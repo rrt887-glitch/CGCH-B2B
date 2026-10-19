@@ -334,8 +334,9 @@ public final class MailClient {
         }
         // 正文：有 HTML 时 text + html 二选一展示（alternative）
         MimeBodyPart bodyPart = new MimeBodyPart();
+        MimeMultipart alt = null;
         if (StrUtil.isNotBlank(html)) {
-            MimeMultipart alt = new MimeMultipart("alternative");
+            alt = new MimeMultipart("alternative");
             MimeBodyPart textPart = new MimeBodyPart();
             textPart.setText(StrUtil.blankToDefault(text, HtmlText.toText(html)), "UTF-8");
             MimeBodyPart htmlPart = new MimeBodyPart();
@@ -347,8 +348,8 @@ public final class MailClient {
             bodyPart.setText(StrUtil.nullToEmpty(text), "UTF-8");
         }
         if (attachments == null || attachments.isEmpty()) {
-            if (StrUtil.isNotBlank(html)) {
-                msg.setContent((Multipart) bodyPart.getContent());
+            if (alt != null) {
+                msg.setContent(alt);
             } else {
                 msg.setText(StrUtil.nullToEmpty(text), "UTF-8");
             }
