@@ -93,6 +93,12 @@
             <artifactId>yudao-module-crm</artifactId>
             <version>${revision}</version>
         </dependency>
+        <!-- CGCH 渠道消息（邮箱等） -->
+        <dependency>
+            <groupId>cn.iocoder.boot</groupId>
+            <artifactId>yudao-module-channel</artifactId>
+            <version>${revision}</version>
+        </dependency>
 
         <!-- ERP 相关模块。默认注释，保证编译速度 -->
 <!--        <dependency>-->

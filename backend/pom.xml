@@ -18,6 +18,7 @@
         <module>yudao-module-pay</module>
         <module>yudao-module-bpm</module>
         <module>yudao-module-crm</module>
+        <module>yudao-module-channel</module>
 <!-- 请参考 https://doc.iocoder.cn/ai/build/ 文档，完成 AI 模块的启动！！！ -->
         <module>yudao-module-ai</module>
     </modules>

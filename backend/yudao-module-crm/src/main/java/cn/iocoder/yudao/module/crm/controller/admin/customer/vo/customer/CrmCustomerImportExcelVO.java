@@ -65,4 +65,19 @@ public class CrmCustomerImportExcelVO {
     @ExcelProperty("备注")
     private String remark;
 
+
+    // ========== CGCH 外贸字段 ==========
+
+    @ExcelProperty("公司名称")
+    private String companyName;
+
+    @ExcelProperty("国家/地区（二字码，如 US）")
+    private String countryCode;
+
+    @ExcelProperty("公司官网")
+    private String website;
+
+    @ExcelProperty("WhatsApp")
+    private String whatsapp;
+
 }

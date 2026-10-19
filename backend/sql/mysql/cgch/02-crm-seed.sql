@@ -32,3 +32,8 @@ INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_i
   (21008, '分组删除', 'crm:customer-group:delete', 3, 8, 21000, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
   (21010, '查重', '', 2, 91, 480, 'cgch-dedup', 'lucide:copy-check', 'cgch/crm/dedup/index', 'CgchCrmDedup', 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
   (21011, '查重搜索', 'crm:dedup:query', 3, 1, 21010, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 默认公海规则：30 天未跟进或 90 天未成交自动回收，提前 3 天提醒负责人
+DELETE FROM `crm_customer_pool_config` WHERE `tenant_id` = 1;
+INSERT INTO `crm_customer_pool_config` (`enabled`, `contact_expire_days`, `deal_expire_days`, `notify_enabled`, `notify_days`, `creator`, `updater`, `tenant_id`)
+VALUES (b'1', 30, 90, b'1', 3, '1', '1', 1);

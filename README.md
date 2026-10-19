@@ -8,6 +8,7 @@
 | --- | --- |
 | `backend/` | Java 17 + Spring Boot 3 后端，基于开源 ruoyi-vue-pro（MIT），已保留 system、infra、bpm、crm、pay、ai 模块 |
 | `frontend/` | Vue 3 + Vite + Ant Design Vue 前端，基于开源 yudao-ui-admin-vben（MIT），只保留 `apps/web-antd` |
+| `backend/yudao-module-channel/` | CGCH 自研渠道模块：邮箱 IMAP 收信、SMTP 发信、邮件工作台接口 |
 | `docker-compose.yml` | 本地开发用 MySQL 8 与 Redis 7 |
 
 ## 本地启动

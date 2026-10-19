@@ -26,6 +26,8 @@ TYPE_MAP = {
     'LocalDate': 'date',
 }
 LONG_TEXT = {'remark', 'content', 'description', 'detail_address', 'contact_last_content'}
+# 正文类大字段，用 mediumtext（最大 16MB）
+MEDIUM_TEXT = {'text_body', 'html_body', 'raw_headers', 'last_sync_error', 'to_addresses', 'cc_addresses'}
 
 
 def snake(name: str) -> str:
@@ -36,6 +38,8 @@ def sql_type(java_type: str, column: str) -> str:
     if java_type.startswith('List<') or java_type.startswith('Set<'):
         return 'varchar(2000)'
     if java_type == 'String':
+        if column in MEDIUM_TEXT:
+            return 'mediumtext'
         return 'varchar(1024)' if column in LONG_TEXT else 'varchar(255)'
     return TYPE_MAP.get(java_type, 'varchar(255)')  # 枚举等按字符串存
 

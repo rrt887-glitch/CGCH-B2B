@@ -24,8 +24,10 @@ services:
       - ./backend/sql/mysql/cgch/00-crm-schema.sql:/docker-entrypoint-initdb.d/04-crm-schema.sql:ro
       - ./backend/sql/mysql/cgch/00-pay-schema.sql:/docker-entrypoint-initdb.d/05-pay-schema.sql:ro
       - ./backend/sql/mysql/cgch/00-ai-schema.sql:/docker-entrypoint-initdb.d/06-ai-schema.sql:ro
+      - ./backend/sql/mysql/cgch/00-channel-schema.sql:/docker-entrypoint-initdb.d/06-channel-schema.sql:ro
       - ./backend/sql/mysql/cgch/01-menu.sql:/docker-entrypoint-initdb.d/07-cgch-menu.sql:ro
       - ./backend/sql/mysql/cgch/02-crm-seed.sql:/docker-entrypoint-initdb.d/08-crm-seed.sql:ro
+      - ./backend/sql/mysql/cgch/03-channel-seed.sql:/docker-entrypoint-initdb.d/09-channel-seed.sql:ro
 
   redis:
     image: redis:7
