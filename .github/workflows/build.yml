@@ -113,6 +113,8 @@ jobs:
           echo "--- 外贸 CRM 扩展：标签、分组、客户新字段、筛选、查重、商机阶段 ---"
           export TOKEN
           python3 - <<'PY'
+          import sys, traceback
+          sys.excepthook = lambda t, v, tb: (print('::error title=test failed::' + ''.join(traceback.format_exception(t, v, tb)).replace('%', '%25').replace('\n', '%0A')), sys.__excepthook__(t, v, tb))
           import json, os, urllib.request
           BASE = 'http://127.0.0.1:48080/admin-api'
           H = {'Authorization': 'Bearer ' + os.environ['TOKEN'], 'tenant-id': '1', 'Content-Type': 'application/json'}
@@ -148,11 +150,9 @@ jobs:
           assert ('customer', cid) in kinds and ('clue', lid) in kinds, f'查重结果不完整: {hits}'
           assert 'whatsapp' in next(h for h in hits if h['type'] == 'customer')['matchedFields']
           print('查重正常', kinds)
-          try:
-              call('DELETE', f'/crm/tag/delete?id={tag}')
-              raise SystemExit('有子标签时删除应失败')
-          except SystemExit as e:
-              if '应失败' in str(e): raise
+          req = urllib.request.Request(BASE + f'/crm/tag/delete?id={tag}', method='DELETE', headers=H)
+          d = json.load(urllib.request.urlopen(req))
+          assert d.get('code') != 0 and '子标签' in d.get('msg', ''), f'有子标签时删除应失败: {d}'
           print('有子标签时禁止删除，正常')
           types = call('GET', '/crm/business-status/type-simple-list')
           assert any(t.get('name') == '外贸标准流程' for t in types), f'缺少外贸标准流程: {types}'
@@ -164,6 +164,8 @@ jobs:
 
           echo "--- 邮箱渠道：绑定、收信、关联客户、回复、对方收到 ---"
           python3 - <<'PY'
+          import sys, traceback
+          sys.excepthook = lambda t, v, tb: (print('::error title=test failed::' + ''.join(traceback.format_exception(t, v, tb)).replace('%', '%25').replace('\n', '%0A')), sys.__excepthook__(t, v, tb))
           import imaplib, json, os, smtplib, time, urllib.request
           from email.message import EmailMessage
           BASE = 'http://127.0.0.1:48080/admin-api'
