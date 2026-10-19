@@ -183,6 +183,12 @@ jobs:
                   print(f'::error title={method} {path}::{d}')
                   raise SystemExit(f'{method} {path} 失败: {d}')
               return d if not ok else d['data']
+          import struct, zlib
+          def tiny_png(tag):  # 1x1 像素的真实 PNG，末尾附带标记便于校验
+              chunk = lambda t, d: struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
+              return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+                      + chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00')) + chunk(b'tEXt', b'tag\x00' + tag.encode())
+                      + chunk(b'IEND', b''))
           account = {'provider': 'custom', 'email': 'sales@cgch.test', 'displayName': 'CGCH Sales',
                      'imapHost': '127.0.0.1', 'imapPort': 3143, 'imapSsl': False,
                      'smtpHost': '127.0.0.1', 'smtpPort': 3025, 'smtpSsl': False, 'password': 'pw'}
@@ -202,7 +208,7 @@ jobs:
           m['Message-ID'] = make_msgid(domain='acme-trading.example')  # 真实邮件服务器都会带 Message-ID
           m.set_content('Hello,\nPlease quote 500 units, FOB Shenzhen.\nThanks')
           m.add_alternative('<p>Hello,</p><p>Please quote <b>500 units</b>, FOB Shenzhen.</p><img src="cid:logo123">', subtype='html')
-          m.get_payload()[1].add_related(b'PNGDATA-LOGO', 'image', 'png', cid='<logo123>')
+          m.get_payload()[1].add_related(tiny_png('LOGO'), 'image', 'png', cid='<logo123>')
           m.add_attachment(b'%PDF-1.4 spec sheet', maintype='application', subtype='pdf', filename='spec.pdf')
           with smtplib.SMTP('127.0.0.1', 3025) as s:
               s.send_message(m)
@@ -330,7 +336,8 @@ jobs:
           assert msgs[1]['mediaId'] == 'MEDIA1'
           assert call('GET', f"/channel/wa/conversation/get?id={c['id']}")['unreadCount'] == 0, '查看后应清零未读'
           media = call('GET', f"/channel/wa/message/media?id={msgs[1]['id']}")
-          assert urllib.request.urlopen(media['fileUrl']).read() == b'JPEGDATA-MEDIA1', '媒体内容不一致'
+          got_media = urllib.request.urlopen(media['fileUrl']).read()
+          assert got_media.startswith(b'\xff\xd8\xff') and b'JPEGDATA-MEDIA1' in got_media, '媒体内容不一致'
           assert call('GET', f"/channel/wa/message/media?id={msgs[1]['id']}")['fileUrl'] == media['fileUrl'], '第二次应直接返回已保存的地址'
           nomedia = call('GET', f"/channel/wa/message/media?id={msgs[0]['id']}", ok=False)
           assert nomedia['code'] == 1030002009, nomedia
@@ -352,13 +359,27 @@ jobs:
               if d.get('code') != 0:
                   raise SystemExit(f'上传 {path} 失败: {d}')
               return d['data']
+          import struct, zlib
+          def tiny_png(tag):  # 1x1 像素的真实 PNG，末尾附带标记便于校验
+              chunk = lambda t, d: struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
+              return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+                      + chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00')) + chunk(b'tEXt', b'tag\x00' + tag.encode())
+                      + chunk(b'IEND', b''))
+          sample = tiny_png('SAMPLE')
           img = upload('/channel/wa/message/send-media', {'conversationId': c['id'], 'caption': 'Sample photo'},
-                       'sample.png', b'PNGDATA-SAMPLE', 'image/png')
+                       'sample.png', sample, 'image/png')
           assert img['type'] == 'image' and img['textBody'] == 'Sample photo' and img['fileUrl'], img
-          assert urllib.request.urlopen(img['fileUrl']).read() == b'PNGDATA-SAMPLE'
+          assert urllib.request.urlopen(img['fileUrl']).read() == sample
           ups = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_uploads'))
-          assert ups[-1]['fileName'] == 'sample.png' and ups[-1]['hasWhatsapp'] and ups[-1]['payload'] == 'PNGDATA-SAMPLE', ups
-          print('发送图片正常：先上传到 Meta 再发消息，本地也保存了一份')
+          assert ups[-1]['fileName'] == 'sample.png' and ups[-1]['hasWhatsapp'] and ups[-1]['size'] > len(sample), ups
+          before = len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_uploads')))
+          try:
+              upload('/channel/wa/message/send-media', {'conversationId': c['id']}, 'fake.png', b'MZ not really a png', 'image/png')
+              raise AssertionError('伪装成图片的文件应被拒绝')
+          except SystemExit as e:
+              assert '不支持的文件类型' in str(e), e
+          assert len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_uploads'))) == before, '被拒绝的文件不应上传到 Meta'
+          print('发送图片正常：本地校验并保存后再上传 Meta；伪装成图片的文件被拒绝且未外发')
           closed = call('POST', '/channel/wa/message/send', {'accountId': aid, 'to': '+49 151 2345 6789', 'text': 'Hello'}, ok=False)
           assert closed['code'] == 1030002004, f'窗口外发文本应被拦截: {closed}'
           tpl = call('POST', '/channel/wa/message/send', {'accountId': aid, 'to': '+49 151 2345 6789', 'templateName': 'hello_world',

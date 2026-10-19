@@ -394,6 +394,8 @@ public class ChannelWhatsAppService {
         }
         byte[] bytes = file.getBytes();
         String name = StrUtil.blankToDefault(file.getOriginalFilename(), "file" + extension(mime));
+        // 先存本地：文件服务会按内容校验真实类型，不通过就不发给客户
+        String url = fileHelper.save(bytes, name, "whatsapp", file.getContentType());
         String wamid;
         try {
             String mediaId = WaGraphClient.upload(a, bytes, name, mime);
@@ -401,7 +403,6 @@ public class ChannelWhatsAppService {
         } catch (WaGraphClient.WaApiException e) {
             throw exception(WA_API_FAIL, e.getMessage());
         }
-        String url = fileHelper.save(bytes, name, "whatsapp", file.getContentType());
         LocalDateTime now = LocalDateTime.now();
         ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
                 .accountId(a.getId()).conversationId(conv.getId()).direction(ChannelWaMessageDO.DIRECTION_OUT)

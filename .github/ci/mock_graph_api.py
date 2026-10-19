@@ -41,7 +41,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self._auth_ok():
             return
         if len(path) == 2 and path[0] == '_media':
-            data = f'JPEGDATA-{path[1]}'.encode()
+            # 带真实 JPEG 文件头，文件服务按内容识别类型
+            data = bytes.fromhex('ffd8ffe000104a46494600010100000100010000') + f'JPEGDATA-{path[1]}'.encode() + b'\xff\xd9'
             self.send_response(200)
             self.send_header('Content-Type', 'image/jpeg')
             self.send_header('Content-Length', str(len(data)))
