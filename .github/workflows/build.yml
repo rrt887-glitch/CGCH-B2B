@@ -226,8 +226,12 @@ jobs:
           typ, data = imap.search(None, 'SUBJECT', '"Re: Inquiry"')
           assert data[0].split(), '买家邮箱没有收到回复'
           typ, raw = imap.fetch(data[0].split()[-1], '(RFC822)')
-          body = raw[0][1].decode(errors='ignore')
-          assert 'In-Reply-To' in body and 'USD 8.5' in body, body[:500]
+          import email as _email
+          got = _email.message_from_bytes(raw[0][1])
+          assert got['In-Reply-To'] and got['In-Reply-To'].strip() == detail['messageId'], (got['In-Reply-To'], detail['messageId'])
+          parts = [p.get_payload(decode=True).decode(p.get_content_charset() or 'utf-8', 'ignore')
+                   for p in got.walk() if p.get_content_maintype() == 'text']
+          assert any('USD 8.5' in t for t in parts), parts
           imap.logout()
           print('回复已送达买家邮箱，带 In-Reply-To 头')
           accts = call('GET', '/channel/mail-account/list')
