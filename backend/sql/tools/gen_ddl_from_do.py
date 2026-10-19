@@ -8,7 +8,7 @@
 - 表名取 @TableName，字段名驼峰转下划线；@TableField(exist = false) 与 static 字段跳过
 - 继承 BaseDO 的表补充 creator / create_time / updater / update_time / deleted
 - 未标注 @TenantIgnore 的表补充 tenant_id（多租户插件会自动带上该条件）
-- 字段注释取字段上方 Javadoc 的第一行
+- 布尔字段默认 b'0'；字段注释取字段上方 Javadoc 的第一行
 """
 import pathlib
 import re
@@ -85,7 +85,9 @@ def ddl(table, title, columns, tenant=True):
         if col == 'id':
             lines.append("  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号'")
             continue
-        lines.append(f"  `{col}` {sql_type(jt, col)} NULL COMMENT '{comment}'")
+        t = sql_type(jt, col)
+        default = " DEFAULT b'0'" if t == 'bit(1)' else ''  # 布尔字段默认 false，与上游建表习惯一致
+        lines.append(f"  `{col}` {t} NULL{default} COMMENT '{comment}'")
     lines += [
         "  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者'",
         "  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'",
