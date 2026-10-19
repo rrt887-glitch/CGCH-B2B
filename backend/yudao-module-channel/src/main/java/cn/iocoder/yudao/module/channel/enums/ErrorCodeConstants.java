@@ -17,6 +17,9 @@ public interface ErrorCodeConstants {
     ErrorCode MAIL_MESSAGE_NOT_EXISTS = new ErrorCode(1_030_001_000, "邮件不存在");
     ErrorCode MAIL_SEND_FAIL = new ErrorCode(1_030_001_001, "发送失败：{}");
     ErrorCode MAIL_RECIPIENT_EMPTY = new ErrorCode(1_030_001_002, "收件人不能为空");
+    ErrorCode MAIL_ATTACHMENT_EMPTY = new ErrorCode(1_030_001_003, "请选择要上传的文件");
+    ErrorCode MAIL_ATTACHMENT_TOO_LARGE = new ErrorCode(1_030_001_004, "单个附件不能超过 25MB");
+    ErrorCode MAIL_ATTACHMENT_NOT_EXISTS = new ErrorCode(1_030_001_005, "附件不存在或已被使用");
 
 
     // ========== WhatsApp 1-030-002-000 ==========
@@ -28,5 +31,8 @@ public interface ErrorCodeConstants {
     ErrorCode WA_CONTENT_EMPTY = new ErrorCode(1_030_002_005, "请填写消息内容或选择模板");
     ErrorCode WA_TOKEN_REQUIRED = new ErrorCode(1_030_002_006, "请填写访问令牌与应用密钥");
     ErrorCode WA_PHONE_INVALID = new ErrorCode(1_030_002_007, "客户号码格式不正确，需包含国家码");
+    ErrorCode WA_MESSAGE_NOT_EXISTS = new ErrorCode(1_030_002_008, "消息不存在");
+    ErrorCode WA_NO_MEDIA = new ErrorCode(1_030_002_009, "该消息没有媒体文件");
+    ErrorCode WA_FILE_TOO_LARGE = new ErrorCode(1_030_002_010, "文件过大：图片不超过 5MB，其他文件不超过 16MB");
 
 }

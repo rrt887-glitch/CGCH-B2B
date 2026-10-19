@@ -73,6 +73,14 @@ public class ChannelWaMessageDO extends TenantBaseDO {
      */
     private String fileName;
     /**
+     * 已保存到本地文件存储的地址；收到的媒体在首次查看时下载
+     */
+    private String fileUrl;
+    /**
+     * 文件大小，字节
+     */
+    private Long fileSize;
+    /**
      * 模板名称（template 类型）
      */
     private String templateName;

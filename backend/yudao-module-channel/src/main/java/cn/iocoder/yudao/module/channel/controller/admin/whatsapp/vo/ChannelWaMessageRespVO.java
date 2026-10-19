@@ -16,6 +16,8 @@ public class ChannelWaMessageRespVO {
     private String mediaId;
     private String mimeType;
     private String fileName;
+    private String fileUrl;
+    private Long fileSize;
     private String templateName;
     private String status;
     private String errorMessage;

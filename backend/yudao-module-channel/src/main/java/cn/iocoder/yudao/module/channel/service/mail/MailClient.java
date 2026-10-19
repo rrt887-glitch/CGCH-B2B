@@ -46,7 +46,23 @@ public final class MailClient {
         private String textBody;
         private String htmlBody;
         private LocalDateTime sentTime;
+        private List<Attachment> attachments;
     }
+
+    /** 附件（收到的或待发送的） */
+    @Data
+    @Builder
+    public static class Attachment {
+        private String fileName;
+        private String contentType;
+        private byte[] content;
+        /** 内嵌图片的 Content-ID，不含尖括号 */
+        private String contentId;
+        private boolean inlined;
+    }
+
+    /** 单个附件大小上限，超过的跳过 */
+    public static final int MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
     /** 一轮收信结果 */
     @Data
@@ -184,6 +200,7 @@ public final class MailClient {
                 .subject(m.getSubject())
                 .textBody(body.text)
                 .htmlBody(body.html)
+                .attachments(body.attachments)
                 .sentTime(date == null ? LocalDateTime.now()
                         : LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault()))
                 .build();
@@ -192,11 +209,31 @@ public final class MailClient {
     private static class Body {
         String text;
         String html;
+        List<Attachment> attachments = new ArrayList<>();
     }
 
-    /** 递归取第一段纯文本与 HTML 正文，忽略附件 */
+    /** 递归取第一段纯文本与 HTML 正文，并收集附件与内嵌图片 */
     private static void collectBody(Part part, Body body) throws MessagingException, IOException {
-        if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
+        String fileName = decodeFileName(part.getFileName());
+        boolean attachment = Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())
+                || (StrUtil.isNotBlank(fileName) && !part.isMimeType("multipart/*"));
+        String cid = part instanceof MimeBodyPart mbp ? StrUtil.strip(mbp.getContentID(), "<", ">") : null;
+        boolean inlineImage = !attachment && part.isMimeType("image/*") && StrUtil.isNotBlank(cid);
+        if (attachment || inlineImage) {
+            byte[] bytes;
+            try (java.io.InputStream in = part.getInputStream()) {
+                bytes = in.readNBytes(MAX_ATTACHMENT_BYTES + 1);
+            }
+            if (bytes.length > MAX_ATTACHMENT_BYTES) {
+                log.warn("[collectBody] 附件 {} 超过 {} 字节，已跳过", fileName, MAX_ATTACHMENT_BYTES);
+                return;
+            }
+            body.attachments.add(Attachment.builder()
+                    .fileName(StrUtil.blankToDefault(fileName, inlineImage ? cid : "attachment"))
+                    .contentType(StrUtil.subBefore(part.getContentType(), ";", false).trim().toLowerCase(Locale.ROOT))
+                    .content(bytes).contentId(cid)
+                    .inlined(inlineImage || Part.INLINE.equalsIgnoreCase(part.getDisposition()) && StrUtil.isNotBlank(cid))
+                    .build());
             return;
         }
         if (part.isMimeType("text/plain") && body.text == null) {
@@ -210,6 +247,17 @@ public final class MailClient {
             }
         } else if (part.isMimeType("message/rfc822")) {
             collectBody((Part) part.getContent(), body);
+        }
+    }
+
+    private static String decodeFileName(String name) {
+        if (StrUtil.isBlank(name)) {
+            return null;
+        }
+        try {
+            return MimeUtility.decodeText(name);
+        } catch (UnsupportedEncodingException e) {
+            return name;
         }
     }
 
@@ -263,6 +311,14 @@ public final class MailClient {
     public static String send(ChannelMailAccountDO a, List<String> to, List<String> cc, String subject,
                               String text, String html, String inReplyTo, String references)
             throws MessagingException, UnsupportedEncodingException {
+        return send(a, to, cc, subject, text, html, inReplyTo, references, List.of());
+    }
+
+    /** 发送邮件（可带附件），返回发出邮件的 Message-ID */
+    public static String send(ChannelMailAccountDO a, List<String> to, List<String> cc, String subject,
+                              String text, String html, String inReplyTo, String references,
+                              List<Attachment> attachments)
+            throws MessagingException, UnsupportedEncodingException {
         Session session = smtpSession(a);
         MimeMessage msg = new MimeMessage(session);
         msg.setFrom(new InternetAddress(a.getEmail(), StrUtil.blankToDefault(a.getDisplayName(), null), "UTF-8"));
@@ -276,6 +332,8 @@ public final class MailClient {
             msg.setHeader("In-Reply-To", inReplyTo);
             msg.setHeader("References", StrUtil.isBlank(references) ? inReplyTo : references + " " + inReplyTo);
         }
+        // 正文：有 HTML 时 text + html 二选一展示（alternative）
+        MimeBodyPart bodyPart = new MimeBodyPart();
         if (StrUtil.isNotBlank(html)) {
             MimeMultipart alt = new MimeMultipart("alternative");
             MimeBodyPart textPart = new MimeBodyPart();
@@ -284,9 +342,28 @@ public final class MailClient {
             htmlPart.setContent(html, "text/html; charset=UTF-8");
             alt.addBodyPart(textPart);
             alt.addBodyPart(htmlPart);
-            msg.setContent(alt);
+            bodyPart.setContent(alt);
         } else {
-            msg.setText(StrUtil.nullToEmpty(text), "UTF-8");
+            bodyPart.setText(StrUtil.nullToEmpty(text), "UTF-8");
+        }
+        if (attachments == null || attachments.isEmpty()) {
+            if (StrUtil.isNotBlank(html)) {
+                msg.setContent((Multipart) bodyPart.getContent());
+            } else {
+                msg.setText(StrUtil.nullToEmpty(text), "UTF-8");
+            }
+        } else {
+            MimeMultipart mixed = new MimeMultipart("mixed");
+            mixed.addBodyPart(bodyPart);
+            for (Attachment att : attachments) {
+                MimeBodyPart ap = new MimeBodyPart();
+                ap.setDataHandler(new jakarta.activation.DataHandler(new jakarta.mail.util.ByteArrayDataSource(
+                        att.getContent(), StrUtil.blankToDefault(att.getContentType(), "application/octet-stream"))));
+                ap.setFileName(MimeUtility.encodeText(att.getFileName(), "UTF-8", null));
+                ap.setDisposition(Part.ATTACHMENT);
+                mixed.addBodyPart(ap);
+            }
+            msg.setContent(mixed);
         }
         msg.saveChanges();
         try (Transport t = session.getTransport("smtp")) {

@@ -46,6 +46,8 @@ export namespace ChannelWaApi {
     mediaId?: string;
     mimeType?: string;
     fileName?: string;
+    fileUrl?: string;
+    fileSize?: number;
     templateName?: string;
     status?: 'delivered' | 'failed' | 'read' | 'received' | 'sent';
     errorMessage?: string;
@@ -97,6 +99,15 @@ export const getWaMessages = (conversationId: number, beforeId?: number) =>
   requestClient.get<ChannelWaApi.Message[]>('/channel/wa/message/list', { params: { conversationId, beforeId } });
 export const sendWaMessage = (data: ChannelWaApi.SendReq) =>
   requestClient.post<ChannelWaApi.Message>('/channel/wa/message/send', data);
+/** 取媒体地址（收到的媒体首次查看时由后端从 Meta 下载） */
+export const getWaMedia = (id: number) =>
+  requestClient.get<ChannelWaApi.Message>(`/channel/wa/message/media?id=${id}`);
+export const sendWaMedia = (conversationId: number, file: File, caption?: string) =>
+  requestClient.upload<ChannelWaApi.Message>('/channel/wa/message/send-media', {
+    conversationId,
+    file,
+    ...(caption ? { caption } : {}),
+  });
 
 /** 模板正文里的变量个数：{{1}}、{{2}}… */
 export function templateParamCount(t?: ChannelWaApi.Template) {

@@ -22,6 +22,15 @@ export namespace ChannelMailApi {
     unrepliedCount?: number;
   }
 
+  export interface Attachment {
+    id: number;
+    messageId?: number;
+    fileName: string;
+    contentType?: string;
+    fileSize?: number;
+    fileUrl: string;
+  }
+
   export interface Message {
     id: number;
     accountId: number;
@@ -40,6 +49,8 @@ export namespace ChannelMailApi {
     replied?: boolean;
     customerId?: number;
     customerName?: string;
+    hasAttachments?: boolean;
+    attachments?: Attachment[];
   }
 
   export type View = 'draft' | 'inbox' | 'sent' | 'trash' | 'unreplied';
@@ -59,6 +70,7 @@ export namespace ChannelMailApi {
     text?: string;
     html?: string;
     replyToId?: number;
+    attachmentIds?: number[];
   }
 }
 
@@ -87,3 +99,13 @@ export const sendMail = (data: ChannelMailApi.SendReq) =>
   requestClient.post<number>('/channel/mail-message/send', data);
 export const trashMail = (id: number) =>
   requestClient.delete(`/channel/mail-message/trash?id=${id}`);
+export const uploadMailAttachment = (file: File) =>
+  requestClient.upload<ChannelMailApi.Attachment>('/channel/mail-message/upload-attachment', { file });
+
+/** 文件大小显示 */
+export function formatSize(n?: number) {
+  if (!n) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}

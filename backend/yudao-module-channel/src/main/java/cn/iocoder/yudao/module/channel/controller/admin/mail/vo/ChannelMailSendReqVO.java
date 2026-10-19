@@ -34,4 +34,7 @@ public class ChannelMailSendReqVO {
     @Schema(description = "回复的邮件编号；填写后自动带上 In-Reply-To，并把原邮件标为已回复", example = "10")
     private Long replyToId;
 
+    @Schema(description = "附件编号（先调用上传接口获得）", example = "[1, 2]")
+    private List<Long> attachmentIds;
+
 }

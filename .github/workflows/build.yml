@@ -201,7 +201,9 @@ jobs:
           from email.utils import make_msgid
           m['Message-ID'] = make_msgid(domain='acme-trading.example')  # 真实邮件服务器都会带 Message-ID
           m.set_content('Hello,\nPlease quote 500 units, FOB Shenzhen.\nThanks')
-          m.add_alternative('<p>Hello,</p><p>Please quote <b>500 units</b>, FOB Shenzhen.</p>', subtype='html')
+          m.add_alternative('<p>Hello,</p><p>Please quote <b>500 units</b>, FOB Shenzhen.</p><img src="cid:logo123">', subtype='html')
+          m.get_payload()[1].add_related(b'PNGDATA-LOGO', 'image', 'png', cid='<logo123>')
+          m.add_attachment(b'%PDF-1.4 spec sheet', maintype='application', subtype='pdf', filename='spec.pdf')
           with smtplib.SMTP('127.0.0.1', 3025) as s:
               s.send_message(m)
           time.sleep(1)
@@ -217,10 +219,29 @@ jobs:
           detail = call('GET', f"/channel/mail-message/get?id={item['id']}")
           assert '500 units' in (detail['textBody'] or '') and '<b>500 units</b>' in (detail['htmlBody'] or ''), detail
           assert detail['readStatus'] is True
-          print('收信、去重、关联客户、正文解析正常')
+          assert item['hasAttachments'] is True, item
+          atts = detail['attachments']
+          assert [a['fileName'] for a in atts] == ['spec.pdf'], f'应只列出普通附件，内嵌图片不算: {atts}'
+          assert urllib.request.urlopen(atts[0]['fileUrl']).read() == b'%PDF-1.4 spec sheet', '附件内容不一致'
+          assert 'cid:logo123' not in detail['htmlBody'] and '/admin-api/infra/file/' in detail['htmlBody'], '内嵌图片应替换为文件地址'
+          print('收信、去重、关联客户、正文解析、附件与内嵌图片正常')
+          def upload(path, fields, filename, content, ctype):
+              b = '----cgchci'
+              parts = b''.join(f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode() for k, v in fields.items())
+              parts += f'--{b}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\nContent-Type: {ctype}\r\n\r\n'.encode() + content + f'\r\n--{b}--\r\n'.encode()
+              hdr = {k: v for k, v in H.items() if k != 'Content-Type'}
+              hdr['Content-Type'] = f'multipart/form-data; boundary={b}'
+              d = json.load(urllib.request.urlopen(urllib.request.Request(BASE + path, method='POST', data=parts, headers=hdr)))
+              if d.get('code') != 0:
+                  raise SystemExit(f'上传 {path} 失败: {d}')
+              return d['data']
+          up = upload('/channel/mail-message/upload-attachment', {}, 'quote.pdf', b'%PDF-1.4 quotation USD 8.5', 'application/pdf')
           sid = call('POST', '/channel/mail-message/send', {'accountId': aid, 'to': ['buyer@acme-trading.example'],
               'subject': 'Re: Inquiry: 500 units hair dryer', 'html': '<p>Dear Buyer, our price is <b>USD 8.5</b>/unit.</p>',
-              'replyToId': item['id']})
+              'replyToId': item['id'], 'attachmentIds': [up['id']]})
+          reuse = call('POST', '/channel/mail-message/send', {'accountId': aid, 'to': ['buyer@acme-trading.example'],
+              'subject': 'x', 'text': 'x', 'attachmentIds': [up['id']]}, ok=False)
+          assert reuse['code'] != 0, '已发送过的附件不能再次使用'
           sent = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=10&accountId={aid}&view=sent')
           assert sent['total'] == 1 and sent['list'][0]['id'] == sid, sent
           assert call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=10&accountId={aid}&view=unreplied')['total'] == 0, '回复后应移出未回复'
@@ -239,8 +260,10 @@ jobs:
           parts = [p.get_payload(decode=True).decode(p.get_content_charset() or 'utf-8', 'ignore')
                    for p in got.walk() if p.get_content_maintype() == 'text']
           assert any('USD 8.5' in t for t in parts), parts
+          files = {p.get_filename(): p.get_payload(decode=True) for p in got.walk() if p.get_filename()}
+          assert files == {'quote.pdf': b'%PDF-1.4 quotation USD 8.5'}, f'买家应收到附件: {list(files)}'
           imap.logout()
-          print('回复已送达买家邮箱，带 In-Reply-To 头')
+          print('回复已送达买家邮箱，带 In-Reply-To 头与附件')
           accts = call('GET', '/channel/mail-account/list')
           assert accts[0]['email'] == 'sales@cgch.test' and 'password' not in accts[0], accts
           print('邮箱渠道全部通过')
@@ -306,7 +329,12 @@ jobs:
           assert [(m['type'], m['textBody']) for m in msgs] == [('text', 'Hi, price for 500 units?'), ('image', 'our sample')], msgs
           assert msgs[1]['mediaId'] == 'MEDIA1'
           assert call('GET', f"/channel/wa/conversation/get?id={c['id']}")['unreadCount'] == 0, '查看后应清零未读'
-          print('收消息、去重、关联客户、媒体信息、未读计数正常')
+          media = call('GET', f"/channel/wa/message/media?id={msgs[1]['id']}")
+          assert urllib.request.urlopen(media['fileUrl']).read() == b'JPEGDATA-MEDIA1', '媒体内容不一致'
+          assert call('GET', f"/channel/wa/message/media?id={msgs[1]['id']}")['fileUrl'] == media['fileUrl'], '第二次应直接返回已保存的地址'
+          nomedia = call('GET', f"/channel/wa/message/media?id={msgs[0]['id']}", ok=False)
+          assert nomedia['code'] == 1030002009, nomedia
+          print('收消息、去重、关联客户、媒体下载与保存、未读计数正常')
           out = call('POST', '/channel/wa/message/send', {'conversationId': c['id'], 'text': 'USD 8.5 per unit, MOQ 500.'})
           assert out['status'] == 'sent' and out['waMessageId'] == 'wamid.OUT1', out
           for st in ['delivered', 'sent', 'read']:  # 中间的 sent 是乱序到达，不能让状态倒退
@@ -314,6 +342,23 @@ jobs:
           last = call('GET', f"/channel/wa/message/list?conversationId={c['id']}")[-1]
           assert last['status'] == 'read', last
           print('文本发送与状态回执正常（delivered → read，乱序的 sent 被忽略）')
+          def upload(path, fields, filename, content, ctype):
+              b = '----cgchci'
+              parts = b''.join(f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode() for k, v in fields.items())
+              parts += f'--{b}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\nContent-Type: {ctype}\r\n\r\n'.encode() + content + f'\r\n--{b}--\r\n'.encode()
+              hdr = {k: v for k, v in H.items() if k != 'Content-Type'}
+              hdr['Content-Type'] = f'multipart/form-data; boundary={b}'
+              d = json.load(urllib.request.urlopen(urllib.request.Request(BASE + path, method='POST', data=parts, headers=hdr)))
+              if d.get('code') != 0:
+                  raise SystemExit(f'上传 {path} 失败: {d}')
+              return d['data']
+          img = upload('/channel/wa/message/send-media', {'conversationId': c['id'], 'caption': 'Sample photo'},
+                       'sample.png', b'PNGDATA-SAMPLE', 'image/png')
+          assert img['type'] == 'image' and img['textBody'] == 'Sample photo' and img['fileUrl'], img
+          assert urllib.request.urlopen(img['fileUrl']).read() == b'PNGDATA-SAMPLE'
+          ups = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_uploads'))
+          assert ups[-1]['fileName'] == 'sample.png' and ups[-1]['hasWhatsapp'] and ups[-1]['payload'] == 'PNGDATA-SAMPLE', ups
+          print('发送图片正常：先上传到 Meta 再发消息，本地也保存了一份')
           closed = call('POST', '/channel/wa/message/send', {'accountId': aid, 'to': '+49 151 2345 6789', 'text': 'Hello'}, ok=False)
           assert closed['code'] == 1030002004, f'窗口外发文本应被拦截: {closed}'
           tpl = call('POST', '/channel/wa/message/send', {'accountId': aid, 'to': '+49 151 2345 6789', 'templateName': 'hello_world',
@@ -327,9 +372,10 @@ jobs:
           print('窗口外只能发模板；发送失败原因已记录')
           sent = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_sent'))
           assert sent[0]['to'] == '14155550100' and sent[0]['text']['body'] == 'USD 8.5 per unit, MOQ 500.', sent[0]
-          assert sent[1]['type'] == 'template' and sent[1]['template']['name'] == 'hello_world', sent[1]
-          assert sent[1]['template']['components'][0]['parameters'][0]['text'] == 'Hans', sent[1]
-          assert len(sent) == 2, f'窗口外的文本不应发到 Meta: {sent}'
+          assert sent[1]['type'] == 'image' and sent[1]['image'] == {'id': 'UP1', 'caption': 'Sample photo'}, sent[1]
+          assert sent[2]['type'] == 'template' and sent[2]['template']['name'] == 'hello_world', sent[2]
+          assert sent[2]['template']['components'][0]['parameters'][0]['text'] == 'Hans', sent[2]
+          assert len(sent) == 3, f'窗口外的文本不应发到 Meta: {sent}'
           names = [t['name'] for t in call('GET', f'/channel/wa-account/templates?id={aid}')]
           assert names == ['hello_world'], names
           print('WhatsApp 渠道全部通过')

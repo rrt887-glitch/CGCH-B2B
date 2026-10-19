@@ -125,6 +125,120 @@ public final class WaGraphClient {
         return call(a, "GET", a.getWabaId() + "/message_templates?limit=200&fields=" + fields, null).path("data");
     }
 
+    // ==================== 媒体 ====================
+
+    /** 媒体文件信息：下载地址（约 5 分钟有效）与类型 */
+    public record MediaInfo(String url, String mimeType) {
+    }
+
+    public static MediaInfo getMedia(ChannelWaAccountDO a, String mediaId) {
+        JsonNode json = call(a, "GET", mediaId, null);
+        String url = json.path("url").asText(null);
+        if (StrUtil.isBlank(url)) {
+            throw new WaApiException("媒体文件不存在或已过期（Meta 只保留 30 天）");
+        }
+        return new MediaInfo(url, json.path("mime_type").asText(null));
+    }
+
+    /** 下载媒体内容；地址需要带同一个访问令牌 */
+    public static byte[] download(ChannelWaAccountDO a, String url, int maxBytes) {
+        try {
+            HttpResponse<byte[]> resp = HTTP.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60))
+                    .header("Authorization", "Bearer " + a.getAccessToken()).GET().build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            if (resp.statusCode() >= 300) {
+                throw new WaApiException("下载媒体失败：HTTP " + resp.statusCode());
+            }
+            if (resp.body().length > maxBytes) {
+                throw new WaApiException("媒体文件过大");
+            }
+            return resp.body();
+        } catch (WaApiException e) {
+            throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new WaApiException("请求被中断");
+        } catch (Exception e) {
+            throw new WaApiException("下载媒体失败：" + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
+        }
+    }
+
+    /** 上传媒体到 Meta，返回媒体编号（multipart/form-data） */
+    public static String upload(ChannelWaAccountDO a, byte[] content, String fileName, String mimeType) {
+        String boundary = "----cgch" + System.nanoTime();
+        try {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            String safeName = StrUtil.blankToDefault(fileName, "file").replace("\"", "");
+            out.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"messaging_product\"\r\n\r\nwhatsapp\r\n")
+                    .getBytes(StandardCharsets.UTF_8));
+            out.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"type\"\r\n\r\n" + mimeType + "\r\n")
+                    .getBytes(StandardCharsets.UTF_8));
+            out.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + safeName
+                    + "\"\r\nContent-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            out.write(content);
+            out.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+            HttpResponse<String> resp = HTTP.send(HttpRequest.newBuilder(URI.create(url(a, a.getPhoneNumberId() + "/media")))
+                    .timeout(Duration.ofSeconds(120))
+                    .header("Authorization", "Bearer " + a.getAccessToken())
+                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray())).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            JsonNode json = StrUtil.isBlank(resp.body()) ? JSON.createObjectNode() : JSON.readTree(resp.body());
+            if (resp.statusCode() >= 300 || json.has("error")) {
+                throw new WaApiException(json.path("error").path("message").asText("上传失败：HTTP " + resp.statusCode()));
+            }
+            String id = json.path("id").asText(null);
+            if (StrUtil.isBlank(id)) {
+                throw new WaApiException("Graph API 未返回媒体编号");
+            }
+            return id;
+        } catch (WaApiException e) {
+            throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new WaApiException("请求被中断");
+        } catch (Exception e) {
+            throw new WaApiException("上传媒体失败：" + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
+        }
+    }
+
+    /**
+     * 发送媒体消息，返回 wamid。
+     *
+     * @param kind image、video、audio、document
+     */
+    public static String sendMedia(ChannelWaAccountDO a, String to, String kind, String mediaId, String caption, String fileName) {
+        ObjectNode body = JSON.createObjectNode();
+        body.put("messaging_product", "whatsapp");
+        body.put("recipient_type", "individual");
+        body.put("to", to);
+        body.put("type", kind);
+        ObjectNode media = body.putObject(kind);
+        media.put("id", mediaId);
+        if (StrUtil.isNotBlank(caption) && !"audio".equals(kind)) {
+            media.put("caption", caption);
+        }
+        if ("document".equals(kind) && StrUtil.isNotBlank(fileName)) {
+            media.put("filename", fileName);
+        }
+        return messageId(call(a, "POST", a.getPhoneNumberId() + "/messages", body));
+    }
+
+    /** 按 MIME 类型选择 WhatsApp 的媒体消息类型；不支持预览的一律按文件发送 */
+    public static String mediaKind(String mimeType) {
+        String m = StrUtil.nullToEmpty(mimeType).toLowerCase();
+        if (m.equals("image/jpeg") || m.equals("image/png")) {
+            return "image";
+        }
+        if (m.equals("video/mp4") || m.equals("video/3gpp")) {
+            return "video";
+        }
+        if (m.startsWith("audio/")) {
+            return "audio";
+        }
+        return "document";
+    }
+
     private static String messageId(JsonNode json) {
         String id = json.path("messages").path(0).path("id").asText(null);
         if (StrUtil.isBlank(id)) {

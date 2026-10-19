@@ -21,6 +21,7 @@ import {
   message,
   Modal,
   Select,
+  Space,
   Spin,
   Switch,
   Tag,
@@ -32,8 +33,10 @@ import {
   getWaAccountList,
   getWaConversation,
   getWaConversationPage,
+  getWaMedia,
   getWaMessages,
   getWaTemplates,
+  sendWaMedia,
   sendWaMessage,
   templateParamCount,
   templatePreview,
@@ -138,6 +141,49 @@ function onKeydown(e: KeyboardEvent) {
     e.preventDefault();
     sendText();
   }
+}
+
+// ===== 媒体：查看与发送 =====
+const mediaLoading = ref<number>();
+async function loadMedia(m: ChannelWaApi.Message) {
+  mediaLoading.value = m.id;
+  try {
+    const res = await getWaMedia(m.id);
+    m.fileUrl = res.fileUrl;
+    m.fileSize = res.fileSize;
+    m.mimeType = res.mimeType;
+    if (m.type !== 'image' && m.type !== 'sticker') window.open(res.fileUrl, '_blank');
+  } finally {
+    mediaLoading.value = undefined;
+  }
+}
+const isImage = (m: ChannelWaApi.Message) => (m.type === 'image' || m.type === 'sticker') && !!m.fileUrl;
+
+const fileSending = ref(false);
+function pickAndSend() {
+  if (!current.value) return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,video/mp4,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file || !current.value) return;
+    const limit = file.type === 'image/jpeg' || file.type === 'image/png' ? 5 : 16;
+    if (file.size > limit * 1024 * 1024) {
+      message.warning(`文件过大：${limit === 5 ? '图片' : '该类文件'}不能超过 ${limit}MB`);
+      return;
+    }
+    fileSending.value = true;
+    try {
+      await sendWaMedia(current.value.id, file, text.value.trim() || undefined);
+      text.value = '';
+      await refreshCurrent();
+      loadConversations(true);
+    } finally {
+      fileSending.value = false;
+    }
+  };
+  input.click();
 }
 
 // ===== 发送模板（窗口外，或主动联系新号码） =====
@@ -286,9 +332,25 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
                   class="max-w-[70%] rounded-lg px-3 py-2 text-sm shadow-sm"
                   :class="m.direction === 2 ? 'bg-[#d9fdd3]' : 'bg-white'"
                 >
-                  <div v-if="MEDIA_LABEL[m.type]" class="mb-1 text-xs text-gray-500">
-                    [{{ MEDIA_LABEL[m.type] }}{{ m.fileName ? `：${m.fileName}` : '' }}]
-                  </div>
+                  <template v-if="MEDIA_LABEL[m.type]">
+                    <a v-if="isImage(m)" :href="m.fileUrl" target="_blank" rel="noopener">
+                      <img :src="m.fileUrl" class="mb-1 max-h-60 max-w-full rounded" alt="" />
+                    </a>
+                    <div v-else class="mb-1 flex items-center gap-2 text-xs text-gray-500">
+                      <span>[{{ MEDIA_LABEL[m.type] }}{{ m.fileName ? `：${m.fileName}` : '' }}]</span>
+                      <a v-if="m.fileUrl" :href="m.fileUrl" target="_blank" rel="noopener">下载</a>
+                      <Button
+                        v-else-if="m.mediaId || m.direction === 1"
+                        size="small"
+                        type="link"
+                        class="!h-auto !p-0 !text-xs"
+                        :loading="mediaLoading === m.id"
+                        @click="loadMedia(m)"
+                      >
+                        {{ m.type === 'image' || m.type === 'sticker' ? '查看' : '下载' }}
+                      </Button>
+                    </div>
+                  </template>
                   <div v-if="m.type === 'template'" class="mb-1 text-xs text-gray-500">[模板 {{ m.templateName }}]</div>
                   <div class="whitespace-pre-wrap break-words">{{ m.textBody }}</div>
                   <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-gray-400">
@@ -310,11 +372,14 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
                 v-model:value="text"
                 :auto-size="{ minRows: 2, maxRows: 6 }"
                 :maxlength="4096"
-                placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+                placeholder="输入消息，Enter 发送，Shift+Enter 换行；发送文件时这里的文字会作为说明"
                 @keydown="onKeydown"
               />
               <div class="mt-2 flex justify-between">
-                <Button @click="openTemplate()">发送模板</Button>
+                <Space>
+                  <Button :loading="fileSending" @click="pickAndSend">发送文件</Button>
+                  <Button @click="openTemplate()">发送模板</Button>
+                </Space>
                 <Button type="primary" :loading="sending" :disabled="!text.trim()" @click="sendText">发送</Button>
               </div>
             </template>

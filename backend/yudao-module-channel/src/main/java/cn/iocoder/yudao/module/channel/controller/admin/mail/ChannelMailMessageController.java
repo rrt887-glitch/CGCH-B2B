@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.channel.controller.admin.mail;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.channel.controller.admin.mail.vo.ChannelMailAttachmentRespVO;
 import cn.iocoder.yudao.module.channel.controller.admin.mail.vo.ChannelMailMessagePageReqVO;
 import cn.iocoder.yudao.module.channel.controller.admin.mail.vo.ChannelMailMessageRespVO;
 import cn.iocoder.yudao.module.channel.controller.admin.mail.vo.ChannelMailSendReqVO;
@@ -14,6 +15,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -57,6 +59,13 @@ public class ChannelMailMessageController {
     @PreAuthorize("@ss.hasPermission('channel:mail-message:send')")
     public CommonResult<Long> send(@Valid @RequestBody ChannelMailSendReqVO req) {
         return success(mailService.send(getLoginUserId(), req));
+    }
+
+    @PostMapping("/upload-attachment")
+    @Operation(summary = "上传待发送的附件（单个不超过 25MB），返回附件编号")
+    @PreAuthorize("@ss.hasPermission('channel:mail-message:send')")
+    public CommonResult<ChannelMailAttachmentRespVO> uploadAttachment(@RequestParam("file") MultipartFile file) throws Exception {
+        return success(mailService.uploadAttachment(getLoginUserId(), file));
     }
 
     @DeleteMapping("/trash")

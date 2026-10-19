@@ -8,7 +8,11 @@ import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.channel.controller.admin.mail.vo.*;
 import cn.iocoder.yudao.module.channel.dal.dataobject.mail.ChannelMailAccountDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.mail.ChannelMailMessageDO;
+import cn.iocoder.yudao.module.channel.dal.dataobject.mail.ChannelMailAttachmentDO;
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailAccountMapper;
+import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailAttachmentMapper;
+import cn.iocoder.yudao.module.channel.service.file.ChannelFileHelper;
+import org.springframework.web.multipart.MultipartFile;
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailMessageMapper;
 import cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.yudao.module.crm.dal.mysql.customer.CrmCustomerMapper;
@@ -40,6 +44,10 @@ public class ChannelMailService {
     private ChannelMailMessageMapper messageMapper;
     @Resource
     private CrmCustomerMapper customerMapper;
+    @Resource
+    private ChannelMailAttachmentMapper attachmentMapper;
+    @Resource
+    private ChannelFileHelper fileHelper;
 
     // ==================== 账号 ====================
 
@@ -79,6 +87,12 @@ public class ChannelMailService {
     public void deleteAccount(Long userId, Long id) {
         validateAccount(userId, id);
         accountMapper.deleteById(id);
+        List<Long> messageIds = messageMapper.selectList(new LambdaQueryWrapperX<ChannelMailMessageDO>()
+                .eq(ChannelMailMessageDO::getAccountId, id).select(ChannelMailMessageDO::getId))
+                .stream().map(ChannelMailMessageDO::getId).toList();
+        if (!messageIds.isEmpty()) {
+            attachmentMapper.delete(new LambdaQueryWrapperX<ChannelMailAttachmentDO>().in(ChannelMailAttachmentDO::getMessageId, messageIds));
+        }
         messageMapper.delete(new LambdaQueryWrapperX<ChannelMailMessageDO>().eq(ChannelMailMessageDO::getAccountId, id));
     }
 
@@ -170,8 +184,10 @@ public class ChannelMailService {
                     .readStatus(false)
                     .replied(false)
                     .customerId(customerByEmail.computeIfAbsent(StrUtil.nullToEmpty(m.getFromAddress()), this::findCustomerId))
+                    .hasAttachments(m.getAttachments() != null && m.getAttachments().stream().anyMatch(x -> !x.isInlined()))
                     .build();
             messageMapper.insert(msg);
+            saveAttachments(msg.getId(), account.getUserId(), m.getAttachments());
             added++;
         }
         accountMapper.updateById(new ChannelMailAccountDO().setId(account.getId())
@@ -221,10 +237,16 @@ public class ChannelMailService {
         if (req.getReplyToId() != null) {
             original = getMessage(userId, req.getReplyToId());
         }
+        List<ChannelMailAttachmentDO> pending = validatePendingAttachments(userId, req.getAttachmentIds());
         String messageId;
         try {
+            List<MailClient.Attachment> files = new ArrayList<>();
+            for (ChannelMailAttachmentDO att : pending) {
+                files.add(MailClient.Attachment.builder().fileName(att.getFileName()).contentType(att.getContentType())
+                        .content(fileHelper.load(att.getFileUrl())).build());
+            }
             messageId = MailClient.send(account, to, cc, req.getSubject(), req.getText(), req.getHtml(),
-                    original == null ? null : original.getMessageId(), null);
+                    original == null ? null : original.getMessageId(), null, files);
         } catch (Exception e) {
             throw exception(MAIL_SEND_FAIL, rootMessage(e));
         }
@@ -247,12 +269,62 @@ public class ChannelMailService {
                 .readStatus(true)
                 .replied(false)
                 .customerId(original != null ? original.getCustomerId() : findCustomerId(to.get(0)))
+                .hasAttachments(!pending.isEmpty())
                 .build();
         messageMapper.insert(sent);
+        pending.forEach(att -> attachmentMapper.updateById(new ChannelMailAttachmentDO().setId(att.getId()).setMessageId(sent.getId())));
         if (original != null) {
             messageMapper.updateById(new ChannelMailMessageDO().setId(original.getId()).setReplied(true).setReadStatus(true));
         }
         return sent.getId();
+    }
+
+    // ==================== 附件 ====================
+
+    private void saveAttachments(Long messageId, Long userId, List<MailClient.Attachment> list) {
+        if (list == null) {
+            return;
+        }
+        for (MailClient.Attachment a : list) {
+            try {
+                String url = fileHelper.save(a.getContent(), a.getFileName(), "mail", a.getContentType());
+                attachmentMapper.insert(ChannelMailAttachmentDO.builder().messageId(messageId).userId(userId)
+                        .fileName(StrUtil.maxLength(a.getFileName(), 250)).contentType(a.getContentType())
+                        .fileSize((long) a.getContent().length).fileUrl(url).contentId(a.getContentId())
+                        .inlined(a.isInlined()).build());
+            } catch (Exception e) {
+                log.warn("[saveAttachments][邮件 {}] 附件 {} 保存失败", messageId, a.getFileName(), e);
+            }
+        }
+    }
+
+    /** 上传待发送的附件，返回附件信息（含编号，发送时带上） */
+    public ChannelMailAttachmentRespVO uploadAttachment(Long userId, MultipartFile file) throws Exception {
+        if (file == null || file.isEmpty()) {
+            throw exception(MAIL_ATTACHMENT_EMPTY);
+        }
+        if (file.getSize() > ChannelFileHelper.MAX_BYTES) {
+            throw exception(MAIL_ATTACHMENT_TOO_LARGE);
+        }
+        String name = StrUtil.blankToDefault(file.getOriginalFilename(), "attachment");
+        String type = StrUtil.blankToDefault(file.getContentType(), "application/octet-stream");
+        String url = fileHelper.save(file.getBytes(), name, "mail", type);
+        ChannelMailAttachmentDO att = ChannelMailAttachmentDO.builder().userId(userId).fileName(StrUtil.maxLength(name, 250))
+                .contentType(type).fileSize(file.getSize()).fileUrl(url).inlined(false).build();
+        attachmentMapper.insert(att);
+        return BeanUtils.toBean(att, ChannelMailAttachmentRespVO.class);
+    }
+
+    private List<ChannelMailAttachmentDO> validatePendingAttachments(Long userId, List<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return List.of();
+        }
+        List<ChannelMailAttachmentDO> list = attachmentMapper.selectByIds(ids);
+        if (list.size() != new HashSet<>(ids).size()
+                || list.stream().anyMatch(a -> !Objects.equals(a.getUserId(), userId) || a.getMessageId() != null)) {
+            throw exception(MAIL_ATTACHMENT_NOT_EXISTS);
+        }
+        return list;
     }
 
     private static List<String> cleanAddresses(List<String> list) {
@@ -290,6 +362,18 @@ public class ChannelMailService {
             m.setReadStatus(true);
         }
         ChannelMailMessageRespVO vo = BeanUtils.toBean(m, ChannelMailMessageRespVO.class);
+        List<ChannelMailAttachmentDO> atts = attachmentMapper.selectListByMessageId(id);
+        String html = vo.getHtmlBody();
+        if (html != null) {
+            for (ChannelMailAttachmentDO a : atts) {
+                if (StrUtil.isNotBlank(a.getContentId())) {
+                    html = html.replace("cid:" + a.getContentId(), a.getFileUrl());
+                }
+            }
+            vo.setHtmlBody(html);
+        }
+        vo.setAttachments(BeanUtils.toBean(atts.stream().filter(a -> !Boolean.TRUE.equals(a.getInlined())).toList(),
+                ChannelMailAttachmentRespVO.class));
         fillCustomerNames(List.of(vo));
         return vo;
     }

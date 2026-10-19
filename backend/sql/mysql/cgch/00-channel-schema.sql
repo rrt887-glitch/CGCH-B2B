@@ -30,6 +30,26 @@ CREATE TABLE `channel_mail_account` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '业务员绑定的邮箱账号（IMAP 收信 + SMTP 发信）';
 
+DROP TABLE IF EXISTS `channel_mail_attachment`;
+CREATE TABLE `channel_mail_attachment` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `message_id` bigint NULL COMMENT '所属邮件编号；待发送的附件为空',
+  `user_id` bigint NULL COMMENT '上传者用户编号（待发送附件的归属校验）',
+  `file_name` varchar(255) NULL COMMENT '文件名',
+  `content_type` varchar(255) NULL COMMENT 'MIME 类型',
+  `file_size` bigint NULL COMMENT '文件大小，字节',
+  `file_url` varchar(1024) NULL COMMENT '文件访问地址',
+  `content_id` varchar(255) NULL COMMENT '内嵌图片的 Content-ID（正文中以 cid: 引用），普通附件为空',
+  `inlined` bit(1) NULL DEFAULT b'0' COMMENT '是否正文内嵌图片',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '邮件附件。收到的邮件附件在同步时保存；发信时先上传（messageId 为空），发送成功后挂到已发送邮件上';
+
 DROP TABLE IF EXISTS `channel_mail_message`;
 CREATE TABLE `channel_mail_message` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
@@ -52,6 +72,7 @@ CREATE TABLE `channel_mail_message` (
   `read_status` bit(1) NULL DEFAULT b'0' COMMENT '是否已读',
   `replied` bit(1) NULL DEFAULT b'0' COMMENT '是否已回复（仅收到的邮件）',
   `customer_id` bigint NULL COMMENT '关联的 CRM 客户编号',
+  `has_attachments` bit(1) NULL DEFAULT b'0' COMMENT '是否带附件（不含正文内嵌图片）',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
@@ -117,6 +138,8 @@ CREATE TABLE `channel_wa_message` (
   `media_id` varchar(255) NULL COMMENT '媒体编号，可通过 Graph API 下载',
   `mime_type` varchar(255) NULL COMMENT '媒体类型',
   `file_name` varchar(255) NULL COMMENT '文件名（document 类型）',
+  `file_url` varchar(1024) NULL COMMENT '已保存到本地文件存储的地址；收到的媒体在首次查看时下载',
+  `file_size` bigint NULL COMMENT '文件大小，字节',
   `template_name` varchar(255) NULL COMMENT '模板名称（template 类型）',
   `status` varchar(255) NULL COMMENT '状态：received、sent、delivered、read、failed',
   `error_message` varchar(255) NULL COMMENT '发送失败原因',

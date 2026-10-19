@@ -16,6 +16,8 @@ import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaMessageD
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaAccountMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaMessageMapper;
+import cn.iocoder.yudao.module.channel.service.file.ChannelFileHelper;
+import org.springframework.web.multipart.MultipartFile;
 import cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.yudao.module.crm.dal.mysql.customer.CrmCustomerMapper;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -54,6 +56,8 @@ public class ChannelWhatsAppService {
     private ChannelWaMessageMapper messageMapper;
     @Resource
     private CrmCustomerMapper customerMapper;
+    @Resource
+    private ChannelFileHelper fileHelper;
 
     // ==================== 号码 ====================
 
@@ -335,6 +339,92 @@ public class ChannelWhatsAppService {
         conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
                 .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
         return BeanUtils.toBean(msg, ChannelWaMessageRespVO.class);
+    }
+
+    // ==================== 媒体 ====================
+
+    /** WhatsApp 对上传文件的大小限制：图片 5MB，音视频与文件 16MB（文件实际可到 100MB，这里统一从严） */
+    private static final int IMAGE_LIMIT = 5 * 1024 * 1024;
+    private static final int OTHER_LIMIT = 16 * 1024 * 1024;
+
+    /** 取媒体文件地址：首次查看时从 Meta 下载并保存，之后直接返回 */
+    public ChannelWaMessageRespVO getMedia(Long userId, Long messageId) {
+        ChannelWaMessageDO m = messageMapper.selectById(messageId);
+        if (m == null) {
+            throw exception(WA_MESSAGE_NOT_EXISTS);
+        }
+        ChannelWaAccountDO a = validateAccount(userId, m.getAccountId());
+        if (StrUtil.isBlank(m.getFileUrl())) {
+            if (StrUtil.isBlank(m.getMediaId())) {
+                throw exception(WA_NO_MEDIA);
+            }
+            try {
+                WaGraphClient.MediaInfo info = WaGraphClient.getMedia(a, m.getMediaId());
+                byte[] bytes = WaGraphClient.download(a, info.url(), ChannelFileHelper.MAX_BYTES);
+                String mime = StrUtil.blankToDefault(m.getMimeType(), info.mimeType());
+                String name = StrUtil.blankToDefault(m.getFileName(), m.getType() + "-" + m.getId() + extension(mime));
+                String url = fileHelper.save(bytes, name, "whatsapp", mime);
+                messageMapper.updateById(new ChannelWaMessageDO().setId(m.getId()).setFileUrl(url)
+                        .setFileSize((long) bytes.length).setMimeType(mime));
+                m.setFileUrl(url).setFileSize((long) bytes.length).setMimeType(mime);
+            } catch (WaGraphClient.WaApiException e) {
+                throw exception(WA_API_FAIL, e.getMessage());
+            }
+        }
+        return BeanUtils.toBean(m, ChannelWaMessageRespVO.class);
+    }
+
+    /** 发送图片、视频、语音或文件（24 小时窗口内） */
+    public ChannelWaMessageRespVO sendMedia(Long userId, Long conversationId, MultipartFile file, String caption) throws Exception {
+        ChannelWaConversationDO conv = validateConversation(userId, conversationId);
+        ChannelWaAccountDO a = accountMapper.selectById(conv.getAccountId());
+        if (!windowOpen(conv)) {
+            throw exception(WA_WINDOW_CLOSED);
+        }
+        if (file == null || file.isEmpty()) {
+            throw exception(WA_CONTENT_EMPTY);
+        }
+        String mime = StrUtil.blankToDefault(file.getContentType(), "application/octet-stream");
+        String kind = WaGraphClient.mediaKind(mime);
+        if (file.getSize() > ("image".equals(kind) ? IMAGE_LIMIT : OTHER_LIMIT)) {
+            throw exception(WA_FILE_TOO_LARGE);
+        }
+        if ("document".equals(kind) && mime.startsWith("image/")) {
+            mime = "application/octet-stream"; // 非 JPEG/PNG 的图片按文件发送
+        }
+        byte[] bytes = file.getBytes();
+        String name = StrUtil.blankToDefault(file.getOriginalFilename(), "file" + extension(mime));
+        String wamid;
+        try {
+            String mediaId = WaGraphClient.upload(a, bytes, name, mime);
+            wamid = WaGraphClient.sendMedia(a, conv.getWaId(), kind, mediaId, caption, name);
+        } catch (WaGraphClient.WaApiException e) {
+            throw exception(WA_API_FAIL, e.getMessage());
+        }
+        String url = fileHelper.save(bytes, name, "whatsapp", file.getContentType());
+        LocalDateTime now = LocalDateTime.now();
+        ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
+                .accountId(a.getId()).conversationId(conv.getId()).direction(ChannelWaMessageDO.DIRECTION_OUT)
+                .waMessageId(wamid).type(kind).textBody(StrUtil.emptyToNull(caption)).mimeType(file.getContentType())
+                .fileName(name).fileUrl(url).fileSize((long) bytes.length)
+                .status(ChannelWaMessageDO.STATUS_SENT).messageTime(now).build();
+        messageMapper.insert(msg);
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
+                .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
+        return BeanUtils.toBean(msg, ChannelWaMessageRespVO.class);
+    }
+
+    private static String extension(String mime) {
+        return switch (StrUtil.nullToEmpty(mime).toLowerCase()) {
+            case "image/jpeg" -> ".jpg";
+            case "image/png" -> ".png";
+            case "image/webp" -> ".webp";
+            case "video/mp4" -> ".mp4";
+            case "audio/ogg", "audio/ogg; codecs=opus" -> ".ogg";
+            case "audio/mpeg" -> ".mp3";
+            case "application/pdf" -> ".pdf";
+            default -> "";
+        };
     }
 
     // ==================== 查询 ====================

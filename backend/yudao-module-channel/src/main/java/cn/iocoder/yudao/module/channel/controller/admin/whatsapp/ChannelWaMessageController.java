@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -56,6 +57,23 @@ public class ChannelWaMessageController {
     @PreAuthorize("@ss.hasPermission('channel:wa-message:send')")
     public CommonResult<ChannelWaMessageRespVO> send(@Valid @RequestBody ChannelWaSendReqVO req) {
         return success(whatsAppService.send(getLoginUserId(), req));
+    }
+
+    @GetMapping("/message/media")
+    @Operation(summary = "取媒体文件地址；收到的媒体首次查看时从 Meta 下载并保存")
+    @Parameter(name = "id", description = "消息编号", required = true)
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<ChannelWaMessageRespVO> media(@RequestParam("id") Long id) {
+        return success(whatsAppService.getMedia(getLoginUserId(), id));
+    }
+
+    @PostMapping("/message/send-media")
+    @Operation(summary = "发送图片、视频、语音或文件（24 小时窗口内）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:send')")
+    public CommonResult<ChannelWaMessageRespVO> sendMedia(@RequestParam("conversationId") Long conversationId,
+                                                          @RequestParam("file") MultipartFile file,
+                                                          @RequestParam(value = "caption", required = false) String caption) throws Exception {
+        return success(whatsAppService.sendMedia(getLoginUserId(), conversationId, file, caption));
     }
 
 }

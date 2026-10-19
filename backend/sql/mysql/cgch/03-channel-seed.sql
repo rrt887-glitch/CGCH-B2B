@@ -28,3 +28,7 @@ INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_i
   (22104, 'WhatsApp 号码解绑', 'channel:wa-account:delete', 3, 14, 20501, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
   (22111, 'WhatsApp 消息查看', 'channel:wa-message:query',  3, 1, 20101, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
   (22112, 'WhatsApp 发送消息', 'channel:wa-message:send',   3, 2, 20101, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 文件存储默认用数据库：上游默认的七牛示例配置没有可用密钥，会导致附件、媒体无法保存
+-- 生产环境建议在「基础设施 → 文件配置」改为对象存储（S3/OSS/COS/MinIO），并把 domain 改成你的域名
+UPDATE `infra_file_config` SET `master` = (`id` = 4);

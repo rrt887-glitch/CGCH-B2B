@@ -29,6 +29,7 @@ import {
 } from 'ant-design-vue';
 
 import {
+  formatSize,
   getMail,
   getMailAccountList,
   getMailPage,
@@ -36,6 +37,7 @@ import {
   sendMail,
   syncMailAccount,
   trashMail,
+  uploadMailAttachment,
 } from '#/api/channel/mail';
 
 defineOptions({ name: 'CgchChannelMail' });
@@ -131,11 +133,38 @@ async function trash() {
   await loadList();
 }
 
+// ===== 附件（回复与写邮件共用） =====
+const MAX_ATTACHMENT = 25 * 1024 * 1024;
+const uploading = ref(false);
+async function pickFiles(target: ChannelMailApi.Attachment[]) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.onchange = async () => {
+    const files = [...(input.files ?? [])];
+    const tooBig = files.filter((f) => f.size > MAX_ATTACHMENT);
+    if (tooBig.length > 0) message.warning(`单个附件不能超过 25MB：${tooBig.map((f) => f.name).join('、')}`);
+    uploading.value = true;
+    try {
+      for (const f of files.filter((x) => x.size <= MAX_ATTACHMENT)) target.push(await uploadMailAttachment(f));
+    } finally {
+      uploading.value = false;
+    }
+  };
+  input.click();
+}
+function removeFile(target: ChannelMailApi.Attachment[], id: number) {
+  const i = target.findIndex((a) => a.id === id);
+  if (i !== -1) target.splice(i, 1);
+}
+
 // ===== 回复 =====
 const replyText = ref('');
 const replySending = ref(false);
+const replyFiles = ref<ChannelMailApi.Attachment[]>([]);
 function resetReply() {
   replyText.value = '';
+  replyFiles.value = [];
 }
 function quote(m: ChannelMailApi.Message) {
   const body = (m.textBody || '').split('\n').map((l) => `> ${l}`).join('\n');
@@ -153,6 +182,7 @@ async function reply() {
       subject,
       text: replyText.value + quote(m),
       replyToId: m.id,
+      attachmentIds: replyFiles.value.map((a) => a.id),
     });
     message.success('已发送');
     resetReply();
@@ -165,8 +195,10 @@ async function reply() {
 // ===== 写邮件 =====
 const composeOpen = ref(false);
 const compose = reactive({ accountId: undefined as number | undefined, to: '', cc: '', subject: '', text: '' });
+const composeFiles = ref<ChannelMailApi.Attachment[]>([]);
 function openCompose() {
   Object.assign(compose, { accountId: accountId.value ?? accounts.value[0]?.id, to: '', cc: '', subject: '', text: '' });
+  composeFiles.value = [];
   composeOpen.value = true;
 }
 const split = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
@@ -181,6 +213,7 @@ async function sendCompose() {
     cc: split(compose.cc),
     subject: compose.subject,
     text: compose.text,
+    attachmentIds: composeFiles.value.map((a) => a.id),
   });
   message.success('已发送');
   composeOpen.value = false;
@@ -252,6 +285,7 @@ onMounted(async () => {
                     <div class="mt-1 flex gap-1">
                       <Tag v-if="item.customerName" color="blue">{{ item.customerName }}</Tag>
                       <Tag v-if="item.direction === 1 && item.replied" color="green">已回复</Tag>
+                      <Tag v-if="item.hasAttachments">📎 附件</Tag>
                     </div>
                   </div>
                 </ListItem>
@@ -300,6 +334,20 @@ onMounted(async () => {
               ></iframe>
               <pre v-else class="whitespace-pre-wrap font-sans text-sm">{{ current.textBody }}</pre>
 
+              <div v-if="current.attachments?.length" class="mt-4 flex flex-wrap gap-2">
+                <a
+                  v-for="a in current.attachments"
+                  :key="a.id"
+                  :href="a.fileUrl"
+                  target="_blank"
+                  rel="noopener"
+                  class="flex items-center gap-2 rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                >
+                  <span>📎 {{ a.fileName }}</span>
+                  <span class="text-xs text-gray-400">{{ formatSize(a.fileSize) }}</span>
+                </a>
+              </div>
+
               <div v-if="thread.length > 1" class="mt-6">
                 <div class="mb-2 text-sm font-medium text-gray-500">往来记录（{{ thread.length }} 封）</div>
                 <div
@@ -318,8 +366,14 @@ onMounted(async () => {
 
             <div v-if="current.direction === 1 && current.folder !== 'TRASH'" class="border-t p-4">
               <Textarea v-model:value="replyText" :rows="5" placeholder="输入回复内容，原邮件会自动引用在下方" />
-              <div class="mt-2 flex justify-end">
-                <Button type="primary" :loading="replySending" :disabled="!replyText.trim()" @click="reply">发送回复</Button>
+              <div v-if="replyFiles.length" class="mt-2 flex flex-wrap gap-2">
+                <Tag v-for="a in replyFiles" :key="a.id" closable @close="removeFile(replyFiles, a.id)">
+                  📎 {{ a.fileName }} {{ formatSize(a.fileSize) }}
+                </Tag>
+              </div>
+              <div class="mt-2 flex justify-between">
+                <Button :loading="uploading" @click="pickFiles(replyFiles)">添加附件</Button>
+                <Button type="primary" :loading="replySending" :disabled="!replyText.trim() || uploading" @click="reply">发送回复</Button>
               </div>
             </div>
           </div>
@@ -338,6 +392,12 @@ onMounted(async () => {
         <Input v-model:value="compose.cc" placeholder="抄送（可选）" />
         <Input v-model:value="compose.subject" placeholder="主题" />
         <Textarea v-model:value="compose.text" :rows="10" placeholder="正文" />
+        <div class="flex flex-wrap items-center gap-2">
+          <Button size="small" :loading="uploading" @click="pickFiles(composeFiles)">添加附件</Button>
+          <Tag v-for="a in composeFiles" :key="a.id" closable @close="removeFile(composeFiles, a.id)">
+            📎 {{ a.fileName }} {{ formatSize(a.fileSize) }}
+          </Tag>
+        </div>
       </div>
     </Modal>
   </Page>

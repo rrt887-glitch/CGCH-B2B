@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Schema(description = "管理后台 - 邮件 Response VO；列表中不含正文")
 @Data
@@ -32,5 +33,11 @@ public class ChannelMailMessageRespVO {
 
     @Schema(description = "关联客户名称")
     private String customerName;
+
+    @Schema(description = "是否带附件")
+    private Boolean hasAttachments;
+
+    @Schema(description = "附件列表（仅详情返回）")
+    private List<ChannelMailAttachmentRespVO> attachments;
 
 }
