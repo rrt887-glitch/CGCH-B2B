@@ -25,7 +25,8 @@ TYPE_MAP = {
     'LocalDateTime': 'datetime',
     'LocalDate': 'date',
 }
-LONG_TEXT = {'remark', 'content', 'description', 'detail_address', 'contact_last_content'}
+LONG_TEXT = {'remark', 'content', 'description', 'detail_address', 'contact_last_content',
+             'password', 'access_token', 'app_secret'}  # 加密后的密钥会变长
 # 正文类大字段，用 mediumtext（最大 16MB）
 MEDIUM_TEXT = {'text_body', 'html_body', 'raw_headers', 'last_sync_error', 'to_addresses', 'cc_addresses'}
 

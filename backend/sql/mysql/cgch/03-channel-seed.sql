@@ -15,3 +15,16 @@ INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_i
   (22011, '邮件查看', 'channel:mail-message:query',  3, 1, 20102, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
   (22012, '发送邮件', 'channel:mail-message:send',   3, 2, 20102, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
   (22013, '删除邮件', 'channel:mail-message:delete', 3, 3, 20102, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- WhatsApp：消息工作台、模板管理从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/channel/im/index' WHERE `id` = 20101;
+UPDATE `system_menu` SET `component` = 'cgch/config/templates/index' WHERE `id` = 20503;
+
+DELETE FROM `system_menu` WHERE `id` BETWEEN 22100 AND 22199;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (22101, 'WhatsApp 号码查询', 'channel:wa-account:query',  3, 11, 20501, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
+  (22102, 'WhatsApp 号码绑定', 'channel:wa-account:create', 3, 12, 20501, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
+  (22103, 'WhatsApp 号码修改', 'channel:wa-account:update', 3, 13, 20501, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
+  (22104, 'WhatsApp 号码解绑', 'channel:wa-account:delete', 3, 14, 20501, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
+  (22111, 'WhatsApp 消息查看', 'channel:wa-message:query',  3, 1, 20101, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
+  (22112, 'WhatsApp 发送消息', 'channel:wa-message:send',   3, 2, 20101, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');

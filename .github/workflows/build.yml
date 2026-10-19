@@ -65,6 +65,11 @@ jobs:
           mysql -h 127.0.0.1 -uroot -p123456 ruoyi-vue-pro -e \
             "SELECT id, name, sort FROM system_menu WHERE parent_id = 0 AND visible = b'1' ORDER BY sort;"
 
+      - name: 启动 Meta Graph API 模拟服务
+        run: |
+          nohup python3 .github/ci/mock_graph_api.py 18080 > mock.log 2>&1 &
+          sleep 1 && curl -s http://127.0.0.1:18080/_sent
+
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
@@ -239,6 +244,95 @@ jobs:
           accts = call('GET', '/channel/mail-account/list')
           assert accts[0]['email'] == 'sales@cgch.test' and 'password' not in accts[0], accts
           print('邮箱渠道全部通过')
+          PY
+
+          echo "--- WhatsApp：绑定、Webhook 验证与签名、收消息、关联客户、24 小时窗口、文本与模板、状态回执 ---"
+          python3 - <<'PY'
+          import hashlib, hmac, json, os, time, urllib.error, urllib.request
+          BASE = 'http://127.0.0.1:48080/admin-api'
+          H = {'Authorization': 'Bearer ' + os.environ['TOKEN'], 'tenant-id': '1', 'Content-Type': 'application/json'}
+          def call(method, path, body=None, ok=True):
+              req = urllib.request.Request(BASE + path, method=method, headers=H,
+                                           data=json.dumps(body).encode() if body is not None else None)
+              d = json.load(urllib.request.urlopen(req))
+              if ok and d.get('code') != 0:
+                  print(f'::error title={method} {path}::{d}')
+                  raise SystemExit(f'{method} {path} 失败: {d}')
+              return d if not ok else d['data']
+          def raw(method, url, data=None, headers=None):
+              req = urllib.request.Request(url, method=method, data=data, headers=headers or {})
+              try:
+                  r = urllib.request.urlopen(req)
+                  return r.status, r.read().decode()
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode()
+          SECRET = 'test-app-secret'
+          acc = {'name': '销售一部', 'phoneNumberId': '111222333', 'wabaId': '999888777', 'accessToken': 'bad-token',
+                 'appSecret': SECRET, 'apiBase': 'http://127.0.0.1:18080', 'apiVersion': 'v24.0'}
+          bad = call('POST', '/channel/wa-account/create', acc, ok=False)
+          assert bad['code'] != 0 and 'Invalid OAuth' in bad['msg'], bad
+          print('错误令牌被拒绝：', bad['msg'][:80])
+          aid = call('POST', '/channel/wa-account/create', dict(acc, accessToken='good-token'))
+          info = call('GET', '/channel/wa-account/list')[0]
+          assert info['displayPhone'] == '+86 138 0000 0000' and info['hasAccessToken'] and 'accessToken' not in info, info
+          hook = 'http://127.0.0.1:48080' + info['webhookPath']
+          code, body = raw('GET', f"{hook}?hub.mode=subscribe&hub.verify_token={info['verifyToken']}&hub.challenge=abc123")
+          assert code == 200 and body == 'abc123', (code, body)
+          code, _ = raw('GET', f'{hook}?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=abc123')
+          assert code == 403, code
+          print('回调地址验证正常')
+          def push(value):
+              payload = json.dumps({'object': 'whatsapp_business_account', 'entry': [{'id': '999888777', 'changes': [
+                  {'field': 'messages', 'value': dict({'messaging_product': 'whatsapp',
+                   'metadata': {'display_phone_number': '8613800000000', 'phone_number_id': '111222333'}}, **value)}]}]}).encode()
+              sig = 'sha256=' + hmac.new(SECRET.encode(), payload, hashlib.sha256).hexdigest()
+              return raw('POST', hook, payload, {'Content-Type': 'application/json', 'X-Hub-Signature-256': sig})
+          inbound = {'contacts': [{'profile': {'name': 'Acme Buyer WA'}, 'wa_id': '14155550100'}],
+                     'messages': [{'from': '14155550100', 'id': 'wamid.IN1', 'timestamp': str(int(time.time())),
+                                   'type': 'text', 'text': {'body': 'Hi, price for 500 units?'}}]}
+          payload = json.dumps({'entry': []}).encode()
+          code, _ = raw('POST', hook, payload, {'Content-Type': 'application/json', 'X-Hub-Signature-256': 'sha256=00'})
+          assert code == 401, f'错误签名应被拒绝: {code}'
+          assert push(inbound)[0] == 200
+          assert push(inbound)[0] == 200  # Meta 重试，应去重
+          push({'messages': [{'from': '14155550100', 'id': 'wamid.IN2', 'timestamp': str(int(time.time())),
+                              'type': 'image', 'image': {'id': 'MEDIA1', 'mime_type': 'image/jpeg', 'caption': 'our sample'}}]})
+          convs = call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=10')
+          assert convs['total'] == 1, convs
+          c = convs['list'][0]
+          assert c['customerName'] == 'Acme Buyer' and c['unreadCount'] == 2 and c['windowOpen'] is True, c
+          assert c['profileName'] == 'Acme Buyer WA', c
+          msgs = call('GET', f"/channel/wa/message/list?conversationId={c['id']}")
+          assert [(m['type'], m['textBody']) for m in msgs] == [('text', 'Hi, price for 500 units?'), ('image', 'our sample')], msgs
+          assert msgs[1]['mediaId'] == 'MEDIA1'
+          assert call('GET', f"/channel/wa/conversation/get?id={c['id']}")['unreadCount'] == 0, '查看后应清零未读'
+          print('收消息、去重、关联客户、媒体信息、未读计数正常')
+          out = call('POST', '/channel/wa/message/send', {'conversationId': c['id'], 'text': 'USD 8.5 per unit, MOQ 500.'})
+          assert out['status'] == 'sent' and out['waMessageId'] == 'wamid.OUT1', out
+          for st in ['delivered', 'sent', 'read']:  # 中间的 sent 是乱序到达，不能让状态倒退
+              push({'statuses': [{'id': out['waMessageId'], 'status': st, 'timestamp': str(int(time.time())), 'recipient_id': '14155550100'}]})
+          last = call('GET', f"/channel/wa/message/list?conversationId={c['id']}")[-1]
+          assert last['status'] == 'read', last
+          print('文本发送与状态回执正常（delivered → read，乱序的 sent 被忽略）')
+          closed = call('POST', '/channel/wa/message/send', {'accountId': aid, 'to': '+49 151 2345 6789', 'text': 'Hello'}, ok=False)
+          assert closed['code'] == 1030002004, f'窗口外发文本应被拦截: {closed}'
+          tpl = call('POST', '/channel/wa/message/send', {'accountId': aid, 'to': '+49 151 2345 6789', 'templateName': 'hello_world',
+                     'templateLanguage': 'en_US', 'templateParams': ['Hans'], 'templatePreview': 'Hi Hans, thanks for your inquiry.'})
+          assert tpl['type'] == 'template' and tpl['status'] == 'sent', tpl
+          push({'statuses': [{'id': tpl['waMessageId'], 'status': 'failed', 'timestamp': str(int(time.time())), 'recipient_id': '4915123456789',
+                              'errors': [{'code': 131026, 'title': 'Message undeliverable', 'error_data': {'details': 'Recipient is not a WhatsApp user'}}]}]})
+          convs = call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=10&keyword=4915123456789')
+          failed = call('GET', f"/channel/wa/message/list?conversationId={convs['list'][0]['id']}")[-1]
+          assert failed['status'] == 'failed' and 'not a WhatsApp user' in failed['errorMessage'], failed
+          print('窗口外只能发模板；发送失败原因已记录')
+          sent = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_sent'))
+          assert sent[0]['to'] == '14155550100' and sent[0]['text']['body'] == 'USD 8.5 per unit, MOQ 500.', sent[0]
+          assert sent[1]['type'] == 'template' and sent[1]['template']['name'] == 'hello_world', sent[1]
+          assert sent[1]['template']['components'][0]['parameters'][0]['text'] == 'Hans', sent[1]
+          assert len(sent) == 2, f'窗口外的文本不应发到 Meta: {sent}'
+          names = [t['name'] for t in call('GET', f'/channel/wa-account/templates?id={aid}')]
+          assert names == ['hello_world'], names
+          print('WhatsApp 渠道全部通过')
           PY
 
       - name: 后端日志

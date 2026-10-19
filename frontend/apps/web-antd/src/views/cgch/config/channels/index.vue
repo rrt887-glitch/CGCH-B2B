@@ -4,6 +4,8 @@
  */
 import type { ChannelMailApi } from '#/api/channel/mail';
 
+import WaAccounts from './wa-accounts.vue';
+
 import { onMounted, reactive, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
@@ -177,7 +179,7 @@ onMounted(load);
 
 <template>
   <Page auto-content-height>
-    <Card title="渠道管理" :bordered="false">
+    <Card title="邮箱" :bordered="false">
       <template #extra>
         <Button type="primary" @click="openForm()">绑定邮箱</Button>
       </template>
@@ -185,7 +187,7 @@ onMounted(load);
         class="mb-4"
         type="info"
         show-icon
-        message="绑定后系统每 5 分钟自动收信，可在「渠道消息 → 邮件工作台」查看与回复。WhatsApp、Facebook、Instagram 等渠道将在后续版本接入。"
+        message="绑定后系统每 5 分钟自动收信，可在「渠道消息 → 邮件工作台」查看与回复。"
       />
       <Table :columns="columns" :data-source="accounts" :loading="loading" :pagination="false" row-key="id">
         <template #bodyCell="{ column, record }">
@@ -220,6 +222,8 @@ onMounted(load);
         <template #emptyText>还没有绑定邮箱</template>
       </Table>
     </Card>
+
+    <WaAccounts />
 
     <Modal v-model:open="open" :title="form.id ? '修改邮箱' : '绑定邮箱'" :width="640" :footer="null">
       <Form layout="vertical">
