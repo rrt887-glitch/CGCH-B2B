@@ -193,6 +193,8 @@ jobs:
           m['From'] = 'Acme Buyer <buyer@acme-trading.example>'
           m['To'] = 'sales@cgch.test'
           m['Subject'] = 'Inquiry: 500 units hair dryer'
+          from email.utils import make_msgid
+          m['Message-ID'] = make_msgid(domain='acme-trading.example')  # 真实邮件服务器都会带 Message-ID
           m.set_content('Hello,\nPlease quote 500 units, FOB Shenzhen.\nThanks')
           m.add_alternative('<p>Hello,</p><p>Please quote <b>500 units</b>, FOB Shenzhen.</p>', subtype='html')
           with smtplib.SMTP('127.0.0.1', 3025) as s:
