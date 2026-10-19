@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.channel.service.file;
 
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.infra.api.file.FileApi;
+import cn.iocoder.yudao.module.infra.service.file.FileService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +32,8 @@ public class ChannelFileHelper {
 
     @Resource
     private FileApi fileApi;
+    @Resource
+    private FileService fileService;
 
     /** 保存文件，返回访问地址 */
     public String save(byte[] content, String fileName, String directory, String mimeType) {
@@ -42,7 +45,7 @@ public class ChannelFileHelper {
         Matcher m = LOCAL_URL.matcher(StrUtil.subBefore(url, "?", false));
         if (m.find()) {
             String path = URLDecoder.decode(m.group(2), StandardCharsets.UTF_8);
-            return fileApi.getFileContent(Long.valueOf(m.group(1)), path);
+            return fileService.getFileContent(Long.valueOf(m.group(1)), path);
         }
         // 对象存储等公网地址，直接下载
         HttpResponse<byte[]> resp = HTTP.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).build(),
