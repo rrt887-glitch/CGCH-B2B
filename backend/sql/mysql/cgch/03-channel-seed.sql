@@ -44,3 +44,17 @@ INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_i
   (22202, 'AI 起草与草稿', 'channel:ai:draft',    3, 2, 20401, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
   (22203, '知识库维护',   'channel:ai:knowledge', 3, 1, 20402, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
   (22204, '违禁词维护',   'channel:ai:forbidden', 3, 1, 20405, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 智点：「智点消耗」从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/config/credits/index' WHERE `id` = 20506;
+DELETE FROM `system_menu` WHERE `id` BETWEEN 22300 AND 22399;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (22301, '智点查询', 'channel:credit:query',    3, 1, 20506, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
+  (22302, '智点充值', 'channel:credit:recharge', 3, 2, 20506, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 默认租户赠送 1000 智点用于试用
+DELETE FROM `channel_credit_ledger` WHERE `tenant_id` = 1;
+DELETE FROM `channel_credit_account` WHERE `tenant_id` = 1;
+INSERT INTO `channel_credit_account` (`balance`, `total_in`, `total_out`, `creator`, `updater`, `tenant_id`) VALUES (1000, 1000, 0, '1', '1', 1);
+INSERT INTO `channel_credit_ledger` (`type`, `amount`, `balance_after`, `user_id`, `remark`, `creator`, `updater`, `tenant_id`)
+VALUES ('recharge', 1000, 1000, 1, '初始赠送', '1', '1', 1);

@@ -35,6 +35,7 @@ CREATE TABLE `channel_ai_draft` (
   `reason_detail` varchar(1024) NULL COMMENT '原因补充说明，例如命中的违禁词',
   `prompt_tokens` int NULL COMMENT '本次消耗的输入 token',
   `completion_tokens` int NULL COMMENT '本次消耗的输出 token',
+  `credits` bigint NULL COMMENT '本次扣除的智点',
   `model` varchar(255) NULL COMMENT '使用的模型',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -76,6 +77,41 @@ CREATE TABLE `channel_ai_knowledge` (
   `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '知识库条目：企业介绍、产品资料、常见问答';
+
+DROP TABLE IF EXISTS `channel_credit_account`;
+CREATE TABLE `channel_credit_account` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `balance` bigint NULL COMMENT '当前余额（智点）；扣费在调用之后，可能短暂为负',
+  `total_in` bigint NULL COMMENT '累计获得',
+  `total_out` bigint NULL COMMENT '累计消耗',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '租户的智点余额，每个租户一条';
+
+DROP TABLE IF EXISTS `channel_credit_ledger`;
+CREATE TABLE `channel_credit_ledger` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `type` varchar(255) NULL COMMENT '类型：recharge 充值、consume 消耗、adjust 调整',
+  `amount` bigint NULL COMMENT '变动数量，获得为正、消耗为负',
+  `balance_after` bigint NULL COMMENT '变动后余额',
+  `channel` varchar(255) NULL COMMENT '产生消耗的渠道：mail、whatsapp',
+  `ref_id` bigint NULL COMMENT '关联对象：AI 回复记录编号',
+  `user_id` bigint NULL COMMENT '相关业务员（手动起草为操作人，自动回复为号码/邮箱所属人）',
+  `tokens` int NULL COMMENT '本次消耗的 token 数',
+  `remark` varchar(1024) NULL COMMENT '备注',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '智点流水';
 
 DROP TABLE IF EXISTS `channel_mail_account`;
 CREATE TABLE `channel_mail_account` (

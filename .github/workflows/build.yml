@@ -551,6 +551,35 @@ jobs:
           print('邮件自动回复送达客户（带签名与 In-Reply-To）；no-reply 通知邮件不回复')
           logs = call('GET', '/channel/ai/draft/page?pageNo=1&pageSize=50&status=sent')
           assert logs['total'] >= 3, logs
+          assert all((x.get('credits') or 0) >= 1 for x in logs['list']), '每次 AI 调用都应扣点'
+
+          # ---- 智点 ----
+          sm = call('GET', '/channel/credit/summary')
+          used = sum(x.get('credits') or 0 for x in call('GET', '/channel/ai/draft/page?pageNo=1&pageSize=100')['list'])
+          assert sm['totalIn'] == 1000 and sm['balance'] == 1000 - used == 1000 - sm['totalOut'], (sm, used)
+          assert sm['monthConsumed'] == used and set(sm['monthByChannel']) <= {'mail', 'whatsapp'}, sm
+          led = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=100&type=consume')
+          assert led['total'] == len([1 for x in call('GET', '/channel/ai/draft/page?pageNo=1&pageSize=100')['list'] if x.get('credits')]), led
+          assert all(x['amount'] < 0 and x['tokens'] > 0 and x['channel'] in ('mail', 'whatsapp') for x in led['list']), led['list'][:2]
+          print(f"智点：已扣 {used} 点，余额 {sm['balance']}，流水与记录一致")
+          assert call('POST', '/channel/credit/recharge', {'amount': 0}, ok=False)['code'] != 0
+          after = call('POST', '/channel/credit/recharge', {'amount': -sm['balance'], 'remark': 'CI 清零'})
+          assert after == 0, after
+          llm_before = len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm')))
+          push('447900000666', 'What is the MOQ?')
+          dr = wait(lambda: pending('447900000666'), '智点不足的提醒')
+          assert dr['reason'] == 'no_credit' and outbound('447900000666') == [], dr
+          nc = call('POST', f"/channel/ai/draft/whatsapp?conversationId={conv('447900000666')['id']}", ok=False)
+          assert nc['code'] == 1030003006, nc
+          assert len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))) == llm_before, '余额为 0 时不应调用大模型'
+          print('余额为 0：不调用大模型，自动回复留提醒，手动起草提示余额不足')
+          assert call('POST', '/channel/credit/recharge', {'amount': 500, 'remark': '线下充值'}) == 500
+          d2 = call('POST', f"/channel/ai/draft/whatsapp?conversationId={conv('447900000666')['id']}")
+          assert 'MOQ is 500' in d2['content'] and d2['credits'] >= 1, d2
+          assert call('GET', '/channel/credit/summary')['balance'] == 500 - d2['credits']
+          kinds = [x['type'] for x in call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=3')['list']]
+          assert kinds == ['consume', 'recharge', 'adjust'], kinds
+          print('充值后恢复；流水依次为调整、充值、消耗')
           print('AI 数字员工全部通过')
           PY
 

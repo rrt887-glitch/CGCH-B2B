@@ -43,5 +43,9 @@ public interface ErrorCodeConstants {
     ErrorCode AI_FORBIDDEN_EMPTY = new ErrorCode(1_030_003_003, "违禁词不能为空");
     ErrorCode AI_FORBIDDEN_EXISTS = new ErrorCode(1_030_003_004, "该违禁词已存在");
     ErrorCode AI_DRAFT_NOT_EXISTS = new ErrorCode(1_030_003_005, "草稿不存在");
+    ErrorCode AI_CREDIT_INSUFFICIENT = new ErrorCode(1_030_003_006, "智点余额不足，请联系管理员充值");
+
+    // ========== 智点 1-030-004-000 ==========
+    ErrorCode CREDIT_AMOUNT_ZERO = new ErrorCode(1_030_004_000, "数量不能为 0");
 
 }

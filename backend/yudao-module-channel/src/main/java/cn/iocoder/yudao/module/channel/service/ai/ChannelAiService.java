@@ -18,6 +18,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiForbiddenWordMapper
 import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiKnowledgeMapper;
 import cn.iocoder.yudao.module.channel.controller.admin.mail.vo.ChannelMailSendReqVO;
 import cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaSendReqVO;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
 import cn.iocoder.yudao.module.channel.service.mail.ChannelMailService;
 import cn.iocoder.yudao.module.channel.service.mail.HtmlText;
 import cn.iocoder.yudao.module.channel.service.whatsapp.ChannelWhatsAppService;
@@ -62,6 +63,8 @@ public class ChannelAiService {
     private ChannelWhatsAppService whatsAppService;
     @Resource
     private CrmCustomerMapper customerMapper;
+    @Resource
+    private ChannelCreditService channelCreditService;
 
     // ==================== 配置 ====================
 
@@ -242,22 +245,24 @@ public class ChannelAiService {
 
     public ChannelAiDraftDO draftForMail(Long userId, Long messageId) {
         ChannelMailMessageDO m = mailService.getMessage(userId, messageId);
+        requireCredit();
         ChannelAiConfigDO cfg = getConfig();
         List<LlmClient.Message> history = mailHistory(m);
         Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history);
-        return saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), withSignature(g, cfg), g, ChannelAiDraftDO.STATUS_PENDING,
+        return charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), withSignature(g, cfg), g, ChannelAiDraftDO.STATUS_PENDING,
                 g.handoff() ? ChannelAiDraftDO.REASON_HANDOFF : g.forbidden() != null ? ChannelAiDraftDO.REASON_FORBIDDEN : ChannelAiDraftDO.REASON_MANUAL,
-                g.forbidden());
+                g.forbidden()), userId, "邮件起草");
     }
 
     public ChannelAiDraftDO draftForWhatsApp(Long userId, Long conversationId) {
         whatsAppService.getConversation(userId, conversationId); // 校验归属
+        requireCredit();
         ChannelAiConfigDO cfg = getConfig();
         List<LlmClient.Message> history = waHistory(conversationId);
         Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history);
-        return saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING,
+        return charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING,
                 g.handoff() ? ChannelAiDraftDO.REASON_HANDOFF : g.forbidden() != null ? ChannelAiDraftDO.REASON_FORBIDDEN : ChannelAiDraftDO.REASON_MANUAL,
-                g.forbidden());
+                g.forbidden()), userId, "WhatsApp 起草");
     }
 
     private static String withSignature(Generated g, ChannelAiConfigDO cfg) {
@@ -274,6 +279,34 @@ public class ChannelAiService {
                 .promptTokens(g.promptTokens()).completionTokens(g.completionTokens()).model(g.model()).build();
         channelAiDraftMapper.insert(d);
         return d;
+    }
+
+    private void requireCredit() {
+        if (!channelCreditService.hasBalance()) {
+            throw exception(AI_CREDIT_INSUFFICIENT);
+        }
+    }
+
+    /** 按本次 token 扣点，并记在回复记录上 */
+    private ChannelAiDraftDO charge(ChannelAiDraftDO d, Long userId, String remark) {
+        int tokens = (d.getPromptTokens() == null ? 0 : d.getPromptTokens()) + (d.getCompletionTokens() == null ? 0 : d.getCompletionTokens());
+        long credits = channelCreditService.consume(d.getChannel(), d.getId(), userId, tokens, remark);
+        channelAiDraftMapper.updateById(new ChannelAiDraftDO().setId(d.getId()).setCredits(credits));
+        d.setCredits(credits);
+        return d;
+    }
+
+    /** 余额不足时不调用大模型，只留一条记录提醒人工处理 */
+    private boolean noCredit(String channel, Long refId) {
+        if (channelCreditService.hasBalance()) {
+            return false;
+        }
+        ChannelAiDraftDO exist = channelAiDraftMapper.selectLatestPending(channel, refId);
+        if (exist == null || !ChannelAiDraftDO.REASON_NO_CREDIT.equals(exist.getReason())) {
+            channelAiDraftMapper.insert(ChannelAiDraftDO.builder().channel(channel).refId(refId).content("")
+                    .status(ChannelAiDraftDO.STATUS_PENDING).reason(ChannelAiDraftDO.REASON_NO_CREDIT).build());
+        }
+        return true;
     }
 
     public ChannelAiDraftDO getPendingDraft(String channel, Long refId) {
@@ -309,6 +342,9 @@ public class ChannelAiService {
         if (account == null || StrUtil.equalsIgnoreCase(account.getEmail(), m.getFromAddress())) {
             return;
         }
+        if (noCredit(ChannelAiDraftDO.CHANNEL_MAIL, m.getId())) {
+            return;
+        }
         List<LlmClient.Message> history = mailHistory(m);
         Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history);
         String content = withSignature(g, cfg);
@@ -317,7 +353,7 @@ public class ChannelAiService {
                         .filter(t -> t.getDirection() == ChannelMailMessageDO.DIRECTION_OUT && !Boolean.TRUE.equals(t.getAiGenerated()))
                         .map(ChannelMailMessageDO::getSentTime).toList(), cfg));
         if (reason != null) {
-            saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), content, g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden());
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), content, g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden()), account.getUserId(), "邮件自动处理");
             return;
         }
         ChannelMailSendReqVO req = new ChannelMailSendReqVO();
@@ -328,10 +364,10 @@ public class ChannelAiService {
         req.setReplyToId(m.getId());
         try {
             mailService.send(account.getUserId(), req, true);
-            saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), content, g, ChannelAiDraftDO.STATUS_SENT, null, null);
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), content, g, ChannelAiDraftDO.STATUS_SENT, null, null), account.getUserId(), "邮件自动处理");
         } catch (Exception e) {
-            saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), content, g, ChannelAiDraftDO.STATUS_PENDING,
-                    ChannelAiDraftDO.REASON_SEND_FAILED, e.getMessage());
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), content, g, ChannelAiDraftDO.STATUS_PENDING,
+                    ChannelAiDraftDO.REASON_SEND_FAILED, e.getMessage()), account.getUserId(), "邮件自动处理");
         }
     }
 
@@ -360,6 +396,9 @@ public class ChannelAiService {
         if (account == null) {
             return;
         }
+        if (noCredit(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId)) {
+            return;
+        }
         List<LlmClient.Message> history = waHistory(conversationId);
         Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history);
         String reason = blockReason(cfg.getWaMode(), g, conv.getCustomerId(),
@@ -370,7 +409,7 @@ public class ChannelAiService {
             reason = ChannelAiDraftDO.REASON_WINDOW_CLOSED;
         }
         if (reason != null) {
-            saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden());
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden()), account.getUserId(), "WhatsApp 自动处理");
             return;
         }
         ChannelWaSendReqVO req = new ChannelWaSendReqVO();
@@ -378,10 +417,10 @@ public class ChannelAiService {
         req.setText(g.content());
         try {
             whatsAppService.send(account.getUserId(), req, true);
-            saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_SENT, null, null);
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_SENT, null, null), account.getUserId(), "WhatsApp 自动处理");
         } catch (Exception e) {
-            saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING,
-                    ChannelAiDraftDO.REASON_SEND_FAILED, e.getMessage());
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING,
+                    ChannelAiDraftDO.REASON_SEND_FAILED, e.getMessage()), account.getUserId(), "WhatsApp 自动处理");
         }
     }
 

@@ -35,6 +35,7 @@ public class ChannelAiDraftDO extends TenantBaseDO {
     public static final String REASON_WINDOW_CLOSED = "window_closed";
     public static final String REASON_SEND_FAILED = "send_failed";
     public static final String REASON_MANUAL = "manual";
+    public static final String REASON_NO_CREDIT = "no_credit";
 
     /**
      * 编号
@@ -73,6 +74,10 @@ public class ChannelAiDraftDO extends TenantBaseDO {
      * 本次消耗的输出 token
      */
     private Integer completionTokens;
+    /**
+     * 本次扣除的智点
+     */
+    private Long credits;
     /**
      * 使用的模型
      */
