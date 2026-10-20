@@ -27,9 +27,11 @@ TYPE_MAP = {
 }
 LONG_TEXT = {'remark', 'content', 'description', 'detail_address', 'contact_last_content',
              'password', 'access_token', 'app_secret',  # 加密后的密钥会变长
-             'file_url'}  # 域名 + 存储路径 + 文件名可能较长
+             'file_url', 'llm_api_key', 'mail_signature', 'extra_instructions', 'reason_detail'}  # 较长的文本
 # 正文类大字段，用 mediumtext（最大 16MB）
 MEDIUM_TEXT = {'text_body', 'html_body', 'raw_headers', 'last_sync_error', 'to_addresses', 'cc_addresses'}
+# 知识条目、AI 回复、跟进记录等正文
+MEDIUM_TEXT |= {'content'}
 
 
 def snake(name: str) -> str:

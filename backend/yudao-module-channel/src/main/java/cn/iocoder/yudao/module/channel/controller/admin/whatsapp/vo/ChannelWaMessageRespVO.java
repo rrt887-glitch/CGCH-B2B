@@ -23,4 +23,6 @@ public class ChannelWaMessageRespVO {
     private String errorMessage;
     private LocalDateTime messageTime;
 
+    private Boolean aiGenerated;
+
 }

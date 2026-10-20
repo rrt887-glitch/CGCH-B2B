@@ -1,6 +1,82 @@
 -- 由 backend/sql/tools/gen_ddl_from_do.py 根据 DO 实体类生成，请勿手改；实体变更后重新生成
 SET NAMES utf8mb4;
 
+DROP TABLE IF EXISTS `channel_ai_config`;
+CREATE TABLE `channel_ai_config` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `agent_name` varchar(255) NULL COMMENT '数字员工名称，回复时的自称',
+  `personality` varchar(255) NULL COMMENT '个性：professional 专业严谨、concise 高效简洁、friendly 温和友好、proactive 积极推进、calm 冷静专业',
+  `default_language` varchar(255) NULL COMMENT '默认答复语种，例如 English；无法从客户消息判断语种时使用',
+  `llm_base_url` varchar(255) NULL COMMENT '大模型接口地址（OpenAI 兼容），例如 https://api.deepseek.com/v1',
+  `llm_api_key` varchar(1024) NULL COMMENT '大模型 API Key，加密存储',
+  `llm_model` varchar(255) NULL COMMENT '模型名称，例如 deepseek-chat、qwen-plus、gpt-4o-mini',
+  `mail_mode` varchar(255) NULL COMMENT '邮件回复模式：off、draft、auto',
+  `wa_mode` varchar(255) NULL COMMENT 'WhatsApp 回复模式：off、draft、auto',
+  `mail_signature` varchar(1024) NULL COMMENT '邮件签名，追加在 AI 回复末尾',
+  `human_pause_hours` int NULL COMMENT '业务员人工回复后，AI 暂停自动回复的小时数',
+  `extra_instructions` varchar(1024) NULL COMMENT '补充要求，例如「报价统一用美元，不承诺交期」',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'AI 数字员工配置，每个租户一条';
+
+DROP TABLE IF EXISTS `channel_ai_draft`;
+CREATE TABLE `channel_ai_draft` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `channel` varchar(255) NULL COMMENT '渠道：mail、whatsapp',
+  `ref_id` bigint NULL COMMENT '关联对象：邮件为收到的邮件编号，WhatsApp 为会话编号',
+  `content` mediumtext NULL COMMENT '回复内容',
+  `status` varchar(255) NULL COMMENT '状态：pending 待处理、sent 已发送、discarded 已放弃',
+  `reason` varchar(255) NULL COMMENT '未自动发送的原因，见 REASON_*',
+  `reason_detail` varchar(1024) NULL COMMENT '原因补充说明，例如命中的违禁词',
+  `prompt_tokens` int NULL COMMENT '本次消耗的输入 token',
+  `completion_tokens` int NULL COMMENT '本次消耗的输出 token',
+  `model` varchar(255) NULL COMMENT '使用的模型',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'AI 生成的回复：起草模式下的草稿、自动回复被拦下的草稿，以及已自动发出的记录';
+
+DROP TABLE IF EXISTS `channel_ai_forbidden_word`;
+CREATE TABLE `channel_ai_forbidden_word` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `word` varchar(255) NULL COMMENT '词语，不区分大小写',
+  `remark` varchar(1024) NULL COMMENT '说明，例如「不能承诺质量保证」',
+  `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否启用',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '违禁词：AI 回复中出现时不会自动发出，转为草稿等人工确认';
+
+DROP TABLE IF EXISTS `channel_ai_knowledge`;
+CREATE TABLE `channel_ai_knowledge` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `type` varchar(255) NULL COMMENT '类型：company 企业介绍、product 产品资料、faq 常见问答',
+  `title` varchar(255) NULL COMMENT '标题；常见问答为问题',
+  `content` mediumtext NULL COMMENT '内容；常见问答为答案',
+  `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否启用',
+  `sort` int NULL COMMENT '排序',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '知识库条目：企业介绍、产品资料、常见问答';
+
 DROP TABLE IF EXISTS `channel_mail_account`;
 CREATE TABLE `channel_mail_account` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
@@ -73,6 +149,7 @@ CREATE TABLE `channel_mail_message` (
   `replied` bit(1) NULL DEFAULT b'0' COMMENT '是否已回复（仅收到的邮件）',
   `customer_id` bigint NULL COMMENT '关联的 CRM 客户编号',
   `has_attachments` bit(1) NULL DEFAULT b'0' COMMENT '是否带附件（不含正文内嵌图片）',
+  `ai_generated` bit(1) NULL DEFAULT b'0' COMMENT '是否由 AI 数字员工生成并发出',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
@@ -144,6 +221,7 @@ CREATE TABLE `channel_wa_message` (
   `status` varchar(255) NULL COMMENT '状态：received、sent、delivered、read、failed',
   `error_message` varchar(255) NULL COMMENT '发送失败原因',
   `message_time` datetime NULL COMMENT '消息时间',
+  `ai_generated` bit(1) NULL DEFAULT b'0' COMMENT '是否由 AI 数字员工生成并发出',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',

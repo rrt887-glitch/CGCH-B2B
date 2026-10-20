@@ -298,7 +298,7 @@ CREATE TABLE `crm_follow_up_record` (
   `biz_type` int NULL COMMENT '数据类型',
   `biz_id` bigint NULL COMMENT '数据编号',
   `type` int NULL COMMENT '跟进类型',
-  `content` varchar(1024) NULL COMMENT '跟进内容',
+  `content` mediumtext NULL COMMENT '跟进内容',
   `next_time` datetime NULL COMMENT '下次联系时间',
   `pic_urls` varchar(2000) NULL COMMENT '图片',
   `file_urls` varchar(2000) NULL COMMENT '附件',

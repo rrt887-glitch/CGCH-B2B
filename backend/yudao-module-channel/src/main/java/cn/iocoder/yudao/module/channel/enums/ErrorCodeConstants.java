@@ -35,4 +35,13 @@ public interface ErrorCodeConstants {
     ErrorCode WA_NO_MEDIA = new ErrorCode(1_030_002_009, "该消息没有媒体文件");
     ErrorCode WA_FILE_TOO_LARGE = new ErrorCode(1_030_002_010, "文件过大：图片不超过 5MB，其他文件不超过 16MB");
 
+
+    // ========== AI 数字员工 1-030-003-000 ==========
+    ErrorCode AI_LLM_FAIL = new ErrorCode(1_030_003_000, "{}");
+    ErrorCode AI_KNOWLEDGE_EMPTY = new ErrorCode(1_030_003_001, "知识内容不能为空");
+    ErrorCode AI_KNOWLEDGE_NOT_EXISTS = new ErrorCode(1_030_003_002, "知识条目不存在");
+    ErrorCode AI_FORBIDDEN_EMPTY = new ErrorCode(1_030_003_003, "违禁词不能为空");
+    ErrorCode AI_FORBIDDEN_EXISTS = new ErrorCode(1_030_003_004, "该违禁词已存在");
+    ErrorCode AI_DRAFT_NOT_EXISTS = new ErrorCode(1_030_003_005, "草稿不存在");
+
 }

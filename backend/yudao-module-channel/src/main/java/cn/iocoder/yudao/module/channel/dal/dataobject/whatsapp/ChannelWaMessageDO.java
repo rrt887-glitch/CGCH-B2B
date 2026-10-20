@@ -96,5 +96,9 @@ public class ChannelWaMessageDO extends TenantBaseDO {
      * 消息时间
      */
     private LocalDateTime messageTime;
+    /**
+     * 是否由 AI 数字员工生成并发出
+     */
+    private Boolean aiGenerated;
 
 }

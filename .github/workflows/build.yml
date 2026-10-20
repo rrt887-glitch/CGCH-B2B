@@ -73,7 +73,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -400,6 +400,157 @@ jobs:
           names = [t['name'] for t in call('GET', f'/channel/wa-account/templates?id={aid}')]
           assert names == ['hello_world'], names
           print('WhatsApp 渠道全部通过')
+          PY
+
+          echo "--- AI 数字员工：配置、知识库、违禁词、起草、自动回复、转人工、拦截 ---"
+          python3 - <<'PY'
+          import sys, traceback
+          sys.excepthook = lambda t, v, tb: (print('::error title=test failed::' + ''.join(traceback.format_exception(t, v, tb)).replace('%', '%25').replace('\n', '%0A')), sys.__excepthook__(t, v, tb))
+          import hashlib, hmac, json, os, smtplib, time, urllib.error, urllib.request
+          from email.message import EmailMessage
+          from email.utils import make_msgid
+          BASE = 'http://127.0.0.1:48080/admin-api'
+          H = {'Authorization': 'Bearer ' + os.environ['TOKEN'], 'tenant-id': '1', 'Content-Type': 'application/json'}
+          def call(method, path, body=None, ok=True):
+              req = urllib.request.Request(BASE + path, method=method, headers=H,
+                                           data=json.dumps(body).encode() if body is not None else None)
+              d = json.load(urllib.request.urlopen(req))
+              if ok and d.get('code') != 0:
+                  print(f'::error title={method} {path}::{d}')
+                  raise SystemExit(f'{method} {path} 失败: {d}')
+              return d if not ok else d['data']
+          def wait(fn, what, timeout=15):
+              end = time.time() + timeout
+              while time.time() < end:
+                  v = fn()
+                  if v:
+                      return v
+                  time.sleep(0.5)
+              raise AssertionError(f'等待超时：{what}')
+          cfg = {'agentName': 'Lily', 'personality': 'professional', 'defaultLanguage': 'English',
+                 'llmBaseUrl': 'http://127.0.0.1:18080/v1', 'llmModel': 'mock-chat', 'mailMode': 'off', 'waMode': 'off',
+                 'mailSignature': 'Best regards,\nLily | CGCH', 'humanPauseHours': 12}
+          bad = call('POST', '/channel/ai/config/test', dict(cfg, llmApiKey='wrong'), ok=False)
+          assert bad['code'] != 0 and 'Incorrect API key' in bad['msg'], bad
+          assert call('POST', '/channel/ai/config/test', dict(cfg, llmApiKey='llm-key')) == 'OK'
+          call('PUT', '/channel/ai/config/save', dict(cfg, llmApiKey='llm-key'))
+          got = call('GET', '/channel/ai/config/get')
+          assert got['hasApiKey'] is True and not got.get('llmApiKey') and got['agentName'] == 'Lily', got
+          call('PUT', '/channel/ai/config/save', dict(cfg))  # 不填 Key 表示不变
+          assert call('GET', '/channel/ai/config/get')['hasApiKey'] is True
+          print('大模型配置：错误 Key 被拒绝、Key 不回显、留空不覆盖')
+          call('POST', '/channel/ai/knowledge/save', {'type': 'company', 'title': 'CGCH', 'content': 'CGCH makes personal care electronics in Dongguan.'})
+          call('POST', '/channel/ai/knowledge/save', {'type': 'faq', 'title': 'What is the MOQ?', 'content': 'Our MOQ is 500 units per model.'})
+          call('POST', '/channel/ai/knowledge/save', {'type': 'product', 'title': 'Lead time', 'content': 'Lead time: 25 days after deposit.'})
+          call('POST', '/channel/ai/forbidden/save', {'word': 'guarantee', 'remark': '不能承诺质量保证'})
+          assert call('POST', '/channel/ai/forbidden/save', {'word': 'guarantee'}, ok=False)['code'] != 0
+          assert len(call('GET', '/channel/ai/knowledge/list')) == 3
+
+          # ---- 邮件：手动起草 ----
+          acct = call('GET', '/channel/mail-account/list')[0]['id']
+          def inquiry(sender, subject, body):
+              m = EmailMessage(); m['From'] = sender; m['To'] = 'sales@cgch.test'; m['Subject'] = subject
+              m['Message-ID'] = make_msgid(domain='buyer.example'); m.set_content(body)
+              with smtplib.SMTP('127.0.0.1', 3025) as s:
+                  s.send_message(m)
+              time.sleep(1)
+              call('POST', f'/channel/mail-account/sync?id={acct}')
+              page = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=20&accountId={acct}&keyword={urllib.parse.quote(subject)}')
+              return page['list'][0]
+          import urllib.parse
+          mm = inquiry('prospect@newbuyer.example', 'Question about MOQ', 'Hi, what is your MOQ for the hair dryer?')
+          d = call('POST', f"/channel/ai/draft/mail?messageId={mm['id']}")
+          assert 'MOQ is 500' in d['content'] and d['content'].endswith('Lily | CGCH'), d
+          assert d['status'] == 'pending' and d['promptTokens'] > 0, d
+          llm = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-1]
+          sys_prompt = llm['messages'][0]['content']
+          assert 'MOQ is 500' in sys_prompt and 'CGCH makes personal care' in sys_prompt and 'Lily' in sys_prompt, sys_prompt[:400]
+          assert '[HANDOFF]' in sys_prompt, '系统提示应包含转人工规则'
+          assert call('GET', f"/channel/ai/draft/pending?channel=mail&refId={mm['id']}")['id'] == d['id']
+          print('邮件起草：引用知识库、附签名、记录 token')
+
+          # ---- WhatsApp：自动回复与各种拦截 ----
+          wa = call('GET', '/channel/wa-account/list')[0]
+          SECRET = 'test-app-secret'
+          hook = 'http://127.0.0.1:48080' + wa['webhookPath']
+          n = [100]
+          def push(frm, text):
+              n[0] += 1
+              payload = json.dumps({'entry': [{'changes': [{'field': 'messages', 'value': {
+                  'metadata': {'phone_number_id': '111222333'},
+                  'contacts': [{'profile': {'name': f'Buyer {frm[-3:]}'}, 'wa_id': frm}],
+                  'messages': [{'from': frm, 'id': f'wamid.AI{n[0]}', 'timestamp': str(int(time.time())), 'type': 'text', 'text': {'body': text}}]}}]}]}).encode()
+              sig = 'sha256=' + hmac.new(SECRET.encode(), payload, hashlib.sha256).hexdigest()
+              urllib.request.urlopen(urllib.request.Request(hook, data=payload, method='POST',
+                                     headers={'Content-Type': 'application/json', 'X-Hub-Signature-256': sig}))
+          def conv(num):
+              p = call('GET', f'/channel/wa/conversation/page?pageNo=1&pageSize=10&keyword={num}')
+              return p['list'][0] if p['list'] else None
+          def outbound(num):
+              c = conv(num)
+              return [m for m in call('GET', f"/channel/wa/message/list?conversationId={c['id']}") if m['direction'] == 2] if c else []
+          def pending(num):
+              c = conv(num)
+              return call('GET', f"/channel/ai/draft/pending?channel=whatsapp&refId={c['id']}") if c else None
+
+          push('447900000111', 'Hello, what is your lead time?')
+          time.sleep(2)
+          assert outbound('447900000111') == [], '回复模式为关闭时不应自动回复'
+          call('PUT', '/channel/ai/config/save', dict(cfg, waMode='auto'))
+          push('447900000111', 'Hello, what is your lead time?')
+          out = wait(lambda: outbound('447900000111'), 'AI 自动回复 WhatsApp')
+          assert len(out) == 1 and out[0]['aiGenerated'] is True and '25 days' in out[0]['textBody'], out
+          print('WhatsApp 自动回复：按知识库回答交期，并标记为 AI 发出')
+
+          push('447900000222', 'hi')
+          push('447900000222', 'what is the MOQ?')
+          out = wait(lambda: outbound('447900000222'), '连发两条后的自动回复')
+          time.sleep(2)
+          out = outbound('447900000222')
+          assert len(out) == 1 and 'MOQ is 500' in out[0]['textBody'], f'连发两条只应回复一次: {out}'
+          print('客户连发多条：合并后只回复一次')
+
+          push('447900000333', 'I want a refund for the broken units')
+          dr = wait(lambda: pending('447900000333'), '转人工草稿')
+          assert dr['reason'] == 'handoff' and outbound('447900000333') == [], dr
+          push('447900000444', 'Do you guarantee the quality?')
+          dr = wait(lambda: pending('447900000444'), '违禁词草稿')
+          assert dr['reason'] == 'forbidden' and dr['reasonDetail'] == 'guarantee' and outbound('447900000444') == [], dr
+          print('投诉退款转人工、命中违禁词拦截，均未发出')
+
+          c111 = conv('447900000111')
+          call('POST', '/channel/wa/message/send', {'conversationId': c111['id'], 'text': 'Hi, this is Tom from sales.'})
+          push('447900000111', 'ok and what about lead time again?')
+          dr = wait(lambda: pending('447900000111'), '业务员跟进中的草稿')
+          assert dr['reason'] == 'human_active', dr
+          assert len([m for m in outbound('447900000111') if m['aiGenerated']]) == 1, '业务员刚回复过，AI 不应再自动发'
+          call('POST', '/crm/customer/create', {'name': 'Manual Client', 'ownerUserId': 1, 'whatsapp': '+44 7900 000555', 'aiHosted': False})
+          push('447900000555', 'What is the lead time?')
+          dr = wait(lambda: pending('447900000555'), '未托管客户的草稿')
+          assert dr['reason'] == 'not_hosted' and outbound('447900000555') == [], dr
+          print('业务员跟进中、客户未开启 AI 托管：只留草稿')
+
+          # ---- 邮件：自动回复 ----
+          call('PUT', '/channel/ai/config/save', dict(cfg, waMode='auto', mailMode='auto'))
+          mm2 = inquiry('newlead@shop.example', 'Lead time question', 'Could you tell me your lead time?')
+          sent = wait(lambda: [x for x in call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=20&accountId={acct}&view=sent')['list']
+                               if x['toAddresses'] == 'newlead@shop.example'], 'AI 自动回复邮件')
+          assert sent[0]['aiGenerated'] is True and sent[0]['subject'] == 'Re: Lead time question', sent[0]
+          import imaplib, email as _email
+          imap = imaplib.IMAP4('127.0.0.1', 3143); imap.login('newlead@shop.example', 'pw'); imap.select('INBOX')
+          ids = imap.search(None, 'ALL')[1][0].split()
+          msg = _email.message_from_bytes(imap.fetch(ids[-1], '(RFC822)')[1][0][1])
+          body = msg.get_payload(decode=True).decode() if not msg.is_multipart() else msg.get_payload()[0].get_payload(decode=True).decode()
+          assert '25 days' in body and 'Lily | CGCH' in body and msg['In-Reply-To'], body
+          imap.logout()
+          noreply = inquiry('no-reply@notify.example', 'Your order shipped', 'Automated notice, what is your lead time?')
+          time.sleep(2)
+          assert not [x for x in call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=20&accountId={acct}&view=sent')['list']
+                      if x['toAddresses'] == 'no-reply@notify.example'], '系统通知邮件不应自动回复'
+          print('邮件自动回复送达客户（带签名与 In-Reply-To）；no-reply 通知邮件不回复')
+          logs = call('GET', '/channel/ai/draft/page?pageNo=1&pageSize=50&status=sent')
+          assert logs['total'] >= 3, logs
+          print('AI 数字员工全部通过')
           PY
 
       - name: 后端日志

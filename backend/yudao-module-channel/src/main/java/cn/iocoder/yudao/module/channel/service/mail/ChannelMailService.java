@@ -18,6 +18,8 @@ import cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.yudao.module.crm.dal.mysql.customer.CrmCustomerMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import cn.iocoder.yudao.module.channel.service.event.ChannelInboundEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -48,6 +50,8 @@ public class ChannelMailService {
     private ChannelMailAttachmentMapper attachmentMapper;
     @Resource
     private ChannelFileHelper fileHelper;
+    @Resource
+    private ApplicationEventPublisher eventPublisher;
 
     // ==================== 账号 ====================
 
@@ -188,6 +192,7 @@ public class ChannelMailService {
                     .build();
             messageMapper.insert(msg);
             saveAttachments(msg.getId(), account.getUserId(), m.getAttachments());
+            eventPublisher.publishEvent(new ChannelInboundEvent("mail", msg.getId(), msg.getId(), account.getTenantId()));
             added++;
         }
         accountMapper.updateById(new ChannelMailAccountDO().setId(account.getId())
@@ -227,6 +232,11 @@ public class ChannelMailService {
     // ==================== 发信 ====================
 
     public Long send(Long userId, ChannelMailSendReqVO req) {
+        return send(userId, req, false);
+    }
+
+    /** @param ai 是否由 AI 数字员工发出（用于标记，以及判断业务员是否在人工跟进） */
+    public Long send(Long userId, ChannelMailSendReqVO req, boolean ai) {
         ChannelMailAccountDO account = validateAccount(userId, req.getAccountId());
         List<String> to = cleanAddresses(req.getTo());
         if (to.isEmpty()) {
@@ -270,6 +280,7 @@ public class ChannelMailService {
                 .replied(false)
                 .customerId(original != null ? original.getCustomerId() : findCustomerId(to.get(0)))
                 .hasAttachments(!pending.isEmpty())
+                .aiGenerated(ai)
                 .build();
         messageMapper.insert(sent);
         pending.forEach(att -> attachmentMapper.updateById(new ChannelMailAttachmentDO().setId(att.getId()).setMessageId(sent.getId())));
@@ -400,6 +411,24 @@ public class ChannelMailService {
         }
         validateAccount(userId, m.getAccountId());
         return m;
+    }
+
+    // ==================== 供 AI 使用（调用方需处于正确租户） ====================
+
+    public ChannelMailMessageDO getMessageInternal(Long id) {
+        return messageMapper.selectById(id);
+    }
+
+    public ChannelMailAccountDO getAccountInternal(Long id) {
+        return accountMapper.selectById(id);
+    }
+
+    /** 同一会话的邮件，按时间正序 */
+    public List<ChannelMailMessageDO> getThreadInternal(ChannelMailMessageDO m) {
+        return messageMapper.selectList(new LambdaQueryWrapperX<ChannelMailMessageDO>()
+                .eq(ChannelMailMessageDO::getAccountId, m.getAccountId())
+                .eq(ChannelMailMessageDO::getThreadKey, m.getThreadKey())
+                .orderByAsc(ChannelMailMessageDO::getSentTime));
     }
 
     private void fillCustomerNames(List<ChannelMailMessageRespVO> list) {

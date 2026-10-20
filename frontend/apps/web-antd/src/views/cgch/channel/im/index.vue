@@ -4,6 +4,8 @@
  * 客户 24 小时内发过消息才能发自由文本，窗口关闭后只能发已审核的模板。
  */
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
+import type { ChannelAiApi } from '#/api/channel/ai';
+import { closeDraft, DRAFT_REASON, draftWhatsApp, getPendingDraft } from '#/api/channel/ai';
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -92,6 +94,7 @@ async function openConversation(c: ChannelWaApi.Conversation) {
     messages.value = await getWaMessages(c.id);
     c.unreadCount = 0;
     current.value = await getWaConversation(c.id);
+    aiDraft.value = (await getPendingDraft('whatsapp', c.id)) ?? undefined;
     await scrollBottom();
   } finally {
     chatLoading.value = false;
@@ -121,6 +124,39 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => timer && clearInterval(timer));
 
+// ===== AI 起草 =====
+const aiDraft = ref<ChannelAiApi.Draft>();
+const aiLoading = ref(false);
+const usedDraftId = ref<number>();
+async function aiCompose() {
+  if (!current.value) return;
+  aiLoading.value = true;
+  try {
+    const d = await draftWhatsApp(current.value.id);
+    if (d.reason === 'handoff') {
+      aiDraft.value = d;
+      message.warning('AI 判断这个会话需要人工处理');
+      return;
+    }
+    text.value = d.content;
+    usedDraftId.value = d.id;
+    aiDraft.value = undefined;
+  } finally {
+    aiLoading.value = false;
+  }
+}
+function useDraft() {
+  if (!aiDraft.value) return;
+  text.value = aiDraft.value.content;
+  usedDraftId.value = aiDraft.value.id;
+  aiDraft.value = undefined;
+}
+async function discardDraft() {
+  if (!aiDraft.value) return;
+  await closeDraft(aiDraft.value.id, false);
+  aiDraft.value = undefined;
+}
+
 // ===== 发送文本 =====
 const text = ref('');
 const sending = ref(false);
@@ -129,6 +165,8 @@ async function sendText() {
   sending.value = true;
   try {
     await sendWaMessage({ conversationId: current.value.id, text: text.value.trim() });
+    if (usedDraftId.value) await closeDraft(usedDraftId.value, true);
+    usedDraftId.value = undefined;
     text.value = '';
     await refreshCurrent();
     loadConversations(true);
@@ -354,6 +392,7 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
                   <div v-if="m.type === 'template'" class="mb-1 text-xs text-gray-500">[模板 {{ m.templateName }}]</div>
                   <div class="whitespace-pre-wrap break-words">{{ m.textBody }}</div>
                   <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-gray-400">
+                    <span v-if="m.aiGenerated" class="text-purple-500">AI</span>
                     <span>{{ md(m.messageTime) }} {{ hm(m.messageTime) }}</span>
                     <Tooltip v-if="m.direction === 2 && m.status" :title="m.errorMessage || STATUS_ICON[m.status]?.label">
                       <span :class="m.status === 'read' ? 'text-sky-500' : m.status === 'failed' ? 'font-bold text-red-500' : ''">
@@ -367,6 +406,17 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
           </div>
 
           <div class="border-t p-3">
+            <div v-if="aiDraft" class="mb-2 rounded border border-orange-200 bg-orange-50 p-3 text-sm">
+              <div class="mb-1 font-medium text-orange-700">
+                AI 已准备回复，未自动发出：{{ DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason }}
+                <span v-if="aiDraft.reasonDetail">（{{ aiDraft.reasonDetail }}）</span>
+              </div>
+              <div v-if="aiDraft.content" class="line-clamp-3 whitespace-pre-wrap text-gray-700">{{ aiDraft.content }}</div>
+              <div class="mt-2 flex gap-2">
+                <Button v-if="aiDraft.content && current.windowOpen" size="small" type="primary" ghost @click="useDraft">填入输入框</Button>
+                <Button size="small" @click="discardDraft">忽略</Button>
+              </div>
+            </div>
             <template v-if="current.windowOpen">
               <Textarea
                 v-model:value="text"
@@ -379,6 +429,7 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
                 <Space>
                   <Button :loading="fileSending" @click="pickAndSend">发送文件</Button>
                   <Button @click="openTemplate()">发送模板</Button>
+                  <Button :loading="aiLoading" @click="aiCompose">AI 起草</Button>
                 </Space>
                 <Button type="primary" :loading="sending" :disabled="!text.trim()" @click="sendText">发送</Button>
               </div>

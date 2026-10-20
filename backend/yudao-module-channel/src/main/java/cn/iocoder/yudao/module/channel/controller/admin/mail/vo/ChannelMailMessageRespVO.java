@@ -37,6 +37,8 @@ public class ChannelMailMessageRespVO {
     @Schema(description = "是否带附件")
     private Boolean hasAttachments;
 
+    private Boolean aiGenerated;
+
     @Schema(description = "附件列表（仅详情返回）")
     private List<ChannelMailAttachmentRespVO> attachments;
 

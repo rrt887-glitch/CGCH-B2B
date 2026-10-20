@@ -114,5 +114,9 @@ public class ChannelMailMessageDO extends TenantBaseDO {
      * 是否带附件（不含正文内嵌图片）
      */
     private Boolean hasAttachments;
+    /**
+     * 是否由 AI 数字员工生成并发出
+     */
+    private Boolean aiGenerated;
 
 }

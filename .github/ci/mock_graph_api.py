@@ -6,7 +6,8 @@
 - GET  /{ver}/{media_id}                   媒体信息（media_id 以 MEDIA 开头）
 - GET  /_media/{media_id}                  媒体内容（需要令牌）
 - POST /{ver}/{phone_number_id}/media      记录上传，返回媒体编号
-- GET  /_sent、/_uploads                    查看已记录的发送与上传
+- POST /v1/chat/completions                模拟 OpenAI 兼容的大模型，按规则返回固定回答
+- GET  /_sent、/_uploads、/_llm             查看已记录的发送、上传与大模型请求
 """
 import json
 import sys
@@ -14,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SENT = []
 UPLOADS = []
+LLM = []
 GOOD = 'Bearer good-token'
 
 
@@ -38,6 +40,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, SENT)
         if path == ['_uploads']:
             return self._json(200, UPLOADS)
+        if path == ['_llm']:
+            return self._json(200, LLM)
         if not self._auth_ok():
             return
         if len(path) == 2 and path[0] == '_media':
@@ -63,10 +67,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split('?')[0].strip('/').split('/')
-        if not self._auth_ok():
-            return
         length = int(self.headers.get('Content-Length') or 0)
         raw = self.rfile.read(length)
+        if path == ['v1', 'chat', 'completions']:
+            return self._llm(json.loads(raw or b'{}'))
+        if not self._auth_ok():
+            return
         if len(path) == 3 and path[2] == 'media':
             ctype = self.headers.get('Content-Type', '')
             UPLOADS.append({'contentType': ctype, 'size': len(raw),
@@ -81,6 +87,30 @@ class Handler(BaseHTTPRequestHandler):
                                     'contacts': [{'input': body.get('to'), 'wa_id': body.get('to')}],
                                     'messages': [{'id': f'wamid.OUT{len(SENT)}'}]})
         self._json(404, {'error': {'message': 'Unknown path', 'code': 100}})
+
+    def _llm(self, body):
+        if self.headers.get('Authorization') != 'Bearer llm-key':
+            return self._json(401, {'error': {'message': 'Incorrect API key provided', 'type': 'invalid_request_error'}})
+        msgs = body.get('messages', [])
+        LLM.append(body)
+        system = msgs[0]['content'] if msgs and msgs[0]['role'] == 'system' else ''
+        last = next((m['content'] for m in reversed(msgs) if m['role'] == 'user'), '').lower()
+        if 'single word' in last:
+            answer = 'OK'
+        elif 'complaint' in last or 'refund' in last:
+            answer = '[HANDOFF]'
+        elif 'guarantee' in last:
+            answer = 'Yes, we guarantee 100% quality on every unit.'
+        elif 'moq' in last:
+            answer = ('Thanks for asking. Our MOQ is 500 units.' if 'MOQ is 500' in system
+                      else 'I will confirm with my colleague and get back to you soon.')
+        elif 'lead time' in last:
+            answer = 'Our lead time is 25 days after deposit.' if '25 days' in system else 'I will confirm and get back to you.'
+        else:
+            answer = 'Thank you for your message. We will get back to you shortly.'
+        self._json(200, {'id': 'chatcmpl-ci', 'object': 'chat.completion', 'model': body.get('model'),
+                         'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': answer}, 'finish_reason': 'stop'}],
+                         'usage': {'prompt_tokens': len(system) // 4 + 10, 'completion_tokens': len(answer) // 4 + 1}})
 
     def log_message(self, *args):
         pass

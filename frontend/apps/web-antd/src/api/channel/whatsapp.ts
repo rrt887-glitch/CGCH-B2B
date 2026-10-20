@@ -52,6 +52,7 @@ export namespace ChannelWaApi {
     status?: 'delivered' | 'failed' | 'read' | 'received' | 'sent';
     errorMessage?: string;
     messageTime?: string;
+    aiGenerated?: boolean;
   }
 
   export interface Template {

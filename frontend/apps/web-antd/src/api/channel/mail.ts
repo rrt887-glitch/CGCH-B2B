@@ -50,6 +50,7 @@ export namespace ChannelMailApi {
     customerId?: number;
     customerName?: string;
     hasAttachments?: boolean;
+    aiGenerated?: boolean;
     attachments?: Attachment[];
   }
 

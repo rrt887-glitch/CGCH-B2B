@@ -4,6 +4,8 @@
  * 邮件 HTML 放在禁用脚本的 iframe 里展示，避免来信中的脚本执行。
  */
 import type { ChannelMailApi } from '#/api/channel/mail';
+import type { ChannelAiApi } from '#/api/channel/ai';
+import { closeDraft, draftMail, DRAFT_REASON, getPendingDraft } from '#/api/channel/ai';
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -106,6 +108,7 @@ async function open(item: ChannelMailApi.Message) {
     thread.value = history;
     item.readStatus = true;
     resetReply();
+    aiDraft.value = detail.direction === 1 ? ((await getPendingDraft('mail', detail.id)) ?? undefined) : undefined;
   } finally {
     detailLoading.value = false;
   }
@@ -158,6 +161,39 @@ function removeFile(target: ChannelMailApi.Attachment[], id: number) {
   if (i !== -1) target.splice(i, 1);
 }
 
+// ===== AI 起草 =====
+const aiDraft = ref<ChannelAiApi.Draft>();
+const aiLoading = ref(false);
+const usedDraftId = ref<number>();
+async function aiCompose() {
+  if (!current.value) return;
+  aiLoading.value = true;
+  try {
+    const d = await draftMail(current.value.id);
+    if (d.reason === 'handoff') {
+      aiDraft.value = d;
+      message.warning('AI 判断这封邮件需要人工处理');
+      return;
+    }
+    replyText.value = d.content;
+    usedDraftId.value = d.id;
+    aiDraft.value = undefined;
+  } finally {
+    aiLoading.value = false;
+  }
+}
+function useDraft() {
+  if (!aiDraft.value) return;
+  replyText.value = aiDraft.value.content;
+  usedDraftId.value = aiDraft.value.id;
+  aiDraft.value = undefined;
+}
+async function discardDraft() {
+  if (!aiDraft.value) return;
+  await closeDraft(aiDraft.value.id, false);
+  aiDraft.value = undefined;
+}
+
 // ===== 回复 =====
 const replyText = ref('');
 const replySending = ref(false);
@@ -184,6 +220,8 @@ async function reply() {
       replyToId: m.id,
       attachmentIds: replyFiles.value.map((a) => a.id),
     });
+    if (usedDraftId.value) await closeDraft(usedDraftId.value, true);
+    usedDraftId.value = undefined;
     message.success('已发送');
     resetReply();
     await Promise.all([open(m), loadList(), loadAccounts()]);
@@ -286,6 +324,7 @@ onMounted(async () => {
                       <Tag v-if="item.customerName" color="blue">{{ item.customerName }}</Tag>
                       <Tag v-if="item.direction === 1 && item.replied" color="green">已回复</Tag>
                       <Tag v-if="item.hasAttachments">📎 附件</Tag>
+                      <Tag v-if="item.aiGenerated" color="purple">AI 回复</Tag>
                     </div>
                   </div>
                 </ListItem>
@@ -365,6 +404,17 @@ onMounted(async () => {
             </div>
 
             <div v-if="current.direction === 1 && current.folder !== 'TRASH'" class="border-t p-4">
+              <div v-if="aiDraft" class="mb-2 rounded border border-orange-200 bg-orange-50 p-3 text-sm">
+                <div class="mb-1 font-medium text-orange-700">
+                  AI 已准备回复，未自动发出：{{ DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason }}
+                  <span v-if="aiDraft.reasonDetail">（{{ aiDraft.reasonDetail }}）</span>
+                </div>
+                <div v-if="aiDraft.content" class="line-clamp-3 whitespace-pre-wrap text-gray-700">{{ aiDraft.content }}</div>
+                <div class="mt-2 flex gap-2">
+                  <Button v-if="aiDraft.content" size="small" type="primary" ghost @click="useDraft">填入回复框</Button>
+                  <Button size="small" @click="discardDraft">忽略</Button>
+                </div>
+              </div>
               <Textarea v-model:value="replyText" :rows="5" placeholder="输入回复内容，原邮件会自动引用在下方" />
               <div v-if="replyFiles.length" class="mt-2 flex flex-wrap gap-2">
                 <Tag v-for="a in replyFiles" :key="a.id" closable @close="removeFile(replyFiles, a.id)">
@@ -372,7 +422,10 @@ onMounted(async () => {
                 </Tag>
               </div>
               <div class="mt-2 flex justify-between">
-                <Button :loading="uploading" @click="pickFiles(replyFiles)">添加附件</Button>
+                <div class="flex gap-2">
+                  <Button :loading="uploading" @click="pickFiles(replyFiles)">添加附件</Button>
+                  <Button :loading="aiLoading" @click="aiCompose">AI 起草</Button>
+                </div>
                 <Button type="primary" :loading="replySending" :disabled="!replyText.trim() || uploading" @click="reply">发送回复</Button>
               </div>
             </div>

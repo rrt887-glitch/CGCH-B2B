@@ -23,6 +23,8 @@ import cn.iocoder.yudao.module.crm.dal.mysql.customer.CrmCustomerMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import cn.iocoder.yudao.module.channel.service.event.ChannelInboundEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -58,6 +60,8 @@ public class ChannelWhatsAppService {
     private CrmCustomerMapper customerMapper;
     @Resource
     private ChannelFileHelper fileHelper;
+    @Resource
+    private ApplicationEventPublisher eventPublisher;
 
     // ==================== 号码 ====================
 
@@ -269,6 +273,9 @@ public class ChannelWhatsAppService {
             upd.setCustomerId(findCustomerId(from));
         }
         conversationMapper.updateById(upd);
+        if (!"reaction".equals(type)) { // 表情回应不需要回复
+            eventPublisher.publishEvent(new ChannelInboundEvent("whatsapp", conv.getId(), msg.getId(), a.getTenantId()));
+        }
     }
 
     /** 发出消息的状态只前进不后退；failed 记录原因 */
@@ -294,6 +301,11 @@ public class ChannelWhatsAppService {
     // ==================== 发送 ====================
 
     public ChannelWaMessageRespVO send(Long userId, ChannelWaSendReqVO req) {
+        return send(userId, req, false);
+    }
+
+    /** @param ai 是否由 AI 数字员工发出 */
+    public ChannelWaMessageRespVO send(Long userId, ChannelWaSendReqVO req, boolean ai) {
         ChannelWaConversationDO conv;
         ChannelWaAccountDO a;
         if (req.getConversationId() != null) {
@@ -334,7 +346,7 @@ public class ChannelWhatsAppService {
                 .waMessageId(wamid).type(template ? "template" : "text")
                 .textBody(template ? StrUtil.blankToDefault(req.getTemplatePreview(), "[模板] " + req.getTemplateName()) : req.getText())
                 .templateName(template ? req.getTemplateName() : null)
-                .status(ChannelWaMessageDO.STATUS_SENT).messageTime(now).build();
+                .status(ChannelWaMessageDO.STATUS_SENT).messageTime(now).aiGenerated(ai).build();
         messageMapper.insert(msg);
         conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
                 .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
@@ -476,6 +488,24 @@ public class ChannelWhatsAppService {
             vo.setWindowExpireTime(c.getLastInboundTime() == null ? null : c.getLastInboundTime().plusHours(WINDOW_HOURS));
             return vo;
         }).toList();
+    }
+
+    // ==================== 供 AI 使用 ====================
+
+    public ChannelWaConversationDO getConversationInternal(Long id) {
+        return conversationMapper.selectById(id);
+    }
+
+    public ChannelWaAccountDO getAccountInternal(Long id) {
+        return accountMapper.selectById(id);
+    }
+
+    public List<ChannelWaMessageDO> getRecentMessagesInternal(Long conversationId, int limit) {
+        return messageMapper.selectRecent(conversationId, null, limit);
+    }
+
+    public boolean isWindowOpen(ChannelWaConversationDO c) {
+        return windowOpen(c);
     }
 
     // ==================== 工具 ====================

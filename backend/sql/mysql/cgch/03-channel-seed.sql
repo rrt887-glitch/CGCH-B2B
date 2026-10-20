@@ -32,3 +32,15 @@ INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_i
 -- 文件存储默认用数据库：上游默认的七牛示例配置没有可用密钥，会导致附件、媒体无法保存
 -- 生产环境建议在「基础设施 → 文件配置」改为对象存储（S3/OSS/COS/MinIO），并把 domain 改成你的域名
 UPDATE `infra_file_config` SET `master` = (`id` = 4);
+
+-- AI 数字员工：数字员工、知识库、违禁词配置从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/agent/profile/index' WHERE `id` = 20401;
+UPDATE `system_menu` SET `component` = 'cgch/agent/knowledge/index' WHERE `id` = 20402;
+UPDATE `system_menu` SET `component` = 'cgch/agent/forbidden/index' WHERE `id` = 20405;
+
+DELETE FROM `system_menu` WHERE `id` BETWEEN 22200 AND 22299;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (22201, '数字员工配置', 'channel:ai:config',    3, 1, 20401, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
+  (22202, 'AI 起草与草稿', 'channel:ai:draft',    3, 2, 20401, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
+  (22203, '知识库维护',   'channel:ai:knowledge', 3, 1, 20402, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
+  (22204, '违禁词维护',   'channel:ai:forbidden', 3, 1, 20405, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
