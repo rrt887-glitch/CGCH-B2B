@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 /**
- * 知识库：企业介绍、产品资料、常见问答。AI 回复时按客户提问挑选最相关的条目作为依据。
+ * 知识库：企业介绍、产品资料、常见问答。AI 回复时按客户提问挑选最相关的条目作为依据；
+ * 配置了向量模型时按「关键词 + 语义」综合排序。
  */
 import type { ChannelAiApi } from '#/api/channel/ai';
 
@@ -21,13 +22,15 @@ import {
   Popconfirm,
   Space,
   Switch,
+  Tag,
+  Tooltip,
   Table,
   TabPane,
   Tabs,
   Textarea,
 } from 'ant-design-vue';
 
-import { deleteKnowledge, getKnowledgeList, saveKnowledge } from '#/api/channel/ai';
+import { deleteKnowledge, getAiConfig, getKnowledgeList, reindexKnowledge, saveKnowledge, searchKnowledge } from '#/api/channel/ai';
 
 defineOptions({ name: 'CgchAgentKnowledge' });
 
@@ -44,10 +47,40 @@ const all = ref<ChannelAiApi.Knowledge[]>([]);
 const rows = computed(() => all.value.filter((k) => k.type === active.value));
 const tab = computed(() => TABS.find((t) => t.key === active.value)!);
 
+const embeddingModel = ref<string>();
+const indexed = (k: ChannelAiApi.Knowledge) => !!embeddingModel.value && k.embeddingModel === embeddingModel.value;
+const unindexed = computed(() => all.value.filter((k) => k.enabled && !indexed(k)).length);
+const reindexing = ref(false);
+async function reindex() {
+  reindexing.value = true;
+  try {
+    const n = await reindexKnowledge();
+    message.success(n ? `已为 ${n} 条资料建立语义索引` : '所有资料都已建立索引');
+    await load();
+  } finally {
+    reindexing.value = false;
+  }
+}
+
+// 检索测试
+const q = ref('');
+const searching = ref(false);
+const hits = ref<ChannelAiApi.SearchHit[]>();
+async function search() {
+  if (!q.value.trim()) return;
+  searching.value = true;
+  try {
+    hits.value = await searchKnowledge(q.value.trim());
+  } finally {
+    searching.value = false;
+  }
+}
+
 const columns = computed(() => [
   { title: tab.value.titleLabel, dataIndex: 'title', key: 'title', width: 240 },
   { title: tab.value.contentLabel, key: 'content' },
   { title: '启用', key: 'enabled', width: 80 },
+  ...(embeddingModel.value ? [{ title: '语义索引', key: 'index', width: 100 }] : []),
   { title: '操作', key: 'action', width: 140 },
 ]);
 
@@ -92,13 +125,23 @@ async function remove(row: ChannelAiApi.Knowledge) {
   await load();
 }
 
-onMounted(load);
+onMounted(async () => {
+  embeddingModel.value = (await getAiConfig()).embeddingModel || undefined;
+  await load();
+});
 </script>
 
 <template>
   <Page auto-content-height>
     <Card title="知识库" :bordered="false">
-      <template #extra><Button type="primary" @click="openForm()">新增{{ tab.label }}</Button></template>
+      <template #extra>
+        <Space>
+          <Tooltip v-if="embeddingModel" :title="`向量模型：${embeddingModel}`">
+            <Button :loading="reindexing" @click="reindex">建立语义索引<span v-if="unindexed">（{{ unindexed }} 条待处理）</span></Button>
+          </Tooltip>
+          <Button type="primary" @click="openForm()">新增{{ tab.label }}</Button>
+        </Space>
+      </template>
       <Alert class="mb-4" type="info" show-icon message="AI 只会依据这里的资料回答价格、起订量、交期等具体问题；资料里没有的，会回复客户「确认后答复」，不会编造。" />
       <Tabs v-model:active-key="active">
         <TabPane v-for="t in TABS" :key="t.key" :tab="`${t.label} ${all.filter((k) => k.type === t.key).length}`" />
@@ -108,6 +151,9 @@ onMounted(load);
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'content'">
             <div class="line-clamp-3 whitespace-pre-wrap text-sm">{{ record.content }}</div>
+          </template>
+          <template v-else-if="column.key === 'index'">
+            <Tag :color="indexed(record) ? 'green' : 'default'">{{ indexed(record) ? '已建立' : '未建立' }}</Tag>
           </template>
           <template v-else-if="column.key === 'enabled'">
             <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record, !!v)" />
@@ -123,6 +169,28 @@ onMounted(load);
         </template>
         <template #emptyText>还没有{{ tab.label }}</template>
       </Table>
+    </Card>
+
+    <Card title="检索测试" :bordered="false" class="mt-4">
+      <p class="mb-3 text-sm text-gray-500">
+        输入一句客户可能会问的话，看 AI 回复时会参考哪些资料（企业介绍每次都会带上，这里不列出）。
+        {{ embeddingModel ? '当前为关键词 + 语义综合检索。' : '当前只按关键词检索；在数字员工档案里填写向量模型后，换种说法也能命中。' }}
+      </p>
+      <Space class="mb-3 w-full">
+        <Input v-model:value="q" placeholder="例如：How many pieces must I buy at minimum?" class="w-[480px]" @press-enter="search" />
+        <Button type="primary" :loading="searching" @click="search">检索</Button>
+      </Space>
+      <div v-if="hits && hits.length === 0" class="text-gray-400">没有命中任何资料，AI 遇到这类问题会回复「确认后答复」。</div>
+      <div v-for="(h, i) in hits" :key="h.id" class="border-b py-2 last:border-b-0">
+        <div class="flex items-center gap-2">
+          <span class="text-gray-400">{{ i + 1 }}.</span>
+          <span class="font-medium">{{ h.title || '（无标题）' }}</span>
+          <Tag>{{ TABS.find((t) => t.key === h.type)?.label }}</Tag>
+          <Tag v-if="h.keywordScore > 0" color="blue">关键词 {{ h.keywordScore }}</Tag>
+          <Tag v-if="h.semantic" :color="h.semanticScore >= 0.35 ? 'green' : 'default'">语义相似度 {{ h.semanticScore.toFixed(2) }}</Tag>
+        </div>
+        <div class="line-clamp-2 pl-5 text-sm text-gray-500">{{ h.content }}</div>
+      </div>
     </Card>
 
     <Modal v-model:open="open" :title="form.id ? `修改${tab.label}` : `新增${tab.label}`" :width="720" :confirm-loading="saving" @ok="save">

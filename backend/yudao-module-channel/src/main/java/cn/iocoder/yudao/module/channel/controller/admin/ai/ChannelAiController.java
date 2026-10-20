@@ -21,6 +21,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -77,6 +78,20 @@ public class ChannelAiController {
     @PreAuthorize("@ss.hasPermission('channel:ai:knowledge')")
     public CommonResult<Long> saveKnowledge(@RequestBody ChannelAiKnowledgeDO req) {
         return success(aiService.saveKnowledge(req));
+    }
+
+    @PostMapping("/knowledge/reindex")
+    @Operation(summary = "为知识库建立语义索引（只处理未建或模型已更换的条目），返回处理条数")
+    @PreAuthorize("@ss.hasPermission('channel:ai:knowledge')")
+    public CommonResult<Integer> reindexKnowledge() {
+        return success(aiService.reindexKnowledge(getLoginUserId()));
+    }
+
+    @GetMapping("/knowledge/search")
+    @Operation(summary = "检索测试：看客户的这句话会命中哪些知识")
+    @PreAuthorize("@ss.hasPermission('channel:ai:knowledge')")
+    public CommonResult<List<Map<String, Object>>> searchKnowledge(@RequestParam("q") String q) {
+        return success(aiService.searchKnowledge(getLoginUserId(), q));
     }
 
     @DeleteMapping("/knowledge/delete")

@@ -46,10 +46,10 @@ const LANGUAGES = ['English', 'Español', 'Français', 'Deutsch', 'Português', 
 );
 /** 常见服务商的接口地址与模型，只是预填，可以改 */
 const PROVIDERS = [
-  { label: 'DeepSeek', base: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  { label: '通义千问（兼容模式）', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
-  { label: 'Kimi（月之暗面）', base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
-  { label: 'OpenAI', base: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  { label: 'DeepSeek', base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', embed: '' },
+  { label: '通义千问（兼容模式）', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', embed: 'text-embedding-v3' },
+  { label: 'Kimi（月之暗面）', base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', embed: '' },
+  { label: 'OpenAI', base: 'https://api.openai.com/v1', model: 'gpt-4o-mini', embed: 'text-embedding-3-small' },
 ];
 const MODES = [
   { value: 'off', label: '关闭' },
@@ -91,6 +91,7 @@ function useProvider(label: string) {
   if (p) {
     form.llmBaseUrl = p.base;
     form.llmModel = p.model;
+    form.embeddingModel = p.embed;
   }
 }
 
@@ -199,6 +200,12 @@ onMounted(() => {
                 </FormItem>
               </Col>
             </Row>
+            <FormItem
+              label="向量模型（知识库语义检索，可留空）"
+              extra="填写后，客户换一种说法提问也能找到对应资料（例如问「最少买多少」能命中起订量）。与对话模型共用上面的接口地址和 Key；所选服务商不提供向量模型时留空，按关键词检索。修改后到知识库点「建立语义索引」。"
+            >
+              <Input v-model:value="form.embeddingModel" placeholder="text-embedding-v3" />
+            </FormItem>
             <Button :loading="testing" @click="test">测试连接</Button>
           </Col>
         </Row>

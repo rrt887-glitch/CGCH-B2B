@@ -29,6 +29,9 @@ public class ChannelAiConfigVO {
     @Schema(description = "模型名称", example = "deepseek-chat")
     private String llmModel;
 
+    @Schema(description = "向量模型，为空时知识库按关键词检索", example = "text-embedding-v3")
+    private String embeddingModel;
+
     @Schema(description = "邮件回复模式：off、draft、auto", example = "draft")
     private String mailMode;
 

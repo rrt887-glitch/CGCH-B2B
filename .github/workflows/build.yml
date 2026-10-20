@@ -654,6 +654,41 @@ jobs:
           assert call('GET', f"/channel/credit/order/get?id={unpaid['id']}")['payStatus'] is False
           assert call('GET', '/channel/credit/order/page?pageNo=1&pageSize=10')['total'] == 2
           print('在线充值：下单→收银台模拟支付→回调到账；重复回调幂等，伪造/未支付回调被拒绝')
+
+          # ---- 知识库语义检索 ----
+          base = dict(cfg, mailMode='off', waMode='off', leadAutoCreate=False, leadAiExtract=False)
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel=''))
+          Q = 'How many pieces must I buy at minimum?'
+          assert call('GET', f'/channel/ai/knowledge/search?q={urllib.parse.quote(Q)}') == [], '换了说法，关键词检索命中不了'
+          assert call('POST', '/channel/ai/knowledge/reindex', ok=False)['code'] != 0, '未配置向量模型时应提示'
+          mq = inquiry('Lena <lena@shop.example>', 'Order quantity', Q)
+          def draft_prompt():
+              call('POST', f"/channel/ai/draft/mail?messageId={mq['id']}")
+              return json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-1]['messages'][0]['content']
+          assert 'MOQ is 500' not in draft_prompt(), '关键词检索时不应带上起订量资料'
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='no-such-model'))
+          bad = call('POST', '/channel/ai/knowledge/reindex', ok=False)
+          assert bad['code'] != 0 and 'not found' in bad['msg'], bad
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed'))
+          assert call('GET', '/channel/ai/config/get')['embeddingModel'] == 'mock-embed'
+          assert call('POST', '/channel/ai/knowledge/reindex') == 3
+          assert call('POST', '/channel/ai/knowledge/reindex') == 0, '已建索引的条目不应重复处理'
+          kl = call('GET', '/channel/ai/knowledge/list')
+          assert all(k['embeddingModel'] == 'mock-embed' and 'embedding' not in k for k in kl), kl
+          hits = call('GET', f'/channel/ai/knowledge/search?q={urllib.parse.quote(Q)}')
+          assert hits and hits[0]['title'] == 'What is the MOQ?' and hits[0]['semantic'] and hits[0]['semanticScore'] > 0.6, hits
+          assert all(h['title'] != 'Lead time' for h in hits), f'无关条目不应命中: {hits}'
+          assert 'MOQ is 500' in draft_prompt(), '语义检索应把起订量资料带给大模型'
+          call('POST', '/channel/ai/knowledge/save', {'type': 'faq', 'title': 'Do you have CE certificate?', 'content': 'Yes, all models are CE and RoHS certified.'})
+          ce = next(k for k in call('GET', '/channel/ai/knowledge/list') if k['title'].startswith('Do you have CE'))
+          assert ce['embeddingModel'] == 'mock-embed', '新增条目保存时应自动建索引'
+          h2 = call('GET', '/channel/ai/knowledge/search?q=' + urllib.parse.quote('Is your product certified for Europe?'))
+          assert h2[0]['id'] == ce['id'], h2
+          h3 = call('GET', '/channel/ai/knowledge/search?q=' + urllib.parse.quote('How soon can you deliver?'))
+          assert h3[0]['title'] == 'Lead time', h3
+          led = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
+          assert any(x['remark'] == '知识库向量化' and x['channel'] == 'knowledge' for x in led), '建索引应扣智点'
+          print('语义检索：换种说法也能命中起订量/交期/认证资料，保存即建索引，模型错误有提示')
           print('AI 数字员工全部通过')
           PY
 

@@ -12,6 +12,7 @@ export namespace ChannelAiApi {
     llmBaseUrl?: string;
     llmApiKey?: string;
     llmModel?: string;
+    embeddingModel?: string;
     mailMode?: Mode;
     waMode?: Mode;
     mailSignature?: string;
@@ -29,6 +30,19 @@ export namespace ChannelAiApi {
     content: string;
     enabled?: boolean;
     sort?: number;
+    /** 生成向量所用模型；与当前向量模型一致才算已建语义索引 */
+    embeddingModel?: string;
+  }
+
+  export interface SearchHit {
+    id: number;
+    type: Knowledge['type'];
+    title?: string;
+    content: string;
+    keywordScore: number;
+    semanticScore: number;
+    score: number;
+    semantic: boolean;
   }
 
   export interface ForbiddenWord {
@@ -88,3 +102,6 @@ export const getDraftPage = (params: PageParam & { channel?: string; status?: st
   requestClient.get<PageResult<ChannelAiApi.Draft>>('/channel/ai/draft/page', { params });
 export const closeDraft = (id: number, used: boolean) =>
   requestClient.post(`/channel/ai/draft/close?id=${id}&used=${used}`);
+export const reindexKnowledge = () => requestClient.post<number>('/channel/ai/knowledge/reindex');
+export const searchKnowledge = (q: string) =>
+  requestClient.get<ChannelAiApi.SearchHit[]>('/channel/ai/knowledge/search', { params: { q } });

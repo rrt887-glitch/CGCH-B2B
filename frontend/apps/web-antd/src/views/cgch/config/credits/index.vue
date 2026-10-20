@@ -51,7 +51,7 @@ const router = useRouter();
 const summary = ref<ChannelCreditApi.Summary>();
 const users = ref<{ id: number; nickname: string }[]>([]);
 const userName = (id?: number) => users.value.find((u) => u.id === id)?.nickname ?? (id ? `#${id}` : '—');
-const CHANNEL: Record<string, string> = { mail: '邮件', whatsapp: 'WhatsApp', pay: '在线支付', other: '其他' };
+const CHANNEL: Record<string, string> = { mail: '邮件', whatsapp: 'WhatsApp', knowledge: '知识库', pay: '在线支付', other: '其他' };
 const TYPE: Record<string, { color: string; label: string }> = {
   recharge: { color: 'green', label: '充值' },
   consume: { color: 'blue', label: '消耗' },

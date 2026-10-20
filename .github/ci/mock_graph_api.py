@@ -7,15 +7,20 @@
 - GET  /_media/{media_id}                  媒体内容（需要令牌）
 - POST /{ver}/{phone_number_id}/media      记录上传，返回媒体编号
 - POST /v1/chat/completions                模拟 OpenAI 兼容的大模型，按规则返回固定回答
+- POST /v1/embeddings                      模拟向量模型：同义词落在同一「概念」维度上，便于验证语义检索
 - GET  /_sent、/_uploads、/_llm             查看已记录的发送、上传与大模型请求
 """
 import json
+import math
+import re
+import zlib
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SENT = []
 UPLOADS = []
 LLM = []
+EMBEDS = []
 GOOD = 'Bearer good-token'
 
 
@@ -71,6 +76,8 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
         if path == ['v1', 'chat', 'completions']:
             return self._llm(json.loads(raw or b'{}'))
+        if path == ['v1', 'embeddings']:
+            return self._embed(json.loads(raw or b'{}'))
         if not self._auth_ok():
             return
         if len(path) == 3 and path[2] == 'media':
@@ -87,6 +94,39 @@ class Handler(BaseHTTPRequestHandler):
                                     'contacts': [{'input': body.get('to'), 'wa_id': body.get('to')}],
                                     'messages': [{'id': f'wamid.OUT{len(SENT)}'}]})
         self._json(404, {'error': {'message': 'Unknown path', 'code': 100}})
+
+    # 概念维度：同一行的词语义相近；其余词按哈希落到低权重维度
+    CONCEPTS = [
+        {'moq', 'minimum', 'smallest', 'least', 'minimal', '起订量', '最少'},
+        {'lead', 'delivery', 'deliver', 'ship', 'shipping', 'production', 'weeks', 'days', 'long', '交期'},
+        {'company', 'factory', 'manufacturer', 'located', 'dongguan', 'about'},
+        {'price', 'cost', 'quote', 'quotation', 'cheap', 'expensive', '价格'},
+        {'certificate', 'certified', 'certification', 'ce', 'rohs', 'europe', 'eu', '认证'},
+    ]
+
+    def _embed(self, body):
+        if self.headers.get('Authorization') != 'Bearer llm-key':
+            return self._json(401, {'error': {'message': 'Incorrect API key provided'}})
+        if body.get('model') != 'mock-embed':
+            return self._json(404, {'error': {'message': f"model {body.get('model')} not found"}})
+        inputs = body.get('input') or []
+        inputs = [inputs] if isinstance(inputs, str) else inputs
+        data, tokens = [], 0
+        for i, text in enumerate(inputs):
+            words = re.findall(r'[a-z]+|[\u4e00-\u9fff]+', text.lower())
+            tokens += len(words)
+            v = [0.0] * 64
+            for w in words:
+                hit = [c for c, ws in enumerate(self.CONCEPTS) if w in ws]
+                for c in hit:
+                    v[c] += 1.0
+                if not hit:
+                    v[8 + zlib.crc32(w.encode()) % 56] += 0.3
+            n = math.sqrt(sum(x * x for x in v)) or 1.0
+            data.append({'object': 'embedding', 'index': i, 'embedding': [round(x / n, 6) for x in v]})
+        EMBEDS.append({'model': body.get('model'), 'count': len(inputs)})
+        self._json(200, {'object': 'list', 'data': data, 'model': body.get('model'),
+                         'usage': {'prompt_tokens': tokens, 'total_tokens': tokens}})
 
     def _llm(self, body):
         if self.headers.get('Authorization') != 'Bearer llm-key':

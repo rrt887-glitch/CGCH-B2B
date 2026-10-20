@@ -56,6 +56,10 @@ public class ChannelAiConfigDO extends TenantBaseDO {
      */
     private String llmModel;
     /**
+     * 向量模型（OpenAI 兼容 /embeddings，与对话模型共用接口地址和 Key）；为空时知识库按关键词检索
+     */
+    private String embeddingModel;
+    /**
      * 邮件回复模式：off、draft、auto
      */
     private String mailMode;

@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.channel.dal.dataobject.ai;
 
 import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
@@ -48,5 +49,14 @@ public class ChannelAiKnowledgeDO extends TenantBaseDO {
      * 排序
      */
     private Integer sort;
+    /**
+     * 标题+内容的向量（JSON 数组），用于语义检索；不对外返回
+     */
+    @JsonIgnore
+    private String embedding;
+    /**
+     * 生成向量所用的模型；与当前配置的向量模型不一致时视为未建索引
+     */
+    private String embeddingModel;
 
 }

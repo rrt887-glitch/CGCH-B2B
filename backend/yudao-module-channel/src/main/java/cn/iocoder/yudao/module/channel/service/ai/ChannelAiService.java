@@ -133,6 +133,8 @@ public class ChannelAiService {
         if (k.getSort() == null) {
             k.setSort(0);
         }
+        k.setEmbedding("");
+        k.setEmbeddingModel(""); // 内容可能变了，旧向量作废；下面能生成就立即生成
         if (k.getId() == null) {
             channelAiKnowledgeMapper.insert(k);
         } else {
@@ -141,7 +143,130 @@ public class ChannelAiService {
             }
             channelAiKnowledgeMapper.updateById(k);
         }
+        ChannelAiConfigDO cfg = getConfig();
+        if (semanticEnabled(cfg) && channelCreditService.hasBalance()) {
+            try {
+                embedKnowledge(cfg, List.of(k), currentUserId());
+            } catch (Exception e) {
+                log.warn("[saveKnowledge][条目({}) 生成向量失败，暂按关键词检索] {}", k.getId(), e.getMessage());
+            }
+        }
         return k.getId();
+    }
+
+    // ==================== 语义检索 ====================
+
+    private static final int EMBED_BATCH = 16;
+
+    private static boolean semanticEnabled(ChannelAiConfigDO cfg) {
+        return StrUtil.isNotBlank(cfg.getEmbeddingModel()) && StrUtil.isNotBlank(cfg.getLlmBaseUrl())
+                && StrUtil.isNotBlank(cfg.getLlmApiKey());
+    }
+
+    private static Long currentUserId() {
+        try {
+            return cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String embedText(ChannelAiKnowledgeDO k) {
+        return StrUtil.maxLength(StrUtil.nullToEmpty(k.getTitle()) + "\n" + StrUtil.nullToEmpty(k.getContent()), 4000);
+    }
+
+    /** 为条目生成向量并保存，按 token 扣智点；返回处理的条数 */
+    private int embedKnowledge(ChannelAiConfigDO cfg, List<ChannelAiKnowledgeDO> items, Long userId) {
+        int tokens = 0;
+        for (int i = 0; i < items.size(); i += EMBED_BATCH) {
+            List<ChannelAiKnowledgeDO> batch = items.subList(i, Math.min(items.size(), i + EMBED_BATCH));
+            LlmClient.Embeddings e = LlmClient.embed(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getEmbeddingModel(),
+                    batch.stream().map(ChannelAiService::embedText).toList());
+            for (int j = 0; j < batch.size(); j++) {
+                ChannelAiKnowledgeDO k = batch.get(j);
+                k.setEmbedding(VectorMath.toJson(e.vectors().get(j))).setEmbeddingModel(cfg.getEmbeddingModel());
+                channelAiKnowledgeMapper.updateById(new ChannelAiKnowledgeDO().setId(k.getId())
+                        .setEmbedding(k.getEmbedding()).setEmbeddingModel(k.getEmbeddingModel()));
+            }
+            tokens += e.tokens();
+        }
+        if (!items.isEmpty()) {
+            channelCreditService.consume("knowledge", null, userId, Math.max(tokens, 1), "知识库向量化");
+        }
+        return items.size();
+    }
+
+    /** 为还没有向量（或向量模型已更换）的启用条目建索引，返回处理条数 */
+    public int reindexKnowledge(Long userId) {
+        ChannelAiConfigDO cfg = getConfig();
+        if (!semanticEnabled(cfg)) {
+            throw exception(AI_EMBEDDING_NOT_CONFIGURED);
+        }
+        requireCredit();
+        List<ChannelAiKnowledgeDO> todo = channelAiKnowledgeMapper.selectEnabled().stream()
+                .filter(k -> !cfg.getEmbeddingModel().equals(k.getEmbeddingModel()) || StrUtil.isBlank(k.getEmbedding()))
+                .toList();
+        try {
+            return embedKnowledge(cfg, todo, userId);
+        } catch (LlmClient.LlmException e) {
+            throw exception(AI_LLM_FAIL, e.getMessage());
+        }
+    }
+
+    /** 语义得分 + 消耗的 token；未配置向量模型或调用失败时返回 null（退回关键词检索） */
+    private record Semantic(Map<Long, Double> scores, int tokens) {
+    }
+
+    private Semantic semanticScores(ChannelAiConfigDO cfg, List<ChannelAiKnowledgeDO> all, String text) {
+        if (!semanticEnabled(cfg) || StrUtil.isBlank(text)) {
+            return null;
+        }
+        List<ChannelAiKnowledgeDO> indexed = all.stream()
+                .filter(k -> cfg.getEmbeddingModel().equals(k.getEmbeddingModel()) && StrUtil.isNotBlank(k.getEmbedding()))
+                .toList();
+        if (indexed.isEmpty()) {
+            return null;
+        }
+        try {
+            LlmClient.Embeddings e = LlmClient.embed(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getEmbeddingModel(),
+                    List.of(StrUtil.maxLength(text, 4000)));
+            float[] q = e.vectors().get(0);
+            Map<Long, Double> scores = new HashMap<>();
+            for (ChannelAiKnowledgeDO k : indexed) {
+                scores.put(k.getId(), VectorMath.cosine(q, VectorMath.parse(k.getEmbedding())));
+            }
+            return new Semantic(scores, e.tokens());
+        } catch (Exception ex) {
+            log.warn("[semanticScores][向量检索失败，退回关键词检索] {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    /** 检索测试：返回命中的条目及得分（知识库页面「检索测试」） */
+    public List<Map<String, Object>> searchKnowledge(Long userId, String q) {
+        ChannelAiConfigDO cfg = getConfig();
+        List<ChannelAiKnowledgeDO> all = channelAiKnowledgeMapper.selectEnabled();
+        Semantic sem = semanticEnabled(cfg) && channelCreditService.hasBalance() ? semanticScores(cfg, all, q) : null;
+        if (sem != null) {
+            channelCreditService.consume("knowledge", null, userId, Math.max(sem.tokens(), 1), "知识库检索测试");
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (AiPromptBuilder.Hit h : AiPromptBuilder.rank(all, q, sem == null ? null : sem.scores())) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", h.knowledge().getId());
+            m.put("type", h.knowledge().getType());
+            m.put("title", h.knowledge().getTitle());
+            m.put("content", StrUtil.maxLength(h.knowledge().getContent(), 200));
+            m.put("keywordScore", h.keywordScore());
+            m.put("semanticScore", Math.round(h.semanticScore() * 1000) / 1000.0);
+            m.put("score", Math.round(h.score() * 100) / 100.0);
+            m.put("semantic", sem != null);
+            out.add(m);
+            if (out.size() >= 10) {
+                break;
+            }
+        }
+        return out;
     }
 
     public void deleteKnowledge(Long id) {
@@ -183,7 +308,9 @@ public class ChannelAiService {
     }
 
     private Generated generate(ChannelAiConfigDO cfg, String channel, String customerText, List<LlmClient.Message> history) {
-        String system = AiPromptBuilder.systemPrompt(cfg, channelAiKnowledgeMapper.selectEnabled(), customerText, channel);
+        List<ChannelAiKnowledgeDO> knowledge = channelAiKnowledgeMapper.selectEnabled();
+        Semantic sem = semanticScores(cfg, knowledge, customerText);
+        String system = AiPromptBuilder.systemPrompt(cfg, knowledge, customerText, channel, sem == null ? null : sem.scores());
         List<LlmClient.Message> messages = new ArrayList<>();
         messages.add(LlmClient.Message.system(system));
         messages.addAll(history);
@@ -197,7 +324,8 @@ public class ChannelAiService {
         String content = handoff ? "" : r.content();
         String hit = handoff ? null : AiPromptBuilder.firstForbidden(content,
                 channelAiForbiddenWordMapper.selectEnabled().stream().map(ChannelAiForbiddenWordDO::getWord).toList());
-        return new Generated(content, handoff, hit, r.promptTokens(), r.completionTokens(), cfg.getLlmModel());
+        int embedTokens = sem == null ? 0 : sem.tokens(); // 检索用的向量 token 一并计入本次消耗
+        return new Generated(content, handoff, hit, r.promptTokens() + embedTokens, r.completionTokens(), cfg.getLlmModel());
     }
 
     /** 邮件往来 → 对话历史：客户来信为 user，我方回复为 assistant */

@@ -36,6 +36,12 @@ public final class AiPromptBuilder {
 
     public static String systemPrompt(ChannelAiConfigDO cfg, List<ChannelAiKnowledgeDO> knowledge,
                                       String customerText, String channel) {
+        return systemPrompt(cfg, knowledge, customerText, channel, null);
+    }
+
+    /** semantic：条目编号 → 与客户消息的余弦相似度；为 null 时只按关键词 */
+    public static String systemPrompt(ChannelAiConfigDO cfg, List<ChannelAiKnowledgeDO> knowledge,
+                                      String customerText, String channel, Map<Long, Double> semantic) {
         StringBuilder sb = new StringBuilder();
         String name = StrUtil.blankToDefault(cfg.getAgentName(), "Sales Assistant");
         sb.append("你是外贸企业的销售代表「").append(name).append("」，正在通过")
@@ -55,42 +61,60 @@ public final class AiPromptBuilder {
         if (StrUtil.isNotBlank(cfg.getExtraInstructions())) {
             sb.append("5. ").append(cfg.getExtraInstructions().trim()).append("\n");
         }
-        String picked = pickKnowledge(knowledge, customerText);
+        String picked = pickKnowledge(knowledge, customerText, semantic);
         sb.append("\n## 企业资料\n").append(StrUtil.isBlank(picked) ? "（暂无资料，涉及具体信息时一律回复会确认后答复）" : picked);
         return sb.toString();
     }
 
-    /** 企业介绍总是带上；其余条目按与客户消息的关键词重合度取前几条 */
-    static String pickKnowledge(List<ChannelAiKnowledgeDO> all, String customerText) {
+    /** 语义相似度低于该值的条目不算命中 */
+    static final double SEMANTIC_MIN = 0.35;
+
+    /** 一条知识的检索得分：关键词分 + 语义分（相似度 × 10） */
+    public record Hit(ChannelAiKnowledgeDO knowledge, int keywordScore, double semanticScore, double score) {
+    }
+
+    /** 对非「企业介绍」条目打分并排序，只返回命中的 */
+    public static List<Hit> rank(List<ChannelAiKnowledgeDO> all, String customerText, Map<Long, Double> semantic) {
         Set<String> terms = terms(customerText);
-        List<ChannelAiKnowledgeDO> company = new ArrayList<>();
-        List<Map.Entry<ChannelAiKnowledgeDO, Integer>> scored = new ArrayList<>();
+        List<Hit> hits = new ArrayList<>();
         for (ChannelAiKnowledgeDO k : all) {
             if (ChannelAiKnowledgeDO.TYPE_COMPANY.equals(k.getType())) {
-                company.add(k);
                 continue;
             }
             Set<String> title = terms(k.getTitle());
             Set<String> body = terms(k.getContent());
-            int score = 0;
+            int kw = 0;
             for (String t : terms) {
-                score += (title.contains(t) ? 3 : 0) + (body.contains(t) ? 1 : 0);
+                kw += (title.contains(t) ? 3 : 0) + (body.contains(t) ? 1 : 0);
             }
+            double sem = semantic == null ? 0 : semantic.getOrDefault(k.getId(), 0d);
+            double score = kw + (sem >= SEMANTIC_MIN ? sem * 10 : 0);
             if (score > 0) {
-                scored.add(Map.entry(k, score));
+                hits.add(new Hit(k, kw, sem, score));
             }
         }
-        scored.sort((x, y) -> y.getValue() - x.getValue());
+        hits.sort((x, y) -> Double.compare(y.score(), x.score()));
+        return hits;
+    }
+
+    /** 企业介绍总是带上；其余条目按关键词重合度与语义相似度综合排序取前几条 */
+    static String pickKnowledge(List<ChannelAiKnowledgeDO> all, String customerText) {
+        return pickKnowledge(all, customerText, null);
+    }
+
+    static String pickKnowledge(List<ChannelAiKnowledgeDO> all, String customerText, Map<Long, Double> semantic) {
         StringBuilder sb = new StringBuilder();
-        for (ChannelAiKnowledgeDO k : company) {
-            append(sb, "企业介绍", k);
+        for (ChannelAiKnowledgeDO k : all) {
+            if (ChannelAiKnowledgeDO.TYPE_COMPANY.equals(k.getType())) {
+                append(sb, "企业介绍", k);
+            }
         }
         int n = 0;
-        for (Map.Entry<ChannelAiKnowledgeDO, Integer> e : scored) {
+        for (Hit h : rank(all, customerText, semantic)) {
             if (n++ >= MAX_PICKED || sb.length() >= MAX_KNOWLEDGE_CHARS) {
                 break;
             }
-            ChannelAiKnowledgeDO k = e.getKey();
+            ChannelAiKnowledgeDO k = h.knowledge();
             append(sb, ChannelAiKnowledgeDO.TYPE_FAQ.equals(k.getType()) ? "常见问答" : "产品资料", k);
         }
         return StrUtil.maxLength(sb.toString(), MAX_KNOWLEDGE_CHARS);
