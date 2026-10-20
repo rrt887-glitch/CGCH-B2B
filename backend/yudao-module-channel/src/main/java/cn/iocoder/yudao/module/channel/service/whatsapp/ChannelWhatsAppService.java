@@ -515,15 +515,18 @@ public class ChannelWhatsAppService {
                 && c.getLastInboundTime().plusHours(WINDOW_HOURS).isAfter(LocalDateTime.now());
     }
 
-    /** 按 WhatsApp 号码匹配 CRM 客户：比较去掉符号后的纯数字 */
+    /**
+     * 按 WhatsApp 号码匹配 CRM 客户：比较去掉空格、横线、括号等符号后的纯数字。
+     * 业务员录入的号码常带分隔符，所以数据库里只按最后 4 位粗筛，再在内存里精确比对。
+     */
     private Long findCustomerId(String waId) {
         if (StrUtil.length(waId) < 8) {
             return null;
         }
-        String tail = waId.substring(waId.length() - 8);
+        String tail = waId.substring(waId.length() - 4);
         List<CrmCustomerDO> list = customerMapper.selectList(new LambdaQueryWrapperX<CrmCustomerDO>()
-                .and(w -> w.like(CrmCustomerDO::getWhatsapp, tail).or().like(CrmCustomerDO::getMobile, tail))
-                .orderByDesc(CrmCustomerDO::getId).last("LIMIT 20"));
+                .and(w -> w.likeLeft(CrmCustomerDO::getWhatsapp, tail).or().likeLeft(CrmCustomerDO::getMobile, tail))
+                .orderByDesc(CrmCustomerDO::getId).last("LIMIT 200"));
         return list.stream()
                 .filter(c -> waId.equals(digits(c.getWhatsapp())) || waId.equals(digits(c.getMobile())))
                 .map(CrmCustomerDO::getId).findFirst().orElse(null);
