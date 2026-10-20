@@ -23,6 +23,7 @@ import {
   RadioGroup,
   Row,
   Select,
+  Switch,
   Table,
   Tag,
   Textarea,
@@ -175,6 +176,14 @@ onMounted(() => {
             />
             <FormItem label="业务员人工回复后，AI 暂停自动回复（小时）">
               <InputNumber v-model:value="form.humanPauseHours" :min="0" :max="720" class="w-40" />
+            </FormItem>
+
+            <h4 class="mb-3 mt-6 font-medium">线索自动建档</h4>
+            <FormItem label="新询盘自动建线索" extra="陌生人发来邮件或 WhatsApp 时，自动在 CRM 线索里建档，负责人为渠道账号所属业务员；同一联系人不会重复建。">
+              <Switch v-model:checked="form.leadAutoCreate" />
+            </FormItem>
+            <FormItem label="AI 提取公司、国家和需求" extra="用大模型从询盘内容里识别公司名、国家、联系人、产品和数量，每次消耗少量智点；关闭时只按邮箱域名和电话区号推断。">
+              <Switch v-model:checked="form.leadAiExtract" :disabled="!form.leadAutoCreate" />
             </FormItem>
 
             <h4 class="mb-3 mt-6 font-medium">大模型</h4>

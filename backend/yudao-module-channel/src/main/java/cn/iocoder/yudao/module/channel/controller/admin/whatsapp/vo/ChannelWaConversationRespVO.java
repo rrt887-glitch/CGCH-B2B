@@ -15,6 +15,8 @@ public class ChannelWaConversationRespVO {
     private String profileName;
     private Long customerId;
     private String customerName;
+    private Long clueId;
+    private String clueName;
     private LocalDateTime lastMessageTime;
     private LocalDateTime lastInboundTime;
     private String lastMessagePreview;

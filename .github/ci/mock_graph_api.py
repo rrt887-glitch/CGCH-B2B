@@ -95,7 +95,14 @@ class Handler(BaseHTTPRequestHandler):
         LLM.append(body)
         system = msgs[0]['content'] if msgs and msgs[0]['role'] == 'system' else ''
         last = next((m['content'] for m in reversed(msgs) if m['role'] == 'user'), '').lower()
-        if 'single word' in last:
+        if 'Return JSON only' in system:  # 线索信息提取
+            if 'mueller' in last or 'hans' in last:
+                answer = 'Sure: {"company": "Müller Haushaltsgeräte GmbH", "country_code": "de", "contact_name": "Hans Müller", "product": "hair dryer", "quantity": "2000 pcs"}'
+            elif 'pierre' in last:
+                answer = '{"company": null, "country_code": null, "contact_name": "Pierre", "product": "curling iron", "quantity": null}'
+            else:
+                answer = '{"company": null, "country_code": null, "contact_name": null, "product": null, "quantity": null}'
+        elif 'single word' in last:
             answer = 'OK'
         elif 'complaint' in last or 'refund' in last:
             answer = '[HANDOFF]'

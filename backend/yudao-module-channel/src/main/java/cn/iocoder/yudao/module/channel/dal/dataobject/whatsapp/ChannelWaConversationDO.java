@@ -43,6 +43,10 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      */
     private Long customerId;
     /**
+     * 关联的 CRM 线索编号（未成为客户的询盘）
+     */
+    private Long clueId;
+    /**
      * 最后一条消息时间
      */
     private LocalDateTime lastMessageTime;

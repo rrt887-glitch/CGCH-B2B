@@ -354,6 +354,9 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
                 <Tag v-if="current.customerName" color="blue" class="cursor-pointer" @click="router.push(`/crm/customer/detail/${current.customerId}`)">
                   客户：{{ current.customerName }}
                 </Tag>
+                <Tag v-else-if="current.clueName" color="cyan" class="cursor-pointer" @click="router.push(`/crm/clue/detail/${current.clueId}`)">
+                  线索：{{ current.clueName }}
+                </Tag>
                 <Tag v-else>未关联客户</Tag>
                 <Tooltip v-if="current.windowOpen" :title="`窗口在 ${current.windowExpireTime} 关闭`">
                   <Tag color="green">24 小时窗口内</Tag>

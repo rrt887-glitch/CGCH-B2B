@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.channel.service.ai;
 
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.channel.service.event.ChannelInboundEvent;
+import cn.iocoder.yudao.module.channel.service.lead.ChannelLeadService;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 收到新消息后异步交给 AI 处理，不阻塞收信与 Webhook。
+ * 收到新消息后异步处理：先线索自动建档，再交给 AI 回复，不阻塞收信与 Webhook。
  * WhatsApp 延迟几秒再处理：客户连发多条时只回复一次。
  */
 @Component
@@ -31,6 +32,8 @@ public class ChannelAiInboundListener {
 
     @Resource
     private ChannelAiService aiService;
+    @Resource
+    private ChannelLeadService channelLeadService;
 
     @Value("${cgch.ai.whatsapp-debounce-ms:3000}")
     private long whatsappDebounceMs;
@@ -41,6 +44,17 @@ public class ChannelAiInboundListener {
         executor.schedule(() -> {
             try {
                 TenantUtils.execute(e.tenantId(), () -> {
+                    // 1. 线索自动建档（失败不影响 AI 回复）
+                    try {
+                        if ("mail".equals(e.channel())) {
+                            channelLeadService.handleMail(e.refId());
+                        } else {
+                            channelLeadService.handleWhatsApp(e.refId());
+                        }
+                    } catch (Exception ex) {
+                        log.warn("[onInbound][{} {}] 线索建档失败: {}", e.channel(), e.refId(), ex.getMessage());
+                    }
+                    // 2. AI 回复
                     if ("mail".equals(e.channel())) {
                         aiService.handleMailInbound(e.refId());
                     } else {

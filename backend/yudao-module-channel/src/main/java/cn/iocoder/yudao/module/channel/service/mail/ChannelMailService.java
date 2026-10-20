@@ -16,6 +16,8 @@ import org.springframework.web.multipart.MultipartFile;
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailMessageMapper;
 import cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.yudao.module.crm.dal.mysql.customer.CrmCustomerMapper;
+import cn.iocoder.yudao.module.crm.dal.dataobject.clue.CrmClueDO;
+import cn.iocoder.yudao.module.crm.dal.mysql.clue.CrmClueMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import cn.iocoder.yudao.module.channel.service.event.ChannelInboundEvent;
@@ -46,6 +48,8 @@ public class ChannelMailService {
     private ChannelMailMessageMapper messageMapper;
     @Resource
     private CrmCustomerMapper customerMapper;
+    @Resource
+    private CrmClueMapper crmClueMapper;
     @Resource
     private ChannelMailAttachmentMapper attachmentMapper;
     @Resource
@@ -432,6 +436,13 @@ public class ChannelMailService {
     }
 
     private void fillCustomerNames(List<ChannelMailMessageRespVO> list) {
+        Set<Long> clueIds = list.stream().map(ChannelMailMessageRespVO::getClueId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (!clueIds.isEmpty()) {
+            Map<Long, String> names = crmClueMapper.selectByIds(clueIds).stream()
+                    .collect(Collectors.toMap(CrmClueDO::getId, CrmClueDO::getName, (a, b) -> a));
+            list.forEach(r -> r.setClueName(r.getClueId() == null ? null : names.get(r.getClueId())));
+        }
         Set<Long> ids = list.stream().map(ChannelMailMessageRespVO::getCustomerId).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         if (CollUtil.isEmpty(ids)) {

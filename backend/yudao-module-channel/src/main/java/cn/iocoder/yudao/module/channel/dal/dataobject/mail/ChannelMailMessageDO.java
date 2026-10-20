@@ -111,6 +111,10 @@ public class ChannelMailMessageDO extends TenantBaseDO {
      */
     private Long customerId;
     /**
+     * 关联的 CRM 线索编号（未成为客户的询盘）
+     */
+    private Long clueId;
+    /**
      * 是否带附件（不含正文内嵌图片）
      */
     private Boolean hasAttachments;

@@ -20,6 +20,8 @@ import cn.iocoder.yudao.module.channel.service.file.ChannelFileHelper;
 import org.springframework.web.multipart.MultipartFile;
 import cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.yudao.module.crm.dal.mysql.customer.CrmCustomerMapper;
+import cn.iocoder.yudao.module.crm.dal.dataobject.clue.CrmClueDO;
+import cn.iocoder.yudao.module.crm.dal.mysql.clue.CrmClueMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -58,6 +60,8 @@ public class ChannelWhatsAppService {
     private ChannelWaMessageMapper messageMapper;
     @Resource
     private CrmCustomerMapper customerMapper;
+    @Resource
+    private CrmClueMapper crmClueMapper;
     @Resource
     private ChannelFileHelper fileHelper;
     @Resource
@@ -480,10 +484,14 @@ public class ChannelWhatsAppService {
         Set<Long> ids = list.stream().map(ChannelWaConversationDO::getCustomerId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, CrmCustomerDO> customers = CollUtil.isEmpty(ids) ? Map.of()
                 : customerMapper.selectByIds(ids).stream().collect(Collectors.toMap(CrmCustomerDO::getId, Function.identity()));
+        Set<Long> clueIds = list.stream().map(ChannelWaConversationDO::getClueId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> clueNames = clueIds.isEmpty() ? Map.of()
+                : crmClueMapper.selectByIds(clueIds).stream().collect(Collectors.toMap(CrmClueDO::getId, CrmClueDO::getName, (a, b) -> a));
         return list.stream().map(c -> {
             ChannelWaConversationRespVO vo = BeanUtils.toBean(c, ChannelWaConversationRespVO.class);
             CrmCustomerDO cu = c.getCustomerId() == null ? null : customers.get(c.getCustomerId());
             vo.setCustomerName(cu == null ? null : cu.getName());
+            vo.setClueName(c.getClueId() == null ? null : clueNames.get(c.getClueId()));
             vo.setWindowOpen(windowOpen(c));
             vo.setWindowExpireTime(c.getLastInboundTime() == null ? null : c.getLastInboundTime().plusHours(WINDOW_HOURS));
             return vo;

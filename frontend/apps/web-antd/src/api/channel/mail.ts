@@ -49,6 +49,8 @@ export namespace ChannelMailApi {
     replied?: boolean;
     customerId?: number;
     customerName?: string;
+    clueId?: number;
+    clueName?: string;
     hasAttachments?: boolean;
     aiGenerated?: boolean;
     attachments?: Attachment[];

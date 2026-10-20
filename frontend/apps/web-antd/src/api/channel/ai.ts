@@ -17,6 +17,8 @@ export namespace ChannelAiApi {
     mailSignature?: string;
     humanPauseHours?: number;
     extraInstructions?: string;
+    leadAutoCreate?: boolean;
+    leadAiExtract?: boolean;
     hasApiKey?: boolean;
   }
 

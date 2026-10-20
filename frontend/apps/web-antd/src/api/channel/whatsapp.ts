@@ -28,6 +28,8 @@ export namespace ChannelWaApi {
     profileName?: string;
     customerId?: number;
     customerName?: string;
+    clueId?: number;
+    clueName?: string;
     lastMessageTime?: string;
     lastInboundTime?: string;
     lastMessagePreview?: string;

@@ -34,6 +34,12 @@ public class ChannelMailMessageRespVO {
     @Schema(description = "关联客户名称")
     private String customerName;
 
+    @Schema(description = "关联线索编号")
+    private Long clueId;
+
+    @Schema(description = "关联线索名称")
+    private String clueName;
+
     @Schema(description = "是否带附件")
     private Boolean hasAttachments;
 

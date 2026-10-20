@@ -75,5 +75,13 @@ public class ChannelAiConfigDO extends TenantBaseDO {
      * 补充要求，例如「报价统一用美元，不承诺交期」
      */
     private String extraInstructions;
+    /**
+     * 新询盘自动建 CRM 线索
+     */
+    private Boolean leadAutoCreate;
+    /**
+     * 建档时用 AI 从询盘中提取公司、国家、需求产品等（消耗智点）
+     */
+    private Boolean leadAiExtract;
 
 }

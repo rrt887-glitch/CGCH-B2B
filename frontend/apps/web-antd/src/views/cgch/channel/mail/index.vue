@@ -322,6 +322,7 @@ onMounted(async () => {
                     <div class="truncate text-xs text-gray-400">{{ item.snippet }}</div>
                     <div class="mt-1 flex gap-1">
                       <Tag v-if="item.customerName" color="blue">{{ item.customerName }}</Tag>
+                      <Tag v-else-if="item.clueName" color="cyan">线索 · {{ item.clueName }}</Tag>
                       <Tag v-if="item.direction === 1 && item.replied" color="green">已回复</Tag>
                       <Tag v-if="item.hasAttachments">📎 附件</Tag>
                       <Tag v-if="item.aiGenerated" color="purple">AI 回复</Tag>
@@ -359,6 +360,9 @@ onMounted(async () => {
                 <span>{{ current.sentTime }}</span>
                 <Tag v-if="current.customerName" color="blue" class="cursor-pointer" @click="router.push(`/crm/customer/detail/${current.customerId}`)">
                   客户：{{ current.customerName }}
+                </Tag>
+                <Tag v-else-if="current.clueName" color="cyan" class="cursor-pointer" @click="router.push(`/crm/clue/detail/${current.clueId}`)">
+                  线索：{{ current.clueName }}
                 </Tag>
                 <Tag v-else-if="current.direction === 1">未关联客户</Tag>
               </div>

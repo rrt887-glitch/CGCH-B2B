@@ -580,6 +580,49 @@ jobs:
           kinds = [x['type'] for x in call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=3')['list']]
           assert kinds == ['consume', 'recharge', 'adjust'], kinds
           print('充值后恢复；流水依次为调整、充值、消耗')
+
+          # ---- 线索自动建档 ----
+          def clues(kw):
+              return call('GET', f'/crm/clue/page?pageNo=1&pageSize=20&sceneType=1&name={urllib.parse.quote(kw)}')['list']
+          mm3 = inquiry('Hans Mueller <hans@mueller-gmbh.de>', 'RFQ hair dryer', 'Hello, we need 2000 pcs hair dryer. Regards, Hans')
+          time.sleep(2)
+          assert clues('Hans') == [], '未开启自动建档时不应建线索'
+          call('PUT', '/channel/ai/config/save', dict(cfg, waMode='auto', mailMode='auto', leadAutoCreate=True, leadAiExtract=True))
+          bal0 = call('GET', '/channel/credit/summary')['balance']
+          mm4 = inquiry('Hans Mueller <hans@mueller-gmbh.de>', 'RFQ hair dryer again', 'Hello, please quote 2000 pcs hair dryer. Hans')
+          lead = wait(lambda: clues('Hans Müller'), '邮件询盘自动建线索')[0]
+          assert lead['email'] == 'hans@mueller-gmbh.de' and lead['companyName'] == 'Müller Haushaltsgeräte GmbH', lead
+          assert lead['countryCode'] == 'DE' and lead['website'] == 'https://mueller-gmbh.de' and lead['source'] == 10, lead
+          assert lead['ownerUserId'] == 1 and lead['aiHosted'] is True, lead
+          detail = call('GET', f"/crm/clue/get?id={lead['id']}")
+          assert 'hair dryer' in detail['remark'] and '2000 pcs' in detail['remark'], detail['remark']
+          msg4 = call('GET', f"/channel/mail-message/get?id={mm4['id']}")
+          assert msg4['clueId'] == lead['id'] and msg4['clueName'] == 'Hans Müller', msg4
+          ledger = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=20&type=consume')['list']
+          assert any(x['remark'] == '线索信息提取' for x in ledger), '信息提取应扣智点'
+          inquiry('Hans Mueller <hans@mueller-gmbh.de>', 'Follow up', 'Any update? Hans')
+          time.sleep(2)
+          assert len(clues('Hans')) == 1, '同一发件人不应重复建线索'
+          print('邮件询盘建档：AI 提取公司/国家/需求，官网取自企业邮箱，重复来信不重复建')
+
+          inquiry('Pierre <pierre.dupont@gmail.com>', 'curling iron', 'Hi, I am Pierre, interested in your curling iron')
+          p_lead = wait(lambda: clues('Pierre'), '免费邮箱询盘建档')[0]
+          assert p_lead['website'] is None and p_lead['companyName'] is None and p_lead['countryCode'] is None, f'免费邮箱不应推断官网和公司: {p_lead}'
+          total = lambda: call('GET', '/crm/clue/page?pageNo=1&pageSize=1&sceneType=1')['total']
+          before = total()
+          inquiry('buyer@acme-trading.example', 'Reorder', 'We want to reorder, what is the lead time?')
+          time.sleep(2)
+          assert total() == before, '已是客户的发件人不应建线索'
+          print('免费邮箱不推断官网/公司；已有客户不建线索')
+
+          push('33612345678', 'Bonjour, prix pour 300 pièces?')
+          wl = wait(lambda: clues('Buyer 678'), 'WhatsApp 询盘建档')[0]
+          assert wl['whatsapp'] == '+33612345678' and wl['countryCode'] == 'FR' and wl['source'] == 11, wl
+          assert wait(lambda: conv('33612345678'), '会话')['clueName'] == 'Buyer 678'
+          push('33612345678', 'merci')
+          time.sleep(2)
+          assert len(clues('Buyer 678')) == 1
+          print('WhatsApp 询盘建档：按区号推断国家，来源为 WhatsApp，不重复建')
           print('AI 数字员工全部通过')
           PY
 

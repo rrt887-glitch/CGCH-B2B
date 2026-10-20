@@ -37,3 +37,8 @@ INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_i
 DELETE FROM `crm_customer_pool_config` WHERE `tenant_id` = 1;
 INSERT INTO `crm_customer_pool_config` (`enabled`, `contact_expire_days`, `deal_expire_days`, `notify_enabled`, `notify_days`, `creator`, `updater`, `tenant_id`)
 VALUES (b'1', 30, 90, b'1', 3, '1', '1', 1);
+
+-- 客户来源补充「WhatsApp」（线索自动建档使用；邮件询盘使用已有的「邮件咨询」= 10）
+DELETE FROM `system_dict_data` WHERE `dict_type` = 'crm_customer_source' AND `value` = '11';
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+VALUES (11, 'WhatsApp', '11', 'crm_customer_source', 0, 'success', '', 'CGCH 线索自动建档', '1', '1', b'0');
