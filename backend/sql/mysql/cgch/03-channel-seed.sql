@@ -67,3 +67,9 @@ VALUES ('cgch-credit', '智点充值', 0, 'CGCH 智点在线充值',
         NULL, '1', '1', 1);
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
   (22303, '在线购买智点', 'channel:credit:buy', 3, 3, 20506, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 数据看板：从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/board/overview/index' WHERE `id` = 20001;
+DELETE FROM `system_menu` WHERE `id` BETWEEN 22400 AND 22499;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (22401, '看板查询', 'channel:dashboard:query', 3, 1, 20001, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');

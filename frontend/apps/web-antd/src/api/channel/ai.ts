@@ -77,6 +77,7 @@ export const DRAFT_REASON: Record<string, string> = {
   window_closed: 'WhatsApp 24 小时窗口已关闭',
   send_failed: '自动发送失败',
   manual: '手动起草',
+  no_credit: '智点余额不足',
 };
 
 export const getAiConfig = () => requestClient.get<ChannelAiApi.Config>('/channel/ai/config/get');

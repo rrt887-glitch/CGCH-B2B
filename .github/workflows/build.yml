@@ -689,6 +689,26 @@ jobs:
           led = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
           assert any(x['remark'] == '知识库向量化' and x['channel'] == 'knowledge' for x in led), '建索引应扣智点'
           print('语义检索：换种说法也能命中起订量/交期/认证资料，保存即建索引，模型错误有提示')
+
+          # ---- 数据看板 ----
+          ov = call('GET', '/channel/dashboard/overview?days=30')
+          c, daily = ov['current'], ov['daily']
+          assert len(daily) == 30 and daily[-1]['date'] == time.strftime('%Y-%m-%d'), [d['date'] for d in daily[-2:]]
+          assert c['mailIn'] >= 8 and c['waIn'] >= 5 and c['waConversations'] >= 3, c
+          assert c['mailAiOut'] + c['waAiOut'] >= 1, f'前面的测试里 AI 自动回复过: {c}'
+          assert c['inquiries'] == c['mailIn'] + c['waConversations'], c
+          assert 0 < c['replyRate'] <= 1 and 0 < c['aiShare'] <= 1, c
+          assert c['cluesFromMail'] >= 2 and c['cluesFromWhatsApp'] >= 1 and c['cluesCreated'] >= 4, c
+          assert c['customersCreated'] >= 2 and c['creditsConsumed'] > 0 and c['aiDrafts'] >= c['aiSent'] + c['aiPending'], c
+          assert sum(d['mailIn'] for d in daily) == c['mailIn'] and sum(d['waIn'] for d in daily) == c['waIn'], '按天汇总应等于总数'
+          assert sum(d['aiOut'] + d['humanOut'] for d in daily) == c['mailOut'] + c['waOut']
+          assert sum(d['credits'] for d in daily) == c['creditsConsumed']
+          assert sum(ov['pendingReasons'].values()) == c['aiPending'], ov['pendingReasons']
+          me = next(u for u in ov['users'] if u['userId'] == 1)
+          assert me['mailIn'] + me['waIn'] == c['mailIn'] + c['waIn'], '测试数据的渠道账号都属于 admin'
+          assert ov['previous']['inquiries'] == 0, '上一周期没有数据'
+          assert len(call('GET', '/channel/dashboard/overview?days=7')['daily']) == 7
+          print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY
 
