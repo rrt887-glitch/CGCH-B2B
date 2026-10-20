@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
+import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - 数据看板")
 @RestController
@@ -28,9 +29,11 @@ public class ChannelDashboardController {
     @GetMapping("/overview")
     @Operation(summary = "看板总览：最近 N 天（含今天）与上一个同等周期")
     @Parameter(name = "days", description = "天数，默认 30，最多 366", example = "30")
+    @Parameter(name = "userId", description = "只看某个业务员；须在本人数据权限范围内", example = "1")
     @PreAuthorize("@ss.hasPermission('channel:dashboard:query')")
-    public CommonResult<ChannelDashboardRespVO> overview(@RequestParam(value = "days", defaultValue = "30") Integer days) {
-        return success(channelDashboardService.overview(days));
+    public CommonResult<ChannelDashboardRespVO> overview(@RequestParam(value = "days", defaultValue = "30") Integer days,
+                                                         @RequestParam(value = "userId", required = false) Long userId) {
+        return success(channelDashboardService.overview(getLoginUserId(), days, userId));
     }
 
 }

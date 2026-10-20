@@ -52,8 +52,9 @@ export namespace ChannelDashboardApi {
     daily: Day[];
     pendingReasons: Record<string, number>;
     users: UserRow[];
+    scope: { all: boolean; userIds: number[]; userId?: number };
   }
 }
 
-export const getDashboardOverview = (days: number) =>
-  requestClient.get<ChannelDashboardApi.Overview>('/channel/dashboard/overview', { params: { days } });
+export const getDashboardOverview = (days: number, userId?: number) =>
+  requestClient.get<ChannelDashboardApi.Overview>('/channel/dashboard/overview', { params: { days, userId } });
