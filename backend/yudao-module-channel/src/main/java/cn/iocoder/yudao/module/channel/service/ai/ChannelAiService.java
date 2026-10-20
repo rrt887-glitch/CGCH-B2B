@@ -49,13 +49,13 @@ public class ChannelAiService {
     private static final Pattern NO_REPLY = Pattern.compile("(?i)(no-?reply|mailer-daemon|postmaster|notification|bounce)");
 
     @Resource
-    private ChannelAiConfigMapper configMapper;
+    private ChannelAiConfigMapper aiConfigMapper;
     @Resource
-    private ChannelAiKnowledgeMapper knowledgeMapper;
+    private ChannelAiKnowledgeMapper aiKnowledgeMapper;
     @Resource
-    private ChannelAiForbiddenWordMapper forbiddenMapper;
+    private ChannelAiForbiddenWordMapper aiForbiddenWordMapper;
     @Resource
-    private ChannelAiDraftMapper draftMapper;
+    private ChannelAiDraftMapper aiDraftMapper;
     @Resource
     private ChannelMailService mailService;
     @Resource
@@ -66,7 +66,7 @@ public class ChannelAiService {
     // ==================== 配置 ====================
 
     public ChannelAiConfigDO getConfig() {
-        ChannelAiConfigDO c = configMapper.selectCurrent();
+        ChannelAiConfigDO c = aiConfigMapper.selectCurrent();
         if (c == null) {
             c = ChannelAiConfigDO.builder().agentName("Sales Assistant").personality("professional")
                     .defaultLanguage("English").mailMode(ChannelAiConfigDO.MODE_OFF).waMode(ChannelAiConfigDO.MODE_OFF)
@@ -76,7 +76,7 @@ public class ChannelAiService {
     }
 
     public void saveConfig(ChannelAiConfigDO req) {
-        ChannelAiConfigDO old = configMapper.selectCurrent();
+        ChannelAiConfigDO old = aiConfigMapper.selectCurrent();
         req.setMailMode(normalizeMode(req.getMailMode()));
         req.setWaMode(normalizeMode(req.getWaMode()));
         if (req.getHumanPauseHours() == null || req.getHumanPauseHours() < 0) {
@@ -87,10 +87,10 @@ public class ChannelAiService {
         }
         if (old == null) {
             req.setId(null);
-            configMapper.insert(req);
+            aiConfigMapper.insert(req);
         } else {
             req.setId(old.getId());
-            configMapper.updateById(req);
+            aiConfigMapper.updateById(req);
         }
     }
 
@@ -100,7 +100,7 @@ public class ChannelAiService {
 
     /** 用一句话测试大模型配置；req 中 Key 为空时用已保存的 */
     public String testConfig(ChannelAiConfigDO req) {
-        ChannelAiConfigDO saved = configMapper.selectCurrent();
+        ChannelAiConfigDO saved = aiConfigMapper.selectCurrent();
         String key = StrUtil.isNotBlank(req.getLlmApiKey()) ? req.getLlmApiKey() : saved == null ? null : saved.getLlmApiKey();
         try {
             LlmClient.Result r = LlmClient.chat(req.getLlmBaseUrl(), key, req.getLlmModel(),
@@ -114,7 +114,7 @@ public class ChannelAiService {
     // ==================== 知识库与违禁词 ====================
 
     public List<ChannelAiKnowledgeDO> listKnowledge(String type) {
-        return knowledgeMapper.selectListByType(StrUtil.emptyToNull(type));
+        return aiKnowledgeMapper.selectListByType(StrUtil.emptyToNull(type));
     }
 
     public Long saveKnowledge(ChannelAiKnowledgeDO k) {
@@ -131,22 +131,22 @@ public class ChannelAiService {
             k.setSort(0);
         }
         if (k.getId() == null) {
-            knowledgeMapper.insert(k);
+            aiKnowledgeMapper.insert(k);
         } else {
-            if (knowledgeMapper.selectById(k.getId()) == null) {
+            if (aiKnowledgeMapper.selectById(k.getId()) == null) {
                 throw exception(AI_KNOWLEDGE_NOT_EXISTS);
             }
-            knowledgeMapper.updateById(k);
+            aiKnowledgeMapper.updateById(k);
         }
         return k.getId();
     }
 
     public void deleteKnowledge(Long id) {
-        knowledgeMapper.deleteById(id);
+        aiKnowledgeMapper.deleteById(id);
     }
 
     public List<ChannelAiForbiddenWordDO> listForbidden() {
-        return forbiddenMapper.selectList();
+        return aiForbiddenWordMapper.selectList();
     }
 
     public Long saveForbidden(ChannelAiForbiddenWordDO w) {
@@ -154,7 +154,7 @@ public class ChannelAiService {
             throw exception(AI_FORBIDDEN_EMPTY);
         }
         w.setWord(w.getWord().trim());
-        ChannelAiForbiddenWordDO same = forbiddenMapper.selectByWord(w.getWord());
+        ChannelAiForbiddenWordDO same = aiForbiddenWordMapper.selectByWord(w.getWord());
         if (same != null && !Objects.equals(same.getId(), w.getId())) {
             throw exception(AI_FORBIDDEN_EXISTS);
         }
@@ -162,15 +162,15 @@ public class ChannelAiService {
             w.setEnabled(true);
         }
         if (w.getId() == null) {
-            forbiddenMapper.insert(w);
+            aiForbiddenWordMapper.insert(w);
         } else {
-            forbiddenMapper.updateById(w);
+            aiForbiddenWordMapper.updateById(w);
         }
         return w.getId();
     }
 
     public void deleteForbidden(Long id) {
-        forbiddenMapper.deleteById(id);
+        aiForbiddenWordMapper.deleteById(id);
     }
 
     // ==================== 生成 ====================
@@ -180,7 +180,7 @@ public class ChannelAiService {
     }
 
     private Generated generate(ChannelAiConfigDO cfg, String channel, String customerText, List<LlmClient.Message> history) {
-        String system = AiPromptBuilder.systemPrompt(cfg, knowledgeMapper.selectEnabled(), customerText, channel);
+        String system = AiPromptBuilder.systemPrompt(cfg, aiKnowledgeMapper.selectEnabled(), customerText, channel);
         List<LlmClient.Message> messages = new ArrayList<>();
         messages.add(LlmClient.Message.system(system));
         messages.addAll(history);
@@ -193,7 +193,7 @@ public class ChannelAiService {
         boolean handoff = AiPromptBuilder.isHandoff(r.content());
         String content = handoff ? "" : r.content();
         String hit = handoff ? null : AiPromptBuilder.firstForbidden(content,
-                forbiddenMapper.selectEnabled().stream().map(ChannelAiForbiddenWordDO::getWord).toList());
+                aiForbiddenWordMapper.selectEnabled().stream().map(ChannelAiForbiddenWordDO::getWord).toList());
         return new Generated(content, handoff, hit, r.promptTokens(), r.completionTokens(), cfg.getLlmModel());
     }
 
@@ -272,32 +272,32 @@ public class ChannelAiService {
         ChannelAiDraftDO d = ChannelAiDraftDO.builder().channel(channel).refId(refId).content(content).status(status)
                 .reason(reason).reasonDetail(StrUtil.maxLength(detail, 250))
                 .promptTokens(g.promptTokens()).completionTokens(g.completionTokens()).model(g.model()).build();
-        draftMapper.insert(d);
+        aiDraftMapper.insert(d);
         return d;
     }
 
     public ChannelAiDraftDO getPendingDraft(String channel, Long refId) {
-        return draftMapper.selectLatestPending(channel, refId);
+        return aiDraftMapper.selectLatestPending(channel, refId);
     }
 
     public PageResult<ChannelAiDraftDO> getDraftPage(PageParam page, String channel, String status) {
-        return draftMapper.selectPage(page, channel, status);
+        return aiDraftMapper.selectPage(page, channel, status);
     }
 
     /** 业务员采用（已发送）或放弃草稿 */
     public void closeDraft(Long id, boolean used) {
-        ChannelAiDraftDO d = draftMapper.selectById(id);
+        ChannelAiDraftDO d = aiDraftMapper.selectById(id);
         if (d == null) {
             throw exception(AI_DRAFT_NOT_EXISTS);
         }
-        draftMapper.updateById(new ChannelAiDraftDO().setId(id)
+        aiDraftMapper.updateById(new ChannelAiDraftDO().setId(id)
                 .setStatus(used ? ChannelAiDraftDO.STATUS_SENT : ChannelAiDraftDO.STATUS_DISCARDED));
     }
 
     // ==================== 自动处理（收到新消息时，已在对应租户上下文中调用） ====================
 
     public void handleMailInbound(Long messageId) {
-        ChannelAiConfigDO cfg = configMapper.selectCurrent();
+        ChannelAiConfigDO cfg = aiConfigMapper.selectCurrent();
         if (cfg == null || ChannelAiConfigDO.MODE_OFF.equals(cfg.getMailMode())) {
             return;
         }
@@ -339,7 +339,7 @@ public class ChannelAiService {
      * @param messageId 触发本次处理的消息；如果之后客户又发了新消息，本次放弃，交给最后一条处理（合并连发）
      */
     public void handleWhatsAppInbound(Long conversationId, Long messageId) {
-        ChannelAiConfigDO cfg = configMapper.selectCurrent();
+        ChannelAiConfigDO cfg = aiConfigMapper.selectCurrent();
         if (cfg == null || ChannelAiConfigDO.MODE_OFF.equals(cfg.getWaMode())) {
             return;
         }
