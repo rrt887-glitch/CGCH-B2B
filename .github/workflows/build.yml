@@ -623,6 +623,37 @@ jobs:
           time.sleep(2)
           assert len(clues('Buyer 678')) == 1
           print('WhatsApp 询盘建档：按区号推断国家，来源为 WhatsApp，不重复建')
+
+          # ---- 智点在线充值（支付模块 + 模拟支付渠道）----
+          app = next(a for a in call('GET', '/pay/app/list') if a['appKey'] == 'cgch-credit')
+          call('POST', '/pay/channel/create', {'code': 'mock', 'status': 0, 'feeRate': 0, 'appId': app['id'], 'config': '{"name":"mock"}'})
+          pkgs = call('GET', '/channel/credit/package/list')
+          assert [p['credits'] for p in pkgs] == [1000, 5500, 24000] and pkgs[0]['price'] == 9900, pkgs
+          assert call('POST', '/channel/credit/order/create?packageId=99', ok=False)['code'] != 0
+          bal1 = call('GET', '/channel/credit/summary')['balance']
+          order = call('POST', '/channel/credit/order/create?packageId=1')
+          assert order['payOrderId'] and order['payStatus'] is False and order['price'] == 9900, order
+          pay = call('GET', f"/pay/order/get?id={order['payOrderId']}")
+          assert pay['price'] == 9900 and pay['merchantOrderId'] == str(order['id']), pay
+          call('POST', '/pay/order/submit', {'id': order['payOrderId'], 'channelCode': 'mock'})
+          wait(lambda: call('GET', f"/channel/credit/order/get?id={order['id']}")['payStatus'], '支付回调到账')
+          assert call('GET', '/channel/credit/summary')['balance'] == bal1 + 1000
+          led = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=5&type=recharge')['list'][0]
+          assert led['amount'] == 1000 and led['channel'] == 'pay' and '入门包' in led['remark'], led
+          def notify(oid, pid):
+              r = urllib.request.Request(BASE + '/channel/credit/order/update-paid', method='POST',
+                                         headers={'tenant-id': '1', 'Content-Type': 'application/json'},
+                                         data=json.dumps({'merchantOrderId': str(oid), 'payOrderId': pid}).encode())
+              return json.load(urllib.request.urlopen(r))
+          assert notify(order['id'], order['payOrderId'])['code'] == 0
+          assert call('GET', '/channel/credit/summary')['balance'] == bal1 + 1000, '重复回调不应重复到账'
+          unpaid = call('POST', '/channel/credit/order/create?packageId=2')
+          assert notify(unpaid['id'], unpaid['payOrderId'])['code'] != 0, '未支付的订单回调应被拒绝'
+          assert notify(unpaid['id'], order['payOrderId'])['code'] != 0, '支付单不匹配应被拒绝'
+          assert call('GET', '/channel/credit/summary')['balance'] == bal1 + 1000
+          assert call('GET', f"/channel/credit/order/get?id={unpaid['id']}")['payStatus'] is False
+          assert call('GET', '/channel/credit/order/page?pageNo=1&pageSize=10')['total'] == 2
+          print('在线充值：下单→收银台模拟支付→回调到账；重复回调幂等，伪造/未支付回调被拒绝')
           print('AI 数字员工全部通过')
           PY
 

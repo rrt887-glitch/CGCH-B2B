@@ -1,10 +1,11 @@
 <script lang="ts" setup>
 /**
- * 智点消耗：余额、本月消耗（按渠道与业务员）、流水；管理员可充值或调整。
+ * 智点消耗：余额、本月消耗（按渠道与业务员）、流水；在线购买套餐；管理员可手动充值或调整。
  */
 import type { ChannelCreditApi } from '#/api/channel/credit';
 
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 import { useAccess } from '@vben/access';
@@ -29,18 +30,28 @@ import {
   Tag,
 } from 'ant-design-vue';
 
-import { getCreditLedger, getCreditSummary, rechargeCredit } from '#/api/channel/credit';
+import {
+  createCreditOrder,
+  getCreditLedger,
+  getCreditOrderPage,
+  getCreditPackages,
+  getCreditSummary,
+  rechargeCredit,
+} from '#/api/channel/credit';
 import { getSimpleUserList } from '#/api/system/user';
 
 defineOptions({ name: 'CgchConfigCredits' });
 
 const { hasAccessByCodes } = useAccess();
 const canRecharge = computed(() => hasAccessByCodes(['channel:credit:recharge']));
+const canBuy = computed(() => hasAccessByCodes(['channel:credit:buy']));
+const route = useRoute();
+const router = useRouter();
 
 const summary = ref<ChannelCreditApi.Summary>();
 const users = ref<{ id: number; nickname: string }[]>([]);
 const userName = (id?: number) => users.value.find((u) => u.id === id)?.nickname ?? (id ? `#${id}` : '—');
-const CHANNEL: Record<string, string> = { mail: '邮件', whatsapp: 'WhatsApp', other: '其他' };
+const CHANNEL: Record<string, string> = { mail: '邮件', whatsapp: 'WhatsApp', pay: '在线支付', other: '其他' };
 const TYPE: Record<string, { color: string; label: string }> = {
   recharge: { color: 'green', label: '充值' },
   consume: { color: 'blue', label: '消耗' },
@@ -107,13 +118,45 @@ async function submit() {
   await Promise.all([loadSummary(), loadLedger()]);
 }
 
+// ===== 在线购买 =====
+const packages = ref<ChannelCreditApi.Package[]>([]);
+const orders = ref<ChannelCreditApi.Order[]>([]);
+const buying = ref<number>();
+const yuan = (fen: number) => (fen / 100).toFixed(2);
+async function buy(p: ChannelCreditApi.Package) {
+  buying.value = p.id;
+  try {
+    const order = await createCreditOrder(p.id);
+    const back = encodeURIComponent(route.path);
+    router.push(`/pay/cashier?id=${order.payOrderId}&returnUrl=${back}`);
+  } finally {
+    buying.value = undefined;
+  }
+}
+async function loadOrders() {
+  orders.value = (await getCreditOrderPage({ pageNo: 1, pageSize: 10 })).list;
+}
+const orderColumns = [
+  { title: '下单时间', dataIndex: 'createTime', key: 'time', width: 170 },
+  { title: '套餐', dataIndex: 'packageName', key: 'pkg' },
+  { title: '智点', dataIndex: 'credits', key: 'credits', width: 90 },
+  { title: '金额', key: 'price', width: 100 },
+  { title: '状态', key: 'status', width: 90 },
+  { title: '支付时间', dataIndex: 'payTime', key: 'payTime', width: 170 },
+];
+
 async function loadSummary() {
   summary.value = await getCreditSummary();
 }
 
 onMounted(async () => {
+  if (route.query.payResult === 'success') {
+    message.success('支付成功，智点到账可能有几秒延迟');
+    router.replace({ path: route.path });
+  }
   users.value = await getSimpleUserList();
-  await Promise.all([loadSummary(), loadLedger()]);
+  await Promise.all([loadSummary(), loadLedger(), loadOrders()]);
+  packages.value = await getCreditPackages();
 });
 </script>
 
@@ -128,7 +171,7 @@ onMounted(async () => {
         class="mb-4"
         type="error"
         show-icon
-        message="智点已用完：AI 不会再起草或自动回复，新消息需要业务员人工处理。请联系管理员充值。"
+        message="智点已用完：AI 不会再起草或自动回复，新消息需要业务员人工处理。请在下方购买智点或联系管理员充值。"
       />
       <Row :gutter="16" class="mb-4">
         <Col :xs="12" :md="6"><Card size="small"><Statistic title="当前余额" :value="summary?.balance ?? 0" /></Card></Col>
@@ -159,12 +202,35 @@ onMounted(async () => {
       </Row>
     </Card>
 
+    <Card v-if="packages.length" title="购买智点" :bordered="false" class="mt-4">
+      <Row :gutter="16">
+        <Col v-for="p in packages" :key="p.id" :xs="24" :md="8" class="mb-3">
+          <Card size="small" class="h-full">
+            <div class="text-base font-medium">{{ p.name }}</div>
+            <div class="my-2 text-2xl font-semibold">¥{{ yuan(p.price) }}</div>
+            <div class="text-sm">{{ p.credits.toLocaleString() }} 智点</div>
+            <div class="mb-3 min-h-5 text-xs text-gray-400">{{ p.description }}</div>
+            <Button v-if="canBuy" type="primary" block :loading="buying === p.id" @click="buy(p)">立即购买</Button>
+            <div v-else class="text-xs text-gray-400">请联系管理员购买</div>
+          </Card>
+        </Col>
+      </Row>
+      <Table v-if="orders.length" :columns="orderColumns" :data-source="orders" row-key="id" size="small" :pagination="false" class="mt-2">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'price'">¥{{ yuan(record.price) }}</template>
+          <template v-else-if="column.key === 'status'">
+            <Tag :color="record.payStatus ? 'green' : 'default'">{{ record.payStatus ? '已到账' : '待支付' }}</Tag>
+          </template>
+        </template>
+      </Table>
+    </Card>
+
     <Card title="流水" :bordered="false" class="mt-4">
       <Space class="mb-3" wrap>
         <Select v-model:value="filter.type" allow-clear placeholder="类型" class="w-28"
                 :options="Object.entries(TYPE).map(([v, t]) => ({ value: v, label: t.label }))" />
         <Select v-model:value="filter.channel" allow-clear placeholder="渠道" class="w-32"
-                :options="[{ value: 'mail', label: '邮件' }, { value: 'whatsapp', label: 'WhatsApp' }]" />
+                :options="[{ value: 'mail', label: '邮件' }, { value: 'whatsapp', label: 'WhatsApp' }, { value: 'pay', label: '在线支付' }]" />
         <Select v-model:value="filter.userId" allow-clear show-search option-filter-prop="label" placeholder="业务员" class="w-40"
                 :options="users.map((u) => ({ value: u.id, label: u.nickname }))" />
         <RangePicker v-model:value="filter.range" />

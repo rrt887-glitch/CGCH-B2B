@@ -58,3 +58,12 @@ DELETE FROM `channel_credit_account` WHERE `tenant_id` = 1;
 INSERT INTO `channel_credit_account` (`balance`, `total_in`, `total_out`, `creator`, `updater`, `tenant_id`) VALUES (1000, 1000, 0, '1', '1', 1);
 INSERT INTO `channel_credit_ledger` (`type`, `amount`, `balance_after`, `user_id`, `remark`, `creator`, `updater`, `tenant_id`)
 VALUES ('recharge', 1000, 1000, 1, '初始赠送', '1', '1', 1);
+
+-- 智点在线充值：支付应用（回调地址按实际部署地址修改；支付渠道在「支付管理 → 应用信息」里配置微信/支付宝）
+DELETE FROM `pay_app` WHERE `app_key` = 'cgch-credit';
+INSERT INTO `pay_app` (`app_key`, `name`, `status`, `remark`, `order_notify_url`, `refund_notify_url`, `creator`, `updater`, `tenant_id`)
+VALUES ('cgch-credit', '智点充值', 0, 'CGCH 智点在线充值',
+        'http://127.0.0.1:48080/admin-api/channel/credit/order/update-paid',
+        NULL, '1', '1', 1);
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (22303, '在线购买智点', 'channel:credit:buy', 3, 3, 20506, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');

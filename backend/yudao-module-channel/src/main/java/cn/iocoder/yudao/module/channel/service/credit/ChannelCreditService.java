@@ -83,6 +83,18 @@ public class ChannelCreditService {
         return after;
     }
 
+    /** 在线支付到账：记为充值，channel=pay，refId=充值订单号 */
+    @Transactional(rollbackFor = Exception.class)
+    public long rechargeByOrder(Long orderId, Long userId, long credits, String remark) {
+        ChannelCreditAccountDO a = getOrCreateAccount();
+        channelCreditAccountMapper.addBalance(a.getId(), credits);
+        long after = channelCreditAccountMapper.selectById(a.getId()).getBalance();
+        channelCreditLedgerMapper.insert(ChannelCreditLedgerDO.builder().type(ChannelCreditLedgerDO.TYPE_RECHARGE)
+                .amount(credits).balanceAfter(after).channel("pay").refId(orderId).userId(userId)
+                .remark(StrUtil.maxLength(remark, 200)).build());
+        return after;
+    }
+
     public ChannelCreditSummaryRespVO getSummary() {
         ChannelCreditAccountDO a = getOrCreateAccount();
         ChannelCreditSummaryRespVO vo = new ChannelCreditSummaryRespVO();

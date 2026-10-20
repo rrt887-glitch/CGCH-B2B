@@ -47,5 +47,10 @@ public interface ErrorCodeConstants {
 
     // ========== 智点 1-030-004-000 ==========
     ErrorCode CREDIT_AMOUNT_ZERO = new ErrorCode(1_030_004_000, "数量不能为 0");
+    ErrorCode CREDIT_PACKAGE_NOT_FOUND = new ErrorCode(1_030_004_001, "充值套餐不存在");
+    ErrorCode CREDIT_ORDER_NOT_FOUND = new ErrorCode(1_030_004_002, "充值订单不存在");
+    ErrorCode CREDIT_ORDER_PAY_MISMATCH = new ErrorCode(1_030_004_003, "支付单与充值订单不匹配");
+    ErrorCode CREDIT_ORDER_NOT_PAID = new ErrorCode(1_030_004_004, "支付单尚未支付成功");
+    ErrorCode CREDIT_ORDER_PRICE_MISMATCH = new ErrorCode(1_030_004_005, "支付金额与订单金额不一致");
 
 }
