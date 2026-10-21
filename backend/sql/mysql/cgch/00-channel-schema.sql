@@ -293,6 +293,28 @@ CREATE TABLE `channel_reactivate_task` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '客户唤醒任务：选一批久未联系的客户，由 AI 写跟进内容，业务员确认后批量发出';
 
+DROP TABLE IF EXISTS `channel_research`;
+CREATE TABLE `channel_research` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `company_name` varchar(255) NULL COMMENT '公司名称（输入或识别结果）',
+  `website` varchar(255) NULL COMMENT '官网',
+  `customer_id` bigint NULL COMMENT '关联的 CRM 客户',
+  `clue_id` bigint NULL COMMENT '关联的 CRM 线索',
+  `status` varchar(255) NULL COMMENT '状态：running、done、failed',
+  `report` mediumtext NULL COMMENT '背调报告（JSON）',
+  `sources` mediumtext NULL COMMENT '参考来源（JSON 数组）：网址、标题、摘要',
+  `reason_detail` varchar(1024) NULL COMMENT '失败原因或提示',
+  `credits` bigint NULL COMMENT '消耗的智点',
+  `user_id` bigint NULL COMMENT '发起人',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '深度背调：根据客户公司官网的公开信息和我方往来记录，由 AI 整理成背调报告';
+
 DROP TABLE IF EXISTS `channel_wa_account`;
 CREATE TABLE `channel_wa_account` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',

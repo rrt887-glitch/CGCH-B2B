@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 SENT = []
 UPLOADS = []
 LLM = []
+SITE_HITS = []
 EMBEDS = []
 GOOD = 'Bearer good-token'
 
@@ -39,8 +40,45 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return True
 
+    # 模拟一个客户公司官网（虚构企业），用于深度背调测试
+    SITE = {
+        '': ('Bluewave Home Appliances Ltd',
+             '<h1>Bluewave Home Appliances Ltd</h1><p>Distributor of small kitchen and personal care appliances '
+             'for retail chains in Australia and New Zealand.</p>'
+             '<a href="/about-us">About us</a> <a href="/products">Products</a> <a href="/contact">Contact</a> '
+             '<a href="/private/plan">Internal plan</a> <a href="https://other.example/x">Partner</a>'),
+        'about-us': ('About Bluewave', '<p>Our story: Bluewave supplies more than 300 retail stores and runs its own '
+                     'warehouse in Sydney. ISO 9001 certified.</p>'),
+        'catalog': ('Catalog', '<p>Hair dryers, hair straighteners, blenders and kettles. We are looking for new '
+                    'OEM suppliers of lightweight hair dryers for 2027.</p>'),
+        'contact': ('Contact', '<p>sales@bluewave.example, +61 2 5550 1234, Sydney NSW</p>'),
+        'private/plan': ('Internal', '<p>SECRET-INTERNAL do not crawl</p>'),
+    }
+
+    def _site(self, path):
+        key = '/'.join(path)
+        if key == 'robots.txt':
+            body = b'User-agent: *\nDisallow: /private\n'
+            self.send_response(200); self.send_header('Content-Type', 'text/plain'); self.send_header('Content-Length', str(len(body)))
+            self.end_headers(); self.wfile.write(body); return True
+        if key == 'products':  # 站内重定向
+            self.send_response(301); self.send_header('Location', '/catalog'); self.send_header('Content-Length', '0'); self.end_headers()
+            return True
+        if key in self.SITE:
+            title, html = self.SITE[key]
+            body = f'<html><head><title>{title}</title><script>var x=1;</script></head><body>{html}</body></html>'.encode()
+            self.send_response(200); self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
+            SITE_HITS.append('/' + key)
+            return True
+        return False
+
     def do_GET(self):
         path = self.path.split('?')[0].strip('/').split('/')
+        if path == ['_site_hits']:
+            return self._json(200, SITE_HITS)
+        if self._site(path):
+            return
         if path == ['_sent']:
             return self._json(200, SENT)
         if path == ['_uploads']:
@@ -135,7 +173,21 @@ class Handler(BaseHTTPRequestHandler):
         LLM.append(body)
         system = msgs[0]['content'] if msgs and msgs[0]['role'] == 'system' else ''
         last = next((m['content'] for m in reversed(msgs) if m['role'] == 'user'), '').lower()
-        if '客户唤醒' in system:  # 客户唤醒邮件
+        if '背调分析师' in system:  # 深度背调报告
+            data = msgs[-1]['content'] if msgs else ''
+            if 'Bluewave' in data:
+                answer = json.dumps({
+                    'companyName': 'Bluewave Home Appliances Ltd', 'countryCode': 'au',
+                    'summary': 'Bluewave 是澳大利亚的小家电分销商，为零售连锁供货。',
+                    'businessType': 'distributor', 'mainProducts': ['Hair dryers', 'Blenders'] if 'Hair dryers' in data else [],
+                    'markets': ['Australia', 'New Zealand'], 'scale': '供货 300 多家门店' if '300 retail stores' in data else None,
+                    'certifications': ['ISO 9001'] if 'ISO 9001' in data else [],
+                    'companyContacts': ['sales@bluewave.example'] if 'sales@bluewave.example' in data else [],
+                    'purchasingSignals': ['正在寻找 2027 年轻量吹风机 OEM 供应商'] if 'OEM suppliers' in data else [],
+                    'talkingPoints': ['介绍轻量吹风机'], 'risks': [], 'confidence': 'medium'}, ensure_ascii=False)
+            else:
+                answer = json.dumps({'companyName': None, 'summary': '资料不足', 'confidence': 'low'}, ensure_ascii=False)
+        elif '客户唤醒' in system:  # 客户唤醒邮件
             data = msgs[-1]['content'] if msgs else ''
             name = next((l.split('：', 1)[1].strip() for l in data.splitlines() if l.startswith('客户名称：')), 'there')
             subject = 'New 2027 hair dryer line' if '2027' in data else 'Checking in'
