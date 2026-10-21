@@ -77,7 +77,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -904,6 +904,51 @@ jobs:
           ledger_x = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
           assert any(x['remark'] == '客户唤醒' and x['channel'] == 'reactivate' for x in ledger_x)
           print('客户唤醒：筛出久未联系客户；AI 按客户写邮件、WhatsApp 用模板；确认后批量发出并跟踪回复；无模板时跳过并说明原因')
+
+          # ---- 深度背调 ----
+          def research(body):
+              rid = call('POST', '/channel/research/create', body)
+              return wait(lambda: (lambda x: x if x['status'] != 'running' else None)(call('GET', f'/channel/research/get?id={rid}')),
+                          f'背调 {rid} 完成', timeout=30)
+          assert call('POST', '/channel/research/create', {}, ok=False)['code'] != 0, '什么都没填应提示'
+          bal_rs = call('GET', '/channel/credit/summary')['balance']
+          rs = research({'website': '127.0.0.1:18080'})  # 不带协议，应自动补全
+          assert rs['status'] == 'done', rs
+          rep = rs['report']
+          assert rep['companyName'] == 'Bluewave Home Appliances Ltd' and rep['businessType'] == 'distributor', rep
+          assert rep['mainProducts'] and rep['purchasingSignals'] and rep['certifications'] == ['ISO 9001'], rep
+          urls = [x['url'] for x in rs['sources']]
+          assert any(u.endswith('/about-us') for u in urls) and any(u.endswith('/catalog') for u in urls), urls
+          assert not any('/private' in u for u in urls) and '/private/plan' not in json.load(urllib.request.urlopen('http://127.0.0.1:18080/_site_hits')), 'robots.txt 禁止的页面不应访问'
+          assert all(len(x['snippet']) <= 240 for x in rs['sources']), '来源只保存摘要'
+          up = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-1]['messages'][1]['content']
+          assert 'Our story' in up and 'SECRET-INTERNAL' not in up and 'var x=1' not in up, up[:500]
+          assert rs['credits'] >= 1 and call('GET', '/channel/credit/summary')['balance'] == bal_rs - rs['credits']
+          bad = research({'website': 'http://localhost:48080'})
+          assert bad['status'] == 'failed' and '内网或本机' in bad['reasonDetail'], bad
+          bad2 = research({'website': 'http://10.0.0.1'})
+          assert bad2['status'] == 'failed' and '内网或本机' in bad2['reasonDetail'], bad2
+          print('深度背调：读取官网首页/关于/产品/联系页（跟随站内重定向、遵守 robots.txt、拒绝内网地址），AI 整理出类型、产品、采购信号')
+
+          rc = research({'customerId': acme['id'], 'website': 'http://127.0.0.1:18080'})
+          up2 = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-1]['messages'][1]['content']
+          assert '往来记录' in up2 and 'free samples' in up2, '应附上与该客户的往来邮件'
+          changed = call('POST', f"/channel/research/apply?id={rc['id']}")
+          assert '备注' in changed and '公司名称' not in changed, changed
+          cust = call('GET', f"/crm/customer/get?id={acme['id']}")
+          assert '【AI 背调' in cust['remark'] and cust['companyName'] == 'Acme Trading LLC', cust
+          assert call('POST', f"/channel/research/apply?id={rc['id']}") == [], '重复应用不应重复追加'
+          lid2 = call('POST', '/crm/clue/create', {'name': 'Bluewave 采购', 'ownerUserId': 1})
+          rl = research({'clueId': lid2, 'website': 'http://127.0.0.1:18080'})
+          ch2 = call('POST', f"/channel/research/apply?id={rl['id']}")
+          assert set(['公司名称', '官网', '国家']).issubset(ch2), ch2
+          clue2 = call('GET', f'/crm/clue/get?id={lid2}')
+          assert clue2['companyName'] == 'Bluewave Home Appliances Ltd' and clue2['countryCode'] == 'AU' and clue2['website'].startswith('http://127.0.0.1:18080'), clue2
+          assert call('GET', f"/channel/research/page?pageNo=1&pageSize=10&customerId={acme['id']}")['total'] == 1
+          call('DELETE', f"/channel/research/delete?id={bad['id']}")
+          ledger_rs = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
+          assert any(x['remark'] == '深度背调' and x['channel'] == 'research' for x in ledger_rs)
+          print('深度背调：附带往来记录；一键补充客户/线索的空字段并追加概况，重复应用不重复')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY

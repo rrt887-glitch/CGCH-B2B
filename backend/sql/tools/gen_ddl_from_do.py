@@ -38,6 +38,8 @@ MEDIUM_TEXT |= {'embedding'}
 MEDIUM_TEXT |= {'stats', 'summary'}
 # 工作时间：每周安排、节假日
 MEDIUM_TEXT |= {'schedule', 'holidays', 'extra_workdays'}
+# 深度背调：报告与来源
+MEDIUM_TEXT |= {'report', 'sources'}
 
 
 def snake(name: str) -> str:

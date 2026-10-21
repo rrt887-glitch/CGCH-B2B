@@ -91,3 +91,9 @@ UPDATE `system_menu` SET `component` = 'cgch/claw/reactivate/index' WHERE `id` =
 DELETE FROM `system_menu` WHERE `id` BETWEEN 22700 AND 22799;
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
   (22701, '客户唤醒', 'channel:reactivate', 3, 1, 20303, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 深度背调：从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/claw/bg-check/index' WHERE `id` = 20302;
+DELETE FROM `system_menu` WHERE `id` BETWEEN 22800 AND 22899;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (22801, '深度背调', 'channel:research', 3, 1, 20302, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
