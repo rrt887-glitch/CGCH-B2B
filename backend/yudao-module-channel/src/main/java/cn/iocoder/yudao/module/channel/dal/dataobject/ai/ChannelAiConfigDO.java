@@ -87,5 +87,9 @@ public class ChannelAiConfigDO extends TenantBaseDO {
      * 建档时用 AI 从询盘中提取公司、国家、需求产品等（消耗智点）
      */
     private Boolean leadAiExtract;
+    /**
+     * 是否每天自动生成 AI 工作报告（周一另生成上周周报）
+     */
+    private Boolean reportAuto;
 
 }

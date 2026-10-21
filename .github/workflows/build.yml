@@ -737,6 +737,43 @@ jobs:
           other = call('GET', f'/channel/dashboard/overview?days=30&userId={uid}')['current']
           assert other['cluesCreated'] == 1 and other['inquiries'] == 0, '管理员可按业务员筛选'
           print('看板数据权限：仅本人角色只看到自己的线索与消息，不能查看他人；管理员可看全部或按人筛选')
+
+          # ---- AI 工作报告 ----
+          today = time.strftime('%Y-%m-%d')
+          bal_r = call('GET', '/channel/credit/summary')['balance']
+          rid1 = call('POST', f'/channel/ai/report/generate?periodType=daily&date={today}')
+          rep = call('GET', f'/channel/ai/report/get?id={rid1}')
+          st = rep['stats']
+          assert rep['periodStart'] == today and rep['periodEnd'] == today and rep['generateMode'] == 'manual', rep
+          assert rep['aiGenerated'] is True and rep['summary'].startswith('【概况】') and '有转人工对话' in rep['summary'], rep['summary']
+          assert rep['credits'] >= 1 and call('GET', '/channel/credit/summary')['balance'] == bal_r - rep['credits']
+          ovd = call('GET', '/channel/dashboard/overview?days=1')['current']
+          assert st['current']['inquiries'] == ovd['inquiries'] and st['current']['aiDrafts'] == ovd['aiDrafts'], '报告与看板口径一致'
+          assert st['current']['aiHandoff'] >= 1 and len(st['handoffs']) >= 1, st['handoffs']
+          h = st['handoffs'][0]
+          assert h['channel'] in ('mail', 'whatsapp') and h['customer'] and h['question'], h
+          assert any('refund' in x['question'].lower() for x in st['handoffs']), st['handoffs']
+          assert st['gaps'] and all(g['question'] for g in st['gaps']), st['gaps']
+          assert not any('at minimum' in g['question'] for g in st['gaps']), '起订量问题后来已命中资料，不应再算缺口'
+          assert len(rep['createTime']) == 16, rep['createTime']
+          keys = [(g['channel'], g['refId']) for g in st['gaps']]
+          assert len(keys) == len(set(keys)), '同一对话只列一次'
+          assert call('GET', '/channel/ai/report/page?pageNo=1&pageSize=10')['list'][0].get('stats') is None, '列表不返回统计明细'
+          rid2 = call('POST', f'/channel/ai/report/generate?periodType=daily&date={today}')
+          pg = call('GET', '/channel/ai/report/page?pageNo=1&pageSize=10&periodType=daily')
+          assert pg['total'] == 1 and pg['list'][0]['id'] == rid2, '同一天重新生成应替换旧报告'
+          import datetime
+          wk = call('GET', f"/channel/ai/report/get?id={call('POST', f'/channel/ai/report/generate?periodType=weekly&date={today}')}")
+          monday = (datetime.date.today() - datetime.timedelta(days=datetime.date.today().weekday())).isoformat()
+          assert wk['periodType'] == 'weekly' and wk['periodStart'] == monday, wk['periodStart']
+          assert wk['stats']['current']['inquiries'] >= st['current']['inquiries']
+          ledger_r = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=20&type=consume')['list']
+          assert any(x['remark'] == 'AI 工作报告' and x['channel'] == 'report' for x in ledger_r)
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed', reportAuto=True))
+          assert call('GET', '/channel/ai/config/get')['reportAuto'] is True
+          call('DELETE', f'/channel/ai/report/delete?id={rid2}')
+          assert call('GET', '/channel/ai/report/page?pageNo=1&pageSize=10&periodType=daily')['total'] == 0
+          print(f"AI 工作报告：日报含 {len(st['handoffs'])} 个转人工、{len(st['gaps'])} 个知识库缺口，与看板一致；重新生成替换；周报按周一起算")
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY

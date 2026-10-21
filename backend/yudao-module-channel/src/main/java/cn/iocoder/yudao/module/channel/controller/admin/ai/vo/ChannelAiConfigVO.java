@@ -56,6 +56,9 @@ public class ChannelAiConfigVO {
     @Schema(description = "建档时用 AI 提取公司、国家、需求产品（消耗智点）", example = "true")
     private Boolean leadAiExtract;
 
+    @Schema(description = "是否每天自动生成 AI 工作报告")
+    private Boolean reportAuto;
+
     @Schema(description = "是否已填写 API Key（仅查询返回）")
     private Boolean hasApiKey;
 

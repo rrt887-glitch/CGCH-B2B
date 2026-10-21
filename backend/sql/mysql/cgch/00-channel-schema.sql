@@ -18,6 +18,7 @@ CREATE TABLE `channel_ai_config` (
   `extra_instructions` varchar(1024) NULL COMMENT '补充要求，例如「报价统一用美元，不承诺交期」',
   `lead_auto_create` bit(1) NULL DEFAULT b'0' COMMENT '新询盘自动建 CRM 线索',
   `lead_ai_extract` bit(1) NULL DEFAULT b'0' COMMENT '建档时用 AI 从询盘中提取公司、国家、需求产品等（消耗智点）',
+  `report_auto` bit(1) NULL DEFAULT b'0' COMMENT '是否每天自动生成 AI 工作报告（周一另生成上周周报）',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
@@ -40,6 +41,8 @@ CREATE TABLE `channel_ai_draft` (
   `completion_tokens` int NULL COMMENT '本次消耗的输出 token',
   `credits` bigint NULL COMMENT '本次扣除的智点',
   `model` varchar(255) NULL COMMENT '使用的模型',
+  `knowledge_hits` int NULL COMMENT '本次回复命中的知识条目数（不含企业介绍）；为 0 表示知识库里没有相关资料',
+  `question` varchar(1024) NULL COMMENT '客户本次的问题（截取），用于工作报告里的「知识库缺口」',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
@@ -82,6 +85,27 @@ CREATE TABLE `channel_ai_knowledge` (
   `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '知识库条目：企业介绍、产品资料、常见问答';
+
+DROP TABLE IF EXISTS `channel_ai_report`;
+CREATE TABLE `channel_ai_report` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `period_type` varchar(255) NULL COMMENT '类型：daily 日报、weekly 周报',
+  `period_start` date NULL COMMENT '统计开始日期（含）',
+  `period_end` date NULL COMMENT '统计结束日期（含）',
+  `stats` mediumtext NULL COMMENT '统计数据（JSON）：本期与上期汇总、转人工清单、知识库缺口',
+  `summary` mediumtext NULL COMMENT '文字总结',
+  `ai_generated` bit(1) NULL DEFAULT b'0' COMMENT '总结是否由大模型撰写；否则为按模板生成',
+  `credits` bigint NULL COMMENT '撰写总结消耗的智点',
+  `generate_mode` varchar(255) NULL COMMENT '生成方式：auto 定时、manual 手动（trigger 是 MySQL 保留字，故用 generate_mode）',
+  `user_id` bigint NULL COMMENT '手动生成的操作人',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'AI 工作报告（日报 / 周报）';
 
 DROP TABLE IF EXISTS `channel_credit_account`;
 CREATE TABLE `channel_credit_account` (

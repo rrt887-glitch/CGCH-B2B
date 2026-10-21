@@ -304,7 +304,8 @@ public class ChannelAiService {
     // ==================== 生成 ====================
 
     /** 一次生成的结果 */
-    public record Generated(String content, boolean handoff, String forbidden, int promptTokens, int completionTokens, String model) {
+    public record Generated(String content, boolean handoff, String forbidden, int promptTokens, int completionTokens, String model,
+                            int knowledgeHits, String question) {
     }
 
     private Generated generate(ChannelAiConfigDO cfg, String channel, String customerText, List<LlmClient.Message> history) {
@@ -325,7 +326,9 @@ public class ChannelAiService {
         String hit = handoff ? null : AiPromptBuilder.firstForbidden(content,
                 channelAiForbiddenWordMapper.selectEnabled().stream().map(ChannelAiForbiddenWordDO::getWord).toList());
         int embedTokens = sem == null ? 0 : sem.tokens(); // 检索用的向量 token 一并计入本次消耗
-        return new Generated(content, handoff, hit, r.promptTokens() + embedTokens, r.completionTokens(), cfg.getLlmModel());
+        int hits = AiPromptBuilder.rank(knowledge, customerText, sem == null ? null : sem.scores()).size();
+        return new Generated(content, handoff, hit, r.promptTokens() + embedTokens, r.completionTokens(), cfg.getLlmModel(),
+                hits, StrUtil.maxLength(StrUtil.trim(customerText), 250));
     }
 
     /** 邮件往来 → 对话历史：客户来信为 user，我方回复为 assistant */
@@ -404,7 +407,8 @@ public class ChannelAiService {
                                        String reason, String detail) {
         ChannelAiDraftDO d = ChannelAiDraftDO.builder().channel(channel).refId(refId).content(content).status(status)
                 .reason(reason).reasonDetail(StrUtil.maxLength(detail, 250))
-                .promptTokens(g.promptTokens()).completionTokens(g.completionTokens()).model(g.model()).build();
+                .promptTokens(g.promptTokens()).completionTokens(g.completionTokens()).model(g.model())
+                .knowledgeHits(g.knowledgeHits()).question(g.question()).build();
         channelAiDraftMapper.insert(d);
         return d;
     }

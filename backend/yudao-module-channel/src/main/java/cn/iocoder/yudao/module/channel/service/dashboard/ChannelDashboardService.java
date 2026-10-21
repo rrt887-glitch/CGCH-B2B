@@ -134,6 +134,15 @@ public class ChannelDashboardService {
         return vo;
     }
 
+    /** 全租户范围的汇总（AI 工作报告使用），pendingReasons 可为 null */
+    public Totals totalsAll(LocalDateTime start, LocalDateTime end, Map<String, Long> pendingReasons) {
+        Map<Long, Long> mailOwner = new HashMap<>();
+        channelMailAccountMapper.selectList().forEach(a -> mailOwner.put(a.getId(), a.getUserId()));
+        Map<Long, Long> waOwner = new HashMap<>();
+        channelWaAccountMapper.selectList().forEach(a -> waOwner.put(a.getId(), a.getUserId()));
+        return totals(start, end, new Filter(null, null, null), null, null, mailOwner, waOwner, pendingReasons);
+    }
+
     /** daily / users / pendingReasons 为 null 时只算总数（用于上期对比） */
     private Totals totals(LocalDateTime start, LocalDateTime end, Filter f, Map<String, Day> daily, Map<Long, UserRow> users,
                           Map<Long, Long> mailOwner, Map<Long, Long> waOwner, Map<String, Long> pendingReasons) {
