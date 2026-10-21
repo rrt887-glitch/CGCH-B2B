@@ -318,3 +318,38 @@ CREATE TABLE `channel_wa_message` (
   `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'WhatsApp 消息';
+
+DROP TABLE IF EXISTS `channel_ai_deferred`;
+CREATE TABLE `channel_ai_deferred` (
+  `channel` varchar(255) NULL COMMENT '正在处理（已被某个实例领取） */',
+  `ref_id` bigint NULL COMMENT '邮件编号或 WhatsApp 会话编号',
+  `message_id` bigint NULL COMMENT '触发的消息编号（WhatsApp 为消息编号，邮件同 refId）',
+  `due_time` datetime NULL COMMENT '到期时间',
+  `status` varchar(255) NULL COMMENT '状态：waiting、human_replied、ai_handled、superseded',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '等待 AI 接手的消息：工作时间内业务员优先，到点仍无人回复时由 AI 处理。存库以免服务重启丢失';
+
+DROP TABLE IF EXISTS `channel_work_time`;
+CREATE TABLE `channel_work_time` (
+  `enabled` bit(1) NULL DEFAULT b'0' COMMENT '工作时间内：业务员优先，超时未回复由 AI 接手 */',
+  `timezone` varchar(255) NULL COMMENT '公司所在时区，例如 Asia/Shanghai',
+  `schedule` mediumtext NULL COMMENT '每周安排（JSON 数组）：[{"day":1,"enabled":true,"ranges":"09:00-12:00,13:30-18:00"}, ...]，day 1=周一 … 7=周日',
+  `holidays` mediumtext NULL COMMENT '节假日（JSON 数组，yyyy-MM-dd），当天全天休息',
+  `extra_workdays` mediumtext NULL COMMENT '调休上班日（JSON 数组，yyyy-MM-dd），当天按周一的时间上班',
+  `in_hours_policy` varchar(255) NULL COMMENT '工作时间内的处理方式：human_first、ai、draft',
+  `takeover_minutes` int NULL COMMENT '业务员优先时，客户来信后等待多少分钟无人回复再由 AI 接手',
+  `off_hours_policy` varchar(255) NULL COMMENT '非工作时间的处理方式：ai、draft',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '工作时间：决定 AI 在上班时间和下班时间分别怎么接待。每个租户一条';

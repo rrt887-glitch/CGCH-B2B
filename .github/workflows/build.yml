@@ -73,7 +73,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -774,6 +774,81 @@ jobs:
           call('DELETE', f'/channel/ai/report/delete?id={rid2}')
           assert call('GET', '/channel/ai/report/page?pageNo=1&pageSize=10&periodType=daily')['total'] == 0
           print(f"AI 工作报告：日报含 {len(st['handoffs'])} 个转人工、{len(st['gaps'])} 个知识库缺口，与看板一致；重新生成替换；周报按周一起算")
+
+          # ---- 工作时间（CI 中 1 分钟 = 2 秒，等待项每秒检查一次）----
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed', waMode='auto'))
+          wt0 = call('GET', '/channel/work-time/get')
+          assert wt0['enabled'] is False and len(wt0['schedule']) == 7 and wt0['inHoursPolicy'] == 'human_first', wt0
+          allday = [{'day': d, 'enabled': True, 'ranges': '00:00-24:00'} for d in range(1, 8)]
+          wt = {'enabled': True, 'timezone': 'Asia/Shanghai', 'schedule': allday, 'holidays': [], 'extraWorkdays': [],
+                'inHoursPolicy': 'human_first', 'takeoverMinutes': 2, 'offHoursPolicy': 'ai'}
+          bad = call('PUT', '/channel/work-time/save', dict(wt, schedule=[{'day': 1, 'enabled': True, 'ranges': '18:00-09:00'}]), ok=False)
+          assert bad['code'] != 0 and '时间段格式不正确' in bad['msg'], bad
+          assert call('PUT', '/channel/work-time/save', dict(wt, takeoverMinutes=5000), ok=False)['code'] != 0
+          assert call('PUT', '/channel/work-time/save', dict(wt, timezone='Mars/Base'), ok=False)['code'] != 0
+          call('PUT', '/channel/work-time/save', wt)
+          stt = call('GET', '/channel/work-time/status')
+          assert stt['enabled'] and stt['inWorkTime'] is True and '业务员优先' in stt['policy'], stt
+          def deferred(num):
+              cv = conv(num)
+              return call('GET', f"/channel/work-time/deferred/latest?channel=whatsapp&refId={cv['id']}") if cv else None
+
+          # 1) 业务员在等待期内回复：AI 不再接手
+          push('447900000901', 'What is your lead time?')
+          d1 = wait(lambda: deferred('447900000901'), '工作时间内应先等待业务员')
+          assert d1['status'] == 'waiting' and outbound('447900000901') == [], d1
+          assert call('GET', '/channel/work-time/status')['waitingCount'] >= 1
+          call('POST', '/channel/wa/message/send', {'conversationId': conv('447900000901')['id'], 'text': 'Hi, about 25 days.'})
+          wait(lambda: deferred('447900000901')['status'] == 'human_replied', '业务员已回复，等待项结束', timeout=20)
+          time.sleep(1)
+          outs = outbound('447900000901')
+          assert len(outs) == 1 and not outs[0].get('aiGenerated'), f'只应有业务员那条回复: {outs}'
+
+          # 2) 无人回复：到时 AI 接手
+          push('447900000902', 'What is your lead time?')
+          wait(lambda: deferred('447900000902'), '等待项')
+          time.sleep(1.5)
+          assert outbound('447900000902') == [], '未到时间不应回复'
+          ai_out = wait(lambda: outbound('447900000902'), 'AI 到时接手', timeout=25)
+          assert 'Lead time: 25 days' in ai_out[0]['textBody'] or '25 days' in ai_out[0]['textBody'], ai_out
+          assert deferred('447900000902')['status'] == 'ai_handled'
+
+          # 3) 等待期间客户又发消息：重新计时，旧的作废
+          push('447900000903', 'Hello')
+          first = wait(lambda: deferred('447900000903'), '第一条的等待项')
+          time.sleep(2)
+          push('447900000903', 'What is your lead time?')
+          wait(lambda: deferred('447900000903')['id'] != first['id'], '新消息重新计时')
+          wait(lambda: outbound('447900000903'), 'AI 接手', timeout=25)
+          time.sleep(2)
+          assert len(outbound('447900000903')) == 1, '只回复一次'
+          print('工作时间内：业务员按时回复则 AI 不插手；超时无人回复由 AI 接手；客户追问时重新计时')
+
+          # 4) 非工作时间：AI 立即接待，并说明业务员上班后跟进
+          closed = [{'day': d, 'enabled': False, 'ranges': ''} for d in range(1, 8)]
+          call('PUT', '/channel/work-time/save', dict(wt, schedule=closed))
+          assert call('GET', '/channel/work-time/status')['inWorkTime'] is False
+          push('447900000904', 'Can I get a quote today?')
+          wait(lambda: outbound('447900000904'), '非工作时间 AI 立即回复')
+          sysp = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-1]['messages'][0]['content']
+          assert '非工作时间' in sysp, '应提示 AI 现在是非工作时间'
+          # 5) 非工作时间只起草
+          call('PUT', '/channel/work-time/save', dict(wt, schedule=closed, offHoursPolicy='draft'))
+          push('447900000905', 'Can I get a quote today?')
+          dr5 = wait(lambda: pending('447900000905'), '非工作时间只起草')
+          assert dr5['reason'] == 'off_hours' and outbound('447900000905') == [], dr5
+          # 6) 节假日按休息处理；工作时间内「只起草」
+          import zoneinfo
+          today_sh = datetime.datetime.now(zoneinfo.ZoneInfo('Asia/Shanghai')).date().isoformat()
+          call('PUT', '/channel/work-time/save', dict(wt, holidays=[today_sh]))
+          st6 = call('GET', '/channel/work-time/status')
+          assert st6['inWorkTime'] is False and st6['nextChange'], st6
+          call('PUT', '/channel/work-time/save', dict(wt, inHoursPolicy='draft'))
+          push('447900000906', 'Can I get a quote today?')
+          dr6 = wait(lambda: pending('447900000906'), '工作时间只起草')
+          assert dr6['reason'] == 'work_hours' and outbound('447900000906') == [], dr6
+          call('PUT', '/channel/work-time/save', dict(wt, enabled=False))
+          print('非工作时间 AI 接待并说明业务员稍后跟进 / 可设为只起草；节假日按休息；工作时间可设为只起草')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY

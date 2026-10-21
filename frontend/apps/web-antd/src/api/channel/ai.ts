@@ -78,6 +78,8 @@ export const DRAFT_REASON: Record<string, string> = {
   send_failed: '自动发送失败',
   manual: '手动起草',
   no_credit: '智点余额不足',
+  work_hours: '工作时间设为由业务员发送',
+  off_hours: '非工作时间设为只起草',
 };
 
 export const getAiConfig = () => requestClient.get<ChannelAiApi.Config>('/channel/ai/config/get');

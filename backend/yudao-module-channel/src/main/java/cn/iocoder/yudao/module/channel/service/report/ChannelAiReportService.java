@@ -44,7 +44,7 @@ public class ChannelAiReportService {
     private static final Map<String, String> REASON = Map.of(
             "draft_mode", "只起草模式", "handoff", "需人工处理", "forbidden", "含违禁词", "human_active", "业务员在跟进",
             "not_hosted", "未开启 AI 托管", "window_closed", "WhatsApp 窗口已关闭", "send_failed", "发送失败",
-            "manual", "手动起草", "no_credit", "智点不足");
+            "manual", "手动起草", "no_credit", "智点不足", "work_hours", "工作时间由业务员发送", "off_hours", "非工作时间只起草");
 
     @Resource
     private ChannelAiReportMapper channelAiReportMapper;

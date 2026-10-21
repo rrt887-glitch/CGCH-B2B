@@ -36,6 +36,8 @@ MEDIUM_TEXT |= {'content'}
 MEDIUM_TEXT |= {'embedding'}
 # AI 工作报告的统计 JSON 与总结
 MEDIUM_TEXT |= {'stats', 'summary'}
+# 工作时间：每周安排、节假日
+MEDIUM_TEXT |= {'schedule', 'holidays', 'extra_workdays'}
 
 
 def snake(name: str) -> str:

@@ -19,6 +19,10 @@ import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiKnowledgeMapper;
 import cn.iocoder.yudao.module.channel.controller.admin.mail.vo.ChannelMailSendReqVO;
 import cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaSendReqVO;
 import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.dal.dataobject.worktime.ChannelAiDeferredDO;
+import cn.iocoder.yudao.module.channel.dal.mysql.worktime.ChannelAiDeferredMapper;
+import cn.iocoder.yudao.module.channel.service.worktime.ChannelWorkTimeService;
+import cn.iocoder.yudao.module.channel.service.worktime.ChannelWorkTimeService.Decision;
 import cn.iocoder.yudao.module.channel.service.mail.ChannelMailService;
 import cn.iocoder.yudao.module.channel.service.mail.HtmlText;
 import cn.iocoder.yudao.module.channel.service.whatsapp.ChannelWhatsAppService;
@@ -65,6 +69,10 @@ public class ChannelAiService {
     private CrmCustomerMapper customerMapper;
     @Resource
     private ChannelCreditService channelCreditService;
+    @Resource
+    private ChannelWorkTimeService channelWorkTimeService;
+    @Resource
+    private ChannelAiDeferredMapper channelAiDeferredMapper;
 
     // ==================== 配置 ====================
 
@@ -462,6 +470,11 @@ public class ChannelAiService {
     // ==================== 自动处理（收到新消息时，已在对应租户上下文中调用） ====================
 
     public void handleMailInbound(Long messageId) {
+        handleMailInbound(messageId, false);
+    }
+
+    /** @param afterWait 是否为「业务员优先」等待到期后的处理（不再重新等待） */
+    public void handleMailInbound(Long messageId, boolean afterWait) {
         ChannelAiConfigDO cfg = channelAiConfigMapper.selectCurrent();
         if (cfg == null || ChannelAiConfigDO.MODE_OFF.equals(cfg.getMailMode())) {
             return;
@@ -474,16 +487,24 @@ public class ChannelAiService {
         if (account == null || StrUtil.equalsIgnoreCase(account.getEmail(), m.getFromAddress())) {
             return;
         }
+        Decision wt = workTime(cfg.getMailMode(), afterWait);
+        if (Decision.DEFER.equals(wt.action())) {
+            defer(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), m.getId(), wt.deferSeconds());
+            return;
+        }
         if (noCredit(ChannelAiDraftDO.CHANNEL_MAIL, m.getId())) {
             return;
         }
         List<LlmClient.Message> history = mailHistory(m);
-        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history);
+        Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history);
         String content = withSignature(g, cfg);
         String reason = blockReason(cfg.getMailMode(), g, m.getCustomerId(),
                 humanRepliedRecently(mailService.getThreadInternal(m).stream()
                         .filter(t -> t.getDirection() == ChannelMailMessageDO.DIRECTION_OUT && !Boolean.TRUE.equals(t.getAiGenerated()))
                         .map(ChannelMailMessageDO::getSentTime).toList(), cfg));
+        if (reason == null && Decision.DRAFT.equals(wt.action())) {
+            reason = wt.reason();
+        }
         if (reason != null) {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), content, g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden()), account.getUserId(), "邮件自动处理");
             return;
@@ -507,6 +528,10 @@ public class ChannelAiService {
      * @param messageId 触发本次处理的消息；如果之后客户又发了新消息，本次放弃，交给最后一条处理（合并连发）
      */
     public void handleWhatsAppInbound(Long conversationId, Long messageId) {
+        handleWhatsAppInbound(conversationId, messageId, false);
+    }
+
+    public void handleWhatsAppInbound(Long conversationId, Long messageId, boolean afterWait) {
         ChannelAiConfigDO cfg = channelAiConfigMapper.selectCurrent();
         if (cfg == null || ChannelAiConfigDO.MODE_OFF.equals(cfg.getWaMode())) {
             return;
@@ -528,15 +553,23 @@ public class ChannelAiService {
         if (account == null) {
             return;
         }
+        Decision wt = workTime(cfg.getWaMode(), afterWait);
+        if (Decision.DEFER.equals(wt.action())) {
+            defer(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, messageId, wt.deferSeconds());
+            return;
+        }
         if (noCredit(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId)) {
             return;
         }
         List<LlmClient.Message> history = waHistory(conversationId);
-        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history);
+        Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history);
         String reason = blockReason(cfg.getWaMode(), g, conv.getCustomerId(),
                 humanRepliedRecently(recent.stream()
                         .filter(t -> t.getDirection() == ChannelWaMessageDO.DIRECTION_OUT && !Boolean.TRUE.equals(t.getAiGenerated()))
                         .map(ChannelWaMessageDO::getMessageTime).toList(), cfg));
+        if (reason == null && Decision.DRAFT.equals(wt.action())) {
+            reason = wt.reason();
+        }
         if (reason == null && !whatsAppService.isWindowOpen(conv)) {
             reason = ChannelAiDraftDO.REASON_WINDOW_CLOSED;
         }
@@ -554,6 +587,68 @@ public class ChannelAiService {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING,
                     ChannelAiDraftDO.REASON_SEND_FAILED, e.getMessage()), account.getUserId(), "WhatsApp 自动处理");
         }
+    }
+
+    // ==================== 工作时间 ====================
+
+    /** 只有「自动回复」模式受工作时间影响；等待到期后的处理不再重新等待 */
+    private Decision workTime(String mode, boolean afterWait) {
+        if (!ChannelAiConfigDO.MODE_AUTO.equals(mode)) {
+            return new Decision(Decision.PROCESS, false, null, 0, null, null);
+        }
+        Decision d = channelWorkTimeService.decide();
+        if (afterWait && Decision.DEFER.equals(d.action())) {
+            return new Decision(Decision.PROCESS, false, null, 0, d.localTime(), null);
+        }
+        return d;
+    }
+
+    /** 非工作时间：提示 AI 说明业务员会在上班后跟进 */
+    private static ChannelAiConfigDO withWorkTime(ChannelAiConfigDO cfg, Decision wt) {
+        if (!wt.offHours()) {
+            return cfg;
+        }
+        ChannelAiConfigDO copy = cn.iocoder.yudao.framework.common.util.object.BeanUtils.toBean(cfg, ChannelAiConfigDO.class);
+        String note = "现在是公司的非工作时间（当地时间 " + wt.localTime() + "）。能根据资料回答的照常回答；"
+                + "需要业务员处理的事项，告诉客户业务员会在上班后" + (wt.nextWorkTime() == null ? "" : "（约 " + wt.nextWorkTime() + "）")
+                + "尽快跟进。";
+        copy.setExtraInstructions(StrUtil.isBlank(cfg.getExtraInstructions()) ? note : cfg.getExtraInstructions().trim() + "\n" + note);
+        return copy;
+    }
+
+    /** 业务员优先：记下等待项，到期仍无人回复再由 AI 处理；同一对象之前的等待项作废 */
+    private void defer(String channel, Long refId, Long messageId, long seconds) {
+        channelAiDeferredMapper.supersede(channel, refId);
+        channelAiDeferredMapper.insert(ChannelAiDeferredDO.builder().channel(channel).refId(refId).messageId(messageId)
+                .dueTime(LocalDateTime.now().plusSeconds(seconds)).status(ChannelAiDeferredDO.STATUS_WAITING).build());
+    }
+
+    /** 等待到期：已有人回复则放弃；客户又发了新消息则交给新消息；否则由 AI 处理。返回最终状态 */
+    public String resumeDeferred(ChannelAiDeferredDO d) {
+        if (ChannelAiDraftDO.CHANNEL_MAIL.equals(d.getChannel())) {
+            ChannelMailMessageDO m = mailService.getMessageInternal(d.getRefId());
+            if (m == null) {
+                return ChannelAiDeferredDO.STATUS_SUPERSEDED;
+            }
+            boolean replied = mailService.getThreadInternal(m).stream()
+                    .anyMatch(t -> t.getDirection() == ChannelMailMessageDO.DIRECTION_OUT && t.getId() > m.getId());
+            if (replied) {
+                return ChannelAiDeferredDO.STATUS_HUMAN_REPLIED;
+            }
+            handleMailInbound(m.getId(), true);
+            return ChannelAiDeferredDO.STATUS_AI_HANDLED;
+        }
+        List<ChannelWaMessageDO> recent = whatsAppService.getRecentMessagesInternal(d.getRefId(), WA_HISTORY);
+        Optional<ChannelWaMessageDO> lastIn = recent.stream().filter(x -> x.getDirection() == ChannelWaMessageDO.DIRECTION_IN)
+                .reduce((a, b) -> b);
+        if (lastIn.isEmpty() || !lastIn.get().getId().equals(d.getMessageId())) {
+            return ChannelAiDeferredDO.STATUS_SUPERSEDED;
+        }
+        if (recent.get(recent.size() - 1).getDirection() == ChannelWaMessageDO.DIRECTION_OUT) {
+            return ChannelAiDeferredDO.STATUS_HUMAN_REPLIED;
+        }
+        handleWhatsAppInbound(d.getRefId(), d.getMessageId(), true);
+        return ChannelAiDeferredDO.STATUS_AI_HANDLED;
     }
 
     /** 不能自动发出的原因；返回 null 表示可以发 */
