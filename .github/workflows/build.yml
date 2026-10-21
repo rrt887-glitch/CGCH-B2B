@@ -949,6 +949,48 @@ jobs:
           ledger_rs = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
           assert any(x['remark'] == '深度背调' and x['channel'] == 'research' for x in ledger_rs)
           print('深度背调：附带往来记录；一键补充客户/线索的空字段并追加概况，重复应用不重复')
+
+          # ---- 对话助手 ----
+          a1 = call('POST', '/channel/assistant/ask', {'question': 'Acme 最近怎么样？'})
+          assert a1['chatId'] and a1['steps'] == [{'tool': 'get_customer', 'args': '{"name": "Acme Buyer"}'}], a1['steps']
+          assert 'Acme Trading LLC' in a1['content'] and 'free samples' in a1['content'], a1['content'][:400]
+          assert a1['credits'] >= 1
+          tools_sent = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-2]['tools']
+          assert {t['function']['name'] for t in tools_sent} >= {'search_customers', 'get_customer', 'followups_due', 'search_messages', 'get_stats', 'pending_drafts'}
+          a2 = call('POST', '/channel/assistant/ask', {'chatId': a1['chatId'], 'question': '这周有哪些需要跟进的？'})
+          assert a2['chatId'] == a1['chatId'] and a2['steps'][0]['tool'] == 'followups_due' and 'unrepliedMails' in a2['content'], a2
+          last_req = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-2]['messages']
+          assert any(m['role'] == 'assistant' and 'Acme Trading LLC' in (m.get('content') or '') for m in last_req), '应带上本会话之前的问答'
+          a3 = call('POST', '/channel/assistant/ask', {'question': '最近 30 天询盘统计'})
+          assert a3['steps'][0]['tool'] == 'get_stats' and '"inquiries"' in a3['content']
+          a4 = call('POST', '/channel/assistant/ask', {'question': '有哪些客户提到退款？'})
+          assert a4['steps'][0]['tool'] == 'search_messages' and 'refund' in a4['content'].lower(), a4['content'][:300]
+          a5 = call('POST', '/channel/assistant/ask', {'question': '待处理的 AI 草稿有哪些'})
+          assert a5['steps'][0]['tool'] == 'pending_drafts' and '"count"' in a5['content']
+          a6 = call('POST', '/channel/assistant/ask', {'question': '你好'})
+          assert a6['steps'] == [] and a6['content']
+          chats = call('GET', '/channel/assistant/chats')
+          assert len(chats) == 5 and chats[0]['id'] == a6['chatId'], chats
+          msgs = call('GET', f"/channel/assistant/messages?chatId={a1['chatId']}")
+          assert [m['role'] for m in msgs] == ['user', 'assistant', 'user', 'assistant'] and msgs[1]['steps'][0]['tool'] == 'get_customer'
+          # 数据权限：仅本人的业务员查不到 admin 的客户，也看不到别人的会话
+          call('POST', '/system/permission/assign-role-menu', {'roleId': rid, 'menuIds': [20000, 20001, 22401, 20300, 20301, 22901]})
+          lg2 = json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/login', method='POST',
+                headers={'tenant-id': '1', 'Content-Type': 'application/json'},
+                data=json.dumps({'username': 'sales2', 'password': 'Sales2pass'}).encode())))
+          H3 = dict(H, Authorization='Bearer ' + lg2['data']['accessToken'])
+          def call3(method, path, body=None):
+              return json.load(urllib.request.urlopen(urllib.request.Request(BASE + path, method=method, headers=H3,
+                               data=json.dumps(body).encode() if body is not None else None)))
+          w1 = call3('POST', '/channel/assistant/ask', {'question': 'Acme 最近怎么样？'})
+          assert w1['code'] == 0 and '没有找到该客户' in w1['data']['content'] and 'Acme Trading LLC' not in w1['data']['content'], w1
+          assert call3('GET', f"/channel/assistant/messages?chatId={a1['chatId']}")['code'] != 0, '不能查看别人的会话'
+          assert len(call3('GET', '/channel/assistant/chats')['data']) == 1
+          call('DELETE', f"/channel/assistant/chat/delete?chatId={a6['chatId']}")
+          assert len(call('GET', '/channel/assistant/chats')) == 4
+          ledger_as = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
+          assert any(x['remark'] == '对话助手' and x['channel'] == 'assistant' for x in ledger_as)
+          print('对话助手：按问题调用查询工具（客户、跟进、统计、消息、草稿）并据此回答；多轮上下文；按数据权限过滤，会话互相隔离')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY

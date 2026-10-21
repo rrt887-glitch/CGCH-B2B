@@ -49,6 +49,8 @@ public interface ErrorCodeConstants {
 
     // ========== 智点 1-030-004-000 ==========
     ErrorCode CREDIT_AMOUNT_ZERO = new ErrorCode(1_030_004_000, "数量不能为 0");
+    ErrorCode ASSISTANT_INVALID = new ErrorCode(1_030_009_000, "{}");
+    ErrorCode ASSISTANT_CHAT_NOT_EXISTS = new ErrorCode(1_030_009_001, "会话不存在");
     ErrorCode RESEARCH_INVALID = new ErrorCode(1_030_008_000, "{}");
     ErrorCode RESEARCH_NOT_EXISTS = new ErrorCode(1_030_008_001, "背调记录不存在");
     ErrorCode REACTIVATE_NO_CUSTOMER = new ErrorCode(1_030_007_000, "请至少选择一位客户");

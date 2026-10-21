@@ -97,3 +97,9 @@ UPDATE `system_menu` SET `component` = 'cgch/claw/bg-check/index' WHERE `id` = 2
 DELETE FROM `system_menu` WHERE `id` BETWEEN 22800 AND 22899;
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
   (22801, '深度背调', 'channel:research', 3, 1, 20302, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 对话助手：从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/claw/chat/index' WHERE `id` = 20301;
+DELETE FROM `system_menu` WHERE `id` BETWEEN 22900 AND 22999;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (22901, '对话助手', 'channel:assistant', 3, 1, 20301, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');

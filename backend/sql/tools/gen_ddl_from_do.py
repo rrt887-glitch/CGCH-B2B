@@ -40,6 +40,8 @@ MEDIUM_TEXT |= {'stats', 'summary'}
 MEDIUM_TEXT |= {'schedule', 'holidays', 'extra_workdays'}
 # 深度背调：报告与来源
 MEDIUM_TEXT |= {'report', 'sources'}
+# 对话助手：查询步骤
+MEDIUM_TEXT |= {'steps'}
 
 
 def snake(name: str) -> str:

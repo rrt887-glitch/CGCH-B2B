@@ -104,6 +104,59 @@ public final class LlmClient {
         }
     }
 
+    /** 支持工具调用的一轮请求结果：content 为最终回答；toolCalls 非空表示模型要求调用工具 */
+    public record ToolTurn(JsonNode assistantMessage, String content, List<JsonNode> toolCalls, int promptTokens, int completionTokens) {
+    }
+
+    /**
+     * OpenAI 兼容的工具调用（function calling）。messages 为原始消息数组（含 tool 消息），tools 为工具定义。
+     */
+    public static ToolTurn chatWithTools(String baseUrl, String apiKey, String model, ArrayNode messages, ArrayNode tools, double temperature) {
+        if (StrUtil.hasBlank(baseUrl, apiKey, model)) {
+            throw new LlmException("请先在数字员工设置中填写大模型接口地址、API Key 和模型名称");
+        }
+        try {
+            ObjectNode body = JSON.createObjectNode();
+            body.put("model", model);
+            body.put("temperature", temperature);
+            body.put("stream", false);
+            body.set("messages", messages);
+            if (tools != null && !tools.isEmpty()) {
+                body.set("tools", tools);
+                body.put("tool_choice", "auto");
+            }
+            String url = StrUtil.removeSuffix(baseUrl.trim(), "/") + "/chat/completions";
+            HttpResponse<String> resp = HTTP.send(HttpRequest.newBuilder(URI.create(url))
+                            .timeout(Duration.ofSeconds(90))
+                            .header("Authorization", "Bearer " + apiKey)
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body))).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            JsonNode json = StrUtil.isBlank(resp.body()) ? JSON.createObjectNode() : JSON.readTree(resp.body());
+            if (resp.statusCode() >= 300 || json.has("error")) {
+                JsonNode err = json.path("error");
+                String msg = err.isTextual() ? err.asText() : err.path("message").asText("HTTP " + resp.statusCode());
+                throw new LlmException("大模型调用失败：" + msg);
+            }
+            JsonNode msg = json.path("choices").path(0).path("message");
+            List<JsonNode> calls = new java.util.ArrayList<>();
+            msg.path("tool_calls").forEach(calls::add);
+            String content = msg.path("content").isTextual() ? msg.path("content").asText("") : "";
+            if (calls.isEmpty() && StrUtil.isBlank(content)) {
+                throw new LlmException("大模型没有返回内容");
+            }
+            JsonNode usage = json.path("usage");
+            return new ToolTurn(msg, content.trim(), calls, usage.path("prompt_tokens").asInt(0), usage.path("completion_tokens").asInt(0));
+        } catch (LlmException e) {
+            throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new LlmException("请求被中断");
+        } catch (Exception e) {
+            throw new LlmException("无法连接大模型接口：" + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
+        }
+    }
+
     public static Result chat(String baseUrl, String apiKey, String model, List<Message> messages, double temperature) {
         if (StrUtil.hasBlank(baseUrl, apiKey, model)) {
             throw new LlmException("请先在数字员工设置中填写大模型接口地址、API Key 和模型名称");
