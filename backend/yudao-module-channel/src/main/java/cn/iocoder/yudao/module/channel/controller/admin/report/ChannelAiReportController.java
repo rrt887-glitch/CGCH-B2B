@@ -4,7 +4,6 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
-import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.channel.controller.admin.report.vo.ChannelAiReportRespVO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.ai.ChannelAiReportDO;
 import cn.iocoder.yudao.module.channel.service.report.ChannelAiReportService;
@@ -19,6 +18,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -40,18 +40,34 @@ public class ChannelAiReportController {
     public CommonResult<PageResult<ChannelAiReportRespVO>> page(@Valid PageParam req,
                                                                @RequestParam(value = "periodType", required = false) String periodType) {
         PageResult<ChannelAiReportDO> page = channelAiReportService.page(req, periodType);
-        page.getList().forEach(r -> r.setStats(null));
-        return success(BeanUtils.toBean(page, ChannelAiReportRespVO.class));
+        return success(new PageResult<>(page.getList().stream().map(r -> toVO(r, false)).toList(), page.getTotal()));
+    }
+
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    /** 日期统一转成字符串返回，避免序列化成数组或时间戳 */
+    private static ChannelAiReportRespVO toVO(ChannelAiReportDO r, boolean withStats) {
+        ChannelAiReportRespVO vo = new ChannelAiReportRespVO();
+        vo.setId(r.getId());
+        vo.setPeriodType(r.getPeriodType());
+        vo.setPeriodStart(r.getPeriodStart() == null ? null : r.getPeriodStart().toString());
+        vo.setPeriodEnd(r.getPeriodEnd() == null ? null : r.getPeriodEnd().toString());
+        vo.setSummary(r.getSummary());
+        vo.setAiGenerated(r.getAiGenerated());
+        vo.setCredits(r.getCredits());
+        vo.setGenerateMode(r.getGenerateMode());
+        vo.setCreateTime(r.getCreateTime() == null ? null : r.getCreateTime().format(TIME));
+        if (withStats && r.getStats() != null) {
+            vo.setStats(JsonUtils.parseObject(r.getStats(), Map.class));
+        }
+        return vo;
     }
 
     @GetMapping("/get")
     @Operation(summary = "报告详情（含统计数据）")
     @PreAuthorize("@ss.hasPermission('channel:ai:report')")
     public CommonResult<ChannelAiReportRespVO> get(@RequestParam("id") Long id) {
-        ChannelAiReportDO r = channelAiReportService.get(id);
-        ChannelAiReportRespVO vo = BeanUtils.toBean(r, ChannelAiReportRespVO.class);
-        vo.setStats(r.getStats() == null ? null : JsonUtils.parseObject(r.getStats(), Map.class));
-        return success(vo);
+        return success(toVO(channelAiReportService.get(id), true));
     }
 
     @PostMapping("/generate")

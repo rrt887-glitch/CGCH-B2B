@@ -163,12 +163,13 @@ public class ChannelAiReportService {
         return c == null ? "WhatsApp #" + d.getRefId() : StrUtil.blankToDefault(c.getProfileName(), "+" + c.getWaId());
     }
 
-    /** 同一对象只保留最近一次没命中的问题，最多 LIST_LIMIT 条 */
+    /** 同一对象只保留最近一次没命中的问题；之后又命中了资料的（已补上）不算缺口。最多 LIST_LIMIT 条 */
     private List<Map<String, Object>> gaps(List<ChannelAiDraftDO> drafts) {
         Set<String> seen = new HashSet<>();
         List<Map<String, Object>> out = new ArrayList<>();
         for (ChannelAiDraftDO d : drafts) {
-            if (!seen.add(d.getChannel() + ":" + d.getRefId())) {
+            if (!seen.add(d.getChannel() + ":" + d.getRefId())
+                    || channelAiDraftMapper.existsHitAfter(d.getChannel(), d.getRefId(), d.getId())) {
                 continue;
             }
             out.add(item(d));

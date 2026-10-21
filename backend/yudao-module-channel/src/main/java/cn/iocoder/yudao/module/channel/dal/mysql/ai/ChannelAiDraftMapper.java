@@ -36,6 +36,13 @@ public interface ChannelAiDraftMapper extends BaseMapperX<ChannelAiDraftDO> {
                 .orderByDesc(ChannelAiDraftDO::getId).last("LIMIT " + limit));
     }
 
+    /** 同一对象在该记录之后是否有命中了知识库的回复（说明缺口已补上） */
+    default boolean existsHitAfter(String channel, Long refId, Long afterId) {
+        return selectCount(new LambdaQueryWrapperX<ChannelAiDraftDO>()
+                .eq(ChannelAiDraftDO::getChannel, channel).eq(ChannelAiDraftDO::getRefId, refId)
+                .gt(ChannelAiDraftDO::getId, afterId).gt(ChannelAiDraftDO::getKnowledgeHits, 0)) > 0;
+    }
+
     /** 期间内知识库没有命中任何资料的问题 */
     default List<ChannelAiDraftDO> selectKnowledgeGaps(java.time.LocalDateTime start, java.time.LocalDateTime end, int limit) {
         return selectList(new LambdaQueryWrapperX<ChannelAiDraftDO>()

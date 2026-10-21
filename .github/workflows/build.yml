@@ -754,6 +754,8 @@ jobs:
           assert h['channel'] in ('mail', 'whatsapp') and h['customer'] and h['question'], h
           assert any('refund' in x['question'].lower() for x in st['handoffs']), st['handoffs']
           assert st['gaps'] and all(g['question'] for g in st['gaps']), st['gaps']
+          assert not any('at minimum' in g['question'] for g in st['gaps']), '起订量问题后来已命中资料，不应再算缺口'
+          assert len(rep['createTime']) == 16, rep['createTime']
           keys = [(g['channel'], g['refId']) for g in st['gaps']]
           assert len(keys) == len(set(keys)), '同一对话只列一次'
           assert call('GET', '/channel/ai/report/page?pageNo=1&pageSize=10')['list'][0].get('stats') is None, '列表不返回统计明细'
