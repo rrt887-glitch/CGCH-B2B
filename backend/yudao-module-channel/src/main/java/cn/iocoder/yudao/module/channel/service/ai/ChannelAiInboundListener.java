@@ -35,6 +35,8 @@ public class ChannelAiInboundListener {
     @Resource
     private ChannelLeadService channelLeadService;
     @Resource
+    private cn.iocoder.yudao.module.channel.service.policy.ChannelSendPolicyService channelSendPolicyService;
+    @Resource
     private cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService channelNotifyService;
 
     @Value("${cgch.ai.whatsapp-debounce-ms:3000}")
@@ -46,6 +48,14 @@ public class ChannelAiInboundListener {
         executor.schedule(() -> {
             try {
                 TenantUtils.execute(e.tenantId(), () -> {
+                    // 0. 退订请求、退信：加入名单，不再建线索或回复
+                    try {
+                        if (channelSendPolicyService.onInbound(e.channel(), e.refId(), e.messageId())) {
+                            return;
+                        }
+                    } catch (Exception ex) {
+                        log.warn("[onInbound][{} {}] 退订识别失败: {}", e.channel(), e.refId(), ex.getMessage());
+                    }
                     // 1. 线索自动建档（失败不影响 AI 回复）
                     try {
                         if ("mail".equals(e.channel())) {

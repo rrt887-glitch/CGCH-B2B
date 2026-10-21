@@ -100,6 +100,8 @@ public class ChannelReactivateService {
     private ChannelMailService channelMailService;
     @Resource
     private ChannelWhatsAppService channelWhatsAppService;
+    @Resource
+    private cn.iocoder.yudao.module.channel.service.policy.ChannelSendPolicyService channelSendPolicyService;
 
     /** 两次发送之间的间隔，避免短时间大量发信被邮件服务商判为垃圾邮件 */
     @Value("${cgch.reactivate.send-interval-ms:3000}")
@@ -498,7 +500,7 @@ public class ChannelReactivateService {
         req.setAccountId(a.getId());
         req.setTo(List.of(i.getRecipient()));
         req.setSubject(i.getSubject());
-        req.setText(i.getContent());
+        req.setText(channelSendPolicyService.withFooter(i.getContent())); // 批量邮件附退订说明
         return channelMailService.send(a.getUserId(), req, true);
     }
 

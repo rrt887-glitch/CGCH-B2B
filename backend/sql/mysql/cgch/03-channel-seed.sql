@@ -124,3 +124,9 @@ UPDATE `system_tenant` SET `contact_user_id` = 1 WHERE `id` = 1 AND `contact_use
 
 -- 通知中心：从占位页切换到正式页面
 UPDATE `system_menu` SET `component` = 'cgch/board/notice/index' WHERE `id` = 20003;
+
+-- 发送策略：从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/config/send-policy/index' WHERE `id` = 20505;
+DELETE FROM `system_menu` WHERE `id` BETWEEN 23100 AND 23199;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (23101, '发送策略与黑名单', 'channel:send-policy', 3, 1, 20505, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');

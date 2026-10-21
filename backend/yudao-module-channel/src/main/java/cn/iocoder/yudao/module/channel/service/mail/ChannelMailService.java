@@ -43,6 +43,8 @@ public class ChannelMailService {
     private static final int SNIPPET_LENGTH = 160;
 
     @Resource
+    private cn.iocoder.yudao.module.channel.service.policy.ChannelSendPolicyService channelSendPolicyService;
+    @Resource
     private ChannelMailAccountMapper accountMapper;
     @Resource
     private ChannelMailMessageMapper messageMapper;
@@ -247,6 +249,9 @@ public class ChannelMailService {
             throw exception(MAIL_RECIPIENT_EMPTY);
         }
         List<String> cc = cleanAddresses(req.getCc());
+        List<String> all = new ArrayList<>(to);
+        all.addAll(cc);
+        channelSendPolicyService.checkMail(account.getId(), all, ai); // 退订 / 黑名单、发送频率
         ChannelMailMessageDO original = null;
         if (req.getReplyToId() != null) {
             original = getMessage(userId, req.getReplyToId());

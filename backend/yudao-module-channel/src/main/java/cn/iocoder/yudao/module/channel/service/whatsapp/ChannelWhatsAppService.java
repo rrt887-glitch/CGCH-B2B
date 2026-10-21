@@ -53,6 +53,8 @@ public class ChannelWhatsAppService {
             ChannelWaMessageDO.STATUS_SENT, ChannelWaMessageDO.STATUS_DELIVERED, ChannelWaMessageDO.STATUS_READ);
 
     @Resource
+    private cn.iocoder.yudao.module.channel.service.policy.ChannelSendPolicyService channelSendPolicyService;
+    @Resource
     private ChannelWaAccountMapper accountMapper;
     @Resource
     private ChannelWaConversationMapper conversationMapper;
@@ -335,6 +337,7 @@ public class ChannelWhatsAppService {
         if (!template && !windowOpen(conv)) {
             throw exception(WA_WINDOW_CLOSED);
         }
+        channelSendPolicyService.checkWhatsApp(a.getId(), conv.getWaId(), ai); // 退订 / 黑名单、发送频率
         String wamid;
         try {
             wamid = template
