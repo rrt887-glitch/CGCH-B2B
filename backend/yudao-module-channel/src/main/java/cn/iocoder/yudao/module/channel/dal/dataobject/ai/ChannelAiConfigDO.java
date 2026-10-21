@@ -91,5 +91,9 @@ public class ChannelAiConfigDO extends TenantBaseDO {
      * 是否每天自动生成 AI 工作报告（周一另生成上周周报）
      */
     private Boolean reportAuto;
+    /**
+     * 关闭的通知类型，逗号分隔：handoff、takeover、new_lead、reactivate_reply、credit_low；为空表示全部开启
+     */
+    private String notifyMuted;
 
 }

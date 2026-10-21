@@ -24,6 +24,10 @@ public class AiDeferredScheduler {
     private ChannelAiDeferredMapper channelAiDeferredMapper;
     @Resource
     private ChannelAiService channelAiService;
+    @Resource
+    private cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService channelNotifyService;
+    @Resource
+    private cn.iocoder.yudao.module.channel.service.worktime.ChannelWorkTimeService channelWorkTimeService;
 
     @Scheduled(initialDelayString = "${cgch.ai.deferred-interval-ms:20000}", fixedDelayString = "${cgch.ai.deferred-interval-ms:20000}")
     public void run() {
@@ -42,6 +46,10 @@ public class AiDeferredScheduler {
                         status = ChannelAiDeferredDO.STATUS_AI_HANDLED;
                     }
                     channelAiDeferredMapper.updateById(new ChannelAiDeferredDO().setId(d.getId()).setStatus(status));
+                    if (ChannelAiDeferredDO.STATUS_AI_HANDLED.equals(status)) {
+                        Integer m = channelWorkTimeService.getConfig().getTakeoverMinutes();
+                        channelNotifyService.onTakeover(d.getChannel(), d.getRefId(), m == null ? 0 : m);
+                    }
                 });
             } catch (Exception e) {
                 log.warn("[run][等待项({}) 处理失败] {}", d.getId(), e.getMessage());

@@ -51,6 +51,8 @@ public class ChannelLeadService {
     private static final Pattern COUNTRY = Pattern.compile("^[A-Za-z]{2}$");
 
     @Resource
+    private cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService channelNotifyService;
+    @Resource
     private ChannelAiConfigMapper channelAiConfigMapper;
     @Resource
     private ChannelMailMessageMapper channelMailMessageMapper;
@@ -168,6 +170,8 @@ public class ChannelLeadService {
                 .setBizType(CrmBizTypeEnum.CRM_CLUE.getType()).setBizId(clue.getId())
                 .setUserId(clue.getOwnerUserId()).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
         log.info("[createClue] 自动建档线索 {}：{} {}", clue.getId(), clue.getName(), StrUtil.blankToDefault(clue.getEmail(), clue.getWhatsapp()));
+        channelNotifyService.onNewLead(clue.getId(), clue.getName(), clue.getOwnerUserId(),
+                Integer.valueOf(SOURCE_WHATSAPP).equals(clue.getSource()) ? "WhatsApp" : "邮件");
     }
 
     private CrmClueDO findClueByEmail(String email) {

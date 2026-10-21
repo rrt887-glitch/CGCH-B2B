@@ -59,6 +59,9 @@ public class ChannelAiConfigVO {
     @Schema(description = "是否每天自动生成 AI 工作报告")
     private Boolean reportAuto;
 
+    @Schema(description = "关闭的通知类型，逗号分隔", example = "takeover,new_lead")
+    private String notifyMuted;
+
     @Schema(description = "是否已填写 API Key（仅查询返回）")
     private Boolean hasApiKey;
 

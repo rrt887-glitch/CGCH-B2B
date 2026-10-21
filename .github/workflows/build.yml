@@ -1025,6 +1025,42 @@ jobs:
           ledger_c = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
           assert any(x['remark'] == '成交案例' and x['channel'] == 'case' for x in ledger_c)
           print('成交案例：AI 从成交客户往来中总结关键点、顾虑与话术（自动去掉客户名和价格）；启用后同类询盘参考，无关询盘不参考')
+
+          # ---- 通知中心（前面各步骤已触发了转人工、AI 接手、线索建档、唤醒回复）----
+          def my_notices():
+              return call('GET', '/system/notify-message/my-page?pageNo=1&pageSize=100')['list']
+          ns = my_notices()
+          by = {}
+          for x in ns:
+              by.setdefault(x['templateCode'], []).append(x)
+          for code in ['cgch_handoff', 'cgch_takeover', 'cgch_new_lead', 'cgch_reactivate_reply']:
+              assert code in by, f'缺少 {code} 通知：{sorted(by)}'
+          refund = [x for x in by['cgch_handoff'] if 'Buyer 333' in x['templateContent']]
+          assert len(refund) == 1 and '需要人工处理' in refund[0]['templateContent'], f'同一会话只提醒一次: {refund}'
+          assert refund[0]['templateParams']['link'].startswith('/channel-msg/im?conversationId='), refund[0]['templateParams']
+          assert any('guarantee' not in x['templateContent'] and '违禁词' in x['templateContent'] for x in by['cgch_handoff']), '违禁词拦截也应提醒'
+          assert any('Hans Müller' in x['templateContent'] and x['templateParams']['link'].startswith('/crm/clue/detail/') for x in by['cgch_new_lead'])
+          assert any('Acme Buyer' in x['templateContent'] and '2027 新品唤醒' in x['templateContent'] for x in by['cgch_reactivate_reply'])
+          assert any('AI 已接手' in x['templateContent'] for x in by['cgch_takeover'])
+          # 关闭某类通知后不再发送
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed', leadAutoCreate=True, notifyMuted='new_lead'))
+          n_lead = len(by['cgch_new_lead'])
+          inquiry('Olga <olga@kitchenpro.example>', 'Kettle inquiry', 'Hello, please quote electric kettles. Olga')
+          wait(lambda: clues('Olga'), '静音时仍正常建线索')
+          time.sleep(1)
+          assert len([x for x in my_notices() if x['templateCode'] == 'cgch_new_lead']) == n_lead, '已关闭的通知类型不应发送'
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed', leadAutoCreate=False, notifyMuted=''))
+          # 智点跌破提醒线（默认 100）
+          bal_n = call('GET', '/channel/credit/summary')['balance']
+          call('POST', '/channel/credit/recharge', {'amount': 100 - bal_n, 'remark': '测试：调到提醒线'})
+          call('POST', '/channel/assistant/ask', {'question': '你好'})
+          low = [x for x in my_notices() if x['templateCode'] == 'cgch_credit_low']
+          assert low and '智点余额仅剩 99' in low[0]['templateContent'] and low[0]['templateParams']['link'] == '/config/credits', low
+          call('POST', '/channel/credit/recharge', {'amount': 1000, 'remark': '测试：恢复'})
+          assert call('GET', '/system/notify-message/get-unread-count') > 0
+          call('PUT', '/system/notify-message/update-all-read')
+          assert call('GET', '/system/notify-message/get-unread-count') == 0
+          print(f"通知中心：转人工 / AI 接手 / 新线索 / 唤醒回复 / 智点不足均送达对应业务员（共 {len(my_notices())} 条），同一会话不重复，可按类型关闭")
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY
