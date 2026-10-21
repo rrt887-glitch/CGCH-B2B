@@ -91,5 +91,9 @@ public class ChannelReactivateItemDO extends TenantBaseDO {
      * 发出的邮件编号或 WhatsApp 消息编号
      */
     private Long sentRefId;
+    /**
+     * 是否已就客户回复发过通知
+     */
+    private Boolean replyNotified;
 
 }

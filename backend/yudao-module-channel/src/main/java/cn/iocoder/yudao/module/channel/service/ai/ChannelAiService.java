@@ -72,6 +72,8 @@ public class ChannelAiService {
     @Resource
     private ChannelWorkTimeService channelWorkTimeService;
     @Resource
+    private cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService channelNotifyService;
+    @Resource
     private cn.iocoder.yudao.module.channel.service.cases.ChannelAiCaseService channelAiCaseService;
     @Resource
     private ChannelAiDeferredMapper channelAiDeferredMapper;
@@ -436,6 +438,9 @@ public class ChannelAiService {
         long credits = channelCreditService.consume(d.getChannel(), d.getId(), userId, tokens, remark);
         channelAiDraftMapper.updateById(new ChannelAiDraftDO().setId(d.getId()).setCredits(credits));
         d.setCredits(credits);
+        if (!ChannelAiDraftDO.REASON_MANUAL.equals(d.getReason())) {
+            channelNotifyService.onDraft(d); // 转人工、违禁词、发送失败时提醒业务员
+        }
         return d;
     }
 

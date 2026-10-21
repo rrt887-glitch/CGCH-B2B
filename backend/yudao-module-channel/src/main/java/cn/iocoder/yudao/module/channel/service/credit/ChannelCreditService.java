@@ -30,6 +30,8 @@ public class ChannelCreditService {
     private ChannelCreditAccountMapper channelCreditAccountMapper;
     @Resource
     private ChannelCreditLedgerMapper channelCreditLedgerMapper;
+    @Resource
+    private cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService channelNotifyService;
 
     /** 每 1 智点对应的 token 数 */
     @Value("${cgch.credit.tokens-per-credit:1000}")
@@ -64,6 +66,7 @@ public class ChannelCreditService {
         channelCreditLedgerMapper.insert(ChannelCreditLedgerDO.builder().type(ChannelCreditLedgerDO.TYPE_CONSUME)
                 .amount(-credits).balanceAfter(after).channel(channel).refId(refId).userId(userId).tokens(tokens)
                 .remark(StrUtil.maxLength(remark, 200)).build());
+        channelNotifyService.onBalanceChanged(after + credits, after, userId);
         return credits;
     }
 

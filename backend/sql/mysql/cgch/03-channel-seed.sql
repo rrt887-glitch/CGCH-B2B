@@ -109,3 +109,18 @@ UPDATE `system_menu` SET `component` = 'cgch/agent/cases/index' WHERE `id` = 204
 DELETE FROM `system_menu` WHERE `id` BETWEEN 23000 AND 23099;
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
   (23001, '成交案例', 'channel:ai:case', 3, 1, 20403, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 通知中心：站内信模板（显示在顶部铃铛和「通知中心」页面），templateParams 里另带 link 供跳转
+DELETE FROM `system_notify_template` WHERE `code` LIKE 'cgch\_%';
+INSERT INTO `system_notify_template` (`name`, `code`, `nickname`, `content`, `type`, `params`, `status`, `remark`, `creator`, `updater`) VALUES
+  ('AI 转人工', 'cgch_handoff', 'CGCH 数字员工', '「{customer}」的消息需要人工处理：{reason}', 1, '["customer","reason"]', 0, 'AI 转人工、违禁词拦截、自动发送失败', '1', '1'),
+  ('AI 接手回复', 'cgch_takeover', 'CGCH 数字员工', '「{customer}」的消息等待 {minutes} 分钟无人回复，AI 已接手回复', 1, '["customer","minutes"]', 0, '工作时间业务员优先，超时由 AI 接手', '1', '1'),
+  ('新询盘建档', 'cgch_new_lead', 'CGCH 数字员工', '新询盘：已为「{name}」自动建线索（来自{source}）', 1, '["name","source"]', 0, '线索自动建档', '1', '1'),
+  ('唤醒客户回复', 'cgch_reactivate_reply', 'CGCH 数字员工', '「{customer}」回复了客户唤醒「{task}」，请尽快跟进', 1, '["customer","task"]', 0, '客户唤醒后客户回复', '1', '1'),
+  ('智点不足', 'cgch_credit_low', 'CGCH 数字员工', '智点余额仅剩 {balance}，{hint}，请及时充值', 1, '["balance","hint"]', 0, '余额跌破提醒线或用完', '1', '1');
+
+-- 默认租户的联系人设为管理员（智点不足等租户级提醒发给联系人）
+UPDATE `system_tenant` SET `contact_user_id` = 1 WHERE `id` = 1 AND `contact_user_id` IS NULL;
+
+-- 通知中心：从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/board/notice/index' WHERE `id` = 20003;

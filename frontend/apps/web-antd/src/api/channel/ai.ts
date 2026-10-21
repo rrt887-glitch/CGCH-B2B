@@ -20,6 +20,9 @@ export namespace ChannelAiApi {
     extraInstructions?: string;
     leadAutoCreate?: boolean;
     leadAiExtract?: boolean;
+    reportAuto?: boolean;
+    /** 关闭的通知类型，逗号分隔 */
+    notifyMuted?: string;
     hasApiKey?: boolean;
   }
 

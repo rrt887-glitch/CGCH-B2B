@@ -34,6 +34,8 @@ public class ChannelAiInboundListener {
     private ChannelAiService aiService;
     @Resource
     private ChannelLeadService channelLeadService;
+    @Resource
+    private cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService channelNotifyService;
 
     @Value("${cgch.ai.whatsapp-debounce-ms:3000}")
     private long whatsappDebounceMs;
@@ -54,7 +56,13 @@ public class ChannelAiInboundListener {
                     } catch (Exception ex) {
                         log.warn("[onInbound][{} {}] 线索建档失败: {}", e.channel(), e.refId(), ex.getMessage());
                     }
-                    // 2. AI 回复
+                    // 2. 客户唤醒的回复提醒
+                    try {
+                        channelNotifyService.onInbound(e.channel(), e.refId(), e.messageId());
+                    } catch (Exception ex) {
+                        log.warn("[onInbound][{} {}] 回复提醒失败: {}", e.channel(), e.refId(), ex.getMessage());
+                    }
+                    // 3. AI 回复
                     if ("mail".equals(e.channel())) {
                         aiService.handleMailInbound(e.refId());
                     } else {

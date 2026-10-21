@@ -116,6 +116,8 @@ async function handleNotificationGetList() {
     id: item.id,
     message: item.templateContent,
     title: item.templateNickname,
+    // CGCH 的通知在参数里带了跳转地址（如打开对应会话、线索）
+    link: ((item.templateParams as any)?.link as string) || undefined,
   }));
 }
 
