@@ -135,7 +135,13 @@ class Handler(BaseHTTPRequestHandler):
         LLM.append(body)
         system = msgs[0]['content'] if msgs and msgs[0]['role'] == 'system' else ''
         last = next((m['content'] for m in reversed(msgs) if m['role'] == 'user'), '').lower()
-        if '工作报告' in system:  # AI 工作报告总结
+        if '客户唤醒' in system:  # 客户唤醒邮件
+            data = msgs[-1]['content'] if msgs else ''
+            name = next((l.split('：', 1)[1].strip() for l in data.splitlines() if l.startswith('客户名称：')), 'there')
+            subject = 'New 2027 hair dryer line' if '2027' in data else 'Checking in'
+            answer = json.dumps({'subject': subject, 'body': f'Hi {name},\n\nIt has been a while since we last talked. '
+                                 'We just launched our 2027 hair dryer line. Would you like a sample?'}, ensure_ascii=False)
+        elif '工作报告' in system:  # AI 工作报告总结
             data = msgs[-1]['content'] if msgs else ''
             answer = '【概况】数据已收到，询盘处理正常。\n【需要关注】' + ('有转人工对话。' if '转人工对话' in data else '无') \
                      + '\n【建议补充知识库】按缺口清单补充。\n【下一步建议】跟进转人工客户。'

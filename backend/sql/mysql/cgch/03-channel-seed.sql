@@ -85,3 +85,9 @@ UPDATE `system_menu` SET `component` = 'cgch/config/work-time/index' WHERE `id` 
 DELETE FROM `system_menu` WHERE `id` BETWEEN 22600 AND 22699;
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
   (22601, '工作时间设置', 'channel:work-time:config', 3, 1, 20502, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 客户唤醒：从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/claw/reactivate/index' WHERE `id` = 20303;
+DELETE FROM `system_menu` WHERE `id` BETWEEN 22700 AND 22799;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (22701, '客户唤醒', 'channel:reactivate', 3, 1, 20303, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');

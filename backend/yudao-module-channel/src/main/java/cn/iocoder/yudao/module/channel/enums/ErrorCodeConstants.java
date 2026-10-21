@@ -49,6 +49,11 @@ public interface ErrorCodeConstants {
 
     // ========== 智点 1-030-004-000 ==========
     ErrorCode CREDIT_AMOUNT_ZERO = new ErrorCode(1_030_004_000, "数量不能为 0");
+    ErrorCode REACTIVATE_NO_CUSTOMER = new ErrorCode(1_030_007_000, "请至少选择一位客户");
+    ErrorCode REACTIVATE_TOO_MANY = new ErrorCode(1_030_007_001, "一次最多选择 {} 位客户");
+    ErrorCode REACTIVATE_TASK_NOT_EXISTS = new ErrorCode(1_030_007_002, "唤醒任务不存在");
+    ErrorCode REACTIVATE_ITEM_NOT_EXISTS = new ErrorCode(1_030_007_003, "唤醒内容不存在");
+    ErrorCode REACTIVATE_ITEM_STATUS = new ErrorCode(1_030_007_004, "{}");
     ErrorCode WORK_TIME_INVALID = new ErrorCode(1_030_006_000, "{}");
     ErrorCode DASHBOARD_USER_FORBIDDEN = new ErrorCode(1_030_005_000, "无权查看该业务员的数据");
     ErrorCode CREDIT_PACKAGE_NOT_FOUND = new ErrorCode(1_030_004_001, "充值套餐不存在");
