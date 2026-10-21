@@ -888,7 +888,13 @@ jobs:
           assert mailbox and mailbox[0]['subject'] == 'New 2027 line - free samples' and mailbox[0]['aiGenerated'], mailbox
           assert done['replied'] == 0
           inquiry('Acme Buyer <buyer@acme-trading.example>', 'Re: New 2027 line - free samples', 'Yes, please send a sample.')
-          r = wait(lambda: (lambda t: t if t['replied'] == 1 else None)(call('GET', f'/channel/reactivate/task/get?id={tid}')), '客户回复后计入回复数')
+          try:
+              r = wait(lambda: (lambda t: t if t['replied'] == 1 else None)(call('GET', f'/channel/reactivate/task/get?id={tid}')), '客户回复后计入回复数')
+          except AssertionError:
+              got = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=5&accountId={acct}&keyword=' + urllib.parse.quote('Re: New 2027'))['list']
+              dbg = [(x['id'], x.get('customerId'), x.get('customerName'), x.get('sentTime'), x.get('direction')) for x in got]
+              it = next(i for i in call('GET', f'/channel/reactivate/task/get?id={tid}')['items'] if i['customerName'] == 'Acme Buyer')
+              raise AssertionError(f"回复未计入：来信 {dbg}；唤醒项 customerId={it['customerId']} sentTime={it['sentTime']} status={it['status']}")
           assert next(i for i in r['items'] if i['customerName'] == 'Acme Buyer')['replied'] is True
           tid2 = call('POST', '/channel/reactivate/task/create', {'customerIds': [manual['id']], 'channel': 'whatsapp'})
           t2 = wait(lambda: (lambda t: t if t['status'] == 'ready' else None)(call('GET', f'/channel/reactivate/task/get?id={tid2}')), '任务 2')
