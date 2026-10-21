@@ -166,6 +166,30 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {'object': 'list', 'data': data, 'model': body.get('model'),
                          'usage': {'prompt_tokens': tokens, 'total_tokens': tokens}})
 
+    def _assistant(self, body, msgs, last):
+        usage = {'prompt_tokens': 300, 'completion_tokens': 40}
+        if msgs[-1]['role'] == 'tool':  # 已拿到工具结果：据此作答
+            i = max(k for k, m in enumerate(msgs) if m['role'] == 'user')
+            results = [m['content'] for m in msgs[i + 1:] if m['role'] == 'tool']
+            answer = '根据查询结果：' + ' | '.join(results)[:8000]
+            return self._json(200, {'choices': [{'message': {'role': 'assistant', 'content': answer}}], 'usage': usage})
+        call = None
+        if body.get('tools'):
+            if 'acme' in last:
+                call = ('get_customer', {'name': 'Acme Buyer'})
+            elif '跟进' in last:
+                call = ('followups_due', {'days': 7, 'inactive_days': 30})
+            elif '统计' in last or '询盘' in last:
+                call = ('get_stats', {'days': 30})
+            elif '退款' in last:
+                call = ('search_messages', {'keyword': 'refund', 'days': 30})
+            elif '草稿' in last:
+                call = ('pending_drafts', {})
+        if call is None:
+            return self._json(200, {'choices': [{'message': {'role': 'assistant', 'content': '你好，我可以帮你查客户、消息和统计。'}}], 'usage': usage})
+        tc = {'id': f'call_{len(LLM)}', 'type': 'function', 'function': {'name': call[0], 'arguments': json.dumps(call[1], ensure_ascii=False)}}
+        return self._json(200, {'choices': [{'message': {'role': 'assistant', 'content': None, 'tool_calls': [tc]}}], 'usage': usage})
+
     def _llm(self, body):
         if self.headers.get('Authorization') != 'Bearer llm-key':
             return self._json(401, {'error': {'message': 'Incorrect API key provided', 'type': 'invalid_request_error'}})
@@ -173,6 +197,8 @@ class Handler(BaseHTTPRequestHandler):
         LLM.append(body)
         system = msgs[0]['content'] if msgs and msgs[0]['role'] == 'system' else ''
         last = next((m['content'] for m in reversed(msgs) if m['role'] == 'user'), '').lower()
+        if 'CRM 里的工作助手' in system:  # 对话助手：工具调用
+            return self._assistant(body, msgs, last)
         if '背调分析师' in system:  # 深度背调报告
             data = msgs[-1]['content'] if msgs else ''
             if 'Bluewave' in data:

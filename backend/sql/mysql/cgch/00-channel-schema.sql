@@ -107,6 +107,37 @@ CREATE TABLE `channel_ai_report` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'AI 工作报告（日报 / 周报）';
 
+DROP TABLE IF EXISTS `channel_assistant_chat`;
+CREATE TABLE `channel_assistant_chat` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `user_id` bigint NULL COMMENT '所属用户',
+  `title` varchar(255) NULL COMMENT '标题（取第一句提问）',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '对话助手的一次会话（每个业务员只能看到自己的会话）';
+
+DROP TABLE IF EXISTS `channel_assistant_message`;
+CREATE TABLE `channel_assistant_message` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `chat_id` bigint NULL COMMENT '会话编号',
+  `role` varchar(255) NULL COMMENT '角色：user、assistant',
+  `content` mediumtext NULL COMMENT '内容',
+  `steps` mediumtext NULL COMMENT '本轮调用过的工具（JSON 数组：工具名、参数），用于展示「查了什么」',
+  `credits` bigint NULL COMMENT '消耗的智点',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '对话助手的一条消息';
+
 DROP TABLE IF EXISTS `channel_credit_account`;
 CREATE TABLE `channel_credit_account` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
