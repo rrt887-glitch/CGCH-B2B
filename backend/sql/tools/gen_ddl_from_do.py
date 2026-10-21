@@ -67,7 +67,7 @@ def parse(path: pathlib.Path):
     columns = []
     # 逐个字段：可选的 Javadoc + 注解 + private 声明
     pattern = re.compile(
-        r'(?:/\*\*(?P<doc>.*?)\*/\s*)?(?P<ann>(?:@[A-Za-z]+(?:\([^)]*\))?\s*)*)'
+        r'(?:/\*\*(?P<doc>(?:(?!\*/).)*?)\*/\s*)?(?P<ann>(?:@[A-Za-z]+(?:\([^)]*\))?\s*)*)'
         r'private\s+(?P<static>static\s+)?(?:final\s+)?(?P<type>[A-Za-z<>, ]+?)\s+(?P<name>\w+)\s*;',
         re.S,
     )

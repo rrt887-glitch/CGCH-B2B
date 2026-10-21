@@ -321,7 +321,8 @@ CREATE TABLE `channel_wa_message` (
 
 DROP TABLE IF EXISTS `channel_ai_deferred`;
 CREATE TABLE `channel_ai_deferred` (
-  `channel` varchar(255) NULL COMMENT '正在处理（已被某个实例领取） */',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `channel` varchar(255) NULL COMMENT '渠道：mail、whatsapp',
   `ref_id` bigint NULL COMMENT '邮件编号或 WhatsApp 会话编号',
   `message_id` bigint NULL COMMENT '触发的消息编号（WhatsApp 为消息编号，邮件同 refId）',
   `due_time` datetime NULL COMMENT '到期时间',
@@ -337,7 +338,8 @@ CREATE TABLE `channel_ai_deferred` (
 
 DROP TABLE IF EXISTS `channel_work_time`;
 CREATE TABLE `channel_work_time` (
-  `enabled` bit(1) NULL DEFAULT b'0' COMMENT '工作时间内：业务员优先，超时未回复由 AI 接手 */',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否启用工作时间；关闭时按数字员工的回复模式全天处理',
   `timezone` varchar(255) NULL COMMENT '公司所在时区，例如 Asia/Shanghai',
   `schedule` mediumtext NULL COMMENT '每周安排（JSON 数组）：[{"day":1,"enabled":true,"ranges":"09:00-12:00,13:30-18:00"}, ...]，day 1=周一 … 7=周日',
   `holidays` mediumtext NULL COMMENT '节假日（JSON 数组，yyyy-MM-dd），当天全天休息',

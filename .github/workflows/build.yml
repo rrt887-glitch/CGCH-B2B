@@ -60,7 +60,11 @@ jobs:
         run: |
           for f in backend/sql/mysql/ruoyi-vue-pro.sql backend/sql/mysql/quartz.sql backend/sql/mysql/cgch/00-bpm-schema.sql backend/sql/mysql/cgch/00-crm-schema.sql backend/sql/mysql/cgch/00-pay-schema.sql backend/sql/mysql/cgch/00-ai-schema.sql backend/sql/mysql/cgch/00-channel-schema.sql backend/sql/mysql/cgch/01-menu.sql backend/sql/mysql/cgch/02-crm-seed.sql backend/sql/mysql/cgch/03-channel-seed.sql; do
             echo "导入 $f"
-            mysql -h 127.0.0.1 -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < "$f"
+            if ! mysql -h 127.0.0.1 -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < "$f" 2> sql_err.txt; then
+              cat sql_err.txt
+              echo "::error title=导入 SQL 失败 $(basename "$f")::$(sed 's/%/%25/g' sql_err.txt | awk '{printf "%s%%0A", $0}')"
+              exit 1
+            fi
           done
           mysql -h 127.0.0.1 -uroot -p123456 ruoyi-vue-pro -e \
             "SELECT id, name, sort FROM system_menu WHERE parent_id = 0 AND visible = b'1' ORDER BY sort;"
