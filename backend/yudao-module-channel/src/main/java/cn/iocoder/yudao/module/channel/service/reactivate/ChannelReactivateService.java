@@ -546,10 +546,11 @@ public class ChannelReactivateService {
             return false;
         }
         if (CHANNEL_MAIL.equals(i.getChannel())) {
-            return channelMailMessageMapper.selectCount(new LambdaQueryWrapperX<ChannelMailMessageDO>()
+            // 按编号判断先后：时间只精确到秒，发出后很快收到的回复可能与发送时间相同
+            return i.getSentRefId() != null && channelMailMessageMapper.selectCount(new LambdaQueryWrapperX<ChannelMailMessageDO>()
                     .eq(ChannelMailMessageDO::getCustomerId, i.getCustomerId())
                     .eq(ChannelMailMessageDO::getDirection, ChannelMailMessageDO.DIRECTION_IN)
-                    .gt(ChannelMailMessageDO::getSentTime, i.getSentTime())) > 0;
+                    .gt(ChannelMailMessageDO::getId, i.getSentRefId())) > 0;
         }
         ChannelWaMessageDO sent = i.getSentRefId() == null ? null : channelWaMessageMapper.selectById(i.getSentRefId());
         return sent != null && channelWaMessageMapper.selectCount(new LambdaQueryWrapperX<ChannelWaMessageDO>()
