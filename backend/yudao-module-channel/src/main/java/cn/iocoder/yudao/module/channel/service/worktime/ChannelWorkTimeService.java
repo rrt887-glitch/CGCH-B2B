@@ -95,8 +95,9 @@ public class ChannelWorkTimeService {
         }
         req.setEnabled(Boolean.TRUE.equals(req.getEnabled()));
         req.setSchedule(JsonUtils.toJsonString(days));
-        req.setHolidays(JsonUtils.toJsonString(dates(req.getHolidays())));
-        req.setExtraWorkdays(JsonUtils.toJsonString(dates(req.getExtraWorkdays())));
+        // 存成 yyyy-MM-dd 字符串（直接序列化 LocalDate 会变成 [2026,10,21] 数组）
+        req.setHolidays(JsonUtils.toJsonString(dates(req.getHolidays()).stream().map(LocalDate::toString).toList()));
+        req.setExtraWorkdays(JsonUtils.toJsonString(dates(req.getExtraWorkdays()).stream().map(LocalDate::toString).toList()));
         ChannelWorkTimeDO old = channelWorkTimeMapper.selectCurrent();
         if (old == null) {
             req.setId(null);
