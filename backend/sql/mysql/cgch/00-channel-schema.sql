@@ -306,6 +306,44 @@ CREATE TABLE `channel_mail_message` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '邮件（收到的与发出的）';
 
+DROP TABLE IF EXISTS `channel_send_policy`;
+CREATE TABLE `channel_send_policy` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `mail_hourly_limit` int NULL COMMENT '每个邮箱每小时最多发送（0 为不限）',
+  `mail_daily_limit` int NULL COMMENT '每个邮箱每天最多发送（0 为不限）',
+  `wa_hourly_limit` int NULL COMMENT '每个 WhatsApp 号码每小时最多发送（0 为不限）',
+  `wa_daily_limit` int NULL COMMENT '每个 WhatsApp 号码每天最多发送（0 为不限）',
+  `apply_to_manual` bit(1) NULL DEFAULT b'0' COMMENT '频率上限是否也限制业务员手动发送；默认只限制 AI 自动回复和批量发送',
+  `auto_unsubscribe` bit(1) NULL DEFAULT b'0' COMMENT '客户回复退订（unsubscribe、STOP、退订等）时自动加入退订名单，AI 不再回复',
+  `auto_bounce` bit(1) NULL DEFAULT b'0' COMMENT '收到退信（地址不存在等）时自动把该地址加入黑名单',
+  `unsubscribe_footer` bit(1) NULL DEFAULT b'0' COMMENT '客户唤醒等批量邮件末尾附加退订说明',
+  `footer_text` varchar(1024) NULL COMMENT '退订说明文字',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '发送策略：每个邮箱 / WhatsApp 号码的发送频率上限，以及退订、退信的自动处理。每个租户一条';
+
+DROP TABLE IF EXISTS `channel_suppression`;
+CREATE TABLE `channel_suppression` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `channel` varchar(255) NULL COMMENT '渠道：mail、whatsapp',
+  `address` varchar(255) NULL COMMENT '邮箱（小写）、@域名（整个域名）或 WhatsApp 号码（纯数字）',
+  `reason` varchar(255) NULL COMMENT '原因：unsubscribe、bounce、manual',
+  `remark` varchar(1024) NULL COMMENT '备注（例如触发退订的原文）',
+  `user_id` bigint NULL COMMENT '操作人（自动加入为空）',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '退订与黑名单：名单中的收件人不会收到任何邮件或 WhatsApp 消息（手动发送也会被拦截）';
+
 DROP TABLE IF EXISTS `channel_reactivate_item`;
 CREATE TABLE `channel_reactivate_item` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',

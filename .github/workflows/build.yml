@@ -1061,6 +1061,64 @@ jobs:
           call('PUT', '/system/notify-message/update-all-read')
           assert call('GET', '/system/notify-message/get-unread-count') == 0
           print(f"通知中心：转人工 / AI 接手 / 新线索 / 唤醒回复 / 智点不足均送达对应业务员（共 {len(my_notices())} 条），同一会话不重复，可按类型关闭")
+
+          # ---- 发送策略与退订 / 黑名单 ----
+          pol = call('GET', '/channel/send-policy/get')
+          assert pol['mailHourlyLimit'] == 50 and pol['autoUnsubscribe'] and pol['autoBounce'] and pol['unsubscribeFooter'], pol
+          def send_mail(to, subject='Hello', text='Hi there'):
+              return call('POST', '/channel/mail-message/send', {'accountId': acct, 'to': [to], 'subject': subject, 'text': text}, ok=False)
+          def sup(keyword):
+              return call('GET', f'/channel/suppression/page?pageNo=1&pageSize=10&keyword={urllib.parse.quote(keyword)}')['list']
+          sid1 = call('POST', '/channel/suppression/create', {'channel': 'mail', 'value': ' Blocked@Spam.example ', 'remark': '投诉'})
+          r = send_mail('blocked@spam.example')
+          assert r['code'] != 0 and 'blocked@spam.example' in r['msg'] and '黑名单' in r['msg'], r
+          call('POST', '/channel/suppression/create', {'channel': 'mail', 'value': 'baddomain.example'})
+          assert sup('baddomain')[0]['value'] == '@baddomain.example'
+          assert send_mail('anyone@BadDomain.example')['code'] != 0, '整个域名被拦截'
+          call('DELETE', f'/channel/suppression/delete?id={sid1}')
+          assert send_mail('blocked@spam.example')['code'] == 0, '移出名单后可以发送'
+          print('黑名单：邮箱与整个域名都能拦截（不区分大小写），移出后恢复')
+
+          # 频率上限：默认只限制 AI 自动发送
+          use = next(u for u in call('GET', '/channel/send-policy/usage') if u['channel'] == 'mail' and u['accountId'] == acct)
+          assert use['hour'] >= 5 and use['day'] >= use['hour'], use
+          call('PUT', '/channel/send-policy/save', dict(pol, mailHourlyLimit=use['hour'] + 1))
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed', mailMode='auto'))
+          send_mail('someone@ok.example')  # 手动发送不受限，但会占用一个名额
+          rm = inquiry('Rita <rita@limit.example>', 'Lead time question', 'Hi, what is your lead time?')
+          dr = wait(lambda: call('GET', f"/channel/ai/draft/pending?channel=mail&refId={rm['id']}"), 'AI 超出频率上限，留为草稿')
+          assert dr['reason'] == 'send_failed' and '达到上限' in dr['reasonDetail'], dr
+          assert send_mail('rita@limit.example', 'Re: Lead time', 'About 25 days.')['code'] == 0, '默认不限制手动发送'
+          call('PUT', '/channel/send-policy/save', dict(pol, mailHourlyLimit=use['hour'] + 1, applyToManual=True))
+          r = send_mail('rita@limit.example', 'Re: again', 'One more thing')
+          assert r['code'] != 0 and '达到上限' in r['msg'], r
+          call('PUT', '/channel/send-policy/save', dict(pol, mailHourlyLimit=0, applyToManual=False))
+          print('发送频率：超出上限的 AI 自动回复改为草稿；开启后也限制手动发送；0 表示不限')
+
+          # 自动识别退订与退信
+          um = inquiry('Leo <leo@unsub.example>', 'Re: offer', 'Please unsubscribe me from your mailing list.\n\nOn Mon, CGCH wrote:\n> hello')
+          wait(lambda: sup('leo@unsub.example'), '邮件退订自动加入名单')
+          assert sup('leo@unsub.example')[0]['reason'] == 'unsubscribe'
+          time.sleep(1.5)
+          assert call('GET', f"/channel/ai/draft/pending?channel=mail&refId={um['id']}") is None, '退订邮件 AI 不应回复'
+          assert send_mail('leo@unsub.example')['code'] != 0
+          qm = inquiry('Max <max@quote.example>', 'Re: New line', 'Sounds good, please send the price list.\n\nOn Tue, CGCH wrote:\n> ' + pol['footerText'])
+          time.sleep(2)
+          assert sup('max@quote.example') == [], '引用的退订说明不应算作退订'
+          push('447900000990', 'STOP')
+          wait(lambda: sup('447900000990'), 'WhatsApp STOP 自动退订')
+          wr = call('POST', '/channel/wa/message/send', {'conversationId': conv('447900000990')['id'], 'text': 'Hello?'}, ok=False)
+          assert wr['code'] != 0 and '+447900000990' in wr['msg'], wr
+          inquiry('Mail Delivery System <MAILER-DAEMON@mx.example>', 'Undelivered Mail Returned to Sender',
+                  'This is the mail system.\n\n<ghost@nowhere.example>: host mx.nowhere.example said: 550 user unknown\n\nFinal-Recipient: rfc822; ghost@nowhere.example')
+          wait(lambda: sup('ghost@nowhere.example'), '退信地址自动加入黑名单')
+          assert sup('ghost@nowhere.example')[0]['reason'] == 'bounce' and sup('sales@cgch.test') == [] and sup('mailer-daemon') == []
+          assert clues('Mail Delivery') == [], '退信不应建线索'
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed', mailMode='off'))
+          # 批量（客户唤醒）邮件末尾附退订说明
+          rx = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=5&accountId={acct}&view=sent&keyword=free%20samples')['list'][0]
+          assert call('GET', f"/channel/mail-message/get?id={rx['id']}")['textBody'].rstrip().endswith(pol['footerText']), '唤醒邮件应附退订说明'
+          print('退订与退信：邮件/WhatsApp 退订自动入名单且 AI 不回复，引用的退订说明不误判；退信地址自动拉黑；唤醒邮件附退订说明')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY
