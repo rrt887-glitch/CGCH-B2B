@@ -122,13 +122,15 @@ public class ChannelAssistantService {
         ChannelAssistantMessageDO reply = ChannelAssistantMessageDO.builder().chatId(chat.getId())
                 .role(ChannelAssistantMessageDO.ROLE_ASSISTANT).content(answer).steps(JsonUtils.toJsonString(steps)).credits(credits).build();
         channelAssistantMessageMapper.insert(reply);
-        channelAssistantChatMapper.updateById(new ChannelAssistantChatDO().setId(chat.getId()).setUpdateTime(LocalDateTime.now()));
+        ChannelAssistantChatDO touch = new ChannelAssistantChatDO().setId(chat.getId());
+        touch.setUpdateTime(LocalDateTime.now()); // 会话列表按最近使用排序
+        channelAssistantChatMapper.updateById(touch);
         return new Reply(chat.getId(), reply.getId(), answer, steps, credits);
     }
 
     private String systemPrompt(Long userId) {
         AdminUserRespDTO u = adminUserApi.getUser(userId);
-        String name = u == null ? "业务员" : StrUtil.blankToDefault(u.getNickname(), u.getUsername());
+        String name = u == null ? "业务员" : StrUtil.blankToDefault(u.getNickname(), "业务员");
         return "你是外贸企业 CRM 里的工作助手，正在帮业务员「" + name + "」（用户编号 " + userId + "）处理日常工作。今天是 "
                 + LocalDate.now() + "（" + LocalDate.now().getDayOfWeek() + "）。\n"
                 + "规则：\n1. 涉及客户、消息、统计等数据时，必须先调用工具查询，只根据工具返回的结果回答，不要编造。\n"
