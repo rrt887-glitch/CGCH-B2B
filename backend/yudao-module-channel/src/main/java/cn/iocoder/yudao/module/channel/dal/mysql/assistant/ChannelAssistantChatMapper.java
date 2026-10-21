@@ -12,7 +12,7 @@ public interface ChannelAssistantChatMapper extends BaseMapperX<ChannelAssistant
 
     default List<ChannelAssistantChatDO> selectListByUserId(Long userId) {
         return selectList(new LambdaQueryWrapperX<ChannelAssistantChatDO>().eq(ChannelAssistantChatDO::getUserId, userId)
-                .orderByDesc(ChannelAssistantChatDO::getUpdateTime).last("LIMIT 50"));
+                .orderByDesc(ChannelAssistantChatDO::getUpdateTime).orderByDesc(ChannelAssistantChatDO::getId).last("LIMIT 50"));
     }
 
 }
