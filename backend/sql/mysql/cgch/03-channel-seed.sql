@@ -73,3 +73,9 @@ UPDATE `system_menu` SET `component` = 'cgch/board/overview/index' WHERE `id` = 
 DELETE FROM `system_menu` WHERE `id` BETWEEN 22400 AND 22499;
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
   (22401, '看板查询', 'channel:dashboard:query', 3, 1, 20001, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- AI 工作报告：从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/channel/report/index' WHERE `id` = 20103;
+DELETE FROM `system_menu` WHERE `id` BETWEEN 22500 AND 22599;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (22501, '工作报告查看与生成', 'channel:ai:report', 3, 1, 20103, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');

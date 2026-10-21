@@ -82,5 +82,13 @@ public class ChannelAiDraftDO extends TenantBaseDO {
      * 使用的模型
      */
     private String model;
+    /**
+     * 本次回复命中的知识条目数（不含企业介绍）；为 0 表示知识库里没有相关资料
+     */
+    private Integer knowledgeHits;
+    /**
+     * 客户本次的问题（截取），用于工作报告里的「知识库缺口」
+     */
+    private String question;
 
 }

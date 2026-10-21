@@ -44,6 +44,7 @@ public interface ErrorCodeConstants {
     ErrorCode AI_FORBIDDEN_EXISTS = new ErrorCode(1_030_003_004, "该违禁词已存在");
     ErrorCode AI_DRAFT_NOT_EXISTS = new ErrorCode(1_030_003_005, "草稿不存在");
     ErrorCode AI_CREDIT_INSUFFICIENT = new ErrorCode(1_030_003_006, "智点余额不足，请联系管理员充值");
+    ErrorCode AI_REPORT_NOT_EXISTS = new ErrorCode(1_030_003_008, "工作报告不存在");
     ErrorCode AI_EMBEDDING_NOT_CONFIGURED = new ErrorCode(1_030_003_007, "请先在数字员工档案中填写向量模型");
 
     // ========== 智点 1-030-004-000 ==========

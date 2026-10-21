@@ -8,7 +8,7 @@ import type { ChannelAiApi } from '#/api/channel/ai';
 import { closeDraft, draftMail, DRAFT_REASON, getPendingDraft } from '#/api/channel/ai';
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
@@ -45,6 +45,7 @@ import {
 defineOptions({ name: 'CgchChannelMail' });
 
 const router = useRouter();
+const route = useRoute();
 
 const VIEWS: { key: ChannelMailApi.View; label: string }[] = [
   { key: 'inbox', label: '收件箱' },
@@ -264,6 +265,9 @@ const iframeDoc = (html: string) =>
 onMounted(async () => {
   await loadAccounts();
   await loadList();
+  // 从工作报告等页面跳转过来时，直接打开指定邮件：/channel-msg/mail?id=123
+  const id = Number(route.query.id);
+  if (id) await open({ id } as ChannelMailApi.Message);
 });
 </script>
 

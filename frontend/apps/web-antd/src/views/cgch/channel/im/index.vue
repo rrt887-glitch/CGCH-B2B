@@ -8,7 +8,7 @@ import type { ChannelAiApi } from '#/api/channel/ai';
 import { closeDraft, DRAFT_REASON, draftWhatsApp, getPendingDraft } from '#/api/channel/ai';
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
@@ -47,6 +47,7 @@ import {
 defineOptions({ name: 'CgchChannelIm' });
 
 const router = useRouter();
+const route = useRoute();
 const POLL_MS = 10_000; // Webhook 写库后前端轮询刷新
 
 const accounts = ref<ChannelWaApi.Account[]>([]);
@@ -116,6 +117,9 @@ let timer: ReturnType<typeof setInterval> | undefined;
 onMounted(async () => {
   accounts.value = await getWaAccountList();
   if (accounts.value.length > 0) await loadConversations();
+  // 从工作报告等页面跳转过来时，直接打开指定会话：/channel-msg/im?conversationId=123
+  const cid = Number(route.query.conversationId);
+  if (cid) await openConversation(await getWaConversation(cid));
   timer = setInterval(() => {
     if (accounts.value.length === 0 || document.hidden) return;
     loadConversations(true);
