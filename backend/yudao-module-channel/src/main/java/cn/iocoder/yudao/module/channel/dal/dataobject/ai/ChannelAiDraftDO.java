@@ -36,6 +36,10 @@ public class ChannelAiDraftDO extends TenantBaseDO {
     public static final String REASON_SEND_FAILED = "send_failed";
     public static final String REASON_MANUAL = "manual";
     public static final String REASON_NO_CREDIT = "no_credit";
+    /** 工作时间设置为「AI 只起草」 */
+    public static final String REASON_WORK_HOURS = "work_hours";
+    /** 非工作时间设置为「AI 只起草」 */
+    public static final String REASON_OFF_HOURS = "off_hours";
 
     /**
      * 编号
