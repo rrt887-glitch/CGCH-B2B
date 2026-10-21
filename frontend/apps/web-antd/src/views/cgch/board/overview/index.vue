@@ -13,7 +13,7 @@ import { Page } from '@vben/common-ui';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import { usePreferences } from '@vben/preferences';
 
-import { Button, Card, Col, Empty, Radio, RadioGroup, Row, Spin, Table, Tooltip } from 'ant-design-vue';
+import { Button, Card, Col, Empty, Radio, RadioGroup, Row, Select, Spin, Table, Tooltip } from 'ant-design-vue';
 
 import { DRAFT_REASON } from '#/api/channel/ai';
 import { getDashboardOverview } from '#/api/channel/dashboard';
@@ -32,12 +32,27 @@ const palette = computed(() =>
 );
 
 const days = ref(30);
+const userId = ref<number>();
 const loading = ref(false);
 const data = ref<ChannelDashboardApi.Overview>();
 const users = ref<{ id: number; nickname: string }[]>([]);
 const userName = (id: number) => users.value.find((u) => u.id === id)?.nickname ?? `#${id}`;
 
 const cur = computed(() => data.value?.current);
+// 可选的业务员：能看全部时列出所有人；否则只列数据权限内的人（只有自己时不显示筛选）
+const userOptions = computed(() => {
+  const s = data.value?.scope;
+  if (!s) return [];
+  const list = s.all ? users.value : users.value.filter((u) => s.userIds.includes(u.id));
+  return list.map((u) => ({ value: u.id, label: u.nickname }));
+});
+const scopeLabel = computed(() => {
+  const s = data.value?.scope;
+  if (!s) return '';
+  if (userId.value) return `仅 ${userName(userId.value)}`;
+  if (s.all) return '全部业务员';
+  return s.userIds.length > 1 ? `本部门 ${s.userIds.length} 人` : '仅本人';
+});
 const prev = computed(() => data.value?.previous);
 
 const pct = (v?: number) => `${((v ?? 0) * 100).toFixed(1)}%`;
@@ -154,14 +169,14 @@ async function renderCharts() {
 async function load() {
   loading.value = true;
   try {
-    data.value = await getDashboardOverview(days.value);
+    data.value = await getDashboardOverview(days.value, userId.value);
   } finally {
     loading.value = false;
   }
   await renderCharts();
 }
 
-watch(days, load);
+watch([days, userId], load);
 watch(isDark, renderCharts);
 onMounted(async () => {
   users.value = await getSimpleUserList();
@@ -175,14 +190,26 @@ onMounted(async () => {
       <div>
         <div class="text-lg font-semibold">数据看板</div>
         <div class="text-sm text-gray-500">
-          {{ data ? `${data.startDate} 至今，与之前 ${data.days} 天对比` : '加载中…' }}
+          {{ data ? `${data.startDate} 至今，与之前 ${data.days} 天对比 · ${scopeLabel}` : '加载中…' }}
         </div>
       </div>
+      <div class="flex flex-wrap items-center gap-3">
+      <Select
+        v-if="userOptions.length > 1"
+        v-model:value="userId"
+        allow-clear
+        show-search
+        option-filter-prop="label"
+        :options="userOptions"
+        :placeholder="data?.scope.all ? '全部业务员' : '本部门全部'"
+        class="w-44"
+      />
       <RadioGroup v-model:value="days" button-style="solid">
         <Radio.Button :value="7">近 7 天</Radio.Button>
         <Radio.Button :value="30">近 30 天</Radio.Button>
         <Radio.Button :value="90">近 90 天</Radio.Button>
       </RadioGroup>
+      </div>
     </div>
 
     <Spin :spinning="loading">

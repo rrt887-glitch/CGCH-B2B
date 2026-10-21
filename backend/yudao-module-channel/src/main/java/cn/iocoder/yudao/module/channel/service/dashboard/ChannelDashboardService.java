@@ -10,12 +10,20 @@ import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaAccountD
 import cn.iocoder.yudao.module.channel.dal.mysql.dashboard.ChannelDashboardMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailAccountMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaAccountMapper;
+import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
+import cn.iocoder.yudao.module.channel.controller.admin.dashboard.vo.ChannelDashboardRespVO.Scope;
+import cn.iocoder.yudao.module.system.api.permission.PermissionApi;
+import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.DASHBOARD_USER_FORBIDDEN;
 
 /**
  * 数据看板：询盘量、回复率、AI 处理量、智点消耗、线索转化，按天和按业务员汇总。
@@ -32,8 +40,65 @@ public class ChannelDashboardService {
     private ChannelMailAccountMapper channelMailAccountMapper;
     @Resource
     private ChannelWaAccountMapper channelWaAccountMapper;
+    @Resource
+    private PermissionApi permissionApi;
+    @Resource
+    private AdminUserApi adminUserApi;
 
-    public ChannelDashboardRespVO overview(int days) {
+    /** 统计口径：业务员范围（null 为不限）及其名下的邮箱 / WhatsApp 账号 */
+    private record Filter(Set<Long> userIds, List<Long> mailAccountIds, List<Long> waAccountIds) {
+        boolean all() {
+            return userIds == null;
+        }
+    }
+
+    /**
+     * 按角色的数据权限决定能看谁：全部 / 指定部门（及下级）/ 仅本人。
+     * 业务员只能看到自己的数据；主管可看本部门；管理员可看全部，也可按业务员筛选。
+     */
+    Scope resolveScope(Long loginUserId, Long userId) {
+        Scope scope = new Scope();
+        DeptDataPermissionRespDTO perm = permissionApi.getDeptDataPermission(loginUserId);
+        if (perm != null && Boolean.TRUE.equals(perm.getAll())) {
+            scope.setAll(true);
+        } else {
+            Set<Long> visible = new TreeSet<>();
+            if (perm != null && perm.getDeptIds() != null && !perm.getDeptIds().isEmpty()) {
+                adminUserApi.getUserListByDeptIds(perm.getDeptIds()).stream().map(AdminUserRespDTO::getId).forEach(visible::add);
+            }
+            visible.add(loginUserId); // 自己的数据总能看
+            scope.setUserIds(new ArrayList<>(visible));
+        }
+        if (userId != null && !scope.isAll() && !scope.getUserIds().contains(userId)) {
+            throw exception(DASHBOARD_USER_FORBIDDEN);
+        }
+        scope.setUserId(userId);
+        return scope;
+    }
+
+    private Filter filter(Scope scope, Map<Long, Long> mailOwner, Map<Long, Long> waOwner) {
+        Set<Long> users = scope.getUserId() != null ? Set.of(scope.getUserId())
+                : scope.isAll() ? null : new HashSet<>(scope.getUserIds());
+        if (users == null) {
+            return new Filter(null, null, null);
+        }
+        return new Filter(users, ownedBy(mailOwner, users), ownedBy(waOwner, users));
+    }
+
+    private static List<Long> ownedBy(Map<Long, Long> owner, Set<Long> users) {
+        List<Long> ids = new ArrayList<>();
+        owner.forEach((acc, uid) -> {
+            if (uid != null && users.contains(uid)) {
+                ids.add(acc);
+            }
+        });
+        if (ids.isEmpty()) {
+            ids.add(-1L); // 没有名下账号：IN (-1) 不会命中任何数据
+        }
+        return ids;
+    }
+
+    public ChannelDashboardRespVO overview(Long loginUserId, int days, Long userId) {
         days = Math.max(1, Math.min(days, 366));
         LocalDate today = LocalDate.now();
         LocalDate startDate = today.minusDays(days - 1L);
@@ -56,9 +121,12 @@ public class ChannelDashboardService {
         Map<Long, Long> waOwner = new HashMap<>();
         channelWaAccountMapper.selectList().forEach(a -> waOwner.put(a.getId(), a.getUserId()));
         Map<Long, UserRow> users = new LinkedHashMap<>();
+        Scope scope = resolveScope(loginUserId, userId);
+        vo.setScope(scope);
+        Filter f = filter(scope, mailOwner, waOwner);
 
-        vo.setCurrent(totals(start, end, daily, users, mailOwner, waOwner, vo.getPendingReasons()));
-        vo.setPrevious(totals(prevStart, start, null, null, mailOwner, waOwner, null));
+        vo.setCurrent(totals(start, end, f, daily, users, mailOwner, waOwner, vo.getPendingReasons()));
+        vo.setPrevious(totals(prevStart, start, f, null, null, mailOwner, waOwner, null));
         vo.setDaily(new ArrayList<>(daily.values()));
         List<UserRow> rows = new ArrayList<>(users.values());
         rows.sort((a, b) -> Long.compare(b.getMailIn() + b.getWaIn(), a.getMailIn() + a.getWaIn()));
@@ -67,10 +135,10 @@ public class ChannelDashboardService {
     }
 
     /** daily / users / pendingReasons 为 null 时只算总数（用于上期对比） */
-    private Totals totals(LocalDateTime start, LocalDateTime end, Map<String, Day> daily, Map<Long, UserRow> users,
+    private Totals totals(LocalDateTime start, LocalDateTime end, Filter f, Map<String, Day> daily, Map<Long, UserRow> users,
                           Map<Long, Long> mailOwner, Map<Long, Long> waOwner, Map<String, Long> pendingReasons) {
         Totals t = new Totals();
-        for (Map<String, Object> r : channelDashboardMapper.mailStats(start, end)) {
+        for (Map<String, Object> r : channelDashboardMapper.mailStats(start, end, f.mailAccountIds())) {
             long in = num(r, "inbound"), replied = num(r, "replied"), out = num(r, "outbound"), ai = num(r, "ai");
             t.setMailIn(t.getMailIn() + in);
             t.setMailReplied(t.getMailReplied() + replied);
@@ -89,7 +157,7 @@ public class ChannelDashboardService {
                 u.setAiOut(u.getAiOut() + ai);
             }
         }
-        for (Map<String, Object> r : channelDashboardMapper.waStats(start, end)) {
+        for (Map<String, Object> r : channelDashboardMapper.waStats(start, end, f.waAccountIds())) {
             long in = num(r, "inbound"), out = num(r, "outbound"), ai = num(r, "ai");
             t.setWaIn(t.getWaIn() + in);
             t.setWaOut(t.getWaOut() + out);
@@ -107,14 +175,19 @@ public class ChannelDashboardService {
                 u.setAiOut(u.getAiOut() + ai);
             }
         }
-        for (Map<String, Object> r : channelDashboardMapper.waConversations(start, end)) {
+        for (Map<String, Object> r : channelDashboardMapper.waConversations(start, end, f.waAccountIds())) {
             t.setWaConversations(t.getWaConversations() + 1);
             Object firstIn = r.get("first_in"), lastOut = r.get("last_out");
             if (firstIn != null && lastOut != null && String.valueOf(lastOut).compareTo(String.valueOf(firstIn)) >= 0) {
                 t.setWaRepliedConversations(t.getWaRepliedConversations() + 1);
             }
         }
-        for (Map<String, Object> r : channelDashboardMapper.drafts(start, end)) {
+        List<Map<String, Object>> drafts = f.all() ? channelDashboardMapper.drafts(start, end) : new ArrayList<>();
+        if (!f.all()) {
+            drafts.addAll(channelDashboardMapper.mailDrafts(start, end, f.mailAccountIds()));
+            drafts.addAll(channelDashboardMapper.waDrafts(start, end, f.waAccountIds()));
+        }
+        for (Map<String, Object> r : drafts) {
             long n = num(r, "n");
             String status = str(r, "s"), reason = str(r, "r");
             t.setAiDrafts(t.getAiDrafts() + n);
@@ -132,7 +205,7 @@ public class ChannelDashboardService {
                 t.setAiHandoff(t.getAiHandoff() + n);
             }
         }
-        for (Map<String, Object> r : channelDashboardMapper.credits(start, end)) {
+        for (Map<String, Object> r : channelDashboardMapper.credits(start, end, f.userIds())) {
             long n = num(r, "n");
             t.setCreditsConsumed(t.getCreditsConsumed() + n);
             Day d = daily == null ? null : daily.get(str(r, "d"));
@@ -140,7 +213,7 @@ public class ChannelDashboardService {
                 d.setCredits(d.getCredits() + n);
             }
         }
-        for (Map<String, Object> r : channelDashboardMapper.clues(start, end)) {
+        for (Map<String, Object> r : channelDashboardMapper.clues(start, end, f.userIds())) {
             long n = num(r, "n");
             t.setCluesCreated(t.getCluesCreated() + n);
             t.setCluesConverted(t.getCluesConverted() + num(r, "converted"));
@@ -151,7 +224,7 @@ public class ChannelDashboardService {
                 t.setCluesFromWhatsApp(t.getCluesFromWhatsApp() + n);
             }
         }
-        Long customers = channelDashboardMapper.customers(start, end);
+        Long customers = channelDashboardMapper.customers(start, end, f.userIds());
         t.setCustomersCreated(customers == null ? 0 : customers);
 
         t.setInquiries(t.getMailIn() + t.getWaConversations());

@@ -26,6 +26,18 @@ public class ChannelDashboardRespVO {
     private Map<String, Long> pendingReasons = new LinkedHashMap<>();
     @Schema(description = "按业务员（渠道账号所属人）")
     private List<UserRow> users = new ArrayList<>();
+    @Schema(description = "数据范围")
+    private Scope scope;
+
+    @Data
+    public static class Scope {
+        /** 是否可看全部业务员 */
+        private boolean all;
+        /** 可选择查看的业务员；all 为 true 时为空，表示全部 */
+        private List<Long> userIds = new ArrayList<>();
+        /** 当前筛选的业务员；为空表示可见范围内全部 */
+        private Long userId;
+    }
 
     @Data
     public static class Totals {

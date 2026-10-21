@@ -708,6 +708,35 @@ jobs:
           assert me['mailIn'] + me['waIn'] == c['mailIn'] + c['waIn'], '测试数据的渠道账号都属于 admin'
           assert ov['previous']['inquiries'] == 0, '上一周期没有数据'
           assert len(call('GET', '/channel/dashboard/overview?days=7')['daily']) == 7
+          assert ov['scope']['all'] is True and ov['scope']['userId'] is None, ov['scope']
+          one = call('GET', '/channel/dashboard/overview?days=30&userId=1')['current']
+          assert one['inquiries'] == c['inquiries'] and one['aiDrafts'] == c['aiDrafts'], '只看 admin 时与全部一致（测试数据都属于 admin）'
+
+          # ---- 看板数据权限：仅本人 ----
+          rid = call('POST', '/system/role/create', {'name': '业务员（仅本人）', 'code': 'cgch_sales_self', 'sort': 10, 'status': 0})
+          call('POST', '/system/permission/assign-role-data-scope', {'roleId': rid, 'dataScope': 5})
+          call('POST', '/system/permission/assign-role-menu', {'roleId': rid, 'menuIds': [20000, 20001, 22401]})
+          uid = call('POST', '/system/user/create', {'username': 'sales2', 'nickname': '业务员小王', 'password': 'Sales2pass'})
+          call('POST', '/system/permission/assign-user-role', {'userId': uid, 'roleIds': [rid]})
+          call('POST', '/crm/clue/create', {'name': 'Wang 的线索', 'ownerUserId': uid})
+          lg = json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/login', method='POST',
+               headers={'tenant-id': '1', 'Content-Type': 'application/json'},
+               data=json.dumps({'username': 'sales2', 'password': 'Sales2pass'}).encode())))
+          assert lg['code'] == 0, lg
+          H2 = dict(H, Authorization='Bearer ' + lg['data']['accessToken'])
+          def call2(path):
+              return json.load(urllib.request.urlopen(urllib.request.Request(BASE + path, headers=H2)))
+          mine = call2('/channel/dashboard/overview?days=30')
+          assert mine['code'] == 0, mine
+          m = mine['data']
+          assert m['scope']['all'] is False and m['scope']['userIds'] == [uid], m['scope']
+          assert m['current']['inquiries'] == 0 and m['current']['mailIn'] == 0 and m['current']['aiDrafts'] == 0, m['current']
+          assert m['current']['cluesCreated'] == 1 and m['current']['creditsConsumed'] == 0 and m['users'] == [], m
+          assert sum(d['mailIn'] + d['waIn'] for d in m['daily']) == 0
+          assert call2('/channel/dashboard/overview?days=30&userId=1')['code'] != 0, '业务员不能查看别人的数据'
+          other = call('GET', f'/channel/dashboard/overview?days=30&userId={uid}')['current']
+          assert other['cluesCreated'] == 1 and other['inquiries'] == 0, '管理员可按业务员筛选'
+          print('看板数据权限：仅本人角色只看到自己的线索与消息，不能查看他人；管理员可看全部或按人筛选')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY

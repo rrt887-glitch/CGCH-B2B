@@ -48,6 +48,7 @@ public interface ErrorCodeConstants {
 
     // ========== 智点 1-030-004-000 ==========
     ErrorCode CREDIT_AMOUNT_ZERO = new ErrorCode(1_030_004_000, "数量不能为 0");
+    ErrorCode DASHBOARD_USER_FORBIDDEN = new ErrorCode(1_030_005_000, "无权查看该业务员的数据");
     ErrorCode CREDIT_PACKAGE_NOT_FOUND = new ErrorCode(1_030_004_001, "充值套餐不存在");
     ErrorCode CREDIT_ORDER_NOT_FOUND = new ErrorCode(1_030_004_002, "充值订单不存在");
     ErrorCode CREDIT_ORDER_PAY_MISMATCH = new ErrorCode(1_030_004_003, "支付单与充值订单不匹配");
