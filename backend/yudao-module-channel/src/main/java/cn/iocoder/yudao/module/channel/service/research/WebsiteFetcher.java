@@ -71,6 +71,24 @@ public class WebsiteFetcher {
         }
     }
 
+    /** https 连不上时（不少小企业官网只有 http）改用 http 再试一次；内网地址等安全拦截不重试 */
+    public List<Page> fetchSiteWithFallback(URI root) {
+        try {
+            return fetchSite(root);
+        } catch (FetchException e) {
+            if (!"https".equals(root.getScheme()) || e.getMessage().startsWith("不能访问") || e.getMessage().contains("robots.txt")) {
+                throw e;
+            }
+            try {
+                return fetchSite(new URI("http", null, root.getHost(), root.getPort(), "/", null, null));
+            } catch (URISyntaxException ex) {
+                throw e;
+            } catch (FetchException ex) {
+                throw e; // 报告最初的 https 错误
+            }
+        }
+    }
+
     /** 读取站点：首页 + 最多 MAX_PAGES-1 个关于/产品/联系类的站内页面 */
     public List<Page> fetchSite(URI root) {
         Robots robots = robots(root);

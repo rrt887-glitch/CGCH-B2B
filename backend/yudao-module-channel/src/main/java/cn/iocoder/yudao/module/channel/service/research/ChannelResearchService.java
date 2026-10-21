@@ -165,7 +165,15 @@ public class ChannelResearchService {
         String siteNote = null;
         if (r.getWebsite() != null) {
             try {
-                pages = fetcher.fetchSite(URI.create(r.getWebsite()));
+                pages = fetcher.fetchSiteWithFallback(URI.create(r.getWebsite()));
+                if (!pages.isEmpty()) { // 记下实际可访问的地址（可能已从 https 改为 http）
+                    URI actual = URI.create(pages.get(0).url());
+                    String root = actual.getScheme() + "://" + actual.getHost() + (actual.getPort() > 0 ? ":" + actual.getPort() : "") + "/";
+                    if (!root.equals(r.getWebsite())) {
+                        r.setWebsite(root);
+                        channelResearchMapper.updateById(new ChannelResearchDO().setId(id).setWebsite(root));
+                    }
+                }
             } catch (WebsiteFetcher.FetchException e) {
                 siteNote = e.getMessage();
             }
