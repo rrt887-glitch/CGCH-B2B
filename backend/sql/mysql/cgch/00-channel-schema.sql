@@ -1,6 +1,34 @@
 -- 由 backend/sql/tools/gen_ddl_from_do.py 根据 DO 实体类生成，请勿手改；实体变更后重新生成
 SET NAMES utf8mb4;
 
+DROP TABLE IF EXISTS `channel_ai_case`;
+CREATE TABLE `channel_ai_case` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `title` varchar(255) NULL COMMENT '案例标题',
+  `customer_id` bigint NULL COMMENT '来源客户（仅内部查看，不会提供给 AI 回复）',
+  `customer_name` varchar(255) NULL COMMENT '来源客户名称（仅内部查看）',
+  `industry` varchar(255) NULL COMMENT '客户行业或类型，例如：澳洲家电分销商',
+  `product` varchar(255) NULL COMMENT '成交产品',
+  `country_code` varchar(255) NULL COMMENT '客户所在国家',
+  `summary` mediumtext NULL COMMENT '背景与过程概述',
+  `key_points` mediumtext NULL COMMENT '成交关键点（JSON 字符串数组）',
+  `objections` mediumtext NULL COMMENT '客户顾虑及我方回应（JSON 字符串数组）',
+  `phrases` mediumtext NULL COMMENT '有效话术（JSON 字符串数组）',
+  `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否供 AI 参考（AI 生成的案例默认关闭，需人工确认后开启）',
+  `source` varchar(255) NULL COMMENT '来源：ai、manual',
+  `credits` bigint NULL COMMENT '生成消耗的智点',
+  `user_id` bigint NULL COMMENT '创建人',
+  `embedding` mediumtext NULL COMMENT '向量（JSON 数组），用于语义匹配；不对外返回',
+  `embedding_model` varchar(255) NULL COMMENT '生成向量所用的模型',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '成交案例：从已成交客户的沟通过程中总结出的经验，AI 回复同类询盘时参考（不会透露原客户的名称和价格）';
+
 DROP TABLE IF EXISTS `channel_ai_config`;
 CREATE TABLE `channel_ai_config` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',

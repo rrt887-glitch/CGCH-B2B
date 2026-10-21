@@ -199,7 +199,17 @@ class Handler(BaseHTTPRequestHandler):
         last = next((m['content'] for m in reversed(msgs) if m['role'] == 'user'), '').lower()
         if 'CRM 里的工作助手' in system:  # 对话助手：工具调用
             return self._assistant(body, msgs, last)
-        if '背调分析师' in system:  # 深度背调报告
+        if '销售教练' in system:  # 成交案例总结（故意带上客户名和价格，验证会被脱敏）
+            data = msgs[-1]['content'] if msgs else ''
+            answer = json.dumps({
+                'title': 'Acme Buyer 通过免费样品成交 2027 新款吹风机',
+                'industry': '美国家电贸易商', 'product': '2027 lightweight hair dryer',
+                'summary': '客户久未联系，收到新品介绍和免费样品后回复并下单。' if 'free samples' in data else '资料不足',
+                'keyPoints': ['Offered free samples of the 2027 hair dryer line before Acme Buyer placed the order',
+                              'Quoted USD 8.5 per unit with MOQ 500'],
+                'objections': ['顾虑：起订量太高；回应：首单可按 500 台起订'],
+                'phrases': ['Would you like us to send a sample this week?']}, ensure_ascii=False)
+        elif '背调分析师' in system:  # 深度背调报告
             data = msgs[-1]['content'] if msgs else ''
             if 'Bluewave' in data:
                 answer = json.dumps({
