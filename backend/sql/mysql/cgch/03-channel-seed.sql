@@ -103,3 +103,9 @@ UPDATE `system_menu` SET `component` = 'cgch/claw/chat/index' WHERE `id` = 20301
 DELETE FROM `system_menu` WHERE `id` BETWEEN 22900 AND 22999;
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
   (22901, '对话助手', 'channel:assistant', 3, 1, 20301, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 成交案例：从占位页切换到正式页面
+UPDATE `system_menu` SET `component` = 'cgch/agent/cases/index' WHERE `id` = 20403;
+DELETE FROM `system_menu` WHERE `id` BETWEEN 23000 AND 23099;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (23001, '成交案例', 'channel:ai:case', 3, 1, 20403, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');

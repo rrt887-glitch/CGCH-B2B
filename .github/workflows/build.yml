@@ -991,6 +991,40 @@ jobs:
           ledger_as = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
           assert any(x['remark'] == '对话助手' and x['channel'] == 'assistant' for x in ledger_as)
           print('对话助手：按问题调用查询工具（客户、跟进、统计、消息、草稿）并据此回答；多轮上下文；按数据权限过滤，会话互相隔离')
+
+          # ---- 成交案例 ----
+          call('PUT', f"/crm/customer/update-deal-status?id={acme['id']}&dealStatus=true")
+          cc = {x['name']: x for x in call('GET', '/channel/ai/case/candidates')}
+          assert cc['Acme Buyer']['hasCase'] is False, cc
+          case_id = call('POST', f"/channel/ai/case/generate?customerId={acme['id']}")
+          gen_req = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-1]['messages'][1]['content']
+          assert 'free samples' in gen_req and '往来记录' in gen_req, '应基于与客户的往来记录生成'
+          kc = call('GET', f'/channel/ai/case/get?id={case_id}')
+          assert kc['enabled'] is False and kc['source'] == 'ai' and kc['customerName'] == 'Acme Buyer' and kc['credits'] >= 1, kc
+          visible = ' '.join([kc['title'], kc['summary'], *kc['keyPoints'], *kc['objections'], *kc['phrases']])
+          assert 'Acme' not in visible and 'USD 8.5' not in visible and '[价格]' in visible and '客户' in kc['title'], visible
+          assert {x['name']: x for x in call('GET', '/channel/ai/case/candidates')}['Acme Buyer']['hasCase'] is True
+          def case_prompt(subject, body):
+              mq2 = inquiry('Mia <mia@shopfront.example>', subject, body)
+              call('POST', f"/channel/ai/draft/mail?messageId={mq2['id']}")
+              return json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-1]['messages'][0]['content']
+          assert '成交经验参考' not in case_prompt('Sample request', 'Can you send a free sample of your lightweight hair dryer?'), '未启用的案例不应参考'
+          call('PUT', f'/channel/ai/case/enable?id={case_id}&enabled=true')
+          assert call('GET', f'/channel/ai/case/get?id={case_id}')['indexed'] is True, '启用后应建立语义索引'
+          sp = case_prompt('Sample request 2', 'Can you send a free sample of your lightweight hair dryer?')
+          block = sp.split('## 成交经验参考', 1)[1] if '## 成交经验参考' in sp else ''
+          assert block and 'Offered free samples' in block and 'Would you like us to send a sample' in block, sp[-800:]
+          assert 'Acme' not in block and 'USD 8.5' not in block and '不要提及任何其他客户的名称' in block, block
+          assert '成交经验参考' not in case_prompt('Showroom', 'Do you have a showroom in Berlin?'), '无关询盘不应牵强参考案例'
+          mid = call('POST', '/channel/ai/case/save', {'title': '展会客户当场下样品单', 'industry': '德国零售商', 'product': 'kettle',
+                     'summary': '展会上看样后两周内下单', 'keyPoints': ['展会现场演示', ''], 'objections': [], 'phrases': ['See you at the fair'], 'enabled': False})
+          lst = call('GET', '/channel/ai/case/list')
+          assert len(lst) == 2 and next(x for x in lst if x['id'] == mid)['keyPoints'] == ['展会现场演示'], lst
+          call('DELETE', f'/channel/ai/case/delete?id={mid}')
+          assert len(call('GET', '/channel/ai/case/list')) == 1
+          ledger_c = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
+          assert any(x['remark'] == '成交案例' and x['channel'] == 'case' for x in ledger_c)
+          print('成交案例：AI 从成交客户往来中总结关键点、顾虑与话术（自动去掉客户名和价格）；启用后同类询盘参考，无关询盘不参考')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY

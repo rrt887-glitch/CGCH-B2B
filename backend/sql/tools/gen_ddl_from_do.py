@@ -42,6 +42,8 @@ MEDIUM_TEXT |= {'schedule', 'holidays', 'extra_workdays'}
 MEDIUM_TEXT |= {'report', 'sources'}
 # 对话助手：查询步骤
 MEDIUM_TEXT |= {'steps'}
+# 成交案例
+MEDIUM_TEXT |= {'key_points', 'objections', 'phrases'}
 
 
 def snake(name: str) -> str:

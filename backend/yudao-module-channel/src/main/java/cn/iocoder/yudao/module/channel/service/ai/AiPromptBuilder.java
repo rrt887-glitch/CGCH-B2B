@@ -125,7 +125,7 @@ public final class AiPromptBuilder {
                 .append(StrUtil.nullToEmpty(k.getContent()).trim()).append("\n\n");
     }
 
-    static Set<String> terms(String text) {
+    public static Set<String> terms(String text) {
         Set<String> set = new HashSet<>();
         if (StrUtil.isBlank(text)) {
             return set;

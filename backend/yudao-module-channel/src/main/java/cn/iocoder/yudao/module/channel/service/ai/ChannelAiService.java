@@ -72,6 +72,8 @@ public class ChannelAiService {
     @Resource
     private ChannelWorkTimeService channelWorkTimeService;
     @Resource
+    private cn.iocoder.yudao.module.channel.service.cases.ChannelAiCaseService channelAiCaseService;
+    @Resource
     private ChannelAiDeferredMapper channelAiDeferredMapper;
 
     // ==================== 配置 ====================
@@ -222,7 +224,7 @@ public class ChannelAiService {
     }
 
     /** 语义得分 + 消耗的 token；未配置向量模型或调用失败时返回 null（退回关键词检索） */
-    private record Semantic(Map<Long, Double> scores, int tokens) {
+    private record Semantic(Map<Long, Double> scores, int tokens, float[] query) {
     }
 
     private Semantic semanticScores(ChannelAiConfigDO cfg, List<ChannelAiKnowledgeDO> all, String text) {
@@ -243,7 +245,7 @@ public class ChannelAiService {
             for (ChannelAiKnowledgeDO k : indexed) {
                 scores.put(k.getId(), VectorMath.cosine(q, VectorMath.parse(k.getEmbedding())));
             }
-            return new Semantic(scores, e.tokens());
+            return new Semantic(scores, e.tokens(), q);
         } catch (Exception ex) {
             log.warn("[semanticScores][向量检索失败，退回关键词检索] {}", ex.getMessage());
             return null;
@@ -319,7 +321,8 @@ public class ChannelAiService {
     private Generated generate(ChannelAiConfigDO cfg, String channel, String customerText, List<LlmClient.Message> history) {
         List<ChannelAiKnowledgeDO> knowledge = channelAiKnowledgeMapper.selectEnabled();
         Semantic sem = semanticScores(cfg, knowledge, customerText);
-        String system = AiPromptBuilder.systemPrompt(cfg, knowledge, customerText, channel, sem == null ? null : sem.scores());
+        String system = AiPromptBuilder.systemPrompt(cfg, knowledge, customerText, channel, sem == null ? null : sem.scores())
+                + channelAiCaseService.promptBlock(customerText, sem == null ? null : sem.query());
         List<LlmClient.Message> messages = new ArrayList<>();
         messages.add(LlmClient.Message.system(system));
         messages.addAll(history);
