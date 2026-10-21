@@ -56,7 +56,7 @@ public class ChannelDashboardService {
      * 按角色的数据权限决定能看谁：全部 / 指定部门（及下级）/ 仅本人。
      * 业务员只能看到自己的数据；主管可看本部门；管理员可看全部，也可按业务员筛选。
      */
-    Scope resolveScope(Long loginUserId, Long userId) {
+    public Scope resolveScope(Long loginUserId, Long userId) {
         Scope scope = new Scope();
         DeptDataPermissionRespDTO perm = permissionApi.getDeptDataPermission(loginUserId);
         if (perm != null && Boolean.TRUE.equals(perm.getAll())) {

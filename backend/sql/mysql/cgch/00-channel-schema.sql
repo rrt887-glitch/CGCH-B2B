@@ -246,6 +246,53 @@ CREATE TABLE `channel_mail_message` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '邮件（收到的与发出的）';
 
+DROP TABLE IF EXISTS `channel_reactivate_item`;
+CREATE TABLE `channel_reactivate_item` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `task_id` bigint NULL COMMENT '任务编号',
+  `customer_id` bigint NULL COMMENT '客户编号',
+  `customer_name` varchar(255) NULL COMMENT '客户名称',
+  `owner_user_id` bigint NULL COMMENT '客户负责人',
+  `last_contact_time` datetime NULL COMMENT '上次联系时间',
+  `channel` varchar(255) NULL COMMENT '发送渠道：mail、whatsapp',
+  `recipient` varchar(255) NULL COMMENT '收件人：邮箱或 WhatsApp 号码',
+  `account_id` bigint NULL COMMENT '发送使用的邮箱或 WhatsApp 账号',
+  `subject` varchar(255) NULL COMMENT '邮件主题',
+  `content` mediumtext NULL COMMENT '正文；WhatsApp 为模板预览',
+  `status` varchar(255) NULL COMMENT '状态：generating、draft、approved、sent、failed、skipped',
+  `reason_detail` varchar(1024) NULL COMMENT '失败或跳过原因',
+  `credits` bigint NULL COMMENT '生成消耗的智点',
+  `sent_time` datetime NULL COMMENT '发送时间',
+  `sent_ref_id` bigint NULL COMMENT '发出的邮件编号或 WhatsApp 消息编号',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '客户唤醒任务中的一位客户及其待发内容';
+
+DROP TABLE IF EXISTS `channel_reactivate_task`;
+CREATE TABLE `channel_reactivate_task` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `name` varchar(255) NULL COMMENT '任务名称',
+  `inactive_days` int NULL COMMENT '筛选条件：多少天未联系',
+  `channel` varchar(255) NULL COMMENT '渠道偏好：auto 有邮箱发邮件否则 WhatsApp、mail 只发邮件、whatsapp 只发 WhatsApp',
+  `instructions` varchar(255) NULL COMMENT '给 AI 的写作要求，例如介绍新品、节日问候',
+  `wa_template_name` varchar(255) NULL COMMENT 'WhatsApp 模板名称（超过 24 小时只能发已审核的模板）',
+  `wa_template_language` varchar(255) NULL COMMENT 'WhatsApp 模板语言',
+  `status` varchar(255) NULL COMMENT '状态：generating、ready、sending、done',
+  `user_id` bigint NULL COMMENT '创建人',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '客户唤醒任务：选一批久未联系的客户，由 AI 写跟进内容，业务员确认后批量发出';
+
 DROP TABLE IF EXISTS `channel_wa_account`;
 CREATE TABLE `channel_wa_account` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',

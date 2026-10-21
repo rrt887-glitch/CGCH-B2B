@@ -77,7 +77,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -853,6 +853,57 @@ jobs:
           assert dr6['reason'] == 'work_hours' and outbound('447900000906') == [], dr6
           call('PUT', '/channel/work-time/save', dict(wt, enabled=False))
           print('非工作时间 AI 接待并说明业务员稍后跟进 / 可设为只起草；节假日按休息；工作时间可设为只起草')
+
+          # ---- 客户唤醒 ----
+          cands = call('GET', '/channel/reactivate/candidates?inactiveDays=0')
+          names = {x['name']: x for x in cands}
+          assert 'Acme Buyer' in names and 'Manual Client' in names, list(names)
+          assert call('GET', '/channel/reactivate/candidates?inactiveDays=3650') == [], '没有十年未联系的客户'
+          acme, manual = names['Acme Buyer'], names['Manual Client']
+          assert acme['inTask'] is False and acme['email'] == 'buyer@acme-trading.example'
+          assert call('POST', '/channel/reactivate/task/create', {'customerIds': []}, ok=False)['code'] != 0
+          bal_x = call('GET', '/channel/credit/summary')['balance']
+          tid = call('POST', '/channel/reactivate/task/create', {'name': '2027 新品唤醒', 'inactiveDays': 0, 'channel': 'auto',
+                     'customerIds': [acme['id'], manual['id']], 'instructions': 'Introduce our new 2027 hair dryer line',
+                     'waTemplateName': 'hello_world', 'waTemplateLanguage': 'en_US'})
+          task = wait(lambda: (lambda t: t if t['status'] == 'ready' else None)(call('GET', f'/channel/reactivate/task/get?id={tid}')), 'AI 生成完毕', timeout=30)
+          items = {i['customerName']: i for i in task['items']}
+          im, iw = items['Acme Buyer'], items['Manual Client']
+          assert im['channel'] == 'mail' and im['status'] == 'draft' and im['subject'] == 'New 2027 hair dryer line', im
+          assert 'Hi Acme Buyer' in im['content'] and im['content'].endswith('Lily | CGCH') and im['credits'] >= 1, im['content']
+          assert iw['channel'] == 'whatsapp' and iw['status'] == 'draft' and 'hello_world' in iw['content'], iw
+          assert call('GET', '/channel/credit/summary')['balance'] == bal_x - im['credits']
+          names_now = {x['name']: x for x in call('GET', '/channel/reactivate/candidates?inactiveDays=0')}
+          assert names_now['Acme Buyer']['inTask'] is True, '已在任务中的客户应有标记'
+          call('PUT', '/channel/reactivate/item/update', {'id': im['id'], 'subject': 'New 2027 line - free samples', 'content': im['content']})
+          assert call('POST', f'/channel/reactivate/task/send?id={tid}', ok=False)['code'] != 0, '未确认时不能发送'
+          assert call('POST', '/channel/reactivate/item/status?action=approve', [im['id'], iw['id']]) == 2
+          sent_before = len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_sent')))
+          assert call('POST', f'/channel/reactivate/task/send?id={tid}') == 2
+          done = wait(lambda: (lambda t: t if t['status'] == 'done' else None)(call('GET', f'/channel/reactivate/task/get?id={tid}')), '发送完成', timeout=30)
+          assert done['counts']['sent'] == 2, done['counts']
+          wa_sent = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_sent'))[sent_before:]
+          assert any(x.get('type') == 'template' and x['template']['name'] == 'hello_world' and x['to'].endswith('7900000555') for x in wa_sent), wa_sent
+          mailbox = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=5&accountId={acct}&view=sent&keyword=free%20samples')['list']
+          assert mailbox and mailbox[0]['subject'] == 'New 2027 line - free samples' and mailbox[0]['aiGenerated'], mailbox
+          assert done['replied'] == 0
+          inquiry('Acme Buyer <buyer@acme-trading.example>', 'Re: New 2027 line - free samples', 'Yes, please send a sample.')
+          try:
+              r = wait(lambda: (lambda t: t if t['replied'] == 1 else None)(call('GET', f'/channel/reactivate/task/get?id={tid}')), '客户回复后计入回复数')
+          except AssertionError:
+              got = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=5&accountId={acct}&keyword=' + urllib.parse.quote('Re: New 2027'))['list']
+              dbg = [(x['id'], x.get('customerId'), x.get('customerName'), x.get('sentTime'), x.get('direction')) for x in got]
+              it = next(i for i in call('GET', f'/channel/reactivate/task/get?id={tid}')['items'] if i['customerName'] == 'Acme Buyer')
+              raise AssertionError(f"回复未计入：来信 {dbg}；唤醒项 customerId={it['customerId']} sentTime={it['sentTime']} status={it['status']}")
+          assert next(i for i in r['items'] if i['customerName'] == 'Acme Buyer')['replied'] is True
+          tid2 = call('POST', '/channel/reactivate/task/create', {'customerIds': [manual['id']], 'channel': 'whatsapp'})
+          t2 = wait(lambda: (lambda t: t if t['status'] == 'ready' else None)(call('GET', f'/channel/reactivate/task/get?id={tid2}')), '任务 2')
+          assert t2['items'][0]['status'] == 'skipped' and '模板' in t2['items'][0]['reasonDetail'], t2['items']
+          call('DELETE', f'/channel/reactivate/task/delete?id={tid2}')
+          assert call('GET', '/channel/reactivate/task/page?pageNo=1&pageSize=10')['total'] == 1
+          ledger_x = call('GET', '/channel/credit/ledger/page?pageNo=1&pageSize=50&type=consume')['list']
+          assert any(x['remark'] == '客户唤醒' and x['channel'] == 'reactivate' for x in ledger_x)
+          print('客户唤醒：筛出久未联系客户；AI 按客户写邮件、WhatsApp 用模板；确认后批量发出并跟踪回复；无模板时跳过并说明原因')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY
