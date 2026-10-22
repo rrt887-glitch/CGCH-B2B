@@ -7,9 +7,9 @@
 1. **把 GitHub 仓库设为私有**：Settings → General → 页面最下方 Danger Zone → Change visibility → Private。
 2. **生成新的密钥**：早期版本的配置文件里曾写入过字段加密密钥和 API 加密密钥，这些值已经随仓库历史公开，**全部作废**，不能再使用。生产环境请重新生成：
    ```bash
-   openssl rand -base64 24   # 生成一个 32 位左右的随机字符串，用作 CGCH_FIELD_ENCRYPT_KEY
+   openssl rand -base64 24   # 生成正好 32 个字符的随机字符串，用作 CGCH_FIELD_ENCRYPT_KEY
    ```
-   以 `prod` 配置启动时，后端会检查这些密钥：未设置、少于 16 位或使用了公开过的值，都会**直接拒绝启动**。
+   以 `prod` 配置启动时，后端会检查这些密钥：未设置、长度不是 16/24/32 位或使用了公开过的值，都会**直接拒绝启动**。
 3. **数据库、Redis 使用强密码**，并且不要对公网开放端口。
 4. **上线后立即修改管理员密码**：默认账号 `admin / admin123` 只用于首次登录。
 
@@ -19,7 +19,7 @@
 
 | 变量 | 必填 | 说明 |
 |---|---|---|
-| `CGCH_FIELD_ENCRYPT_KEY` | 是 | 字段加密密钥，至少 16 位。用于加密数据库里的邮箱密码、WhatsApp 令牌、大模型 API Key。**上线后不要再改**，改了以后已加密的数据解不开，需要重新录入 |
+| `CGCH_FIELD_ENCRYPT_KEY` | 是 | 字段加密密钥，必须正好 16、24 或 32 个字符（AES 密钥长度），推荐 `openssl rand -base64 24`。用于加密数据库里的邮箱密码、WhatsApp 令牌、大模型 API Key。**上线后不要再改**，改了以后已加密的数据解不开，需要重新录入 |
 | `DB_URL` | 是 | MySQL 连接串，示例见 `.env.example` |
 | `DB_USERNAME` / `DB_PASSWORD` | 是 | 数据库账号和密码，密码不能是 123456 等弱密码 |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 建议 | Redis 地址和密码 |

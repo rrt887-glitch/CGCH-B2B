@@ -12,7 +12,7 @@ import java.util.Set;
 /**
  * 生产环境（prod）启动前检查密钥配置，不合格直接拒绝启动，避免带着公开过的或空的密钥上线。
  * <ul>
- *     <li>字段加密密钥 CGCH_FIELD_ENCRYPT_KEY：必填、至少 16 位、不能是仓库里出现过的值</li>
+ *     <li>字段加密密钥 CGCH_FIELD_ENCRYPT_KEY：必填、正好 16/24/32 位（AES）、不能是仓库里出现过的值</li>
  *     <li>数据库密码 DB_PASSWORD：必填、不能是 123456 这类默认值</li>
  *     <li>Redis 未设置密码、开启了 API 加密却没配密钥：给出警告</li>
  * </ul>
@@ -20,7 +20,7 @@ import java.util.Set;
 public class ProductionSecretsCheck implements EnvironmentPostProcessor {
 
     /** 曾经出现在公开仓库里、或仅供开发使用的值 */
-    private static final Set<String> KNOWN = Set.of("WLWohCayruUlMUWn", "local-only-insecure-key", "dev-only-insecure-key",
+    private static final Set<String> KNOWN = Set.of("WLWohCayruUlMUWn", "local-only-insecure-dev-key-0000", "dev-only-insecure-dev-key-000000",
             "Z579dnaRSE9uJ2vgpjnILyP0S6grC98z", "qpizJVFuBjkrWRIw1FrVlf6aECC2trdh", "change-me", "please-change-me");
     private static final Set<String> WEAK_DB = Set.of("123456", "root", "password", "admin", "admin123", "12345678");
 
@@ -48,8 +48,9 @@ public class ProductionSecretsCheck implements EnvironmentPostProcessor {
         String fieldKey = first(env, "CGCH_FIELD_ENCRYPT_KEY", "mybatis-plus.encryptor.password");
         if (fieldKey.isBlank()) {
             errors.add("未设置字段加密密钥 CGCH_FIELD_ENCRYPT_KEY（用于加密邮箱密码、WhatsApp 令牌、大模型 Key 等）");
-        } else if (fieldKey.length() < 16) {
-            errors.add("字段加密密钥 CGCH_FIELD_ENCRYPT_KEY 太短，至少 16 位");
+        } else if (!Set.of(16, 24, 32).contains(fieldKey.getBytes(java.nio.charset.StandardCharsets.UTF_8).length)) {
+            errors.add("字段加密密钥 CGCH_FIELD_ENCRYPT_KEY 必须正好是 16、24 或 32 个字符（AES 密钥长度），"
+                    + "推荐 openssl rand -base64 24 生成 32 位");
         } else if (KNOWN.contains(fieldKey)) {
             errors.add("字段加密密钥 CGCH_FIELD_ENCRYPT_KEY 使用了公开过的值，请重新生成（例如 openssl rand -base64 24）");
         }

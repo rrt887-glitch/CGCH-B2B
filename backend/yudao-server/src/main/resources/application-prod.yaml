@@ -299,7 +299,7 @@ knife4j:
 
 mybatis-plus:
   encryptor:
-    password: ${CGCH_FIELD_ENCRYPT_KEY} # 字段加密密钥（必填，至少 16 位；启动时会检查）
+    password: ${CGCH_FIELD_ENCRYPT_KEY} # 字段加密密钥（必填，正好 16/24/32 位；启动时会检查）
 
 cgch:
   research:

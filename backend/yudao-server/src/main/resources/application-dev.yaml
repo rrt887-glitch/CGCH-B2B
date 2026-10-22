@@ -213,4 +213,4 @@ justauth:
 --- #################### 字段加密密钥（仅供开发） ####################
 mybatis-plus:
   encryptor:
-    password: ${CGCH_FIELD_ENCRYPT_KEY:dev-only-insecure-key} # 开发用默认值，不要用于生产
+    password: ${CGCH_FIELD_ENCRYPT_KEY:dev-only-insecure-dev-key-000000} # 开发用默认值，不要用于生产
