@@ -10,6 +10,9 @@
 # 镜像为私有时，先提供只读令牌：GHCR_USER=用户名 GHCR_TOKEN=令牌 ... | bash
 set -euo pipefail
 
+# 整个脚本包在函数里：用 curl | bash 执行时，bash 会先读完全部内容再运行，避免中途的命令读走后面的脚本
+main() {
+
 DIR=/opt/cgch
 REGISTRY=ghcr.io/rrt887-glitch
 VERSION="${CGCH_VERSION:-latest}"
@@ -165,7 +168,7 @@ docker compose up -d --remove-orphans
 
 wait_backend() {
   for i in $(seq 1 90); do
-    if docker compose exec -T web wget -q -O /dev/null "http://backend:48080/admin-api/public/site/about" 2>/dev/null; then
+    if docker compose exec -T web wget -q -O /dev/null "http://backend:48080/admin-api/public/site/about" </dev/null 2>/dev/null; then
       return 0
     fi
     sleep 4
@@ -196,3 +199,6 @@ cat <<EOF
 
   阿里云轻量服务器请在「防火墙」中放行 80 和 443 端口。
 EOF
+}
+
+main "$@" </dev/null
