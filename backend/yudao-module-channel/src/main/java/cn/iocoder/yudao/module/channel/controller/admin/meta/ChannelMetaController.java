@@ -58,6 +58,40 @@ public class ChannelMetaController {
         }
     }
 
+    @PostMapping(value = "/deauthorize")
+    @Operation(summary = "取消授权回调：用户在 Facebook 里移除了应用")
+    @PermitAll
+    @TenantIgnore
+    public ResponseEntity<String> deauthorize(@RequestParam(value = "signed_request", required = false) String signedRequest) {
+        return channelMetaOAuthService.deauthorize(signedRequest) ? ResponseEntity.ok("OK")
+                : ResponseEntity.status(HttpStatus.BAD_REQUEST).body("invalid signed_request");
+    }
+
+    @PostMapping(value = "/data-deletion", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "数据删除回调：返回查询地址与确认码（Meta 规定的格式）")
+    @PermitAll
+    @TenantIgnore
+    public ResponseEntity<java.util.Map<String, String>> dataDeletion(@RequestParam(value = "signed_request", required = false) String signedRequest) {
+        String code = channelMetaOAuthService.deleteUserData(signedRequest);
+        if (code == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(java.util.Map.of("error", "invalid signed_request"));
+        }
+        return ResponseEntity.ok(java.util.Map.of("url", channelMetaOAuthService.deletionStatusUrl(code), "confirmation_code", code));
+    }
+
+    @GetMapping(value = "/data-deletion/status", produces = MediaType.TEXT_HTML_VALUE + ";charset=UTF-8")
+    @Operation(summary = "数据删除进度查询页")
+    @PermitAll
+    @TenantIgnore
+    public String dataDeletionStatus(@RequestParam(value = "code", required = false) String code) {
+        String n = channelMetaOAuthService.deletionStatus(code);
+        return n == null
+                ? OAuthResultPage.html("cgch-meta-deletion", false, "Confirmation code not found 未找到该确认码",
+                "Please check the code, or contact us by email. 请核对确认码，或通过邮件联系我们。")
+                : OAuthResultPage.html("cgch-meta-deletion", true, "Deletion completed 数据已删除",
+                "Code " + code + ": " + n + " connected account(s) and their conversations have been deleted. 已删除接入的 " + n + " 个账号及其会话。");
+    }
+
     @GetMapping(value = "/webhook", produces = MediaType.TEXT_PLAIN_VALUE)
     @Operation(summary = "应用级 Webhook 回调地址验证")
     @PermitAll

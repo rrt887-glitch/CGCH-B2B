@@ -35,6 +35,7 @@ SUBS = []
 TOKENS = {GOOD, 'Bearer page-token-PAGE1', 'Bearer user-long'}
 # Graph 对象：主页、Instagram 账号、Messenger / Instagram 用户
 PROFILES = {
+    'me': {'id': 'FBU1', 'name': 'Page Owner'},
     'PAGE1': {'id': 'PAGE1', 'name': 'CGCH Fan Page'},
     'IG1': {'id': 'IG1', 'username': 'cgch_ig', 'name': 'CGCH IG'},
     '7001': {'first_name': 'Maria', 'last_name': 'Lopez'},

@@ -53,6 +53,11 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      */
     private String authType;
     /**
+     * 通过 Facebook 登录授权接入时，授权人的 Facebook 用户编号（应用范围内的编号）；
+     * 用户在 Facebook 里移除应用或申请删除数据时，据此找到并删除他接入的账号
+     */
+    private String oauthUserId;
+    /**
      * 平台账号编号：WhatsApp 为 Phone number ID，Messenger 为主页编号（Page ID），Instagram 为专业账号编号
      */
     private String phoneNumberId;

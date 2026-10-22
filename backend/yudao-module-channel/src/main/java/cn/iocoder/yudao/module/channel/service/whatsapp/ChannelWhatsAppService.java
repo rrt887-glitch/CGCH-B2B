@@ -151,6 +151,13 @@ public class ChannelWhatsAppService {
         messageMapper.delete(new LambdaQueryWrapperX<ChannelWaMessageDO>().eq(ChannelWaMessageDO::getAccountId, id));
     }
 
+    /** 删除账号及其会话、消息（不校验归属，供 Meta 数据删除回调使用） */
+    public void deleteAccountInternal(Long id) {
+        accountMapper.deleteById(id);
+        conversationMapper.delete(new LambdaQueryWrapperX<ChannelWaConversationDO>().eq(ChannelWaConversationDO::getAccountId, id));
+        messageMapper.delete(new LambdaQueryWrapperX<ChannelWaMessageDO>().eq(ChannelWaMessageDO::getAccountId, id));
+    }
+
     public List<ChannelWaAccountRespVO> listAccounts(Long userId) {
         return accountMapper.selectListByUserId(userId).stream().map(a -> {
             ChannelWaAccountRespVO vo = BeanUtils.toBean(a, ChannelWaAccountRespVO.class);
