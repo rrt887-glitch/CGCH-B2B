@@ -49,3 +49,9 @@ INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`,
   (12, '阿里国际站', '12', 'crm_customer_source', 0, 'warning', '', 'CGCH 留资邮箱', '1', '1', b'0'),
   (13, '中国制造网', '13', 'crm_customer_source', 0, 'danger', '', 'CGCH 留资邮箱', '1', '1', b'0'),
   (14, '官网表单', '14', 'crm_customer_source', 0, 'primary', '', 'CGCH 留资邮箱', '1', '1', b'0');
+
+-- 客户来源补充：社媒私信
+DELETE FROM `system_dict_data` WHERE `dict_type` = 'crm_customer_source' AND `value` IN ('15', '16');
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`) VALUES
+  (15, 'Facebook', '15', 'crm_customer_source', 0, 'primary', '', 'CGCH 社媒私信', '1', '1', b'0'),
+  (16, 'Instagram', '16', 'crm_customer_source', 0, 'danger', '', 'CGCH 社媒私信', '1', '1', b'0');

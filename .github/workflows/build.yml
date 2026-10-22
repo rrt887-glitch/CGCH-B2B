@@ -103,7 +103,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -1199,7 +1199,7 @@ jobs:
           print('留资邮箱：阿里国际站、中国制造网、官网表单的询盘通知按规则识别，解析出买家、国家、公司、联系方式和需求建线索；不重复、不让 AI 回复通知邮件')
 
           # ---- Gmail / Outlook OAuth 授权绑定 ----
-          assert call('GET', '/channel/oauth/providers') == ['google', 'microsoft']
+          assert call('GET', '/channel/oauth/providers') == ['google', 'microsoft', 'meta']
           def oauth_bind(provider, code='good-code', error=None):
               url = call('GET', f'/channel/oauth/{provider}/authorize-url')
               q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
@@ -1233,6 +1233,122 @@ jobs:
           for a in (g, o):
               call('DELETE', f"/channel/mail-account/delete?id={a['id']}")
           print('邮箱 OAuth：Gmail / Outlook 授权回调绑定邮箱（state 一次有效、无需登录态），令牌不外露、过期自动刷新；拒绝授权和无效授权码都有提示')
+          # ---- Facebook 主页 / Instagram 私信：Facebook 登录授权、应用级 Webhook、收发、回执 ----
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed', waMode='off'))
+          call('POST', '/channel/credit/recharge', {'amount': 100, 'remark': 'CI 社媒私信'})
+          url = call('GET', '/channel/meta/oauth/authorize-url')
+          mq = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+          assert url.startswith('http://127.0.0.1:18080/fb/dialog?') and mq['client_id'] == ['metaid'], url
+          assert 'pages_messaging' in mq['scope'][0] and 'instagram_manage_messages' in mq['scope'][0], mq
+          assert mq['redirect_uri'] == ['http://127.0.0.1:48080/admin-api/channel/meta/oauth/callback'], mq
+          mcb = f"http://127.0.0.1:48080/admin-api/channel/meta/oauth/callback?state={mq['state'][0]}&code=good-code"
+          mhtml = urllib.request.urlopen(mcb).read().decode()
+          assert 'Facebook 授权成功' in mhtml and 'CGCH Fan Page' in mhtml and '@cgch_ig' in mhtml and 'cgch-meta-oauth' in mhtml, mhtml[:400]
+          assert 'No Token Page' in mhtml, '没有主页令牌的主页应提示未接入'
+          assert '授权链接已过期' in urllib.request.urlopen(mcb).read().decode(), 'state 只能用一次'
+          ol = [x for x in json.load(urllib.request.urlopen('http://127.0.0.1:18080/_oauth')) if x['provider'] == 'meta']
+          assert ol[-2]['code'] == 'good-code' and ol[-1]['grant_type'] == 'fb_exchange_token' and ol[-1]['fb_exchange_token'] == 'user-short', ol
+          macc = {a['platform']: a for a in call('GET', '/channel/wa-account/list') if a['platform'] != 'whatsapp'}
+          fb, ig = macc['messenger'], macc['instagram']
+          assert fb['phoneNumberId'] == 'PAGE1' and fb['displayPhone'] == 'CGCH Fan Page' and fb['authType'] == 'oauth', fb
+          assert fb['webhookPath'] == '/admin-api/channel/meta/webhook' and fb['hasAccessToken'] and 'accessToken' not in fb, fb
+          assert ig['phoneNumberId'] == 'IG1' and ig['displayPhone'] == '@cgch_ig', ig
+          subs = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_subs'))
+          assert subs[-1]['page'] == 'PAGE1' and 'messages' in subs[-1]['fields'] and 'message_echoes' in subs[-1]['fields'], subs
+          assert subs[-1]['auth'] == 'Bearer page-token-PAGE1', '订阅要用主页令牌'
+          bad_cb = urllib.request.urlopen(mcb.replace('good-code', 'bad')).read().decode()
+          assert 'Facebook 授权失败' in bad_cb, bad_cb[:300]
+          print('Facebook 登录授权：一次接入主页与关联的 Instagram，换长期令牌、订阅消息推送，令牌不外露')
+
+          MHOOK = 'http://127.0.0.1:48080/admin-api/channel/meta/webhook'
+          def mraw(method, url, data=None, headers=None):
+              try:
+                  r = urllib.request.urlopen(urllib.request.Request(url, method=method, data=data, headers=headers or {}))
+                  return r.status, r.read().decode()
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode()
+          assert mraw('GET', MHOOK + '?hub.mode=subscribe&hub.verify_token=meta-verify&hub.challenge=fb123') == (200, 'fb123')
+          assert mraw('GET', MHOOK + '?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=fb123')[0] == 403
+          def mpush(obj, entry_id, events, secret='metasec'):
+              payload = json.dumps({'object': obj, 'entry': [{'id': entry_id, 'time': int(time.time() * 1000), 'messaging': events}]}).encode()
+              sig = 'sha256=' + hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+              return mraw('POST', MHOOK, payload, {'Content-Type': 'application/json', 'X-Hub-Signature-256': sig})[0]
+          now = int(time.time() * 1000)
+          ev1 = {'sender': {'id': '7001'}, 'recipient': {'id': 'PAGE1'}, 'timestamp': now,
+                 'message': {'mid': 'm_IN1', 'text': 'Hi, do you ship to Spain?'}}
+          assert mpush('page', 'PAGE1', [ev1], secret='wrong') == 401, '错误签名应被拒绝'
+          assert mpush('page', 'PAGE1', [ev1]) == 200 and mpush('page', 'PAGE1', [ev1]) == 200  # 重试推送应去重
+          mpush('page', 'PAGE1', [{'sender': {'id': '7001'}, 'recipient': {'id': 'PAGE1'}, 'timestamp': now + 1000,
+                 'message': {'mid': 'm_IN2', 'attachments': [{'type': 'image', 'payload': {'url': 'http://127.0.0.1:18080/_media/FBIMG1'}}]}}])
+          fp = call('GET', f"/channel/wa/conversation/page?pageNo=1&pageSize=10&accountId={fb['id']}")
+          assert fp['total'] == 1, fp
+          fc = fp['list'][0]
+          assert fc['platform'] == 'messenger' and fc['profileName'] == 'Maria Lopez' and fc['unreadCount'] == 2 and fc['windowOpen'], fc
+          fm = call('GET', f"/channel/wa/message/list?conversationId={fc['id']}")
+          assert [(m['type'], m['textBody']) for m in fm] == [('text', 'Hi, do you ship to Spain?'), ('image', None)], fm
+          fmedia = call('GET', f"/channel/wa/message/media?id={fm[1]['id']}")
+          assert b'JPEGDATA-FBIMG1' in urllib.request.urlopen(fmedia['fileUrl']).read(), '附件应下载保存'
+          fd = call('POST', f"/channel/ai/draft/whatsapp?conversationId={fc['id']}")
+          assert fd['content'] and fd['status'] == 'pending', fd
+          fout = call('POST', '/channel/wa/message/send', {'conversationId': fc['id'], 'text': 'Yes, we ship to Spain by sea.'})
+          assert fout['status'] == 'sent' and fout['waMessageId'].startswith('m_OUT'), fout
+          fs = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_fbsent'))[-1]
+          assert fs['recipient'] == {'id': '7001'} and fs['messaging_type'] == 'RESPONSE' and fs['auth'] == 'Bearer page-token-PAGE1', fs
+          assert fs['message'] == {'text': 'Yes, we ship to Spain by sea.', 'metadata': 'cgch'}, fs
+          print('Messenger：收消息与图片、按 mid 去重、取客户姓名、AI 起草、用主页令牌回复')
+
+          mpush('page', 'PAGE1', [{'sender': {'id': 'PAGE1'}, 'recipient': {'id': '7001'}, 'timestamp': now + 2000,
+                 'message': {'mid': fout['waMessageId'], 'is_echo': True, 'metadata': 'cgch', 'text': 'Yes, we ship to Spain by sea.'}},
+                {'sender': {'id': 'PAGE1'}, 'recipient': {'id': '7001'}, 'timestamp': now + 3000,
+                 'message': {'mid': 'm_HUMAN1', 'is_echo': True, 'text': 'Sent from Business Suite'}}])
+          fouts = [m for m in call('GET', f"/channel/wa/message/list?conversationId={fc['id']}") if m['direction'] == 2]
+          assert [m['textBody'] for m in fouts] == ['Yes, we ship to Spain by sea.', 'Sent from Business Suite'], fouts
+          mpush('page', 'PAGE1', [{'sender': {'id': '7001'}, 'recipient': {'id': 'PAGE1'}, 'timestamp': now + 4000,
+                 'delivery': {'mids': [fout['waMessageId']], 'watermark': now + 4000}}])
+          st = {m['waMessageId']: m['status'] for m in call('GET', f"/channel/wa/message/list?conversationId={fc['id']}")}
+          assert st[fout['waMessageId']] == 'delivered', st
+          mpush('page', 'PAGE1', [{'sender': {'id': '7001'}, 'recipient': {'id': 'PAGE1'}, 'timestamp': now + 5000,
+                 'read': {'watermark': int(time.time() * 1000) + 60000}}])
+          st = {m['waMessageId']: m['status'] for m in call('GET', f"/channel/wa/message/list?conversationId={fc['id']}")}
+          assert st[fout['waMessageId']] == 'read' and st['m_HUMAN1'] == 'read', st
+          tp = call('POST', '/channel/wa/message/send', {'conversationId': fc['id'], 'templateName': 'hello_world'}, ok=False)
+          assert tp['code'] == 1030002013, tp
+          nw = call('POST', '/channel/wa/message/send', {'accountId': fb['id'], 'to': '+34 600 000 000', 'text': 'Hi'}, ok=False)
+          assert nw['code'] == 1030002014, nw
+          print('Messenger：系统发出的回显不重复、后台人工回复会补记；送达与已读回执；不支持模板和主动发起会话')
+
+          def mupload(fields, filename, content, ctype):
+              b = '----cgchfb'
+              parts = b''.join(f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode() for k, v in fields.items())
+              parts += f'--{b}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\nContent-Type: {ctype}\r\n\r\n'.encode() + content + f'\r\n--{b}--\r\n'.encode()
+              hdr = {k: v for k, v in H.items() if k != 'Content-Type'}
+              hdr['Content-Type'] = f'multipart/form-data; boundary={b}'
+              return json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/channel/wa/message/send-media', method='POST', data=parts, headers=hdr)))
+          pdf = b'%PDF-1.4 CGCH catalog'
+          mr = mupload({'conversationId': fc['id'], 'caption': 'Our catalog'}, 'catalog.pdf', pdf, 'application/pdf')
+          assert mr['code'] == 0 and mr['data']['type'] == 'document' and mr['data']['fileUrl'], mr
+          fsl = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_fbsent'))
+          assert fsl[-2]['multipart'] and fsl[-2]['fileName'] == 'catalog.pdf' and fsl[-2]['size'] == len(pdf), fsl[-2]
+          assert fsl[-2]['message']['attachment']['type'] == 'file' and fsl[-2]['recipient'] == {'id': '7001'}, fsl[-2]
+          assert fsl[-1]['message']['text'] == 'Our catalog', '说明文字应作为单独一条文本发出'
+          print('Messenger：发送文件（附件上传 + 说明文字）')
+
+          mpush('instagram', 'IG1', [{'sender': {'id': 'IGU1'}, 'recipient': {'id': 'IG1'}, 'timestamp': now,
+                 'message': {'mid': 'ig_IN1', 'text': 'Price for 1000 pcs?'}}])
+          mpush('page', 'IG1', [{'sender': {'id': 'IGU1'}, 'recipient': {'id': 'IG1'}, 'timestamp': now,
+                 'message': {'mid': 'ig_WRONG', 'text': 'object 不匹配的推送应忽略'}}])
+          ic = call('GET', f"/channel/wa/conversation/page?pageNo=1&pageSize=10&accountId={ig['id']}")['list']
+          assert len(ic) == 1 and ic[0]['platform'] == 'instagram' and ic[0]['profileName'] == 'Kenji', ic
+          im = call('GET', f"/channel/wa/message/list?conversationId={ic[0]['id']}")
+          assert [m['textBody'] for m in im] == ['Price for 1000 pcs?'], im
+          iout = call('POST', '/channel/wa/message/send', {'conversationId': ic[0]['id'], 'text': 'USD 6.2 each for 1000 pcs.'})
+          fs = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_fbsent'))[-1]
+          assert fs['recipient'] == {'id': 'IGU1'} and fs['message'] == {'text': 'USD 6.2 each for 1000 pcs.'} and iout['status'] == 'sent', fs
+          imr = mupload({'conversationId': ic[0]['id']}, 'catalog.pdf', pdf, 'application/pdf')
+          assert imr['code'] == 1030002015, imr
+          for a in (fb, ig):
+              call('DELETE', f"/channel/wa-account/delete?id={a['id']}")
+          print('Instagram：收发私信、取客户昵称；按 object 区分平台；暂不支持发文件')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 /**
- * 消息工作台（WhatsApp）：左侧会话列表，右侧聊天记录与输入框。
+ * 消息工作台（WhatsApp、Facebook 主页私信、Instagram 私信）：左侧会话列表，右侧聊天记录与输入框。
  * 客户 24 小时内发过消息才能发自由文本，窗口关闭后只能发已审核的模板。
  */
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
@@ -62,9 +62,22 @@ const messages = ref<ChannelWaApi.Message[]>([]);
 const chatLoading = ref(false);
 const chatBox = ref<HTMLElement>();
 
+/** 平台：WhatsApp 显示号码、可发模板；Facebook / Instagram 只能在客户来信后 24 小时内回复 */
+const PLATFORM_META: Record<string, { avatar: string; color: string; label: string }> = {
+  whatsapp: { label: 'WhatsApp', color: 'green', avatar: '!bg-green-600' },
+  messenger: { label: 'Facebook', color: 'blue', avatar: '!bg-blue-600' },
+  instagram: { label: 'Instagram', color: 'magenta', avatar: '!bg-pink-600' },
+};
+const plat = (c?: { platform?: string }) => PLATFORM_META[c?.platform || 'whatsapp'] ?? PLATFORM_META.whatsapp!;
+const isWa = (c?: { platform?: string }) => !c?.platform || c.platform === 'whatsapp';
+const waAccounts = computed(() => accounts.value.filter((a) => isWa(a)));
+
 const accountOptions = computed(() => [
-  { label: '全部号码', value: undefined as any },
-  ...accounts.value.map((a) => ({ label: `${a.name || ''} ${a.displayPhone || a.phoneNumberId}`.trim(), value: a.id })),
+  { label: '全部账号', value: undefined as any },
+  ...accounts.value.map((a) => ({
+    label: `${plat(a).label} · ${a.name || ''} ${a.displayPhone || a.phoneNumberId}`.trim(),
+    value: a.id,
+  })),
 ]);
 
 async function loadConversations(silent = false) {
@@ -243,7 +256,8 @@ watch(chosen, (t) => {
 });
 
 async function openTemplate(newChat = false) {
-  const acc = newChat ? (accountId.value ?? accounts.value[0]?.id) : current.value?.accountId;
+  const selected = accounts.value.find((a) => a.id === accountId.value);
+  const acc = newChat ? (selected && isWa(selected) ? selected.id : waAccounts.value[0]?.id) : current.value?.accountId;
   if (!acc) return;
   newAccountId.value = acc;
   newTo.value = newChat ? '' : current.value!.waId;
@@ -297,6 +311,7 @@ const MEDIA_LABEL: Record<string, string> = {
   sticker: '表情',
 };
 const initials = (c: ChannelWaApi.Conversation) => (c.profileName || c.waId).slice(0, 1).toUpperCase();
+const contact = (c: ChannelWaApi.Conversation) => c.profileName || (isWa(c) ? `+${c.waId}` : `${plat(c).label} 用户`);
 const hm = (t?: string) => t?.slice(11, 16) ?? '';
 const md = (t?: string) => t?.slice(5, 10) ?? '';
 </script>
@@ -304,8 +319,8 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
 <template>
   <Page auto-content-height>
     <div v-if="accounts.length === 0" class="flex h-full items-center justify-center rounded bg-white">
-      <Empty description="还没有绑定 WhatsApp 号码">
-        <Button type="primary" @click="router.push('/config/channels')">去绑定号码</Button>
+      <Empty description="还没有绑定 WhatsApp、Facebook 或 Instagram 账号">
+        <Button type="primary" @click="router.push('/config/channels')">去绑定账号</Button>
       </Empty>
     </div>
 
@@ -315,7 +330,7 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
         <div class="flex flex-col gap-2 border-b p-3">
           <div class="flex gap-2">
             <Select v-model:value="accountId" :options="accountOptions" class="min-w-0 flex-1" />
-            <Button type="primary" @click="openTemplate(true)">新会话</Button>
+            <Button v-if="waAccounts.length > 0" type="primary" @click="openTemplate(true)">新会话</Button>
           </div>
           <InputSearch v-model:value="keyword" allow-clear placeholder="号码或昵称" @search="() => loadConversations()" />
           <label class="flex items-center gap-2 text-sm text-gray-500">
@@ -333,11 +348,11 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
               @click="openConversation(c)"
             >
               <Badge :count="c.unreadCount" :offset="[-4, 4]">
-                <Avatar class="!bg-green-600">{{ initials(c) }}</Avatar>
+                <Avatar :class="plat(c).avatar">{{ initials(c) }}</Avatar>
               </Badge>
               <div class="min-w-0 flex-1">
                 <div class="flex justify-between gap-2">
-                  <span class="truncate font-medium">{{ c.customerName || c.profileName || `+${c.waId}` }}</span>
+                  <span class="truncate font-medium">{{ c.customerName || contact(c) }}</span>
                   <span class="shrink-0 text-xs text-gray-400">{{ md(c.lastMessageTime) }} {{ hm(c.lastMessageTime) }}</span>
                 </div>
                 <div class="truncate text-xs text-gray-500">{{ c.lastMessagePreview }}</div>
@@ -353,7 +368,11 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
         <template v-else>
           <div class="flex items-center justify-between border-b px-4 py-3">
             <div>
-              <div class="font-medium">{{ current.profileName || `+${current.waId}` }} <span class="text-sm text-gray-400">+{{ current.waId }}</span></div>
+              <div class="font-medium">
+                {{ contact(current) }}
+                <span v-if="isWa(current)" class="text-sm text-gray-400">+{{ current.waId }}</span>
+                <Tag v-else :color="plat(current).color" class="ml-1">{{ plat(current).label }}</Tag>
+              </div>
               <div class="mt-1 flex gap-2">
                 <Tag v-if="current.customerName" color="blue" class="cursor-pointer" @click="router.push(`/crm/customer/detail/${current.customerId}`)">
                   客户：{{ current.customerName }}
@@ -365,7 +384,7 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
                 <Tooltip v-if="current.windowOpen" :title="`窗口在 ${current.windowExpireTime} 关闭`">
                   <Tag color="green">24 小时窗口内</Tag>
                 </Tooltip>
-                <Tag v-else color="orange">窗口已关闭，仅可发模板</Tag>
+                <Tag v-else color="orange">{{ isWa(current) ? '窗口已关闭，仅可发模板' : '窗口已关闭，等待客户来信' }}</Tag>
               </div>
             </div>
           </div>
@@ -435,7 +454,7 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
               <div class="mt-2 flex justify-between">
                 <Space>
                   <Button :loading="fileSending" @click="pickAndSend">发送文件</Button>
-                  <Button @click="openTemplate()">发送模板</Button>
+                  <Button v-if="isWa(current)" @click="openTemplate()">发送模板</Button>
                   <Button :loading="aiLoading" @click="aiCompose">AI 起草</Button>
                 </Space>
                 <Button type="primary" :loading="sending" :disabled="!text.trim()" @click="sendText">发送</Button>
@@ -445,9 +464,13 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
               v-else
               type="warning"
               show-icon
-              message="客户超过 24 小时没有回复，WhatsApp 规定此时只能发送已审核的模板消息。"
+              :message="
+                isWa(current)
+                  ? '客户超过 24 小时没有回复，WhatsApp 规定此时只能发送已审核的模板消息。'
+                  : `客户超过 24 小时没有回复，${plat(current).label} 规定此时不能再发消息，等客户再次来信后即可回复。`
+              "
             >
-              <template #action><Button type="primary" size="small" @click="openTemplate()">发送模板</Button></template>
+              <template v-if="isWa(current)" #action><Button type="primary" size="small" @click="openTemplate()">发送模板</Button></template>
             </Alert>
           </div>
         </template>

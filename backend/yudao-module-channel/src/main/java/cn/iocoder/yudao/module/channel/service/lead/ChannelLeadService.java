@@ -45,6 +45,28 @@ public class ChannelLeadService {
     /** crm_customer_source 字典：邮件咨询 10，WhatsApp 11（在 03-channel-seed.sql 中补充） */
     public static final int SOURCE_MAIL = 10;
     public static final int SOURCE_WHATSAPP = 11;
+    /** Facebook 主页私信、Instagram 私信 */
+    public static final int SOURCE_FACEBOOK = 15;
+    public static final int SOURCE_INSTAGRAM = 16;
+
+    private static int sourceOf(ChannelWaConversationDO c) {
+        if (c.isWhatsApp()) {
+            return SOURCE_WHATSAPP;
+        }
+        return ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(c.getPlatform()) ? SOURCE_INSTAGRAM : SOURCE_FACEBOOK;
+    }
+
+    private static String sourceLabel(Integer source) {
+        if (source == null) {
+            return "邮件";
+        }
+        return switch (source) {
+            case SOURCE_WHATSAPP -> "WhatsApp";
+            case SOURCE_FACEBOOK -> "Facebook";
+            case SOURCE_INSTAGRAM -> "Instagram";
+            default -> "邮件";
+        };
+    }
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern JSON_BLOCK = Pattern.compile("\\{[\\s\\S]*}");
@@ -128,31 +150,32 @@ public class ChannelLeadService {
         if (account == null) {
             return;
         }
-        CrmClueDO clue = findClueByWhatsapp(c.getWaId());
+        boolean wa = c.isWhatsApp();
+        CrmClueDO clue = wa ? findClueByWhatsapp(c.getWaId()) : null;
         if (clue == null) {
             ChannelAiConfigDO cfg = channelAiConfigMapper.selectCurrent();
             if (cfg == null || !Boolean.TRUE.equals(cfg.getLeadAutoCreate())) {
                 return;
             }
             List<ChannelWaMessageDO> recent = whatsAppService.getRecentMessagesInternal(conversationId, 10);
-            StringBuilder text = new StringBuilder("WhatsApp 昵称：").append(StrUtil.nullToEmpty(c.getProfileName()))
-                    .append("\n号码：+").append(c.getWaId()).append("\n客户消息：\n");
+            StringBuilder text = new StringBuilder(c.platformLabel()).append(" 昵称：").append(StrUtil.nullToEmpty(c.getProfileName()))
+                    .append(wa ? "\n号码：+" + c.getWaId() : "").append("\n客户消息：\n");
             recent.stream().filter(x -> x.getDirection() == ChannelWaMessageDO.DIRECTION_IN)
                     .forEach(x -> text.append(StrUtil.nullToEmpty(x.getTextBody())).append('\n'));
             Extracted ex = extract(cfg, "whatsapp", conversationId, account.getUserId(), text.toString());
             String first = recent.stream().filter(x -> x.getDirection() == ChannelWaMessageDO.DIRECTION_IN)
                     .map(ChannelWaMessageDO::getTextBody).filter(StrUtil::isNotBlank).findFirst().orElse("");
             clue = CrmClueDO.builder()
-                    .name(firstNonBlank(ex.contactName(), c.getProfileName(), "+" + c.getWaId()))
-                    .whatsapp("+" + c.getWaId())
-                    .mobile("+" + c.getWaId())
+                    .name(firstNonBlank(ex.contactName(), c.getProfileName(), c.contactLabel()))
+                    .whatsapp(wa ? "+" + c.getWaId() : null)
+                    .mobile(wa ? "+" + c.getWaId() : null)
                     .companyName(ex.company())
-                    .countryCode(firstNonBlank(ex.countryCode(), LeadInference.countryFromPhone(c.getWaId())))
-                    .source(SOURCE_WHATSAPP)
+                    .countryCode(firstNonBlank(ex.countryCode(), wa ? LeadInference.countryFromPhone(c.getWaId()) : null))
+                    .source(sourceOf(c))
                     .ownerUserId(account.getUserId())
                     .contactLastTime(c.getLastMessageTime())
                     .contactLastContent(StrUtil.maxLength(first, 500))
-                    .remark(remark("WhatsApp", StrUtil.maxLength(first, 80), ex))
+                    .remark(remark(c.platformLabel(), StrUtil.maxLength(first, 80), ex))
                     .build();
             createClue(clue);
         }
@@ -171,7 +194,7 @@ public class ChannelLeadService {
                 .setUserId(clue.getOwnerUserId()).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
         log.info("[createClue] 自动建档线索 {}：{} {}", clue.getId(), clue.getName(), StrUtil.blankToDefault(clue.getEmail(), clue.getWhatsapp()));
         channelNotifyService.onNewLead(clue.getId(), clue.getName(), clue.getOwnerUserId(),
-                Integer.valueOf(SOURCE_WHATSAPP).equals(clue.getSource()) ? "WhatsApp" : "邮件");
+                sourceLabel(clue.getSource()));
     }
 
     private CrmClueDO findClueByEmail(String email) {

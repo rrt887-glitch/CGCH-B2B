@@ -10,6 +10,9 @@ import java.time.LocalDateTime;
 public class ChannelWaConversationRespVO {
 
     private Long id;
+    @Schema(description = "平台：whatsapp、messenger、instagram")
+    private String platform;
+
     private Long accountId;
     private String waId;
     private String profileName;

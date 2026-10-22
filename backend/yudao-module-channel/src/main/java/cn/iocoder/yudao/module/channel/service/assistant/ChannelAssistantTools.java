@@ -305,7 +305,7 @@ public class ChannelAssistantTools {
                     .like(ChannelWaMessageDO::getTextBody, keyword).orderByDesc(ChannelWaMessageDO::getId).last("LIMIT 10"))) {
                 ChannelWaConversationDO conv = channelWaConversationMapper.selectById(x.getConversationId());
                 out.add(Map.of("channel", "WhatsApp", "direction", x.getDirection() == ChannelWaMessageDO.DIRECTION_IN ? "收到" : "发出",
-                        "contact", conv == null ? "" : StrUtil.blankToDefault(conv.getProfileName(), "+" + conv.getWaId()),
+                        "contact", conv == null ? "" : conv.contactLabel(),
                         "text", StrUtil.maxLength(x.getTextBody(), 200), "time", x.getMessageTime() == null ? "" : x.getMessageTime().format(TIME)));
             }
         }
@@ -341,7 +341,7 @@ public class ChannelAssistantTools {
                 if (c == null || !wa.contains(c.getAccountId())) {
                     continue;
                 }
-                who = StrUtil.blankToDefault(c.getProfileName(), "+" + c.getWaId());
+                who = c.contactLabel();
             }
             out.add(Map.of("channel", d.getChannel(), "customer", who, "reason", StrUtil.nullToEmpty(d.getReason()),
                     "time", d.getCreateTime() == null ? "" : d.getCreateTime().format(TIME)));

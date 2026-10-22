@@ -237,6 +237,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
       @mail="(p) => openForm(undefined, p)"
       @oauth="startOAuth"
       @wa="waRef?.openForm()"
+      @meta="(p) => waRef?.connect(p)"
       @lead-rules="leadOpen = true"
     />
 
@@ -285,7 +286,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
       </Table>
     </Card>
 
-    <WaAccounts ref="waRef" />
+    <WaAccounts ref="waRef" :meta-o-auth="oauthProviders.includes('meta')" />
 
     <LeadRules v-model:open="leadOpen" :mailboxes="mailboxes" />
 

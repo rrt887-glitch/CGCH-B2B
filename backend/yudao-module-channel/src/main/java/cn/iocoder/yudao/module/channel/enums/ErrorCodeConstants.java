@@ -34,6 +34,12 @@ public interface ErrorCodeConstants {
     ErrorCode WA_MESSAGE_NOT_EXISTS = new ErrorCode(1_030_002_008, "消息不存在");
     ErrorCode WA_NO_MEDIA = new ErrorCode(1_030_002_009, "该消息没有媒体文件");
     ErrorCode WA_FILE_TOO_LARGE = new ErrorCode(1_030_002_010, "文件过大：图片不超过 5MB，其他文件不超过 16MB");
+    ErrorCode WA_WABA_REQUIRED = new ErrorCode(1_030_002_011, "请填写 WhatsApp Business Account ID");
+    ErrorCode META_PLATFORM_INVALID = new ErrorCode(1_030_002_012, "不支持的平台：{}");
+    ErrorCode META_TEMPLATE_UNSUPPORTED = new ErrorCode(1_030_002_013, "{} 不支持模板消息，只能在客户来信后 24 小时内回复");
+    ErrorCode META_NEW_CONVERSATION_UNSUPPORTED = new ErrorCode(1_030_002_014, "{} 不能主动发起会话，请等待客户先发消息");
+    ErrorCode META_MEDIA_UNSUPPORTED = new ErrorCode(1_030_002_015, "Instagram 私信暂不支持从系统发送文件，请发送文字");
+    ErrorCode META_OAUTH_FAIL = new ErrorCode(1_030_002_016, "Facebook 授权失败：{}");
 
 
     // ========== AI 数字员工 1-030-003-000 ==========

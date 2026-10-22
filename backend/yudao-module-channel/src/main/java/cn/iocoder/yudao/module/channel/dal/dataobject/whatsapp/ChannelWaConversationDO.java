@@ -31,7 +31,11 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      */
     private Long accountId;
     /**
-     * 客户的 WhatsApp 号码（纯数字，含国家码）
+     * 平台：whatsapp（默认）、messenger、instagram，与所属账号一致
+     */
+    private String platform;
+    /**
+     * 客户编号：WhatsApp 为号码（纯数字，含国家码）；Messenger / Instagram 为平台分配的用户编号（PSID / IGSID）
      */
     private String waId;
     /**
@@ -62,5 +66,29 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      * 未读条数
      */
     private Integer unreadCount;
+
+    public boolean isWhatsApp() {
+        return platform == null || ChannelWaAccountDO.PLATFORM_WHATSAPP.equals(platform);
+    }
+
+    /** 展示用的联系人：昵称，没有昵称时 WhatsApp 显示号码，其他平台显示平台名 */
+    public String contactLabel() {
+        if (profileName != null && !profileName.isBlank()) {
+            return profileName;
+        }
+        if (isWhatsApp()) {
+            return "+" + waId;
+        }
+        return (ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(platform) ? "Instagram 用户 " : "Facebook 用户 ")
+                + (waId == null ? "" : waId.substring(Math.max(0, waId.length() - 4)));
+    }
+
+    /** 平台中文名，用于提示和备注 */
+    public String platformLabel() {
+        if (isWhatsApp()) {
+            return "WhatsApp";
+        }
+        return ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(platform) ? "Instagram" : "Facebook Messenger";
+    }
 
 }

@@ -136,7 +136,7 @@ public class ChannelNotifyService {
             return null;
         }
         ChannelWaAccountDO a = channelWaAccountMapper.selectById(c.getAccountId());
-        return new Target(StrUtil.blankToDefault(c.getProfileName(), "+" + c.getWaId()), a == null ? null : a.getUserId(),
+        return new Target(c.contactLabel(), a == null ? null : a.getUserId(),
                 "/channel-msg/im?conversationId=" + c.getId());
     }
 

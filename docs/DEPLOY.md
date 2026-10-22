@@ -28,6 +28,7 @@
 | `CGCH_API_ENCRYPT_*` | 否 | 接口加密，默认关闭；开启时前后端必须使用同一对密钥 |
 | `CGCH_OAUTH_GOOGLE_CLIENT_ID` / `_SECRET` | 否 | Gmail 授权登录，见第六节「邮箱 OAuth」 |
 | `CGCH_OAUTH_MICROSOFT_CLIENT_ID` / `_SECRET` | 否 | Outlook / Microsoft 365 授权登录 |
+| `CGCH_META_APP_ID` / `CGCH_META_APP_SECRET` / `CGCH_META_WEBHOOK_VERIFY_TOKEN` | 否 | Facebook 主页、Instagram 私信的「Facebook 登录授权」，见第六节 |
 
 ## 三、方式一：Docker Compose（推荐）
 
@@ -115,6 +116,19 @@ java -Xms512m -Xmx1g -jar backend/yudao-server/target/yudao-server.jar --spring.
 4. 填到 `CGCH_OAUTH_MICROSOFT_CLIENT_ID` / `CGCH_OAUTH_MICROSOFT_CLIENT_SECRET`。企业邮箱还需管理员在 Exchange 中为该邮箱开启 IMAP 和「经过身份验证的 SMTP」。
 
 `PUBLIC_BASE_URL` 必须是用户浏览器能访问到的地址，并与上面登记的重定向 URI 一致。
+
+### Facebook 主页 / Instagram 私信（可选）
+
+不配置也能手动接入（在渠道管理里填主页编号、主页令牌和应用密钥）。配置后业务员点「Facebook 登录授权」，勾选主页即可一次接入这些主页的私信，以及主页关联的 Instagram 专业账号的私信。
+
+1. 打开 developers.facebook.com → 我的应用 → 创建应用，类型选「商务」，添加 **Messenger** 和 **Instagram** 产品，以及 **Facebook 登录**。
+2. Facebook 登录 → 设置 → 有效 OAuth 跳转 URI 填 `https://你的域名/admin-api/channel/meta/oauth/callback`。
+3. Webhooks：
+   - 对象选 **Page**，回调地址填 `https://你的域名/admin-api/channel/meta/webhook`，验证令牌填 `CGCH_META_WEBHOOK_VERIFY_TOKEN` 的值（自己生成一串随机字符），订阅 `messages`、`messaging_postbacks`、`message_echoes`、`message_deliveries`、`message_reads`。
+   - 对象选 **Instagram**，同样的回调地址和验证令牌，订阅 `messages`。
+4. 应用设置 → 基本：把应用编号和应用密钥填到 `CGCH_META_APP_ID` / `CGCH_META_APP_SECRET`。
+5. **应用审核**：给客户（应用管理员以外的人）使用前，需要在「应用审核」里申请 `pages_messaging`、`pages_manage_metadata`、`pages_show_list`、`instagram_basic`、`instagram_manage_messages`、`business_management` 权限并完成商家验证。审核通过前，只有应用里添加的管理员、开发者、测试人员能授权。
+6. 平台规则：客户来信后 24 小时内可以任意回复；超过 24 小时不能再主动发消息（Facebook / Instagram 没有 WhatsApp 那样的模板消息），系统会提示等客户再次来信。
 
 ## 七、安全检查清单
 

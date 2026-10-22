@@ -250,7 +250,7 @@ public class ChannelReactivateService {
                 continue;
             }
             Optional<ChannelWaAccountDO> a = channelWaAccountMapper.selectListByUserId(uid).stream()
-                    .filter(x -> Boolean.TRUE.equals(x.getEnabled())).findFirst();
+                    .filter(x -> Boolean.TRUE.equals(x.getEnabled()) && x.isWhatsApp()).findFirst(); // 只有 WhatsApp 能主动发模板
             if (a.isPresent()) {
                 return a.get();
             }

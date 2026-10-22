@@ -19,11 +19,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   leadRules: [];
   mail: [provider: string];
+  meta: [platform: 'instagram' | 'messenger'];
   oauth: [provider: string];
   wa: [];
 }>();
 
-type Kind = 'lead' | 'mail' | 'soon' | 'wa';
+type Kind = 'lead' | 'mail' | 'meta' | 'soon' | 'wa';
 interface Item {
   key: string;
   name: string;
@@ -34,6 +35,8 @@ interface Item {
   /** 邮箱：对应的 provider；可 OAuth 的还有 oauth 服务商 */
   provider?: string;
   oauth?: string;
+  /** Meta 账号的平台 */
+  platform?: 'instagram' | 'messenger';
   soonText?: string;
 }
 
@@ -69,8 +72,8 @@ const GROUPS: { title: string; items: Item[] }[] = [
   {
     title: '社交媒体',
     items: [
-      { key: 'facebook', name: 'Facebook 主页', abbr: 'FB', color: '#1877f2', desc: '主页私信（Messenger）', kind: 'soon', soonText: '需 Meta 应用审核' },
-      { key: 'instagram', name: 'Instagram', abbr: 'IG', color: '#c13584', desc: '专业账号私信', kind: 'soon', soonText: '需 Meta 应用审核' },
+      { key: 'facebook', name: 'Facebook 主页', abbr: 'FB', color: '#1877f2', desc: '主页私信（Messenger），AI 可自动回复', kind: 'meta', platform: 'messenger' },
+      { key: 'instagram', name: 'Instagram', abbr: 'IG', color: '#c13584', desc: '专业账号私信，需关联 Facebook 主页', kind: 'meta', platform: 'instagram' },
       { key: 'tiktok', name: 'TikTok', abbr: 'TT', color: '#111827', desc: '企业号私信', kind: 'soon', soonText: '需平台开通权限' },
       { key: 'youtube', name: 'YouTube', abbr: 'YT', color: '#e00000', desc: '频道评论', kind: 'soon', soonText: '需 Google 应用审核' },
     ],
@@ -80,7 +83,12 @@ const GROUPS: { title: string; items: Item[] }[] = [
 /** 已连接的账号名称列表 */
 function connected(item: Item): string[] {
   if (item.kind === 'wa') {
-    return props.waAccounts.map((a) => a.displayPhone || a.name || a.phoneNumberId);
+    return props.waAccounts
+      .filter((a) => !a.platform || a.platform === 'whatsapp')
+      .map((a) => a.displayPhone || a.name || a.phoneNumberId);
+  }
+  if (item.kind === 'meta') {
+    return props.waAccounts.filter((a) => a.platform === item.platform).map((a) => a.displayPhone || a.name || a.phoneNumberId);
   }
   if (item.kind === 'mail') {
     return props.mailAccounts.filter((a) => (a.provider || 'custom') === item.provider).map((a) => a.email);
@@ -141,6 +149,12 @@ function canOAuth(item: Item) {
               </Button>
             </template>
             <Button v-else-if="item.kind === 'wa'" size="small" type="link" @click="emit('wa')">连接新账号</Button>
+            <template v-else-if="item.kind === 'meta'">
+              <Button v-if="oauthProviders.includes('meta')" size="small" type="primary" ghost @click="emit('meta', item.platform!)">
+                授权登录
+              </Button>
+              <Button v-else size="small" type="link" @click="emit('meta', item.platform!)">连接新账号</Button>
+            </template>
             <Button v-else-if="item.kind === 'lead'" size="small" type="link" @click="emit('leadRules')">设置</Button>
             <Button v-else size="small" type="link" disabled>敬请期待</Button>
           </div>

@@ -14,7 +14,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.util.HtmlUtils;
 
 import java.util.List;
 
@@ -71,12 +70,7 @@ public class ChannelMailOAuthController {
             title = "邮箱授权失败";
             detail = "服务器处理授权时出错，请稍后重试";
         }
-        String t = HtmlUtils.htmlEscape(title), d = HtmlUtils.htmlEscape(StrUtil.nullToEmpty(detail));
-        return "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\">"
-                + "<title>" + t + "</title></head><body style=\"font-family:system-ui,sans-serif;padding:48px;text-align:center\">"
-                + "<h2 style=\"color:" + (ok ? "#1a7f37" : "#cf222e") + "\">" + t + "</h2><p>" + d + "</p>"
-                + "<script>try{window.opener&&window.opener.postMessage({type:'cgch-mail-oauth',ok:" + ok + "},'*');"
-                + (ok ? "setTimeout(function(){window.close()},1500);" : "") + "}catch(e){}</script></body></html>";
+        return OAuthResultPage.html("cgch-mail-oauth", ok, title, detail);
     }
 
 }
