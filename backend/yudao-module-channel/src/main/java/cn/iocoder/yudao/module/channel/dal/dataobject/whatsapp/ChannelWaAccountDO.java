@@ -23,6 +23,14 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ChannelWaAccountDO extends TenantBaseDO {
 
+    /** 平台：WhatsApp Cloud API、Facebook 主页私信（Messenger）、Instagram 私信 */
+    public static final String PLATFORM_WHATSAPP = "whatsapp";
+    public static final String PLATFORM_MESSENGER = "messenger";
+    public static final String PLATFORM_INSTAGRAM = "instagram";
+    /** 接入方式：手动填写令牌，或通过 Facebook 登录授权 */
+    public static final String AUTH_MANUAL = "manual";
+    public static final String AUTH_OAUTH = "oauth";
+
     /**
      * 编号
      */
@@ -37,7 +45,15 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      */
     private String name;
     /**
-     * Meta 的 Phone number ID
+     * 平台：whatsapp（默认）、messenger、instagram
+     */
+    private String platform;
+    /**
+     * 接入方式：manual 手动填写令牌（默认）、oauth 通过 Facebook 登录授权
+     */
+    private String authType;
+    /**
+     * 平台账号编号：WhatsApp 为 Phone number ID，Messenger 为主页编号（Page ID），Instagram 为专业账号编号
      */
     private String phoneNumberId;
     /**
@@ -45,7 +61,7 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      */
     private String wabaId;
     /**
-     * 号码，例如 +86 138 0000 0000，展示用
+     * 展示名称：WhatsApp 为号码（如 +86 138 0000 0000），Messenger 为主页名称，Instagram 为 @用户名
      */
     private String displayPhone;
     /**
@@ -78,5 +94,9 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      * 最近一次收到 Webhook 的时间
      */
     private LocalDateTime lastWebhookTime;
+
+    public boolean isWhatsApp() {
+        return platform == null || PLATFORM_WHATSAPP.equals(platform);
+    }
 
 }

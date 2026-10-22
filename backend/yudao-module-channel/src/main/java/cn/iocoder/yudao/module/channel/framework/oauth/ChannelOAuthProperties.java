@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 邮箱 OAuth 授权（Gmail、Outlook / Microsoft 365）的应用配置。
+ * OAuth 授权的应用配置：邮箱（Gmail、Outlook / Microsoft 365）与 Meta（Facebook 主页、Instagram 私信）。
  * client-id / client-secret 来自在 Google Cloud Console、Microsoft Entra 注册的应用，
  * 通过环境变量 CGCH_OAUTH_GOOGLE_CLIENT_ID 等提供；未配置的服务商不显示授权按钮。
  */
@@ -19,6 +19,30 @@ public class ChannelOAuthProperties {
 
     private Provider google = Provider.google();
     private Provider microsoft = Provider.microsoft();
+    private Meta meta = new Meta();
+
+    /**
+     * Meta 应用（developers.facebook.com）：Facebook 登录授权主页与 Instagram，并接收应用级 Webhook。
+     * 回调为 {redirectBase}/admin-api/channel/meta/oauth/callback，Webhook 为 {redirectBase}/admin-api/channel/meta/webhook。
+     */
+    @Data
+    public static class Meta {
+        /** 应用编号（App ID） */
+        private String clientId = "";
+        /** 应用密钥（App Secret），同时用于校验 Webhook 签名 */
+        private String clientSecret = "";
+        /** 在 Meta 后台配置 Webhook 时填写的验证令牌 */
+        private String verifyToken = "";
+        private String dialogUrl = "https://www.facebook.com/v24.0/dialog/oauth";
+        private String apiBase = "https://graph.facebook.com";
+        private String apiVersion = "v24.0";
+        private String scope = "pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement,"
+                + "instagram_basic,instagram_manage_messages,business_management";
+
+        public boolean configured() {
+            return clientId != null && !clientId.isBlank() && clientSecret != null && !clientSecret.isBlank();
+        }
+    }
 
     @Data
     public static class Provider {

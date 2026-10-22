@@ -21,7 +21,8 @@ import java.util.HexFormat;
 import java.util.List;
 
 /**
- * Meta WhatsApp Cloud API（Graph API）的最小封装：发消息、查模板、查号码信息、校验 Webhook 签名。
+ * Meta Graph API 的最小封装：WhatsApp Cloud API（发消息、查模板、查号码信息），
+ * Messenger 平台（Facebook 主页私信、Instagram 私信）的收发，以及 Webhook 签名校验。
  */
 public final class WaGraphClient {
 
@@ -48,11 +49,13 @@ public final class WaGraphClient {
         return base + "/" + version + "/" + path;
     }
 
-    private static JsonNode call(ChannelWaAccountDO a, String method, String path, JsonNode body) {
+    static JsonNode call(ChannelWaAccountDO a, String method, String path, JsonNode body) {
         try {
             HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url(a, path)))
-                    .timeout(Duration.ofSeconds(30))
-                    .header("Authorization", "Bearer " + a.getAccessToken());
+                    .timeout(Duration.ofSeconds(30));
+            if (StrUtil.isNotBlank(a.getAccessToken())) {
+                b.header("Authorization", "Bearer " + a.getAccessToken());
+            }
             if (body != null) {
                 b.header("Content-Type", "application/json")
                         .method(method, HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)));
@@ -237,6 +240,131 @@ public final class WaGraphClient {
             return "audio";
         }
         return "document";
+    }
+
+    // ==================== Messenger / Instagram ====================
+
+    /** 主页或 Instagram 账号的展示名称；同时用于验证令牌是否有效 */
+    public static String getMessagingProfile(ChannelWaAccountDO a) {
+        boolean ig = ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(a.getPlatform());
+        JsonNode json = call(a, "GET", a.getPhoneNumberId() + "?fields=" + (ig ? "id,username,name" : "id,name"), null);
+        if (ig) {
+            String u = json.path("username").asText(null);
+            return StrUtil.isNotBlank(u) ? "@" + u : json.path("name").asText(null);
+        }
+        return json.path("name").asText(null);
+    }
+
+    /** 客户昵称（Messenger 需要 pages_messaging 权限；拿不到时返回 null） */
+    public static String getMessagingUserName(ChannelWaAccountDO a, String userId) {
+        try {
+            if (ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(a.getPlatform())) {
+                JsonNode j = call(a, "GET", userId + "?fields=name,username", null);
+                return StrUtil.blankToDefault(j.path("name").asText(null), j.path("username").asText(null));
+            }
+            JsonNode j = call(a, "GET", userId + "?fields=first_name,last_name", null);
+            String name = (j.path("first_name").asText("") + " " + j.path("last_name").asText("")).trim();
+            return StrUtil.emptyToNull(name);
+        } catch (WaApiException e) {
+            return null;
+        }
+    }
+
+    /** 回复文本（客户来信后 24 小时内），返回消息编号 mid */
+    public static String sendMessagingText(ChannelWaAccountDO a, String recipientId, String text) {
+        ObjectNode body = JSON.createObjectNode();
+        body.putObject("recipient").put("id", recipientId);
+        body.put("messaging_type", "RESPONSE");
+        ObjectNode m = body.putObject("message");
+        m.put("text", text);
+        if (!ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(a.getPlatform())) {
+            m.put("metadata", ECHO_METADATA); // 回显事件里带回，用于识别系统自己发出的消息
+        }
+        return mid(call(a, "POST", "me/messages", body));
+    }
+
+    /** 回显事件中标记系统自己发出的消息 */
+    public static final String ECHO_METADATA = "cgch";
+
+    /**
+     * 上传并发送附件（Messenger），返回 mid。
+     *
+     * @param kind image、video、audio、file
+     */
+    public static String sendMessagingAttachment(ChannelWaAccountDO a, String recipientId, String kind,
+                                                 byte[] content, String fileName, String mimeType) {
+        ObjectNode recipient = JSON.createObjectNode().put("id", recipientId);
+        ObjectNode message = JSON.createObjectNode();
+        message.putObject("attachment").put("type", kind).putObject("payload").put("is_reusable", false);
+        java.util.LinkedHashMap<String, String> fields = new java.util.LinkedHashMap<>();
+        fields.put("recipient", recipient.toString());
+        fields.put("messaging_type", "RESPONSE");
+        fields.put("message", message.toString());
+        return mid(multipart(a, "me/messages", fields, "filedata", content, fileName, mimeType));
+    }
+
+    /** Messenger 附件类型 */
+    public static String messagingKind(String mimeType) {
+        String m = StrUtil.nullToEmpty(mimeType).toLowerCase();
+        if (m.startsWith("image/")) {
+            return "image";
+        }
+        if (m.startsWith("video/")) {
+            return "video";
+        }
+        if (m.startsWith("audio/")) {
+            return "audio";
+        }
+        return "file";
+    }
+
+    /** 订阅主页的消息推送（Facebook 登录授权后调用一次） */
+    public static void subscribePage(ChannelWaAccountDO page) {
+        call(page, "POST", page.getPhoneNumberId() + "/subscribed_apps?subscribed_fields="
+                + URLEncoder.encode("messages,messaging_postbacks,message_echoes,message_deliveries,message_reads", StandardCharsets.UTF_8), null);
+    }
+
+    private static String mid(JsonNode json) {
+        String id = json.path("message_id").asText(null);
+        if (StrUtil.isBlank(id)) {
+            throw new WaApiException("Graph API 未返回消息编号");
+        }
+        return id;
+    }
+
+    private static JsonNode multipart(ChannelWaAccountDO a, String path, java.util.Map<String, String> fields,
+                                      String fileField, byte[] content, String fileName, String mimeType) {
+        String boundary = "----cgch" + System.nanoTime();
+        try {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            for (java.util.Map.Entry<String, String> f : fields.entrySet()) {
+                out.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + f.getKey() + "\"\r\n\r\n"
+                        + f.getValue() + "\r\n").getBytes(StandardCharsets.UTF_8));
+            }
+            String safeName = StrUtil.blankToDefault(fileName, "file").replace("\"", "");
+            out.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + fileField + "\"; filename=\"" + safeName
+                    + "\"\r\nContent-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            out.write(content);
+            out.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+            HttpResponse<String> resp = HTTP.send(HttpRequest.newBuilder(URI.create(url(a, path)))
+                            .timeout(Duration.ofSeconds(120))
+                            .header("Authorization", "Bearer " + a.getAccessToken())
+                            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                            .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray())).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            JsonNode json = StrUtil.isBlank(resp.body()) ? JSON.createObjectNode() : JSON.readTree(resp.body());
+            if (resp.statusCode() >= 300 || json.has("error")) {
+                throw new WaApiException(json.path("error").path("message").asText("上传失败：HTTP " + resp.statusCode()));
+            }
+            return json;
+        } catch (WaApiException e) {
+            throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new WaApiException("请求被中断");
+        } catch (Exception e) {
+            throw new WaApiException("上传失败：" + StrUtil.blankToDefault(e.getMessage(), e.getClass().getSimpleName()));
+        }
     }
 
     private static String messageId(JsonNode json) {

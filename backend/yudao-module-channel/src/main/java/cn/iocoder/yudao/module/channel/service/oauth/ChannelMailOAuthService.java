@@ -62,6 +62,9 @@ public class ChannelMailOAuthService {
         if (channelOAuthProperties.getMicrosoft().configured()) {
             l.add("microsoft");
         }
+        if (channelOAuthProperties.getMeta().configured()) {
+            l.add("meta");
+        }
         return l;
     }
 

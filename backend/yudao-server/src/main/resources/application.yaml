@@ -385,3 +385,7 @@ cgch:
     microsoft:
       client-id: ${CGCH_OAUTH_MICROSOFT_CLIENT_ID:}
       client-secret: ${CGCH_OAUTH_MICROSOFT_CLIENT_SECRET:}
+    meta: # Facebook 主页、Instagram 私信（developers.facebook.com 创建的应用）
+      client-id: ${CGCH_META_APP_ID:}
+      client-secret: ${CGCH_META_APP_SECRET:}
+      verify-token: ${CGCH_META_WEBHOOK_VERIFY_TOKEN:}

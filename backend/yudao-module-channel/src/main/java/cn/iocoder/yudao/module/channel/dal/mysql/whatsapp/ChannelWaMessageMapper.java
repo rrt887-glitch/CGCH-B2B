@@ -14,6 +14,16 @@ public interface ChannelWaMessageMapper extends BaseMapperX<ChannelWaMessageDO> 
         return selectOne(ChannelWaMessageDO::getAccountId, accountId, ChannelWaMessageDO::getWaMessageId, waMessageId);
     }
 
+    /** Messenger / Instagram 已读回执：把该时间点之前发出、尚未已读的消息标为已读 */
+    default int markReadBefore(Long conversationId, java.time.LocalDateTime watermark) {
+        return update(new ChannelWaMessageDO().setStatus(ChannelWaMessageDO.STATUS_READ),
+                new LambdaQueryWrapperX<ChannelWaMessageDO>()
+                        .eq(ChannelWaMessageDO::getConversationId, conversationId)
+                        .eq(ChannelWaMessageDO::getDirection, ChannelWaMessageDO.DIRECTION_OUT)
+                        .in(ChannelWaMessageDO::getStatus, ChannelWaMessageDO.STATUS_SENT, ChannelWaMessageDO.STATUS_DELIVERED)
+                        .le(ChannelWaMessageDO::getMessageTime, watermark));
+    }
+
     /** 会话中最近的 limit 条消息，按时间正序返回；beforeId 用于向上翻页 */
     default List<ChannelWaMessageDO> selectRecent(Long conversationId, Long beforeId, int limit) {
         List<ChannelWaMessageDO> list = selectList(new LambdaQueryWrapperX<ChannelWaMessageDO>()

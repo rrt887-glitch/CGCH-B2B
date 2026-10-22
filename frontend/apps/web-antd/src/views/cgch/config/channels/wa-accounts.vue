@@ -1,10 +1,11 @@
 <script lang="ts" setup>
 /**
- * 渠道管理中的 WhatsApp 部分：绑定 Meta 官方 Cloud API 号码，并给出回调地址配置说明。
+ * 渠道管理中的 Meta 即时通讯账号：WhatsApp（官方 Cloud API）、Facebook 主页私信、Instagram 私信。
+ * Facebook / Instagram 推荐用「Facebook 登录授权」一键接入；也可以手动填写主页令牌。
  */
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
 
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 
 import {
   Alert,
@@ -28,7 +29,19 @@ import {
   TypographyParagraph,
 } from 'ant-design-vue';
 
+import { getMetaAuthorizeUrl } from '#/api/channel/oauth';
 import { createWaAccount, deleteWaAccount, getWaAccountList, updateWaAccount } from '#/api/channel/whatsapp';
+
+type Platform = 'instagram' | 'messenger' | 'whatsapp';
+
+const props = defineProps<{ metaOAuth?: boolean }>();
+
+const PLATFORM: Record<Platform, { color: string; idLabel: string; label: string }> = {
+  whatsapp: { label: 'WhatsApp', color: 'green', idLabel: 'Phone number ID' },
+  messenger: { label: 'Facebook 主页', color: 'blue', idLabel: '主页编号 Page ID' },
+  instagram: { label: 'Instagram', color: 'magenta', idLabel: 'Instagram 专业账号编号' },
+};
+const platformOf = (a: ChannelWaApi.Account): Platform => (a.platform as Platform) || 'whatsapp';
 
 const loading = ref(false);
 const accounts = ref<ChannelWaApi.Account[]>([]);
@@ -36,7 +49,7 @@ const origin = window.location.origin;
 const webhookUrl = (a: ChannelWaApi.Account) => `${origin}${a.webhookPath}`;
 
 const columns = [
-  { title: '号码', key: 'phone' },
+  { title: '账号', key: 'phone' },
   { title: '启用', key: 'enabled', width: 80 },
   { title: '回调状态', key: 'webhook', width: 200 },
   { title: '操作', key: 'action', width: 200 },
@@ -54,6 +67,7 @@ async function load() {
 const open = ref(false);
 const saving = ref(false);
 const emptyForm = (): ChannelWaApi.Account => ({
+  platform: 'whatsapp',
   name: '',
   phoneNumberId: '',
   wabaId: '',
@@ -65,15 +79,17 @@ const emptyForm = (): ChannelWaApi.Account => ({
   enabled: true,
 });
 const form = reactive<ChannelWaApi.Account>(emptyForm());
+const formPlatform = computed(() => platformOf(form));
 
-function openForm(row?: ChannelWaApi.Account) {
-  Object.assign(form, emptyForm(), row ? { ...row, accessToken: '', appSecret: '' } : {});
+function openForm(row?: ChannelWaApi.Account, platform: Platform = 'whatsapp') {
+  Object.assign(form, emptyForm(), row ? { ...row, accessToken: '', appSecret: '' } : { platform });
   open.value = true;
 }
 
 async function save() {
-  if (!form.phoneNumberId || !form.wabaId) {
-    message.warning('请填写 Phone number ID 和 WhatsApp Business Account ID');
+  const wa = formPlatform.value === 'whatsapp';
+  if (!form.phoneNumberId || (wa && !form.wabaId)) {
+    message.warning(wa ? '请填写 Phone number ID 和 WhatsApp Business Account ID' : `请填写${PLATFORM[formPlatform.value].idLabel}`);
     return;
   }
   if (!form.id && (!form.accessToken || !form.appSecret)) {
@@ -104,19 +120,74 @@ async function remove(row: ChannelWaApi.Account) {
 
 const guide = ref<ChannelWaApi.Account>();
 
-onMounted(load);
+// ===== Facebook 登录授权 =====
+async function startMetaOAuth() {
+  const win = window.open('about:blank', 'cgch-meta-oauth', 'width=600,height=760');
+  try {
+    const url = await getMetaAuthorizeUrl();
+    if (win) {
+      win.location.href = url;
+    } else {
+      window.location.href = url;
+    }
+  } catch (error) {
+    win?.close();
+    throw error;
+  }
+}
 
-defineExpose({ openForm, accounts });
+function onMessage(e: MessageEvent) {
+  if (e.data?.type !== 'cgch-meta-oauth') return;
+  if (e.data.ok) {
+    message.success('Facebook 授权完成，已接入主页和关联的 Instagram');
+    load();
+  } else {
+    message.error('Facebook 授权失败，请查看授权窗口中的说明');
+  }
+}
+
+/** 渠道总表点击 Facebook / Instagram：已配置 Meta 应用时走授权，否则手动填写 */
+function connect(platform: Platform) {
+  if (platform !== 'whatsapp' && props.metaOAuth) {
+    startMetaOAuth();
+  } else {
+    openForm(undefined, platform);
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('message', onMessage);
+  load();
+});
+onBeforeUnmount(() => window.removeEventListener('message', onMessage));
+
+defineExpose({ openForm, connect, accounts });
 </script>
 
 <template>
-  <Card title="WhatsApp（官方 Cloud API）" :bordered="false" class="mt-4">
-    <template #extra><Button type="primary" @click="openForm()">绑定号码</Button></template>
+  <Card title="WhatsApp / Facebook / Instagram" :bordered="false" class="mt-4">
+    <template #extra>
+      <Space>
+        <Button v-if="metaOAuth" @click="startMetaOAuth">Facebook 登录授权</Button>
+        <Button type="primary" @click="openForm()">绑定 WhatsApp</Button>
+      </Space>
+    </template>
+    <Alert
+      v-if="metaOAuth"
+      class="mb-4"
+      type="info"
+      show-icon
+      message="点「Facebook 登录授权」，登录后勾选要接入的主页，一次即可接入这些主页的私信，以及主页关联的 Instagram 专业账号的私信。"
+    />
     <Table :columns="columns" :data-source="accounts" :loading="loading" :pagination="false" row-key="id">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'phone'">
-          <div class="font-medium">{{ record.displayPhone || record.phoneNumberId }}</div>
-          <div class="text-xs text-gray-500">{{ record.name }} · Phone number ID {{ record.phoneNumberId }}</div>
+          <div class="flex items-center gap-2">
+            <Tag :color="PLATFORM[platformOf(record)].color" class="m-0">{{ PLATFORM[platformOf(record)].label }}</Tag>
+            <span class="font-medium">{{ record.displayPhone || record.phoneNumberId }}</span>
+            <Tag v-if="record.authType === 'oauth'" class="m-0">授权接入</Tag>
+          </div>
+          <div class="text-xs text-gray-500">{{ record.name }} · {{ PLATFORM[platformOf(record)].idLabel }} {{ record.phoneNumberId }}</div>
         </template>
         <template v-else-if="column.key === 'enabled'">
           <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record, !!v)" />
@@ -129,33 +200,59 @@ defineExpose({ openForm, accounts });
         <template v-else-if="column.key === 'action'">
           <Space>
             <Button size="small" type="link" @click="guide = record">回调配置</Button>
-            <Button size="small" type="link" @click="openForm(record)">修改</Button>
+            <Button v-if="record.authType !== 'oauth'" size="small" type="link" @click="openForm(record)">修改</Button>
             <Popconfirm title="解绑后会话与消息记录也会删除，确定吗？" @confirm="remove(record)">
               <Button size="small" type="link" danger>解绑</Button>
             </Popconfirm>
           </Space>
         </template>
       </template>
-      <template #emptyText>还没有绑定 WhatsApp 号码</template>
+      <template #emptyText>还没有绑定账号</template>
     </Table>
 
-    <Modal v-model:open="open" :title="form.id ? '修改 WhatsApp 号码' : '绑定 WhatsApp 号码'" :width="640" :confirm-loading="saving" @ok="save">
+    <Modal
+      v-model:open="open"
+      :title="`${form.id ? '修改' : '绑定'}${PLATFORM[formPlatform].label}${formPlatform === 'whatsapp' ? ' 号码' : ' 账号'}`"
+      :width="640"
+      :confirm-loading="saving"
+      @ok="save"
+    >
       <Alert
+        v-if="formPlatform === 'whatsapp'"
         class="mb-4"
         type="info"
         show-icon
         message="需要先在 Meta 开发者后台创建应用并添加 WhatsApp 产品。下面的信息都可以在「WhatsApp → API 设置」和「应用设置 → 基本」里找到。"
       />
+      <Alert
+        v-else
+        class="mb-4"
+        type="info"
+        show-icon
+        :message="
+          formPlatform === 'messenger'
+            ? '手动接入：在 Meta 开发者后台的应用里添加 Messenger 产品，生成主页访问令牌（需 pages_messaging 权限）。推荐让管理员配置 Meta 应用后使用「Facebook 登录授权」。'
+            : '手动接入：Instagram 需是专业账号并关联 Facebook 主页；访问令牌填关联主页的主页令牌（需 instagram_manage_messages 权限）。'
+        "
+      />
       <Form layout="vertical">
         <Row :gutter="16">
           <Col :span="12"><FormItem label="显示名称"><Input v-model:value="form.name" placeholder="例如：销售一部" /></FormItem></Col>
-          <Col :span="12"><FormItem label="Phone number ID" required><Input v-model:value="form.phoneNumberId" /></FormItem></Col>
-          <Col :span="12"><FormItem label="WhatsApp Business Account ID" required><Input v-model:value="form.wabaId" /></FormItem></Col>
+          <Col :span="12">
+            <FormItem :label="PLATFORM[formPlatform].idLabel" required><Input v-model:value="form.phoneNumberId" /></FormItem>
+          </Col>
+          <Col v-if="formPlatform === 'whatsapp'" :span="12">
+            <FormItem label="WhatsApp Business Account ID" required><Input v-model:value="form.wabaId" /></FormItem>
+          </Col>
           <Col :span="12">
             <FormItem label="Webhook 验证令牌（不填自动生成）"><Input v-model:value="form.verifyToken" /></FormItem>
           </Col>
           <Col :span="24">
-            <FormItem :label="form.id ? '访问令牌（不改请留空）' : '访问令牌'" :required="!form.id" help="建议用「系统用户」生成的永久令牌，临时令牌 24 小时后失效">
+            <FormItem
+              :label="form.id ? '访问令牌（不改请留空）' : formPlatform === 'whatsapp' ? '访问令牌' : '主页访问令牌'"
+              :required="!form.id"
+              :help="formPlatform === 'whatsapp' ? '建议用「系统用户」生成的永久令牌，临时令牌 24 小时后失效' : '建议用长期令牌换取的主页令牌，不会过期'"
+            >
               <InputPassword v-model:value="form.accessToken" autocomplete="new-password" />
             </FormItem>
           </Col>
@@ -177,9 +274,21 @@ defineExpose({ openForm, accounts });
     </Modal>
 
     <Modal :open="!!guide" title="在 Meta 后台配置回调" :footer="null" :width="640" @cancel="guide = undefined">
-      <template v-if="guide">
+      <template v-if="guide && guide.authType === 'oauth'">
+        <p class="text-sm">
+          这个账号通过 Facebook 登录授权接入，系统已自动订阅主页的消息推送。管理员只需在 Meta 应用里配置一次应用级回调（所有授权接入的主页和 Instagram 共用）：
+        </p>
+        <TypographyParagraph copyable class="!mb-2 rounded bg-gray-100 px-2 py-1 font-mono">{{ webhookUrl(guide) }}</TypographyParagraph>
+        <p class="text-xs text-gray-500">
+          验证令牌为服务器环境变量 CGCH_META_WEBHOOK_VERIFY_TOKEN 的值。Messenger 订阅 messages、messaging_postbacks、message_echoes、message_deliveries、message_reads；Instagram 订阅 messages。
+        </p>
+      </template>
+      <template v-else-if="guide">
         <ol class="list-decimal space-y-3 pl-5 text-sm">
-          <li>打开 Meta 开发者后台 → 你的应用 → WhatsApp → 配置。</li>
+          <li>
+            打开 Meta 开发者后台 → 你的应用 →
+            {{ platformOf(guide) === 'whatsapp' ? 'WhatsApp → 配置' : platformOf(guide) === 'messenger' ? 'Messenger → Messenger API 设置' : 'Instagram → API 设置' }}。
+          </li>
           <li>
             回调地址填写：
             <TypographyParagraph copyable class="!mb-0 rounded bg-gray-100 px-2 py-1 font-mono">{{ webhookUrl(guide) }}</TypographyParagraph>
@@ -189,8 +298,9 @@ defineExpose({ openForm, accounts });
             验证令牌填写：
             <TypographyParagraph copyable class="!mb-0 rounded bg-gray-100 px-2 py-1 font-mono">{{ guide.verifyToken }}</TypographyParagraph>
           </li>
-          <li>点击「验证并保存」，然后在 Webhook 字段里订阅 <b>messages</b>。</li>
-          <li>用手机给这个号码发一条 WhatsApp，几秒后在「消息工作台」就能看到。</li>
+          <li v-if="platformOf(guide) === 'whatsapp'">点击「验证并保存」，然后在 Webhook 字段里订阅 <b>messages</b>。</li>
+          <li v-else>点击「验证并保存」，订阅 <b>messages</b>、<b>messaging_postbacks</b>、<b>message_echoes</b>、<b>message_reads</b>，并把主页添加到订阅列表。</li>
+          <li>用手机给这个账号发一条消息，几秒后在「消息工作台」就能看到。</li>
         </ol>
       </template>
     </Modal>

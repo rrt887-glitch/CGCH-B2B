@@ -9,6 +9,11 @@
 - POST /v1/chat/completions                模拟 OpenAI 兼容的大模型，按规则返回固定回答
 - POST /v1/embeddings                      模拟向量模型：同义词落在同一「概念」维度上，便于验证语义检索
 - GET  /_sent、/_uploads、/_llm             查看已记录的发送、上传与大模型请求
+- GET  /{ver}/oauth/access_token           Facebook 登录：code 换用户令牌、换长期令牌
+- GET  /{ver}/me/accounts                  主页列表（带主页令牌与关联的 Instagram 账号）
+- POST /{ver}/{page_id}/subscribed_apps    订阅主页消息推送
+- POST /{ver}/me/messages                  Messenger / Instagram 发消息（JSON 或带附件的 multipart）
+- GET  /_fbsent、/_subs                     查看 Messenger 发送记录与主页订阅
 """
 import base64
 import json
@@ -25,6 +30,16 @@ SITE_HITS = []
 OAUTH = []
 EMBEDS = []
 GOOD = 'Bearer good-token'
+FB_SENT = []
+SUBS = []
+TOKENS = {GOOD, 'Bearer page-token-PAGE1', 'Bearer user-long'}
+# Graph 对象：主页、Instagram 账号、Messenger / Instagram 用户
+PROFILES = {
+    'PAGE1': {'id': 'PAGE1', 'name': 'CGCH Fan Page'},
+    'IG1': {'id': 'IG1', 'username': 'cgch_ig', 'name': 'CGCH IG'},
+    '7001': {'first_name': 'Maria', 'last_name': 'Lopez'},
+    'IGU1': {'name': 'Kenji', 'username': 'kenji_buyer'},
+}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -37,7 +52,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _auth_ok(self):
-        if self.headers.get('Authorization') != GOOD:
+        if self.headers.get('Authorization') not in TOKENS:
             self._json(401, {'error': {'message': 'Invalid OAuth access token.', 'type': 'OAuthException', 'code': 190}})
             return False
         return True
@@ -93,6 +108,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, UPLOADS)
         if path == ['_llm']:
             return self._json(200, LLM)
+        if path == ['_fbsent']:
+            return self._json(200, FB_SENT)
+        if path == ['_subs']:
+            return self._json(200, SUBS)
+        if len(path) == 3 and path[1:] == ['oauth', 'access_token']:
+            return self._fb_token()
         if not self._auth_ok():
             return
         if len(path) == 2 and path[0] == '_media':
@@ -111,6 +132,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {'data': [{
                 'name': 'hello_world', 'language': 'en_US', 'status': 'APPROVED', 'category': 'UTILITY',
                 'components': [{'type': 'BODY', 'text': 'Hi {{1}}, thanks for your inquiry.'}]}]})
+        if len(path) == 3 and path[1:] == ['me', 'accounts']:
+            if self.headers.get('Authorization') != 'Bearer user-long':
+                return self._json(401, {'error': {'message': 'Invalid OAuth access token.', 'code': 190}})
+            return self._json(200, {'data': [
+                {'id': 'PAGE1', 'name': 'CGCH Fan Page', 'access_token': 'page-token-PAGE1',
+                 'instagram_business_account': {'id': 'IG1', 'username': 'cgch_ig'}},
+                {'id': 'PAGE2', 'name': 'No Token Page'}]})
+        if len(path) == 2 and path[1] in PROFILES:
+            return self._json(200, PROFILES[path[1]])
         if len(path) == 2:
             return self._json(200, {'id': path[1], 'display_phone_number': '+86 138 0000 0000',
                                     'verified_name': 'CGCH Test', 'quality_rating': 'GREEN'})
@@ -128,6 +158,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._oauth_token(path[1], raw)
         if not self._auth_ok():
             return
+        if len(path) == 3 and path[1:] == ['me', 'messages']:
+            return self._fb_send(raw)
+        if len(path) == 3 and path[2] == 'subscribed_apps':
+            from urllib.parse import parse_qs, urlparse
+            SUBS.append({'page': path[1], 'fields': parse_qs(urlparse(self.path).query).get('subscribed_fields', [''])[0],
+                         'auth': self.headers.get('Authorization')})
+            return self._json(200, {'success': True})
         if len(path) == 3 and path[2] == 'media':
             ctype = self.headers.get('Content-Type', '')
             UPLOADS.append({'contentType': ctype, 'size': len(raw),
@@ -175,6 +212,41 @@ class Handler(BaseHTTPRequestHandler):
         EMBEDS.append({'model': body.get('model'), 'count': len(inputs)})
         self._json(200, {'object': 'list', 'data': data, 'model': body.get('model'),
                          'usage': {'prompt_tokens': tokens, 'total_tokens': tokens}})
+
+    def _fb_token(self):
+        from urllib.parse import parse_qs, urlparse
+        q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+        OAUTH.append({'provider': 'meta', **{k: q.get(k) for k in ('grant_type', 'code', 'client_id', 'redirect_uri', 'fb_exchange_token')}})
+        if q.get('client_secret') != 'metasec':
+            return self._json(400, {'error': {'message': 'Error validating client secret.', 'code': 1}})
+        if q.get('grant_type') == 'fb_exchange_token':
+            if q.get('fb_exchange_token') != 'user-short':
+                return self._json(400, {'error': {'message': 'Invalid token', 'code': 190}})
+            return self._json(200, {'access_token': 'user-long', 'token_type': 'bearer', 'expires_in': 5184000})
+        if q.get('code') != 'good-code':
+            return self._json(400, {'error': {'message': 'This authorization code has expired.', 'code': 100}})
+        return self._json(200, {'access_token': 'user-short', 'token_type': 'bearer', 'expires_in': 3600})
+
+    def _fb_send(self, raw):
+        auth = self.headers.get('Authorization')
+        ctype = self.headers.get('Content-Type', '')
+        if ctype.startswith('multipart/'):
+            rec = {'multipart': True, 'auth': auth}
+            for part in raw.split(b'--' + ctype.split('boundary=')[1].encode()):
+                if b'name="' not in part:
+                    continue
+                name = part.split(b'name="')[1].split(b'"')[0].decode()
+                value = part.split(b'\r\n\r\n', 1)[1].rsplit(b'\r\n', 1)[0]
+                if b'filename="' in part:
+                    rec['fileName'] = part.split(b'filename="')[1].split(b'"')[0].decode()
+                    rec['size'] = len(value)
+                else:
+                    rec[name] = json.loads(value) if value[:1] in (b'{', b'[') else value.decode()
+        else:
+            rec = dict(json.loads(raw or b'{}'), auth=auth)
+        FB_SENT.append(rec)
+        rid = (rec.get('recipient') or {}).get('id')
+        return self._json(200, {'recipient_id': rid, 'message_id': f'm_OUT{len(FB_SENT)}'})
 
     def _oauth_token(self, provider, raw):
         from urllib.parse import parse_qs

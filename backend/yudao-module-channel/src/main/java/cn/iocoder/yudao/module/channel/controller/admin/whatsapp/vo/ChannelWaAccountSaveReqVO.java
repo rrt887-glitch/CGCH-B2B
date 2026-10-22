@@ -16,13 +16,16 @@ public class ChannelWaAccountSaveReqVO {
     @Size(max = 64)
     private String name;
 
-    @Schema(description = "Phone number ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "123456789012345")
-    @NotBlank(message = "Phone number ID 不能为空")
+    @Schema(description = "平台账号编号：WhatsApp 为 Phone number ID，Messenger 为 Page ID，Instagram 为专业账号编号",
+            requiredMode = Schema.RequiredMode.REQUIRED, example = "123456789012345")
+    @NotBlank(message = "账号编号不能为空")
     private String phoneNumberId;
 
-    @Schema(description = "WhatsApp Business Account ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "987654321098765")
-    @NotBlank(message = "WhatsApp Business Account ID 不能为空")
+    @Schema(description = "WhatsApp Business Account ID（仅 WhatsApp 必填）", example = "987654321098765")
     private String wabaId;
+
+    @Schema(description = "平台：whatsapp（默认）、messenger（Facebook 主页私信）、instagram；创建后不能修改", example = "whatsapp")
+    private String platform;
 
     @Schema(description = "访问令牌；修改时不填表示不变")
     private String accessToken;

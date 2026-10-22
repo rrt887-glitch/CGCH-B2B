@@ -168,7 +168,7 @@ public class ChannelAiReportService {
                     : StrUtil.blankToDefault(m.getFromName(), m.getFromAddress()) + " · " + StrUtil.nullToEmpty(m.getSubject());
         }
         ChannelWaConversationDO c = channelWaConversationMapper.selectById(d.getRefId());
-        return c == null ? "WhatsApp #" + d.getRefId() : StrUtil.blankToDefault(c.getProfileName(), "+" + c.getWaId());
+        return c == null ? "WhatsApp #" + d.getRefId() : c.contactLabel();
     }
 
     /** 同一对象只保留最近一次没命中的问题；之后又命中了资料的（已补上）不算缺口。最多 LIST_LIMIT 条 */

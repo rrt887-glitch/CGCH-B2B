@@ -12,6 +12,12 @@ public class ChannelWaAccountRespVO {
     private Long id;
     private String name;
     private String phoneNumberId;
+
+    @Schema(description = "平台：whatsapp、messenger、instagram")
+    private String platform;
+
+    @Schema(description = "接入方式：manual 手动填写令牌、oauth Facebook 登录授权")
+    private String authType;
     private String wabaId;
     private String displayPhone;
     private String verifyToken;

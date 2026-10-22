@@ -40,8 +40,9 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.*;
 
 /**
- * WhatsApp 渠道（Meta 官方 Cloud API）：号码管理、Webhook 收消息与状态、发文本与模板。
- * 号码归属于业务员本人，接口只能访问自己的号码。
+ * Meta 即时通讯渠道：WhatsApp（官方 Cloud API）、Facebook 主页私信（Messenger）、Instagram 私信。
+ * 三个平台共用账号、会话、消息表（以 platform 区分），AI 接待、线索建档、看板等能力因此直接复用。
+ * 账号归属于业务员本人，接口只能访问自己的账号。
  */
 @Service
 @Slf4j
@@ -68,6 +69,26 @@ public class ChannelWhatsAppService {
     private ChannelFileHelper fileHelper;
     @Resource
     private ApplicationEventPublisher eventPublisher;
+    @Resource
+    private cn.iocoder.yudao.module.channel.framework.oauth.ChannelOAuthProperties channelOAuthProperties;
+
+    private static final Set<String> PLATFORMS = Set.of(ChannelWaAccountDO.PLATFORM_WHATSAPP,
+            ChannelWaAccountDO.PLATFORM_MESSENGER, ChannelWaAccountDO.PLATFORM_INSTAGRAM);
+
+    private static String platformOf(String p) {
+        String v = StrUtil.blankToDefault(StrUtil.trim(p), ChannelWaAccountDO.PLATFORM_WHATSAPP);
+        if (!PLATFORMS.contains(v)) {
+            throw exception(META_PLATFORM_INVALID, v);
+        }
+        return v;
+    }
+
+    private static String platformLabel(ChannelWaAccountDO a) {
+        if (a.isWhatsApp()) {
+            return "WhatsApp";
+        }
+        return ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(a.getPlatform()) ? "Instagram" : "Facebook Messenger";
+    }
 
     // ==================== 号码 ====================
 
@@ -78,8 +99,13 @@ public class ChannelWhatsAppService {
         if (TenantUtils.executeIgnore(() -> accountMapper.selectByPhoneNumberId(req.getPhoneNumberId().trim())) != null) {
             throw exception(WA_ACCOUNT_EXISTS);
         }
+        String platform = platformOf(req.getPlatform());
+        if (ChannelWaAccountDO.PLATFORM_WHATSAPP.equals(platform) && StrUtil.isBlank(req.getWabaId())) {
+            throw exception(WA_WABA_REQUIRED);
+        }
         ChannelWaAccountDO a = BeanUtils.toBean(req, ChannelWaAccountDO.class).setId(null).setUserId(userId)
-                .setPhoneNumberId(req.getPhoneNumberId().trim()).setWabaId(req.getWabaId().trim())
+                .setPlatform(platform).setAuthType(ChannelWaAccountDO.AUTH_MANUAL)
+                .setPhoneNumberId(req.getPhoneNumberId().trim()).setWabaId(StrUtil.trimToNull(req.getWabaId()))
                 .setEnabled(req.getEnabled() == null || req.getEnabled());
         normalize(a);
         a.setDisplayPhone(fetchDisplayPhone(a));
@@ -93,13 +119,20 @@ public class ChannelWhatsAppService {
         if (same != null && !same.getId().equals(old.getId())) {
             throw exception(WA_ACCOUNT_EXISTS);
         }
+        if (old.isWhatsApp() && StrUtil.isBlank(req.getWabaId())) {
+            throw exception(WA_WABA_REQUIRED);
+        }
         ChannelWaAccountDO a = BeanUtils.toBean(req, ChannelWaAccountDO.class)
-                .setPhoneNumberId(req.getPhoneNumberId().trim()).setWabaId(req.getWabaId().trim());
+                .setPlatform(null).setAuthType(null) // 平台和接入方式创建后不能改
+                .setPhoneNumberId(req.getPhoneNumberId().trim()).setWabaId(StrUtil.trimToNull(req.getWabaId()));
         if (StrUtil.isBlank(req.getAccessToken())) {
             a.setAccessToken(null);
         }
         if (StrUtil.isBlank(req.getAppSecret())) {
             a.setAppSecret(null);
+        }
+        if (a.getWabaId() == null) {
+            a.setWabaId(null);
         }
         if (StrUtil.isBlank(req.getVerifyToken())) {
             a.setVerifyToken(null);
@@ -121,7 +154,10 @@ public class ChannelWhatsAppService {
     public List<ChannelWaAccountRespVO> listAccounts(Long userId) {
         return accountMapper.selectListByUserId(userId).stream().map(a -> {
             ChannelWaAccountRespVO vo = BeanUtils.toBean(a, ChannelWaAccountRespVO.class);
-            vo.setWebhookPath("/admin-api/channel/whatsapp/webhook/" + a.getId());
+            vo.setPlatform(StrUtil.blankToDefault(a.getPlatform(), ChannelWaAccountDO.PLATFORM_WHATSAPP));
+            vo.setAuthType(StrUtil.blankToDefault(a.getAuthType(), ChannelWaAccountDO.AUTH_MANUAL));
+            vo.setWebhookPath(ChannelWaAccountDO.AUTH_OAUTH.equals(a.getAuthType())
+                    ? "/admin-api/channel/meta/webhook" : "/admin-api/channel/whatsapp/webhook/" + a.getId());
             vo.setHasAccessToken(StrUtil.isNotBlank(a.getAccessToken()));
             vo.setHasAppSecret(StrUtil.isNotBlank(a.getAppSecret()));
             return vo;
@@ -150,10 +186,10 @@ public class ChannelWhatsAppService {
         }
     }
 
-    /** 用令牌查一次号码信息：既验证配置，又取到展示用号码 */
+    /** 用令牌查一次账号信息：既验证配置，又取到展示用号码 / 主页名称 / Instagram 用户名 */
     private static String fetchDisplayPhone(ChannelWaAccountDO a) {
         try {
-            return WaGraphClient.getDisplayPhone(a);
+            return a.isWhatsApp() ? WaGraphClient.getDisplayPhone(a) : WaGraphClient.getMessagingProfile(a);
         } catch (WaGraphClient.WaApiException e) {
             throw exception(WA_API_FAIL, e.getMessage());
         }
@@ -161,6 +197,9 @@ public class ChannelWhatsAppService {
 
     public JsonNode listTemplates(Long userId, Long accountId) {
         ChannelWaAccountDO a = validateAccount(userId, accountId);
+        if (!a.isWhatsApp()) {
+            throw exception(META_TEMPLATE_UNSUPPORTED, platformLabel(a));
+        }
         try {
             return WaGraphClient.listTemplates(a);
         } catch (WaGraphClient.WaApiException e) {
@@ -185,13 +224,21 @@ public class ChannelWhatsAppService {
      */
     public boolean handleWebhook(Long accountId, byte[] rawBody, String signature) {
         ChannelWaAccountDO a = TenantUtils.executeIgnore(() -> accountMapper.selectById(accountId));
-        if (a == null || !WaGraphClient.verifySignature(a.getAppSecret(), rawBody, signature)) {
+        if (a == null || !WaGraphClient.verifySignature(appSecret(a), rawBody, signature)) {
             return false;
         }
         if (!Boolean.TRUE.equals(a.getEnabled())) {
             return true;
         }
         JsonNode root = WaGraphClient.parse(rawBody);
+        if (!a.isWhatsApp()) {
+            for (JsonNode entry : root.path("entry")) {
+                if (a.getPhoneNumberId().equals(entry.path("id").asText())) {
+                    handleMessagingEntry(a, entry);
+                }
+            }
+            return true;
+        }
         TenantUtils.execute(a.getTenantId(), () -> {
             for (JsonNode entry : root.path("entry")) {
                 for (JsonNode change : entry.path("changes")) {
@@ -224,6 +271,217 @@ public class ChannelWhatsAppService {
         });
         return true;
     }
+
+    /** 手动接入的账号用自己填写的应用密钥；Facebook 登录授权的账号用服务器配置的 Meta 应用密钥 */
+    private String appSecret(ChannelWaAccountDO a) {
+        return StrUtil.blankToDefault(a.getAppSecret(), channelOAuthProperties.getMeta().getClientSecret());
+    }
+
+    /** 应用级 Webhook（Facebook 登录授权的主页与 Instagram 共用一个回调地址）的验证 */
+    public String verifyAppWebhook(String mode, String token, String challenge) {
+        String expected = channelOAuthProperties.getMeta().getVerifyToken();
+        if (!"subscribe".equals(mode) || StrUtil.isBlank(expected) || !expected.equals(token)) {
+            return null;
+        }
+        return challenge;
+    }
+
+    /**
+     * 应用级 Webhook：按 entry.id（主页编号或 Instagram 账号编号）找到账号再处理。
+     * 签名用服务器配置的 Meta 应用密钥校验，不对返回 false。
+     */
+    public boolean handleAppWebhook(byte[] rawBody, String signature) {
+        if (!WaGraphClient.verifySignature(channelOAuthProperties.getMeta().getClientSecret(), rawBody, signature)) {
+            return false;
+        }
+        JsonNode root = WaGraphClient.parse(rawBody);
+        String platform = "instagram".equals(root.path("object").asText()) ? ChannelWaAccountDO.PLATFORM_INSTAGRAM
+                : "page".equals(root.path("object").asText()) ? ChannelWaAccountDO.PLATFORM_MESSENGER : null;
+        if (platform == null) {
+            return true;
+        }
+        for (JsonNode entry : root.path("entry")) {
+            String id = entry.path("id").asText("");
+            ChannelWaAccountDO a = TenantUtils.executeIgnore(() -> accountMapper.selectByPhoneNumberId(id));
+            if (a == null || !platform.equals(a.getPlatform()) || !Boolean.TRUE.equals(a.getEnabled())) {
+                continue;
+            }
+            handleMessagingEntry(a, entry);
+        }
+        return true;
+    }
+
+    // ==================== Messenger / Instagram 推送 ====================
+
+    private void handleMessagingEntry(ChannelWaAccountDO a, JsonNode entry) {
+        TenantUtils.execute(a.getTenantId(), () -> {
+            for (JsonNode ev : entry.path("messaging")) {
+                try {
+                    handleMessagingEvent(a, ev);
+                } catch (Exception e) {
+                    log.warn("[handleMessagingEntry][{}] 事件处理失败 {}", a.getId(), ev, e);
+                }
+            }
+            accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setLastWebhookTime(LocalDateTime.now()));
+        });
+    }
+
+    private void handleMessagingEvent(ChannelWaAccountDO a, JsonNode ev) {
+        String sender = ev.path("sender").path("id").asText("");
+        String recipient = ev.path("recipient").path("id").asText("");
+        LocalDateTime time = epochMillis(ev.path("timestamp").asLong(0));
+        if (ev.has("delivery")) {
+            for (JsonNode mid : ev.path("delivery").path("mids")) {
+                ChannelWaMessageDO m = messageMapper.selectByWaMessageId(a.getId(), mid.asText());
+                if (m != null && ChannelWaMessageDO.STATUS_SENT.equals(m.getStatus())) {
+                    messageMapper.updateById(new ChannelWaMessageDO().setId(m.getId()).setStatus(ChannelWaMessageDO.STATUS_DELIVERED));
+                }
+            }
+            return;
+        }
+        if (ev.has("read")) {
+            ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), sender);
+            if (conv == null) {
+                return;
+            }
+            JsonNode read = ev.path("read");
+            LocalDateTime watermark = read.has("watermark") ? epochMillis(read.path("watermark").asLong()) : null;
+            if (read.has("mid")) { // Instagram 回执带的是消息编号
+                ChannelWaMessageDO m = messageMapper.selectByWaMessageId(a.getId(), read.path("mid").asText());
+                watermark = m == null ? null : m.getMessageTime();
+            }
+            if (watermark != null) {
+                messageMapper.markReadBefore(conv.getId(), watermark);
+            }
+            return;
+        }
+        JsonNode message = ev.path("message");
+        String text;
+        String mid;
+        if (ev.has("postback")) { // 点了按钮
+            JsonNode pb = ev.path("postback");
+            mid = pb.path("mid").asText("pb-" + sender + "-" + ev.path("timestamp").asText());
+            text = StrUtil.blankToDefault(pb.path("title").asText(null), pb.path("payload").asText(""));
+            saveMessagingInbound(a, sender, mid, "button", text, null, time);
+            return;
+        }
+        if (message.isMissingNode() || message.path("is_deleted").asBoolean(false)) {
+            return; // 已撤回、表情回应等不需要处理
+        }
+        mid = message.path("mid").asText("");
+        if (StrUtil.isBlank(mid)) {
+            return;
+        }
+        text = message.path("text").asText(null);
+        if (message.path("is_echo").asBoolean(false)) {
+            // 回显：主页一方发出的消息。系统自己发出的已入库；在 Meta 后台或手机上人工回复的补记为发出消息
+            if (ECHO.equals(message.path("metadata").asText(null)) || messageMapper.selectByWaMessageId(a.getId(), mid) != null) {
+                return;
+            }
+            saveMessagingOutbound(a, recipient, mid, text, message.path("attachments"), time);
+            return;
+        }
+        JsonNode atts = message.path("attachments");
+        if (atts.isArray() && !atts.isEmpty()) {
+            for (int i = 0; i < atts.size(); i++) {
+                JsonNode att = atts.get(i);
+                String type = attachmentType(att.path("type").asText("file"));
+                String url = att.path("payload").path("url").asText(null);
+                String body = i == 0 ? text : null;
+                if (body == null && !"image".equals(type) && !"video".equals(type) && !"audio".equals(type) && !"document".equals(type)) {
+                    body = attachmentText(att);
+                }
+                saveMessagingInbound(a, sender, i == 0 ? mid : mid + "#" + i, type, body, url, time);
+            }
+            return;
+        }
+        saveMessagingInbound(a, sender, mid, "text", StrUtil.blankToDefault(text, "[暂不支持的消息类型]"), null, time);
+    }
+
+    private static final String ECHO = WaGraphClient.ECHO_METADATA;
+
+    private static String attachmentType(String t) {
+        return switch (t) {
+            case "image", "video", "audio" -> t;
+            case "file" -> "document";
+            case "location" -> "location";
+            default -> t; // fallback（分享链接）、story_mention、share、template、ig_reel 等
+        };
+    }
+
+    private static String attachmentText(JsonNode att) {
+        String t = att.path("type").asText("");
+        JsonNode p = att.path("payload");
+        return switch (t) {
+            case "location" -> StrUtil.format("位置：{}, {}", p.path("coordinates").path("lat").asText(),
+                    p.path("coordinates").path("long").asText());
+            case "fallback", "share", "ig_reel", "reel" -> "分享：" + StrUtil.blankToDefault(att.path("title").asText(null),
+                    StrUtil.blankToDefault(p.path("title").asText(null), p.path("url").asText("")));
+            case "story_mention" -> "在快拍中提到了你";
+            default -> "[" + t + "]";
+        };
+    }
+
+    private ChannelWaConversationDO messagingConversation(ChannelWaAccountDO a, String userId) {
+        ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), userId);
+        if (conv == null) {
+            conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(a.getPlatform()).waId(userId)
+                    .profileName(WaGraphClient.getMessagingUserName(a, userId)).unreadCount(0).build();
+            conversationMapper.insert(conv);
+        }
+        return conv;
+    }
+
+    private void saveMessagingInbound(ChannelWaAccountDO a, String sender, String mid, String type, String text,
+                                      String mediaUrl, LocalDateTime time) {
+        if (StrUtil.isBlank(sender) || messageMapper.selectByWaMessageId(a.getId(), mid) != null) {
+            return; // Meta 会重试推送，按 mid 去重
+        }
+        ChannelWaConversationDO conv = messagingConversation(a, sender);
+        ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
+                .accountId(a.getId()).conversationId(conv.getId()).direction(ChannelWaMessageDO.DIRECTION_IN)
+                .waMessageId(mid).type(type).textBody(text).mediaId(mediaUrl)
+                .status(ChannelWaMessageDO.STATUS_RECEIVED).messageTime(time).build();
+        messageMapper.insert(msg);
+        ChannelWaConversationDO upd = new ChannelWaConversationDO().setId(conv.getId())
+                .setLastInboundTime(max(conv.getLastInboundTime(), time))
+                .setLastMessageTime(max(conv.getLastMessageTime(), time))
+                .setLastMessagePreview(preview(msg))
+                .setUnreadCount((conv.getUnreadCount() == null ? 0 : conv.getUnreadCount()) + 1);
+        if (StrUtil.isBlank(conv.getProfileName())) {
+            upd.setProfileName(WaGraphClient.getMessagingUserName(a, sender));
+        }
+        conversationMapper.updateById(upd);
+        if (mid.indexOf('#') < 0) { // 同一条消息的多个附件只触发一次
+            eventPublisher.publishEvent(new ChannelInboundEvent("whatsapp", conv.getId(), msg.getId(), a.getTenantId()));
+        }
+    }
+
+    private void saveMessagingOutbound(ChannelWaAccountDO a, String userId, String mid, String text, JsonNode atts, LocalDateTime time) {
+        if (StrUtil.isBlank(userId)) {
+            return;
+        }
+        ChannelWaConversationDO conv = messagingConversation(a, userId);
+        String type = "text";
+        String mediaUrl = null;
+        if (atts.isArray() && !atts.isEmpty()) {
+            type = attachmentType(atts.get(0).path("type").asText("file"));
+            mediaUrl = atts.get(0).path("payload").path("url").asText(null);
+        }
+        ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
+                .accountId(a.getId()).conversationId(conv.getId()).direction(ChannelWaMessageDO.DIRECTION_OUT)
+                .waMessageId(mid).type(type).textBody(text).mediaId(mediaUrl)
+                .status(ChannelWaMessageDO.STATUS_SENT).messageTime(time).aiGenerated(false).build();
+        messageMapper.insert(msg);
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
+                .setLastMessageTime(max(conv.getLastMessageTime(), time)).setLastMessagePreview(preview(msg)));
+    }
+
+    private static LocalDateTime epochMillis(long ms) {
+        return ms <= 0 ? LocalDateTime.now() : LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault());
+    }
+
+    // ==================== WhatsApp 推送 ====================
 
     private void saveInbound(ChannelWaAccountDO a, JsonNode m, String profileName) {
         String wamid = m.path("id").asText();
@@ -261,7 +519,8 @@ public class ChannelWhatsAppService {
         }
         ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), from);
         if (conv == null) {
-            conv = ChannelWaConversationDO.builder().accountId(a.getId()).waId(from).profileName(profileName)
+            conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
+                    .waId(from).profileName(profileName)
                     .customerId(findCustomerId(from)).unreadCount(0).build();
             conversationMapper.insert(conv);
         }
@@ -319,18 +578,24 @@ public class ChannelWhatsAppService {
             a = accountMapper.selectById(conv.getAccountId());
         } else {
             a = validateAccount(userId, req.getAccountId());
+            if (!a.isWhatsApp()) {
+                throw exception(META_NEW_CONVERSATION_UNSUPPORTED, platformLabel(a));
+            }
             String to = digits(req.getTo());
             if (to.length() < 8 || to.length() > 15) {
                 throw exception(WA_PHONE_INVALID);
             }
             conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), to);
             if (conv == null) {
-                conv = ChannelWaConversationDO.builder().accountId(a.getId()).waId(to)
-                        .customerId(findCustomerId(to)).unreadCount(0).build();
+                conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
+                        .waId(to).customerId(findCustomerId(to)).unreadCount(0).build();
                 conversationMapper.insert(conv);
             }
         }
         boolean template = StrUtil.isNotBlank(req.getTemplateName());
+        if (template && !a.isWhatsApp()) {
+            throw exception(META_TEMPLATE_UNSUPPORTED, platformLabel(a));
+        }
         if (!template && StrUtil.isBlank(req.getText())) {
             throw exception(WA_CONTENT_EMPTY);
         }
@@ -343,7 +608,8 @@ public class ChannelWhatsAppService {
             wamid = template
                     ? WaGraphClient.sendTemplate(a, conv.getWaId(), req.getTemplateName(),
                             StrUtil.blankToDefault(req.getTemplateLanguage(), "en_US"), req.getTemplateParams())
-                    : WaGraphClient.sendText(a, conv.getWaId(), req.getText());
+                    : a.isWhatsApp() ? WaGraphClient.sendText(a, conv.getWaId(), req.getText())
+                    : WaGraphClient.sendMessagingText(a, conv.getWaId(), req.getText());
         } catch (WaGraphClient.WaApiException e) {
             throw exception(WA_API_FAIL, e.getMessage());
         }
@@ -378,9 +644,11 @@ public class ChannelWhatsAppService {
                 throw exception(WA_NO_MEDIA);
             }
             try {
-                WaGraphClient.MediaInfo info = WaGraphClient.getMedia(a, m.getMediaId());
+                // Messenger / Instagram 推送里直接带文件地址；WhatsApp 需要先按媒体编号查地址
+                WaGraphClient.MediaInfo info = m.getMediaId().startsWith("http")
+                        ? new WaGraphClient.MediaInfo(m.getMediaId(), null) : WaGraphClient.getMedia(a, m.getMediaId());
                 byte[] bytes = WaGraphClient.download(a, info.url(), ChannelFileHelper.MAX_BYTES);
-                String mime = StrUtil.blankToDefault(m.getMimeType(), info.mimeType());
+                String mime = StrUtil.blankToDefault(StrUtil.blankToDefault(m.getMimeType(), info.mimeType()), guessMime(m.getType()));
                 String name = StrUtil.blankToDefault(m.getFileName(), m.getType() + "-" + m.getId() + extension(mime));
                 String url = fileHelper.save(bytes, name, "whatsapp", mime);
                 messageMapper.updateById(new ChannelWaMessageDO().setId(m.getId()).setFileUrl(url)
@@ -402,6 +670,9 @@ public class ChannelWhatsAppService {
         }
         if (file == null || file.isEmpty()) {
             throw exception(WA_CONTENT_EMPTY);
+        }
+        if (!a.isWhatsApp()) {
+            return sendMessagingMedia(userId, a, conv, file, caption);
         }
         String mime = StrUtil.blankToDefault(file.getContentType(), "application/octet-stream");
         String kind = WaGraphClient.mediaKind(mime);
@@ -432,6 +703,54 @@ public class ChannelWhatsAppService {
         conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
                 .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
         return BeanUtils.toBean(msg, ChannelWaMessageRespVO.class);
+    }
+
+    /** Messenger：先发附件，再把说明文字作为单独一条文本发出（附件消息不支持说明文字） */
+    private ChannelWaMessageRespVO sendMessagingMedia(Long userId, ChannelWaAccountDO a, ChannelWaConversationDO conv,
+                                                      MultipartFile file, String caption) throws Exception {
+        if (ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(a.getPlatform())) {
+            throw exception(META_MEDIA_UNSUPPORTED);
+        }
+        if (file.getSize() > MESSENGER_LIMIT) {
+            throw exception(WA_FILE_TOO_LARGE);
+        }
+        channelSendPolicyService.checkWhatsApp(a.getId(), conv.getWaId(), false);
+        String mime = StrUtil.blankToDefault(file.getContentType(), "application/octet-stream");
+        String kind = WaGraphClient.messagingKind(mime);
+        byte[] bytes = file.getBytes();
+        String name = StrUtil.blankToDefault(file.getOriginalFilename(), "file" + extension(mime));
+        String url = fileHelper.save(bytes, name, "whatsapp", file.getContentType());
+        String mid;
+        try {
+            mid = WaGraphClient.sendMessagingAttachment(a, conv.getWaId(), kind, bytes, name, mime);
+        } catch (WaGraphClient.WaApiException e) {
+            throw exception(WA_API_FAIL, e.getMessage());
+        }
+        LocalDateTime now = LocalDateTime.now();
+        ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
+                .accountId(a.getId()).conversationId(conv.getId()).direction(ChannelWaMessageDO.DIRECTION_OUT)
+                .waMessageId(mid).type("file".equals(kind) ? "document" : kind).mimeType(file.getContentType())
+                .fileName(name).fileUrl(url).fileSize((long) bytes.length)
+                .status(ChannelWaMessageDO.STATUS_SENT).messageTime(now).build();
+        messageMapper.insert(msg);
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
+                .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
+        if (StrUtil.isNotBlank(caption)) {
+            send(userId, new ChannelWaSendReqVO().setConversationId(conv.getId()).setText(caption));
+        }
+        return BeanUtils.toBean(msg, ChannelWaMessageRespVO.class);
+    }
+
+    /** Messenger 附件上限 25MB */
+    private static final int MESSENGER_LIMIT = 25 * 1024 * 1024;
+
+    private static String guessMime(String type) {
+        return switch (StrUtil.nullToEmpty(type)) {
+            case "image" -> "image/jpeg";
+            case "video" -> "video/mp4";
+            case "audio" -> "audio/mpeg";
+            default -> "application/octet-stream";
+        };
     }
 
     private static String extension(String mime) {
@@ -492,6 +811,7 @@ public class ChannelWhatsAppService {
                 : crmClueMapper.selectByIds(clueIds).stream().collect(Collectors.toMap(CrmClueDO::getId, CrmClueDO::getName, (a, b) -> a));
         return list.stream().map(c -> {
             ChannelWaConversationRespVO vo = BeanUtils.toBean(c, ChannelWaConversationRespVO.class);
+            vo.setPlatform(StrUtil.blankToDefault(c.getPlatform(), ChannelWaAccountDO.PLATFORM_WHATSAPP));
             CrmCustomerDO cu = c.getCustomerId() == null ? null : customers.get(c.getCustomerId());
             vo.setCustomerName(cu == null ? null : cu.getName());
             vo.setClueName(c.getClueId() == null ? null : clueNames.get(c.getClueId()));
