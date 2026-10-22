@@ -83,7 +83,12 @@ EOF
 fi
 if [ -n "${DOMAIN:-}" ]; then
   say "绑定域名 $DOMAIN（启用 HTTPS）"
-  sed -i "s|^CGCH_SITE=.*|CGCH_SITE=${DOMAIN}|; s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=https://${DOMAIN}|" .env
+  SITE="$DOMAIN"
+  # 主域名（如 example.com）同时为 www.example.com 申请证书；设置 WWW=0 可关闭
+  if [ "$(echo "$DOMAIN" | tr -cd . | wc -c)" = 1 ] && [ "${WWW:-1}" != 0 ]; then
+    SITE="${DOMAIN}, www.${DOMAIN}"
+  fi
+  sed -i "s|^CGCH_SITE=.*|CGCH_SITE=\"${SITE}\"|; s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=https://${DOMAIN}|" .env
 fi
 
 # ---------- 3. 编排文件（每次执行都更新到最新） ----------
