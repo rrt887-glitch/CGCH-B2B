@@ -87,6 +87,9 @@ public final class MailClient {
         if (Boolean.TRUE.equals(a.getImapSsl())) {
             props.put("mail.imaps.ssl.checkserveridentity", "true");
         }
+        if ("oauth2".equals(a.getAuthType())) { // Gmail / Outlook 授权登录：密码位置传访问令牌
+            props.put("mail." + p + ".auth.mechanisms", "XOAUTH2");
+        }
         return Session.getInstance(props);
     }
 
@@ -99,6 +102,9 @@ public final class MailClient {
         props.put("mail.smtp.connectiontimeout", String.valueOf(TIMEOUT_MS));
         props.put("mail.smtp.timeout", String.valueOf(TIMEOUT_MS));
         props.put("mail.smtp.writetimeout", String.valueOf(TIMEOUT_MS));
+        if ("oauth2".equals(a.getAuthType())) {
+            props.put("mail.smtp.auth.mechanisms", "XOAUTH2");
+        }
         if (Boolean.TRUE.equals(a.getSmtpSsl())) {
             props.put("mail.smtp.ssl.enable", "true");
             props.put("mail.smtp.ssl.checkserveridentity", "true");

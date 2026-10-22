@@ -26,6 +26,8 @@
 | `PUBLIC_BASE_URL` | 建议 | 对外访问的 HTTPS 地址，例如 `https://crm.example.com`，用于支付渠道回调 |
 | `CAPTCHA_ENABLE` | 否 | 登录图片验证码，默认开启 |
 | `CGCH_API_ENCRYPT_*` | 否 | 接口加密，默认关闭；开启时前后端必须使用同一对密钥 |
+| `CGCH_OAUTH_GOOGLE_CLIENT_ID` / `_SECRET` | 否 | Gmail 授权登录，见第六节「邮箱 OAuth」 |
+| `CGCH_OAUTH_MICROSOFT_CLIENT_ID` / `_SECRET` | 否 | Outlook / Microsoft 365 授权登录 |
 
 ## 三、方式一：Docker Compose（推荐）
 
@@ -94,6 +96,25 @@ java -Xms512m -Xmx1g -jar backend/yudao-server/target/yudao-server.jar --spring.
 4. **配置中台 → 发送策略**：新邮箱和新号码建议先把发送上限调低，再逐步放开。
 5. **在线充值（可选）**：支付管理 → 应用信息 →「智点充值」，配置微信支付或支付宝渠道；后端和支付模块在同一个进程内，回调地址保持 `http://127.0.0.1:48080/...` 即可，端口改过的话同步修改。
 6. **工作时间**：设置上班时间，以及上下班时间 AI 怎么接待。
+7. **留资邮箱**：渠道管理 →「设置留资邮箱」。把阿里国际站、中国制造网的询盘通知邮箱改成系统里已绑定的邮箱（或自动转发过去），通知邮件会自动解析成线索。官网表单等其他来源可自己加规则（按发件人或主题关键词匹配）。
+
+### 邮箱 OAuth（Gmail / Outlook 授权登录，可选）
+
+不配置也能用：Gmail 用「应用专用密码」、Outlook 个人版用密码即可绑定。配置后可以一键授权，不用开两步验证，也支持禁用了基础认证的 Microsoft 365 企业邮箱。
+
+**Google**
+1. 打开 Google Cloud Console → API 和服务 → OAuth 同意屏幕，用户类型选「外部」，添加范围 `https://mail.google.com/`。
+2. 凭据 → 创建 OAuth 客户端 ID → Web 应用，已获授权的重定向 URI 填 `https://你的域名/admin-api/channel/oauth/google/callback`。
+3. 把客户端 ID 和密钥填到 `CGCH_OAUTH_GOOGLE_CLIENT_ID` / `CGCH_OAUTH_GOOGLE_CLIENT_SECRET`。
+4. 注意：`mail.google.com` 属于受限范围。应用处于「测试」状态时只有添加为测试用户的账号能授权，且授权 7 天后过期；正式给客户使用需要提交 Google 验证（含安全评估）。
+
+**Microsoft**
+1. 打开 Azure 门户 → Microsoft Entra ID → 应用注册 → 新注册，受支持的账户类型选「任何组织目录中的帐户和个人 Microsoft 帐户」。
+2. 重定向 URI 选 Web，填 `https://你的域名/admin-api/channel/oauth/microsoft/callback`。
+3. API 权限添加委托权限 `offline_access`、`IMAP.AccessAsUser.All`、`SMTP.Send`（Office 365 Exchange Online）；证书和密码 → 新建客户端密码。
+4. 填到 `CGCH_OAUTH_MICROSOFT_CLIENT_ID` / `CGCH_OAUTH_MICROSOFT_CLIENT_SECRET`。企业邮箱还需管理员在 Exchange 中为该邮箱开启 IMAP 和「经过身份验证的 SMTP」。
+
+`PUBLIC_BASE_URL` 必须是用户浏览器能访问到的地址，并与上面登记的重定向 URI 一致。
 
 ## 七、安全检查清单
 

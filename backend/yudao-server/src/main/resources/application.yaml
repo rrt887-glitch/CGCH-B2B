@@ -371,3 +371,17 @@ yudao:
       type: redis # 消息总线的类型
 
 debug: false
+
+--- #################### CGCH 邮箱 OAuth 授权 ####################
+# 在 Google Cloud Console / Microsoft Entra 注册应用后，把回调地址设为
+#   {PUBLIC_BASE_URL}/admin-api/channel/oauth/google/callback
+#   {PUBLIC_BASE_URL}/admin-api/channel/oauth/microsoft/callback
+cgch:
+  oauth:
+    redirect-base: ${PUBLIC_BASE_URL:http://127.0.0.1:48080}
+    google:
+      client-id: ${CGCH_OAUTH_GOOGLE_CLIENT_ID:}
+      client-secret: ${CGCH_OAUTH_GOOGLE_CLIENT_SECRET:}
+    microsoft:
+      client-id: ${CGCH_OAUTH_MICROSOFT_CLIENT_ID:}
+      client-secret: ${CGCH_OAUTH_MICROSOFT_CLIENT_SECRET:}

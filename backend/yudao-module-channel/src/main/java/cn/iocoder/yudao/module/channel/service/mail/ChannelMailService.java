@@ -43,6 +43,8 @@ public class ChannelMailService {
     private static final int SNIPPET_LENGTH = 160;
 
     @Resource
+    private cn.iocoder.yudao.module.channel.service.oauth.ChannelMailOAuthService channelMailOAuthService;
+    @Resource
     private cn.iocoder.yudao.module.channel.service.policy.ChannelSendPolicyService channelSendPolicyService;
     @Resource
     private ChannelMailAccountMapper accountMapper;
@@ -124,15 +126,30 @@ public class ChannelMailService {
     /** 测试连接；account 可以是尚未保存的表单内容 */
     public void testAccount(Long userId, ChannelMailAccountSaveReqVO req) {
         ChannelMailAccountDO a = BeanUtils.toBean(req, ChannelMailAccountDO.class);
-        if (StrUtil.isBlank(req.getPassword()) && req.getId() != null) {
-            a.setPassword(validateAccount(userId, req.getId()).getPassword());
+        if (req.getId() != null) {
+            ChannelMailAccountDO saved = validateAccount(userId, req.getId());
+            if (cn.iocoder.yudao.module.channel.service.oauth.ChannelMailOAuthService.AUTH_OAUTH2.equals(saved.getAuthType())) {
+                a = saved; // 授权登录的邮箱按已保存的授权测试
+            } else if (StrUtil.isBlank(req.getPassword())) {
+                a.setPassword(saved.getPassword());
+            }
         }
         normalize(a);
         try {
-            MailClient.testConnection(a);
+            MailClient.testConnection(credential(a));
         } catch (Exception e) {
             throw exception(MAIL_ACCOUNT_CONNECT_FAIL, rootMessage(e));
         }
+    }
+
+    /** 授权登录的邮箱：用（必要时刷新后的）访问令牌代替密码 */
+    private ChannelMailAccountDO credential(ChannelMailAccountDO a) {
+        if (!cn.iocoder.yudao.module.channel.service.oauth.ChannelMailOAuthService.AUTH_OAUTH2.equals(a.getAuthType())) {
+            return a;
+        }
+        ChannelMailAccountDO c = BeanUtils.toBean(a, ChannelMailAccountDO.class);
+        c.setPassword(channelMailOAuthService.accessToken(a));
+        return c;
     }
 
     private static void normalize(ChannelMailAccountDO a) {
@@ -156,7 +173,7 @@ public class ChannelMailService {
     public int syncAccount(ChannelMailAccountDO account) {
         MailClient.FetchResult fetched;
         try {
-            fetched = MailClient.fetchInbox(account);
+            fetched = MailClient.fetchInbox(credential(account));
         } catch (Exception e) {
             String reason = rootMessage(e);
             accountMapper.updateById(new ChannelMailAccountDO().setId(account.getId())
@@ -264,7 +281,7 @@ public class ChannelMailService {
                 files.add(MailClient.Attachment.builder().fileName(att.getFileName()).contentType(att.getContentType())
                         .content(fileHelper.load(att.getFileUrl())).build());
             }
-            messageId = MailClient.send(account, to, cc, req.getSubject(), req.getText(), req.getHtml(),
+            messageId = MailClient.send(credential(account), to, cc, req.getSubject(), req.getText(), req.getHtml(),
                     original == null ? null : original.getMessageId(), null, files);
         } catch (Exception e) {
             throw exception(MAIL_SEND_FAIL, rootMessage(e));

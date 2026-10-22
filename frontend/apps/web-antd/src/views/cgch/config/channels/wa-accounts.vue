@@ -105,6 +105,8 @@ async function remove(row: ChannelWaApi.Account) {
 const guide = ref<ChannelWaApi.Account>();
 
 onMounted(load);
+
+defineExpose({ openForm, accounts });
 </script>
 
 <template>

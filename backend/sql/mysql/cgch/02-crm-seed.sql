@@ -42,3 +42,10 @@ VALUES (b'1', 30, 90, b'1', 3, '1', '1', 1);
 DELETE FROM `system_dict_data` WHERE `dict_type` = 'crm_customer_source' AND `value` = '11';
 INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
 VALUES (11, 'WhatsApp', '11', 'crm_customer_source', 0, 'success', '', 'CGCH 线索自动建档', '1', '1', b'0');
+
+-- 客户来源补充：留资邮箱识别的平台询盘
+DELETE FROM `system_dict_data` WHERE `dict_type` = 'crm_customer_source' AND `value` IN ('12', '13', '14');
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`) VALUES
+  (12, '阿里国际站', '12', 'crm_customer_source', 0, 'warning', '', 'CGCH 留资邮箱', '1', '1', b'0'),
+  (13, '中国制造网', '13', 'crm_customer_source', 0, 'danger', '', 'CGCH 留资邮箱', '1', '1', b'0'),
+  (14, '官网表单', '14', 'crm_customer_source', 0, 'primary', '', 'CGCH 留资邮箱', '1', '1', b'0');

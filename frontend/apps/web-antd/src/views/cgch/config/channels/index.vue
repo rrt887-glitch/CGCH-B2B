@@ -1,12 +1,15 @@
 <script lang="ts" setup>
 /**
- * 渠道管理：目前支持绑定邮箱（IMAP 收信 + SMTP 发信），其他渠道陆续接入。
+ * 渠道管理：渠道总表 + 邮箱（IMAP/SMTP，Gmail/Outlook 支持 OAuth 授权）+ WhatsApp + 留资邮箱。
  */
 import type { ChannelMailApi } from '#/api/channel/mail';
+import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
 
+import ChannelCatalog from './channel-catalog.vue';
+import LeadRules from './lead-rules.vue';
 import WaAccounts from './wa-accounts.vue';
 
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -109,9 +112,52 @@ function applyProvider(key: string) {
   form.smtpSsl = p.smtp[1] === 465; // 587 走 STARTTLS
 }
 
-function openForm(row?: ChannelMailApi.Account) {
+function openForm(row?: ChannelMailApi.Account, provider?: string) {
   Object.assign(form, emptyForm(), row ? { ...row, password: '' } : {});
+  if (!row && provider) {
+    form.provider = provider;
+    applyProvider(provider);
+    if (provider === 'custom') {
+      form.imapHost = '';
+      form.smtpHost = '';
+    }
+  }
   open.value = true;
+}
+
+const isOAuth = computed(() => form.authType === 'oauth2');
+
+// ===== 渠道总表 / OAuth 授权 / 留资邮箱 =====
+const waRef = ref<InstanceType<typeof WaAccounts>>();
+const waAccounts = computed(() => waRef.value?.accounts ?? []);
+const oauthProviders = ref<string[]>([]);
+const leadOpen = ref(false);
+const mailboxes = computed(() => accounts.value.map((a) => a.email));
+
+async function startOAuth(provider: string) {
+  // 先同步打开窗口，避免被浏览器拦截弹窗
+  const win = window.open('about:blank', 'cgch-mail-oauth', 'width=560,height=720');
+  try {
+    const url = await getOAuthAuthorizeUrl(provider);
+    if (win) {
+      win.location.href = url;
+    } else {
+      window.location.href = url;
+    }
+  } catch (error) {
+    win?.close();
+    throw error;
+  }
+}
+
+function onOAuthMessage(e: MessageEvent) {
+  if (e.data?.type !== 'cgch-mail-oauth') return;
+  if (e.data.ok) {
+    message.success(e.data.email ? `已授权绑定 ${e.data.email}` : '已授权绑定');
+    load();
+  } else {
+    message.error(e.data.message || '授权失败');
+  }
 }
 
 function validate() {
@@ -119,7 +165,7 @@ function validate() {
     message.warning('请填写邮箱地址和服务器');
     return false;
   }
-  if (!form.id && !form.password) {
+  if (!form.id && !form.password && !isOAuth.value) {
     message.warning('请填写密码或授权码');
     return false;
   }
@@ -174,12 +220,27 @@ async function remove(row: ChannelMailApi.Account) {
   await load();
 }
 
-onMounted(load);
+onMounted(async () => {
+  window.addEventListener('message', onOAuthMessage);
+  await load();
+  oauthProviders.value = await getOAuthProviders().catch(() => []);
+});
+onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 </script>
 
 <template>
   <Page auto-content-height>
-    <Card title="邮箱" :bordered="false">
+    <ChannelCatalog
+      :mail-accounts="accounts"
+      :wa-accounts="waAccounts"
+      :oauth-providers="oauthProviders"
+      @mail="(p) => openForm(undefined, p)"
+      @oauth="startOAuth"
+      @wa="waRef?.openForm()"
+      @lead-rules="leadOpen = true"
+    />
+
+    <Card title="邮箱" :bordered="false" class="mt-4">
       <template #extra>
         <Button type="primary" @click="openForm()">绑定邮箱</Button>
       </template>
@@ -197,6 +258,7 @@ onMounted(load);
           </template>
           <template v-else-if="column.key === 'provider'">
             {{ PROVIDERS[record.provider]?.label ?? record.provider }}
+            <Tag v-if="record.authType === 'oauth2'" color="blue" class="ml-1">OAuth</Tag>
           </template>
           <template v-else-if="column.key === 'enabled'">
             <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record, !!v)" />
@@ -223,14 +285,17 @@ onMounted(load);
       </Table>
     </Card>
 
-    <WaAccounts />
+    <WaAccounts ref="waRef" />
+
+    <LeadRules v-model:open="leadOpen" :mailboxes="mailboxes" />
 
     <Modal v-model:open="open" :title="form.id ? '修改邮箱' : '绑定邮箱'" :width="640" :footer="null">
       <Form layout="vertical">
-        <FormItem label="邮箱服务商">
+        <Alert v-if="isOAuth" class="mb-4" type="success" show-icon message="此邮箱通过 OAuth 授权登录，无需密码；授权失效时请在上方重新「授权登录」。" />
+        <FormItem v-else label="邮箱服务商">
           <Select v-model:value="form.provider" :options="providerOptions" @change="(v: any) => applyProvider(String(v))" />
         </FormItem>
-        <Alert v-if="PROVIDERS[form.provider || '']?.tip" class="mb-4" type="warning" :message="PROVIDERS[form.provider || '']?.tip" />
+        <Alert v-if="!isOAuth && PROVIDERS[form.provider || '']?.tip" class="mb-4" type="warning" :message="PROVIDERS[form.provider || '']?.tip" />
         <Row :gutter="16">
           <Col :span="12">
             <FormItem label="邮箱地址" required><Input v-model:value="form.email" placeholder="sales@yourcompany.com" /></FormItem>
@@ -238,12 +303,12 @@ onMounted(load);
           <Col :span="12">
             <FormItem label="发件人名称"><Input v-model:value="form.displayName" placeholder="客户看到的名字" /></FormItem>
           </Col>
-          <Col :span="12">
+          <Col v-if="!isOAuth" :span="12">
             <FormItem :label="form.id ? '密码或授权码（不改请留空）' : '密码或授权码'" :required="!form.id">
               <InputPassword v-model:value="form.password" autocomplete="new-password" />
             </FormItem>
           </Col>
-          <Col :span="12">
+          <Col v-if="!isOAuth" :span="12">
             <FormItem label="登录名（默认同邮箱地址）"><Input v-model:value="form.username" /></FormItem>
           </Col>
           <Col :span="12">

@@ -20,6 +20,8 @@ export namespace ChannelMailApi {
     lastSyncTime?: string;
     lastSyncError?: string;
     unrepliedCount?: number;
+    /** password：密码/授权码；oauth2：Google / Microsoft 授权 */
+    authType?: string;
   }
 
   export interface Attachment {
