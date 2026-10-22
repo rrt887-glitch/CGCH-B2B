@@ -168,6 +168,82 @@ public class ChannelMetaOAuthService {
         return a;
     }
 
+    // ==================== WhatsApp 嵌入式注册 ====================
+
+    /** 前端拉起 Facebook 弹窗所需的公开配置；未配置时 enabled=false */
+    public Map<String, Object> waSignupConfig() {
+        ChannelOAuthProperties.Meta m = channelOAuthProperties.getMeta();
+        boolean on = m.configured() && StrUtil.isNotBlank(m.getWaConfigId());
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("enabled", on);
+        if (on) {
+            r.put("appId", m.getClientId());
+            r.put("configId", m.getWaConfigId());
+            r.put("apiVersion", m.getApiVersion());
+            r.put("sdkUrl", m.getSdkUrl());
+        }
+        return r;
+    }
+
+    /** 嵌入式注册完成的结果：账号编号、展示号码、两步验证 PIN（仅这一次返回）、注册号码时的提示 */
+    public record WaSignupResult(Long id, String displayPhone, String pin, String warning) {
+    }
+
+    /**
+     * 客户在 Facebook 弹窗里完成 WhatsApp 开通后：用 code 换企业令牌 → 校验能访问该号码 → 订阅 WABA 的消息推送 →
+     * 注册号码（设置两步验证 PIN）→ 建立账号。推送走应用级 Webhook。
+     */
+    public WaSignupResult completeWaSignup(Long userId, String code, String phoneNumberId, String wabaId) {
+        ChannelOAuthProperties.Meta m = meta();
+        if (StrUtil.isBlank(m.getWaConfigId())) {
+            throw exception(META_OAUTH_FAIL, "未配置 WhatsApp 嵌入式注册（CGCH_META_WA_CONFIG_ID）");
+        }
+        if (StrUtil.hasBlank(code, phoneNumberId, wabaId)) {
+            throw exception(META_OAUTH_FAIL, "开通流程没有完成，请在弹窗中选择或添加号码后再试");
+        }
+        String pnid = phoneNumberId.trim();
+        String waba = wabaId.trim();
+        try {
+            String token = WaGraphClient.call(graph(m, null), "GET", "oauth/access_token?client_id=" + enc(m.getClientId())
+                    + "&client_secret=" + enc(m.getClientSecret()) + "&code=" + enc(code), null).path("access_token").asText("");
+            if (token.isBlank()) {
+                throw exception(META_OAUTH_FAIL, "没有拿到访问令牌");
+            }
+            ChannelWaAccountDO probe = graph(m, token).setPhoneNumberId(pnid).setWabaId(waba)
+                    .setPlatform(ChannelWaAccountDO.PLATFORM_WHATSAPP);
+            String display = WaGraphClient.getDisplayPhone(probe); // 同时验证令牌能访问这个号码
+            WaGraphClient.call(probe, "POST", waba + "/subscribed_apps", null);
+            String pin = String.valueOf(100000 + new java.security.SecureRandom().nextInt(900000));
+            String warning = null;
+            try {
+                WaGraphClient.call(probe, "POST", pnid + "/register", WaGraphClient.parse(
+                        ("{\"messaging_product\":\"whatsapp\",\"pin\":\"" + pin + "\"}").getBytes(StandardCharsets.UTF_8)));
+            } catch (WaGraphClient.WaApiException e) {
+                pin = null; // 号码之前已注册过（例如已设置两步验证），沿用原有设置
+                warning = "号码注册提示：" + e.getMessage();
+                log.warn("[completeWaSignup][号码 {} 注册失败] {}", pnid, e.getMessage());
+            }
+            ChannelWaAccountDO old = TenantUtils.executeIgnore(() -> accountMapper.selectByPhoneNumberId(pnid));
+            if (old != null && !Objects.equals(old.getTenantId(), TenantContextHolder.getTenantId())) {
+                throw exception(META_OAUTH_FAIL, "该号码已被其他企业绑定");
+            }
+            ChannelWaAccountDO a = old != null ? old : new ChannelWaAccountDO().setUserId(userId)
+                    .setPlatform(ChannelWaAccountDO.PLATFORM_WHATSAPP).setPhoneNumberId(pnid)
+                    .setName(StrUtil.blankToDefault(display, pnid)).setVerifyToken(IdUtil.fastSimpleUUID());
+            a.setAuthType(ChannelWaAccountDO.AUTH_OAUTH).setWabaId(waba).setAccessToken(token).setDisplayPhone(display)
+                    .setApiBase(m.getApiBase()).setApiVersion(m.getApiVersion()).setEnabled(true);
+            if (old == null) {
+                accountMapper.insert(a);
+            } else {
+                accountMapper.updateById(a);
+            }
+            log.info("[completeWaSignup][用户 {} 通过嵌入式注册开通 WhatsApp {}（WABA {}）]", userId, display, waba);
+            return new WaSignupResult(a.getId(), display, pin, warning);
+        } catch (WaGraphClient.WaApiException e) {
+            throw exception(META_OAUTH_FAIL, e.getMessage());
+        }
+    }
+
     // ==================== 移除应用与数据删除回调 ====================
 
     private static final String DELETION_KEY = "cgch:meta-deletion:";

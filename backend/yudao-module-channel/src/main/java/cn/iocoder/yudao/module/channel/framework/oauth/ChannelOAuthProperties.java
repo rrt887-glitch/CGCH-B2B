@@ -31,6 +31,13 @@ public class ChannelOAuthProperties {
         private String clientId = "";
         /** 应用密钥（App Secret），同时用于校验 Webhook 签名 */
         private String clientSecret = "";
+        /**
+         * WhatsApp 嵌入式注册的配置编号（Facebook 登录 for Business → 配置，类型选「WhatsApp 嵌入式注册」）；
+         * 填写后客户可以在系统里用 Facebook 弹窗自己开通 WhatsApp 号码
+         */
+        private String waConfigId = "";
+        /** Facebook JS SDK 地址（测试时可替换） */
+        private String sdkUrl = "https://connect.facebook.net/en_US/sdk.js";
         /** 在 Meta 后台配置 Webhook 时填写的验证令牌 */
         private String verifyToken = "";
         private String dialogUrl = "https://www.facebook.com/v24.0/dialog/oauth";

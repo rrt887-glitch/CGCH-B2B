@@ -254,29 +254,34 @@ public class ChannelWhatsAppService {
                     if (StrUtil.isNotBlank(phoneNumberId) && !phoneNumberId.equals(a.getPhoneNumberId())) {
                         continue; // 同一应用下其他号码的推送
                     }
-                    Map<String, String> names = new HashMap<>();
-                    for (JsonNode c : value.path("contacts")) {
-                        names.put(c.path("wa_id").asText(), c.path("profile").path("name").asText(null));
-                    }
-                    for (JsonNode m : value.path("messages")) {
-                        try {
-                            saveInbound(a, m, names.get(m.path("from").asText()));
-                        } catch (Exception e) {
-                            log.warn("[handleWebhook][{}] 消息处理失败 {}", a.getId(), m, e);
-                        }
-                    }
-                    for (JsonNode s : value.path("statuses")) {
-                        try {
-                            applyStatus(a, s);
-                        } catch (Exception e) {
-                            log.warn("[handleWebhook][{}] 状态处理失败 {}", a.getId(), s, e);
-                        }
-                    }
+                    processWaChange(a, value);
                 }
             }
             accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setLastWebhookTime(LocalDateTime.now()));
         });
         return true;
+    }
+
+    /** 处理一条 WhatsApp 推送（messages / statuses），调用方已切换到账号所属租户 */
+    private void processWaChange(ChannelWaAccountDO a, JsonNode value) {
+        Map<String, String> names = new HashMap<>();
+        for (JsonNode c : value.path("contacts")) {
+            names.put(c.path("wa_id").asText(), c.path("profile").path("name").asText(null));
+        }
+        for (JsonNode m : value.path("messages")) {
+            try {
+                saveInbound(a, m, names.get(m.path("from").asText()));
+            } catch (Exception e) {
+                log.warn("[handleWebhook][{}] 消息处理失败 {}", a.getId(), m, e);
+            }
+        }
+        for (JsonNode s : value.path("statuses")) {
+            try {
+                applyStatus(a, s);
+            } catch (Exception e) {
+                log.warn("[handleWebhook][{}] 状态处理失败 {}", a.getId(), s, e);
+            }
+        }
     }
 
     /** 手动接入的账号用自己填写的应用密钥；Facebook 登录授权的账号用服务器配置的 Meta 应用密钥 */
@@ -302,6 +307,10 @@ public class ChannelWhatsAppService {
             return false;
         }
         JsonNode root = WaGraphClient.parse(rawBody);
+        if ("whatsapp_business_account".equals(root.path("object").asText())) {
+            handleAppWhatsApp(root);
+            return true;
+        }
         String platform = "instagram".equals(root.path("object").asText()) ? ChannelWaAccountDO.PLATFORM_INSTAGRAM
                 : "page".equals(root.path("object").asText()) ? ChannelWaAccountDO.PLATFORM_MESSENGER : null;
         if (platform == null) {
@@ -316,6 +325,25 @@ public class ChannelWhatsAppService {
             handleMessagingEntry(a, entry);
         }
         return true;
+    }
+
+    /** 应用级 Webhook 中的 WhatsApp 推送（客户通过嵌入式注册开通的号码）：按 phone_number_id 找账号 */
+    private void handleAppWhatsApp(JsonNode root) {
+        for (JsonNode entry : root.path("entry")) {
+            for (JsonNode change : entry.path("changes")) {
+                JsonNode value = change.path("value");
+                String pnid = value.path("metadata").path("phone_number_id").asText("");
+                ChannelWaAccountDO a = StrUtil.isBlank(pnid) ? null
+                        : TenantUtils.executeIgnore(() -> accountMapper.selectByPhoneNumberId(pnid));
+                if (a == null || !a.isWhatsApp() || !Boolean.TRUE.equals(a.getEnabled())) {
+                    continue;
+                }
+                TenantUtils.execute(a.getTenantId(), () -> {
+                    processWaChange(a, value);
+                    accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setLastWebhookTime(LocalDateTime.now()));
+                });
+            }
+        }
     }
 
     // ==================== Messenger / Instagram 推送 ====================

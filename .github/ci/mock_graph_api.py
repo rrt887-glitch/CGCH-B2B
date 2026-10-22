@@ -32,10 +32,13 @@ EMBEDS = []
 GOOD = 'Bearer good-token'
 FB_SENT = []
 SUBS = []
-TOKENS = {GOOD, 'Bearer page-token-PAGE1', 'Bearer user-long'}
+TOKENS = {GOOD, 'Bearer page-token-PAGE1', 'Bearer user-long', 'Bearer biz-token'}
+REG = []
 # Graph 对象：主页、Instagram 账号、Messenger / Instagram 用户
 PROFILES = {
     'me': {'id': 'FBU1', 'name': 'Page Owner'},
+    'PN2': {'id': 'PN2', 'display_phone_number': '+1 555 0100', 'verified_name': 'Customer Co'},
+    'PN3': {'id': 'PN3', 'display_phone_number': '+1 555 0111', 'verified_name': 'Customer Co'},
     'PAGE1': {'id': 'PAGE1', 'name': 'CGCH Fan Page'},
     'IG1': {'id': 'IG1', 'username': 'cgch_ig', 'name': 'CGCH IG'},
     '7001': {'first_name': 'Maria', 'last_name': 'Lopez'},
@@ -113,6 +116,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, FB_SENT)
         if path == ['_subs']:
             return self._json(200, SUBS)
+        if path == ['_reg']:
+            return self._json(200, REG)
         if len(path) == 3 and path[1:] == ['oauth', 'access_token']:
             return self._fb_token()
         if not self._auth_ok():
@@ -165,6 +170,11 @@ class Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs, urlparse
             SUBS.append({'page': path[1], 'fields': parse_qs(urlparse(self.path).query).get('subscribed_fields', [''])[0],
                          'auth': self.headers.get('Authorization')})
+            return self._json(200, {'success': True})
+        if len(path) == 3 and path[2] == 'register':
+            REG.append(dict(json.loads(raw or b'{}'), pn=path[1], auth=self.headers.get('Authorization')))
+            if path[1] == 'PN3':
+                return self._json(400, {'error': {'message': 'Phone number is already registered', 'code': 133005}})
             return self._json(200, {'success': True})
         if len(path) == 3 and path[2] == 'media':
             ctype = self.headers.get('Content-Type', '')
@@ -224,6 +234,8 @@ class Handler(BaseHTTPRequestHandler):
             if q.get('fb_exchange_token') != 'user-short':
                 return self._json(400, {'error': {'message': 'Invalid token', 'code': 190}})
             return self._json(200, {'access_token': 'user-long', 'token_type': 'bearer', 'expires_in': 5184000})
+        if q.get('code') == 'es-code':  # WhatsApp 嵌入式注册：换企业令牌
+            return self._json(200, {'access_token': 'biz-token', 'token_type': 'bearer'})
         if q.get('code') != 'good-code':
             return self._json(400, {'error': {'message': 'This authorization code has expired.', 'code': 100}})
         return self._json(200, {'access_token': 'user-short', 'token_type': 'bearer', 'expires_in': 3600})
