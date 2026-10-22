@@ -1145,6 +1145,25 @@ jobs:
           rx = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=5&accountId={acct}&view=sent&keyword=free%20samples')['list'][0]
           assert call('GET', f"/channel/mail-message/get?id={rx['id']}")['textBody'].rstrip().endswith(pol['footerText']), '唤醒邮件应附退订说明'
           print('退订与退信：邮件/WhatsApp 退订自动入名单且 AI 不回复，引用的退订说明不误判；退信地址自动拉黑；唤醒邮件附退订说明')
+
+          # ---- 客户概览 ----
+          co = call('GET', '/channel/customer-overview/get?days=30')
+          ct = co['totals']
+          assert ct['total'] >= 2 and ct['dealt'] >= 1 and 0 < ct['dealRate'] <= 1, ct
+          assert sum(co['recency'].values()) == ct['total'], f"活跃度分桶之和应等于客户总数: {co['recency']}"
+          assert ct['active30'] + co['recency']['d90'] + ct['dormant'] == ct['total']
+          assert any(x['key'] == 'US' and x['dealt'] >= 1 for x in co['byCountry']), co['byCountry']
+          assert sum(x['count'] for x in co['byCountry']) <= ct['total'] and sum(x['count'] for x in co['bySource']) == ct['total']
+          assert len(co['monthly']) == 12 and list(co['monthly'].values())[-1] >= ct['created'] >= 2, co['monthly']
+          assert [f['name'] for f in co['funnel']][:2] == ['初步回复', '背调'] and len(co['funnel']) == 8, co['funnel']
+          top = co['topActive']
+          assert top and top[0]['name'] == 'Acme Buyer' and top[0]['mails'] >= 3 and top[0]['dealt'] is True, top[:2]
+          assert all(top[i]['messages'] >= top[i + 1]['messages'] for i in range(len(top) - 1)), '应按往来消息数排序'
+          assert call('GET', '/channel/customer-overview/get?days=30&userId=1')['totals']['pool'] == 0, '按人筛选时不统计公海'
+          mine_co = call3('GET', '/channel/customer-overview/get?days=30')
+          assert mine_co['code'] == 0 and mine_co['data']['totals']['total'] == 0 and mine_co['data']['topActive'] == [], mine_co
+          assert call3('GET', '/channel/customer-overview/get?days=30&userId=1')['code'] != 0, '业务员不能看别人的客户概览'
+          print(f"客户概览：{ct['total']} 位客户、成交率 {ct['dealRate']:.0%}，活跃度分桶与总数一致；国家/来源/等级分布、12 个月趋势、商机 8 个阶段；按数据权限隔离")
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY
