@@ -29,8 +29,12 @@ import {
   TypographyParagraph,
 } from 'ant-design-vue';
 
-import { getMetaAuthorizeUrl } from '#/api/channel/oauth';
+import type { WaSignupConfig } from '#/api/channel/oauth';
+
+import { completeWaSignup, getMetaAuthorizeUrl, getWaSignupConfig } from '#/api/channel/oauth';
 import { createWaAccount, deleteWaAccount, getWaAccountList, updateWaAccount } from '#/api/channel/whatsapp';
+
+import { runWaSignup } from './wa-signup';
 
 type Platform = 'instagram' | 'messenger' | 'whatsapp';
 
@@ -146,9 +150,38 @@ function onMessage(e: MessageEvent) {
   }
 }
 
-/** 渠道总表点击 Facebook / Instagram：已配置 Meta 应用时走授权，否则手动填写 */
+// ===== WhatsApp 嵌入式注册（客户自己开通号码） =====
+const signupCfg = ref<WaSignupConfig>({ enabled: false });
+const signingUp = ref(false);
+
+async function startWaSignup() {
+  signingUp.value = true;
+  try {
+    const session = await runWaSignup(signupCfg.value);
+    if (!session) {
+      message.info('没有完成开通：请在弹窗中选择企业账户和号码并完成验证');
+      return;
+    }
+    const r = await completeWaSignup(session);
+    await load();
+    Modal.success({
+      title: `已开通 WhatsApp ${r.displayPhone || ''}`,
+      content: r.pin
+        ? `已为这个号码设置两步验证 PIN：${r.pin}。请妥善保存，以后在其他地方重新注册这个号码时需要用到。`
+        : r.warning || '号码已接入，客户发来的消息会出现在消息工作台。',
+    });
+  } catch (error: any) {
+    if (error?.message) message.error(error.message);
+  } finally {
+    signingUp.value = false;
+  }
+}
+
+/** 渠道总表点击：已配置时 Facebook / Instagram 走授权、WhatsApp 走嵌入式注册，否则手动填写 */
 function connect(platform: Platform) {
-  if (platform !== 'whatsapp' && props.metaOAuth) {
+  if (platform === 'whatsapp' && signupCfg.value.enabled) {
+    startWaSignup();
+  } else if (platform !== 'whatsapp' && props.metaOAuth) {
     startMetaOAuth();
   } else {
     openForm(undefined, platform);
@@ -158,6 +191,9 @@ function connect(platform: Platform) {
 onMounted(() => {
   window.addEventListener('message', onMessage);
   load();
+  getWaSignupConfig()
+    .then((c) => (signupCfg.value = c))
+    .catch(() => {});
 });
 onBeforeUnmount(() => window.removeEventListener('message', onMessage));
 
@@ -169,7 +205,10 @@ defineExpose({ openForm, connect, accounts });
     <template #extra>
       <Space>
         <Button v-if="metaOAuth" @click="startMetaOAuth">Facebook 登录授权</Button>
-        <Button type="primary" @click="openForm()">绑定 WhatsApp</Button>
+        <Button v-if="signupCfg.enabled" type="primary" :loading="signingUp" @click="startWaSignup">开通 WhatsApp</Button>
+        <Button :type="signupCfg.enabled ? 'default' : 'primary'" @click="openForm()">
+          {{ signupCfg.enabled ? '手动绑定' : '绑定 WhatsApp' }}
+        </Button>
       </Space>
     </template>
     <Alert

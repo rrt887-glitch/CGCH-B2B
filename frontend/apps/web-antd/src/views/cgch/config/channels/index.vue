@@ -236,7 +236,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
       :oauth-providers="oauthProviders"
       @mail="(p) => openForm(undefined, p)"
       @oauth="startOAuth"
-      @wa="waRef?.openForm()"
+      @wa="waRef?.connect('whatsapp')"
       @meta="(p) => waRef?.connect(p)"
       @lead-rules="leadOpen = true"
     />

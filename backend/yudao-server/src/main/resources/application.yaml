@@ -395,3 +395,4 @@ cgch:
       client-id: ${CGCH_META_APP_ID:}
       client-secret: ${CGCH_META_APP_SECRET:}
       verify-token: ${CGCH_META_WEBHOOK_VERIFY_TOKEN:}
+      wa-config-id: ${CGCH_META_WA_CONFIG_ID:} # WhatsApp 嵌入式注册的配置编号

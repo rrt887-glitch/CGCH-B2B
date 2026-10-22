@@ -38,6 +38,21 @@ public class ChannelMetaController {
         return success(channelMetaOAuthService.authorizeUrl(getLoginUserId()));
     }
 
+    @GetMapping("/wa-signup/config")
+    @Operation(summary = "WhatsApp 嵌入式注册的前端配置（应用编号、配置编号）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
+    public CommonResult<java.util.Map<String, Object>> waSignupConfig() {
+        return success(channelMetaOAuthService.waSignupConfig());
+    }
+
+    @PostMapping("/wa-signup/complete")
+    @Operation(summary = "WhatsApp 嵌入式注册完成：提交 code、phone_number_id、waba_id")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
+    public CommonResult<ChannelMetaOAuthService.WaSignupResult> waSignupComplete(@RequestBody java.util.Map<String, String> req) {
+        return success(channelMetaOAuthService.completeWaSignup(getLoginUserId(), req.get("code"),
+                req.get("phoneNumberId"), req.get("wabaId")));
+    }
+
     @GetMapping(value = "/oauth/callback", produces = MediaType.TEXT_HTML_VALUE + ";charset=UTF-8")
     @Operation(summary = "授权回调（由 Facebook 跳转，无需登录；租户与用户由 state 确定）")
     @PermitAll

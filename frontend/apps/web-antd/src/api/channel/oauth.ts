@@ -14,3 +14,24 @@ export function getOAuthAuthorizeUrl(provider: string) {
 export function getMetaAuthorizeUrl() {
   return requestClient.get<string>('/channel/meta/oauth/authorize-url');
 }
+
+export interface WaSignupConfig {
+  enabled: boolean;
+  appId?: string;
+  configId?: string;
+  apiVersion?: string;
+  sdkUrl?: string;
+}
+
+/** WhatsApp 嵌入式注册的前端配置 */
+export function getWaSignupConfig() {
+  return requestClient.get<WaSignupConfig>('/channel/meta/wa-signup/config');
+}
+
+/** 嵌入式注册完成后提交 code、号码编号与 WABA 编号 */
+export function completeWaSignup(data: { code: string; phoneNumberId: string; wabaId: string }) {
+  return requestClient.post<{ displayPhone?: string; id: number; pin?: string; warning?: string }>(
+    '/channel/meta/wa-signup/complete',
+    data,
+  );
+}
