@@ -283,3 +283,8 @@ justauth:
     type: REDIS
     prefix: 'social_auth_state:' # 缓存前缀，目前只对 Redis 缓存生效，默认 JUSTAUTH::STATE::
     timeout: 24h # 超时时长，目前只对 Redis 缓存生效，默认 3 分钟
+
+--- #################### 字段加密密钥（仅供开发） ####################
+mybatis-plus:
+  encryptor:
+    password: ${CGCH_FIELD_ENCRYPT_KEY:local-only-insecure-dev-key-0000} # 开发用默认值，不要用于生产

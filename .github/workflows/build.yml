@@ -69,6 +69,32 @@ jobs:
           mysql -h 127.0.0.1 -uroot -p123456 ruoyi-vue-pro -e \
             "SELECT id, name, sort FROM system_menu WHERE parent_id = 0 AND visible = b'1' ORDER BY sort;"
 
+      - name: 生产配置安全检查
+        run: |
+          # 1. 仓库里不能再出现公开过的密钥
+          if grep -rn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target --exclude="*.class" --exclude="*.jar" --exclude=ProductionSecretsCheck.java --exclude=build.yml \
+               -e 'WLWohCayruUlMUWn' -e 'Z579dnaRSE9uJ2vgpjnILyP0S6grC98z' -e 'qpizJVFuBjkrWRIw1FrVlf6aECC2trdh' . ; then
+            echo "::error title=发现明文密钥::仓库中仍有公开过的密钥，请改为环境变量"; exit 1
+          fi
+          JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
+          # 2. prod 配置缺少密钥时必须拒绝启动
+          set +e
+          out=$(timeout 90 env -u CGCH_FIELD_ENCRYPT_KEY java -jar "$JAR" --spring.profiles.active=prod 2>&1); code=$?
+          echo "$out" | grep -q '生产环境安全检查未通过' && [ $code -ne 0 ] && [ $code -ne 124 ] \
+            || { echo "$out" | tail -40; echo "::error title=prod 安全检查::缺少密钥时没有拒绝启动（code=$code）%0A$(echo "$out" | grep -v '^\s*at ' | tail -15 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"; exit 1; }
+          echo "$out" | grep -q 'CGCH_FIELD_ENCRYPT_KEY' && echo "$out" | grep -q 'DB_PASSWORD' || { echo "::error::提示信息不完整"; exit 1; }
+          # 3. 密钥长度不对（AES 只接受 16/24/32 位）也必须拒绝
+          out=$(timeout 90 env CGCH_FIELD_ENCRYPT_KEY=abcdefghijklmnopqrstu DB_URL=jdbc:mysql://x/y DB_PASSWORD=Str0ng-Passw0rd \
+                java -jar "$JAR" --spring.profiles.active=prod 2>&1); code=$?
+          echo "$out" | grep -q '必须正好是 16、24 或 32' && [ $code -ne 0 ] || { echo "$out" | tail -40; echo "::error title=prod 安全检查::密钥长度不对没有被拒绝"; exit 1; }
+          # 4. 使用公开过的旧密钥、弱数据库密码也必须拒绝
+          out=$(timeout 90 env CGCH_FIELD_ENCRYPT_KEY=WLWohCayruUlMUWn DB_URL=jdbc:mysql://x/y DB_PASSWORD=123456 \
+                java -jar "$JAR" --spring.profiles.active=prod 2>&1); code=$?
+          echo "$out" | grep -q '公开过的值' && echo "$out" | grep -q '过于简单' && [ $code -ne 0 ] \
+            || { echo "$out" | tail -40; echo "::error title=prod 安全检查::旧密钥或弱密码没有被拒绝（code=$code）%0A$(echo "$out" | grep -v '^\s*at ' | tail -15 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"; exit 1; }
+          set -e
+          echo "生产配置安全检查通过：无明文密钥；缺少密钥、旧密钥、弱密码均拒绝启动"
+
       - name: 启动 Meta Graph API 模拟服务
         run: |
           nohup python3 .github/ci/mock_graph_api.py 18080 > mock.log 2>&1 &
