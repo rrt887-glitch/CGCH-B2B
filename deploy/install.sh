@@ -155,7 +155,11 @@ if [ -n "${GHCR_TOKEN:-}" ]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-rrt887-glitch}" --password-stdin
 fi
 say "下载最新版本镜像"
-docker compose pull
+if ! docker compose pull; then
+  die "镜像下载失败。如果提示 denied / unauthorized，说明 GitHub 上的镜像是私有的：
+  请把 github.com/rrt887-glitch 下 cgch-backend、cgch-web、cgch-mysql 三个 Package 设为 Public，
+  或在命令前加 GHCR_USER=你的GitHub用户名 GHCR_TOKEN=只读令牌 后重试"
+fi
 say "启动服务（首次启动需要导入数据库，约 1～3 分钟）"
 docker compose up -d --remove-orphans
 
