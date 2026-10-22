@@ -1,4 +1,4 @@
-# 本地开发依赖：MySQL 8 + Redis 7
+# 本地开发依赖：MySQL 8 + Redis 7（只供本机开发，端口只绑定 127.0.0.1；生产部署见 docs/DEPLOY.md）
 # 启动：docker compose up -d
 # 首次启动会自动导入基础表（系统、基础设施、定时任务）、BPM/CRM/支付/AI 业务表和菜单
 services:
@@ -7,7 +7,7 @@ services:
     container_name: cgch-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-123456}" # 本地开发默认 123456
       MYSQL_DATABASE: ruoyi-vue-pro
       TZ: Asia/Shanghai
     command:
@@ -15,7 +15,7 @@ services:
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./backend/sql/mysql/ruoyi-vue-pro.sql:/docker-entrypoint-initdb.d/01-ruoyi-vue-pro.sql:ro
@@ -34,7 +34,7 @@ services:
     container_name: cgch-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
 

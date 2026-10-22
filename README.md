@@ -73,3 +73,12 @@
 ## 第三方许可
 
 见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 部署到生产环境
+
+见 [docs/DEPLOY.md](docs/DEPLOY.md)。要点：
+
+- 所有密码和密钥通过环境变量提供，示例见 [.env.example](.env.example)；`.env` 不会被提交
+- 以 `--spring.profiles.active=prod` 启动：缺少字段加密密钥、使用公开过的旧密钥或弱数据库密码时会**拒绝启动**
+- 早期配置文件里出现过的密钥已随仓库历史公开、全部作废，生产环境必须重新生成
+- `deploy/docker-compose.prod.yml` 提供 MySQL + Redis + 后端 + Nginx 的一键部署示例
