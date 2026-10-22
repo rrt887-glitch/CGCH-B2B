@@ -377,6 +377,12 @@ debug: false
 #   {PUBLIC_BASE_URL}/admin-api/channel/oauth/google/callback
 #   {PUBLIC_BASE_URL}/admin-api/channel/oauth/microsoft/callback
 cgch:
+  site: # 对外公开页面里的运营主体信息（平台审核会检查隐私政策等页面）
+    product-name: ${CGCH_PRODUCT_NAME:CGCH}
+    company-name: ${CGCH_COMPANY_NAME:}
+    company-name-en: ${CGCH_COMPANY_NAME_EN:}
+    contact-email: ${CGCH_CONTACT_EMAIL:}
+    address: ${CGCH_COMPANY_ADDRESS:}
   oauth:
     redirect-base: ${PUBLIC_BASE_URL:http://127.0.0.1:48080}
     google:

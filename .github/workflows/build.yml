@@ -103,7 +103,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 --cgch.site.company-name=测试科技有限公司 '--cgch.site.company-name-en=CGCH Test Co., Ltd.' --cgch.site.contact-email=privacy@cgch.test > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -1346,9 +1346,41 @@ jobs:
           assert fs['recipient'] == {'id': 'IGU1'} and fs['message'] == {'text': 'USD 6.2 each for 1000 pcs.'} and iout['status'] == 'sent', fs
           imr = mupload({'conversationId': ic[0]['id']}, 'catalog.pdf', pdf, 'application/pdf')
           assert imr['code'] == 1030002015, imr
-          for a in (fb, ig):
-              call('DELETE', f"/channel/wa-account/delete?id={a['id']}")
           print('Instagram：收发私信、取客户昵称；按 object 区分平台；暂不支持发文件')
+
+          import base64
+          def signed(user_id, secret='metasec'):
+              b64 = lambda b: base64.urlsafe_b64encode(b).decode().rstrip('=')
+              payload = b64(json.dumps({'algorithm': 'HMAC-SHA256', 'user_id': user_id, 'issued_at': int(time.time())}).encode())
+              return b64(hmac.new(secret.encode(), payload.encode(), hashlib.sha256).digest()) + '.' + payload
+          def form_post(path, sr):
+              return mraw('POST', 'http://127.0.0.1:48080/admin-api/channel/meta/' + path,
+                          urllib.parse.urlencode({'signed_request': sr}).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
+          assert form_post('deauthorize', signed('FBU1', 'wrong'))[0] == 400, '签名不对应拒绝'
+          assert form_post('deauthorize', signed('FBU1'))[0] == 200
+          dis = {a['id']: a for a in call('GET', '/channel/wa-account/list')}
+          assert dis[fb['id']]['enabled'] is False and dis[ig['id']]['enabled'] is False and not dis[fb['id']]['hasAccessToken'], dis
+          code, body = form_post('data-deletion', signed('FBU1'))
+          dd = json.loads(body)
+          assert code == 200 and dd['url'].startswith('http://127.0.0.1:48080/admin-api/channel/meta/data-deletion/status?code=') and dd['confirmation_code'], (code, body)
+          left = [a for a in call('GET', '/channel/wa-account/list') if a['id'] in (fb['id'], ig['id'])]
+          assert left == [], f'数据删除后账号应删除: {left}'
+          st_html = urllib.request.urlopen(dd['url']).read().decode()
+          assert '数据已删除' in st_html and '2 ' in st_html, st_html[:300]
+          assert '未找到该确认码' in urllib.request.urlopen(dd['url'][:-3] + 'zzz').read().decode()
+          print('Facebook 移除应用：停用账号并清除令牌；数据删除回调删除账号与会话，返回确认码与查询页')
+
+          def page(name):
+              return urllib.request.urlopen(f'http://127.0.0.1:48080/admin-api/public/site/{name}').read().decode()
+          pv = page('privacy')
+          assert 'Privacy Policy' in pv and '隐私政策' in pv and 'CGCH Test Co., Ltd.' in pv and '测试科技有限公司' in pv and 'privacy@cgch.test' in pv, pv[:300]
+          assert 'Limited Use' in pv and 'Meta Platform Terms' in pv
+          assert 'Terms of Service' in page('terms') and 'Business integrations' in page('data-deletion') and 'Unified inbox' in page('about')
+          try:
+              page('nope'); raise AssertionError('不存在的页面应返回 404')
+          except urllib.error.HTTPError as e:
+              assert e.code == 404
+          print('公开页面：产品介绍、隐私政策、服务条款、数据删除说明，无需登录，显示配置的公司信息')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY

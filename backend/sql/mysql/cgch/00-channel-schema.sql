@@ -443,6 +443,7 @@ CREATE TABLE `channel_wa_account` (
   `name` varchar(255) NULL COMMENT '显示名称，例如「销售一部 WhatsApp」',
   `platform` varchar(255) NULL COMMENT '平台：whatsapp（默认）、messenger、instagram',
   `auth_type` varchar(255) NULL COMMENT '接入方式：manual 手动填写令牌（默认）、oauth 通过 Facebook 登录授权',
+  `oauth_user_id` varchar(255) NULL COMMENT '通过 Facebook 登录授权接入时，授权人的 Facebook 用户编号（应用范围内的编号）；',
   `phone_number_id` varchar(255) NULL COMMENT '平台账号编号：WhatsApp 为 Phone number ID，Messenger 为主页编号（Page ID），Instagram 为专业账号编号',
   `waba_id` varchar(255) NULL COMMENT 'WhatsApp Business Account ID，用于查询消息模板',
   `display_phone` varchar(255) NULL COMMENT '展示名称：WhatsApp 为号码（如 +86 138 0000 0000），Messenger 为主页名称，Instagram 为 @用户名',

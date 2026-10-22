@@ -17,7 +17,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.META_OAUTH_FAIL;
@@ -100,6 +99,7 @@ public class ChannelMetaOAuthService {
             String longToken = WaGraphClient.call(anon, "GET", "oauth/access_token?grant_type=fb_exchange_token&client_id="
                     + enc(m.getClientId()) + "&client_secret=" + enc(m.getClientSecret())
                     + "&fb_exchange_token=" + enc(shortToken), null).path("access_token").asText(shortToken);
+            String fbUserId = WaGraphClient.call(graph(m, longToken), "GET", "me?fields=id", null).path("id").asText(null);
             JsonNode pages = WaGraphClient.call(graph(m, longToken), "GET", "me/accounts?limit=100&fields="
                     + enc("id,name,access_token,instagram_business_account{id,username,name}"), null).path("data");
             if (!pages.isArray() || pages.isEmpty()) {
@@ -114,7 +114,7 @@ public class ChannelMetaOAuthService {
                         skipped.add(p.path("name").asText(p.path("id").asText()) + "（没有主页令牌，可能缺少管理权限）");
                         continue;
                     }
-                    ChannelWaAccountDO page = upsert(m, userId, ChannelWaAccountDO.PLATFORM_MESSENGER, p.path("id").asText(),
+                    ChannelWaAccountDO page = upsert(m, userId, fbUserId, ChannelWaAccountDO.PLATFORM_MESSENGER, p.path("id").asText(),
                             p.path("name").asText(null), pageToken, skipped);
                     if (page != null) {
                         try {
@@ -128,7 +128,7 @@ public class ChannelMetaOAuthService {
                     JsonNode ig = p.path("instagram_business_account");
                     if (ig.hasNonNull("id")) {
                         String u = ig.path("username").asText(null);
-                        ChannelWaAccountDO insta = upsert(m, userId, ChannelWaAccountDO.PLATFORM_INSTAGRAM, ig.path("id").asText(),
+                        ChannelWaAccountDO insta = upsert(m, userId, fbUserId, ChannelWaAccountDO.PLATFORM_INSTAGRAM, ig.path("id").asText(),
                                 StrUtil.isNotBlank(u) ? "@" + u : ig.path("name").asText(null), pageToken, skipped);
                         if (insta != null) {
                             done.add("Instagram " + insta.getDisplayPhone());
@@ -147,7 +147,7 @@ public class ChannelMetaOAuthService {
     }
 
     /** 按平台账号编号新增或更新；已被其他企业绑定的跳过 */
-    private ChannelWaAccountDO upsert(ChannelOAuthProperties.Meta m, Long userId, String platform, String id,
+    private ChannelWaAccountDO upsert(ChannelOAuthProperties.Meta m, Long userId, String fbUserId, String platform, String id,
                                       String name, String token, List<String> skipped) {
         ChannelWaAccountDO old = TenantUtils.executeIgnore(() -> accountMapper.selectByPhoneNumberId(id));
         String label = StrUtil.blankToDefault(name, id);
@@ -158,7 +158,7 @@ public class ChannelMetaOAuthService {
         ChannelWaAccountDO a = old != null ? old : new ChannelWaAccountDO()
                 .setUserId(userId).setPlatform(platform).setPhoneNumberId(id).setName(label)
                 .setVerifyToken(IdUtil.fastSimpleUUID());
-        a.setAuthType(ChannelWaAccountDO.AUTH_OAUTH).setAccessToken(token).setDisplayPhone(label)
+        a.setAuthType(ChannelWaAccountDO.AUTH_OAUTH).setOauthUserId(fbUserId).setAccessToken(token).setDisplayPhone(label)
                 .setApiBase(m.getApiBase()).setApiVersion(m.getApiVersion()).setEnabled(true);
         if (old == null) {
             accountMapper.insert(a);
@@ -166,6 +166,83 @@ public class ChannelMetaOAuthService {
             accountMapper.updateById(a);
         }
         return a;
+    }
+
+    // ==================== 移除应用与数据删除回调 ====================
+
+    private static final String DELETION_KEY = "cgch:meta-deletion:";
+
+    @Resource
+    private ChannelWhatsAppService channelWhatsAppService;
+
+    /**
+     * 解析并校验 Meta 的 signed_request（base64url(HMAC-SHA256(载荷)).base64url(载荷)），返回 Facebook 用户编号；
+     * 签名不对返回 null
+     */
+    String verifySignedRequest(String signedRequest) {
+        String secret = channelOAuthProperties.getMeta().getClientSecret();
+        if (StrUtil.hasBlank(signedRequest, secret) || !signedRequest.contains(".")) {
+            return null;
+        }
+        String[] parts = signedRequest.split("\\.", 2);
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] expected = mac.doFinal(parts[1].getBytes(StandardCharsets.UTF_8));
+            byte[] given = Base64.getUrlDecoder().decode(parts[0]);
+            if (!java.security.MessageDigest.isEqual(expected, given)) {
+                return null;
+            }
+            JsonNode payload = WaGraphClient.parse(Base64.getUrlDecoder().decode(parts[1]));
+            return StrUtil.emptyToNull(payload.path("user_id").asText(""));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private List<ChannelWaAccountDO> accountsOf(String fbUserId) {
+        return TenantUtils.executeIgnore(() -> accountMapper.selectList(ChannelWaAccountDO::getOauthUserId, fbUserId));
+    }
+
+    /** 用户在 Facebook 里移除了应用：令牌已失效，停用他接入的账号并清除令牌（会话保留，便于企业查看历史） */
+    public boolean deauthorize(String signedRequest) {
+        String fbUserId = verifySignedRequest(signedRequest);
+        if (fbUserId == null) {
+            return false;
+        }
+        for (ChannelWaAccountDO a : accountsOf(fbUserId)) {
+            TenantUtils.executeIgnore(() -> accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId())
+                    .setEnabled(false).setAccessToken("")));
+        }
+        log.info("[deauthorize][Facebook 用户 {} 移除了应用]", fbUserId);
+        return true;
+    }
+
+    /** 数据删除回调：删除该用户接入的主页、Instagram 账号及其会话，返回确认码；签名不对返回 null */
+    public String deleteUserData(String signedRequest) {
+        String fbUserId = verifySignedRequest(signedRequest);
+        if (fbUserId == null) {
+            return null;
+        }
+        List<ChannelWaAccountDO> list = accountsOf(fbUserId);
+        for (ChannelWaAccountDO a : list) {
+            TenantUtils.execute(a.getTenantId(), () -> channelWhatsAppService.deleteAccountInternal(a.getId()));
+        }
+        String code = IdUtil.fastSimpleUUID().substring(0, 16);
+        stringRedisTemplate.opsForValue().set(DELETION_KEY + code, String.valueOf(list.size()), 90, TimeUnit.DAYS);
+        log.info("[deleteUserData][Facebook 用户 {} 申请删除数据，删除账号 {} 个，确认码 {}]", fbUserId, list.size(), code);
+        return code;
+    }
+
+    /** 删除进度查询地址（Meta 要求返回给用户） */
+    public String deletionStatusUrl(String code) {
+        return StrUtil.removeSuffix(channelOAuthProperties.getRedirectBase(), "/")
+                + "/admin-api/channel/meta/data-deletion/status?code=" + enc(code);
+    }
+
+    /** 确认码对应的删除结果：删除的账号数；确认码不存在返回 null */
+    public String deletionStatus(String code) {
+        return StrUtil.isBlank(code) ? null : stringRedisTemplate.opsForValue().get(DELETION_KEY + code);
     }
 
     /** 已配置时返回 true，前端据此显示「Facebook 登录授权」按钮 */
