@@ -1560,7 +1560,8 @@ jobs:
         run: |
           set -e
           docker image rm -f $REGISTRY/cgch-backend:${{ github.sha }} $REGISTRY/cgch-web:${{ github.sha }} $REGISTRY/cgch-mysql:${{ github.sha }} >/dev/null 2>&1 || true
-          sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash deploy/install.sh
+          cat deploy/install.sh | sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash 2>&1 | tee /tmp/install.log  # 与用户一样用管道执行
+          grep -q '安装完成' /tmp/install.log || { echo "::error::安装脚本没有执行到最后"; exit 1; }
           curl -fsS http://127.0.0.1/privacy | grep -q 'Privacy Policy'
           curl -fsS http://127.0.0.1/ | grep -qi '<div id="app"'
           code=$(curl -s -o /tmp/login.json -w '%{http_code}' -H 'tenant-id: 1' -H 'Content-Type: application/json' \
@@ -1570,7 +1571,7 @@ jobs:
           sudo grep -q '^CGCH_FIELD_ENCRYPT_KEY=' /opt/cgch/.env
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT config FROM infra_file_config WHERE id=4\""' | grep -q '"domain": *"http://'
           echo "--- 再执行一次（升级场景）---"
-          sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash deploy/install.sh
+          cat deploy/install.sh | sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash  # 与用户一样用管道执行
           curl -fsS http://127.0.0.1/terms | grep -q 'Terms of Service'
 
       - name: 安装失败时的日志
