@@ -1,0 +1,26 @@
+# CGCH_SITE 为域名（如 crm.example.com）时自动启用 HTTPS（Let's Encrypt）；未设置时按 IP 用 HTTP 访问
+{$CGCH_SITE::80} {
+	encode gzip
+
+	# 对外公开页面：产品介绍、隐私政策、服务条款、数据删除说明（平台审核要求公开可访问）
+	@public path_regexp pub ^/(about|privacy|terms|data-deletion)/?$
+	rewrite @public /admin-api/public/site/{re.pub.1}
+
+	handle /admin-api/* {
+		reverse_proxy backend:48080 {
+			transport http {
+				read_timeout 180s
+			}
+		}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	request_body {
+		max_size 30MB
+	}
+}
