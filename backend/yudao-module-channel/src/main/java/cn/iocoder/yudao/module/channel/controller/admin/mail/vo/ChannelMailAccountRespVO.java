@@ -12,6 +12,9 @@ public class ChannelMailAccountRespVO {
     private Long id;
     private Long userId;
     private String provider;
+
+    @Schema(description = "登录方式：password 密码/授权码、oauth2 Google/Microsoft 授权")
+    private String authType;
     private String email;
     private String displayName;
     private String imapHost;

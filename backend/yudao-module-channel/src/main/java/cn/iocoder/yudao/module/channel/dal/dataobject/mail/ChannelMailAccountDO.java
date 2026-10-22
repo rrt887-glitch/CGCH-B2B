@@ -78,6 +78,24 @@ public class ChannelMailAccountDO extends TenantBaseDO {
     @TableField(typeHandler = EncryptTypeHandler.class)
     private String password;
     /**
+     * 登录方式：password 密码或授权码（默认）、oauth2 通过 Google / Microsoft 授权（XOAUTH2）
+     */
+    private String authType;
+    /**
+     * OAuth 刷新令牌（加密存储）
+     */
+    @TableField(typeHandler = EncryptTypeHandler.class)
+    private String oauthRefreshToken;
+    /**
+     * OAuth 访问令牌（加密存储，约 1 小时过期，自动刷新）
+     */
+    @TableField(typeHandler = EncryptTypeHandler.class)
+    private String oauthAccessToken;
+    /**
+     * 访问令牌过期时间
+     */
+    private LocalDateTime oauthExpireTime;
+    /**
      * 是否启用自动收信
      */
     private Boolean enabled;

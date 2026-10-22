@@ -49,6 +49,8 @@ public interface ErrorCodeConstants {
 
     // ========== 智点 1-030-004-000 ==========
     ErrorCode CREDIT_AMOUNT_ZERO = new ErrorCode(1_030_004_000, "数量不能为 0");
+    ErrorCode LEAD_RULE_INVALID = new ErrorCode(1_030_012_000, "{}");
+    ErrorCode MAIL_OAUTH_FAIL = new ErrorCode(1_030_000_010, "邮箱授权失败：{}");
     ErrorCode SEND_POLICY_INVALID = new ErrorCode(1_030_011_000, "{}");
     ErrorCode SEND_SUPPRESSED = new ErrorCode(1_030_011_001, "收件人 {} 已退订或在黑名单中，不能发送");
     ErrorCode SEND_RATE_LIMITED = new ErrorCode(1_030_011_002, "{}");

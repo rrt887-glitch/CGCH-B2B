@@ -223,6 +223,24 @@ CREATE TABLE `channel_credit_order` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '智点在线充值订单';
 
+DROP TABLE IF EXISTS `channel_lead_rule`;
+CREATE TABLE `channel_lead_rule` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `name` varchar(255) NULL COMMENT '平台名称，例如：阿里国际站',
+  `match_field` varchar(255) NULL COMMENT '匹配字段：from、subject',
+  `keyword` varchar(255) NULL COMMENT '匹配关键词（包含即匹配，不区分大小写），例如 alibaba.com',
+  `source` int NULL COMMENT '建线索时的客户来源（字典 crm_customer_source 的值）',
+  `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否启用',
+  `sort` int NULL COMMENT '排序',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '留资邮箱规则：识别阿里国际站、中国制造网、官网表单等平台发来的询盘通知邮件，自动解析成线索';
+
 DROP TABLE IF EXISTS `channel_mail_account`;
 CREATE TABLE `channel_mail_account` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
@@ -238,6 +256,10 @@ CREATE TABLE `channel_mail_account` (
   `smtp_ssl` bit(1) NULL DEFAULT b'0' COMMENT 'SMTP 是否使用 SSL（465）；否则尝试 STARTTLS',
   `username` varchar(255) NULL COMMENT '登录用户名，一般就是邮箱地址',
   `password` varchar(1024) NULL COMMENT '登录密码或授权码，加密存储',
+  `auth_type` varchar(255) NULL COMMENT '登录方式：password 密码或授权码（默认）、oauth2 通过 Google / Microsoft 授权（XOAUTH2）',
+  `oauth_refresh_token` mediumtext NULL COMMENT 'OAuth 刷新令牌（加密存储）',
+  `oauth_access_token` mediumtext NULL COMMENT 'OAuth 访问令牌（加密存储，约 1 小时过期，自动刷新）',
+  `oauth_expire_time` datetime NULL COMMENT '访问令牌过期时间',
   `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否启用自动收信',
   `last_sync_time` datetime NULL COMMENT '最近一次同步时间',
   `last_sync_uid` bigint NULL COMMENT '收件箱已同步到的最大 IMAP UID',

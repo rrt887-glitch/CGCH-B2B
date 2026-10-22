@@ -103,7 +103,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -1164,6 +1164,75 @@ jobs:
           assert mine_co['code'] == 0 and mine_co['data']['totals']['total'] == 0 and mine_co['data']['topActive'] == [], mine_co
           assert call3('GET', '/channel/customer-overview/get?days=30&userId=1')['code'] != 0, '业务员不能看别人的客户概览'
           print(f"客户概览：{ct['total']} 位客户、成交率 {ct['dealRate']:.0%}，活跃度分桶与总数一致；国家/来源/等级分布、12 个月趋势、商机 8 个阶段；按数据权限隔离")
+
+          # ---- 留资邮箱：平台询盘通知自动建线索 ----
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed', mailMode='auto'))
+          rules = call('GET', '/channel/lead-rule/list')
+          assert [r['name'] for r in rules] == ['阿里国际站', '中国制造网'] and rules[0]['source'] == 12, rules
+          ali = inquiry('Alibaba.com <notification@service.alibaba.com>', 'New Inquiry: Lightweight Hair Dryer',
+                        'You have received a new inquiry.\n\nBuyer Name: John Smith\nCompany: Maple Home Goods Inc.\nCountry/Region: Canada\n'
+                        'Product Name: Lightweight Hair Dryer\nQuantity: 1000 Pieces\nMessage: Please send your best price and lead time.\n\n'
+                        'Reply to this inquiry on Alibaba.com')
+          cj = wait(lambda: clues('John Smith'), '阿里国际站询盘建线索')[0]
+          assert cj['source'] == 12 and cj['countryCode'] == 'CA' and cj['companyName'] == 'Maple Home Goods Inc.' and not cj.get('email'), cj
+          rj = call('GET', f"/crm/clue/get?id={cj['id']}")['remark']
+          assert '阿里国际站' in rj and '1000 Pieces' in rj and 'best price' in rj and '平台后台回复' in rj, rj
+          time.sleep(1.5)
+          assert call('GET', f"/channel/ai/draft/pending?channel=mail&refId={ali['id']}") is None, '平台通知邮件 AI 不应回复'
+          assert call('GET', f"/channel/mail-message/get?id={ali['id']}")['clueName'] == 'John Smith'
+          inquiry('Alibaba.com <notification@service.alibaba.com>', 'New Inquiry: Hair Dryer (follow-up)', 'Buyer Name: John Smith\nMessage: Any update?')
+          time.sleep(2)
+          assert len(clues('John Smith')) == 1, '同一平台同名买家 30 天内不重复建'
+          inquiry('Made-in-China.com <inquiry@made-in-china.com>', '您收到一条新询盘：电热水壶',
+                  '联系人：Ahmed Ali\n国家：沙特阿拉伯\n邮箱：ahmed@riyadh-trade.example\n电话：+966 50 123 4567\n产品：电热水壶\n数量：500台\n留言：请报价')
+          ca = wait(lambda: clues('Ahmed Ali'), '中国制造网询盘建线索')[0]
+          assert ca['source'] == 13 and ca['countryCode'] == 'SA' and ca['email'] == 'ahmed@riyadh-trade.example' and ca['whatsapp'] == '+966501234567', ca
+          rid_w = call('POST', '/channel/lead-rule/save', {'name': '官网表单', 'matchField': 'subject', 'keyword': 'New contact form submission', 'source': 14})
+          assert call('POST', '/channel/lead-rule/save', {'name': 'x', 'keyword': 'ab'}, ok=False)['code'] != 0
+          inquiry('WordPress <wordpress@cgch-site.example>', 'New contact form submission',
+                  'Name: Lucia Gomez\nEmail: lucia@ferreteria.example\nCountry: Mexico\nMessage: We need 200 kettles for our stores.')
+          cl = wait(lambda: clues('Lucia Gomez'), '官网表单建线索')[0]
+          assert cl['source'] == 14 and cl['countryCode'] == 'MX' and cl['email'] == 'lucia@ferreteria.example', cl
+          call('DELETE', f'/channel/lead-rule/delete?id={rid_w}')
+          assert len(call('GET', '/channel/lead-rule/list')) == 2
+          call('PUT', '/channel/ai/config/save', dict(base, embeddingModel='mock-embed', mailMode='off'))
+          print('留资邮箱：阿里国际站、中国制造网、官网表单的询盘通知按规则识别，解析出买家、国家、公司、联系方式和需求建线索；不重复、不让 AI 回复通知邮件')
+
+          # ---- Gmail / Outlook OAuth 授权绑定 ----
+          assert call('GET', '/channel/oauth/providers') == ['google', 'microsoft']
+          def oauth_bind(provider, code='good-code', error=None):
+              url = call('GET', f'/channel/oauth/{provider}/authorize-url')
+              q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+              assert q['redirect_uri'][0] == f'http://127.0.0.1:48080/admin-api/channel/oauth/{provider}/callback', q
+              cb = f"http://127.0.0.1:48080/admin-api/channel/oauth/{provider}/callback?state={q['state'][0]}" + (f'&code={code}' if code else '') + (f'&error={error}' if error else '')
+              html = urllib.request.urlopen(cb).read().decode()  # 第三方跳转回来：不带登录令牌和租户
+              return q, html, cb
+          q, html, cb = oauth_bind('google')
+          assert q['client_id'] == ['gid'] and q['access_type'] == ['offline'] and 'mail.google.com' in q['scope'][0], q
+          assert '邮箱授权成功' in html and 'sales.gmail@cgch.test' in html and 'cgch-mail-oauth' in html, html[:300]
+          assert '授权链接已过期' in urllib.request.urlopen(cb).read().decode(), 'state 只能用一次'
+          accs = {a['email']: a for a in call('GET', '/channel/mail-account/list')}
+          g = accs['sales.gmail@cgch.test']
+          assert g['provider'] == 'gmail' and g['authType'] == 'oauth2' and g['userId'] == 1, g
+          assert not any(k for k in g if 'token' in k.lower() or k == 'password' and g[k]), f'不应返回令牌: {list(g)}'
+          ol = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_oauth'))
+          assert ol[-1]['grant_type'] == 'authorization_code' and ol[-1]['code'] == 'good-code' and ol[-1]['client_id'] == 'gid', ol[-1]
+          time.sleep(1.5)  # 访问令牌 1 秒后过期
+          call('POST', '/channel/mail-account/test', {k: g.get(k) for k in ('id', 'email', 'imapHost', 'imapPort', 'smtpHost', 'smtpPort')},
+               ok=False)  # GreenMail 不支持 XOAUTH2，这里只验证令牌刷新
+          ol = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_oauth'))
+          assert any(x['grant_type'] == 'refresh_token' and x['refresh_token'] == 'refresh-google-1' for x in ol), '令牌过期后应自动刷新'
+          q2, html2, _ = oauth_bind('microsoft')
+          assert '邮箱授权成功' in html2 and 'sales.outlook@cgch.test' in html2 and 'IMAP.AccessAsUser.All' in q2['scope'][0], html2[:300]
+          o = {a['email']: a for a in call('GET', '/channel/mail-account/list')}['sales.outlook@cgch.test']
+          assert o['provider'] == 'outlook' and o['authType'] == 'oauth2', o
+          _, html3, _ = oauth_bind('google', code=None, error='access_denied')
+          assert '邮箱授权失败' in html3 and '授权被取消' in html3, html3[:300]
+          _, html4, _ = oauth_bind('google', code='bad-code')
+          assert '邮箱授权失败' in html4 and 'code expired' in html4, html4[:300]
+          for a in (g, o):
+              call('DELETE', f"/channel/mail-account/delete?id={a['id']}")
+          print('邮箱 OAuth：Gmail / Outlook 授权回调绑定邮箱（state 一次有效、无需登录态），令牌不外露、过期自动刷新；拒绝授权和无效授权码都有提示')
           print(f"数据看板：询盘 {c['inquiries']}、回复率 {c['replyRate']:.0%}、AI 占比 {c['aiShare']:.0%}、线索 {c['cluesCreated']}、智点 {c['creditsConsumed']}，按天与总数一致")
           print('AI 数字员工全部通过')
           PY

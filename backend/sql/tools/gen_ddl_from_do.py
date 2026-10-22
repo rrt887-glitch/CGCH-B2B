@@ -44,6 +44,8 @@ MEDIUM_TEXT |= {'report', 'sources'}
 MEDIUM_TEXT |= {'steps'}
 # 成交案例
 MEDIUM_TEXT |= {'key_points', 'objections', 'phrases'}
+# OAuth 令牌（Microsoft 的访问令牌加密后可超过 3KB）
+MEDIUM_TEXT |= {'oauth_refresh_token', 'oauth_access_token'}
 
 
 def snake(name: str) -> str:

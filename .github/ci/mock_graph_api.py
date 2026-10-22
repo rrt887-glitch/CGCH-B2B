@@ -10,6 +10,7 @@
 - POST /v1/embeddings                      模拟向量模型：同义词落在同一「概念」维度上，便于验证语义检索
 - GET  /_sent、/_uploads、/_llm             查看已记录的发送、上传与大模型请求
 """
+import base64
 import json
 import math
 import re
@@ -21,6 +22,7 @@ SENT = []
 UPLOADS = []
 LLM = []
 SITE_HITS = []
+OAUTH = []
 EMBEDS = []
 GOOD = 'Bearer good-token'
 
@@ -77,6 +79,12 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0].strip('/').split('/')
         if path == ['_site_hits']:
             return self._json(200, SITE_HITS)
+        if path == ['_oauth']:
+            return self._json(200, OAUTH)
+        if path == ['oauth', 'google', 'userinfo']:  # 模拟 Google 取邮箱
+            if self.headers.get('Authorization', '').startswith('Bearer ya29.'):
+                return self._json(200, {'email': 'Sales.Gmail@cgch.test', 'name': 'Gmail Sales'})
+            return self._json(401, {'error': 'invalid_token'})
         if self._site(path):
             return
         if path == ['_sent']:
@@ -116,6 +124,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._llm(json.loads(raw or b'{}'))
         if path == ['v1', 'embeddings']:
             return self._embed(json.loads(raw or b'{}'))
+        if len(path) == 3 and path[0] == 'oauth' and path[2] == 'token':  # 模拟 Google / Microsoft 令牌接口
+            return self._oauth_token(path[1], raw)
         if not self._auth_ok():
             return
         if len(path) == 3 and path[2] == 'media':
@@ -165,6 +175,30 @@ class Handler(BaseHTTPRequestHandler):
         EMBEDS.append({'model': body.get('model'), 'count': len(inputs)})
         self._json(200, {'object': 'list', 'data': data, 'model': body.get('model'),
                          'usage': {'prompt_tokens': tokens, 'total_tokens': tokens}})
+
+    def _oauth_token(self, provider, raw):
+        from urllib.parse import parse_qs
+        f = {k: v[0] for k, v in parse_qs(raw.decode()).items()}
+        OAUTH.append({'provider': provider, **{k: f.get(k) for k in ('grant_type', 'code', 'refresh_token', 'client_id', 'redirect_uri')}})
+        if f.get('client_secret') not in ('gsec', 'msec'):
+            return self._json(401, {'error': 'invalid_client', 'error_description': 'bad client secret'})
+        n = len(OAUTH)
+        if f.get('grant_type') == 'authorization_code':
+            if f.get('code') != 'good-code':
+                return self._json(400, {'error': 'invalid_grant', 'error_description': 'code expired'})
+            body = {'access_token': f'ya29.mock-{n}', 'refresh_token': f'refresh-{provider}-1', 'expires_in': 1, 'token_type': 'Bearer'}
+            if provider == 'microsoft':
+                claims = base64.urlsafe_b64encode(json.dumps({'preferred_username': 'sales.outlook@cgch.test', 'name': 'Outlook Sales'}).encode()).decode().rstrip('=')
+                body['id_token'] = 'eyJhbGciOiJub25lIn0.' + claims + '.'
+            return self._json(200, body)
+        if f.get('grant_type') == 'refresh_token':
+            if not (f.get('refresh_token') or '').startswith('refresh-'):
+                return self._json(400, {'error': 'invalid_grant'})
+            body = {'access_token': f'ya29.mock-{n}', 'expires_in': 3600, 'token_type': 'Bearer'}
+            if provider == 'microsoft':
+                body['refresh_token'] = f'refresh-microsoft-{n}'  # Microsoft 会轮换刷新令牌
+            return self._json(200, body)
+        return self._json(400, {'error': 'unsupported_grant_type'})
 
     def _assistant(self, body, msgs, last):
         usage = {'prompt_tokens': 300, 'completion_tokens': 40}

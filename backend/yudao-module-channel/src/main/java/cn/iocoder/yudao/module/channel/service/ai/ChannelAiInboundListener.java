@@ -35,6 +35,8 @@ public class ChannelAiInboundListener {
     @Resource
     private ChannelLeadService channelLeadService;
     @Resource
+    private cn.iocoder.yudao.module.channel.service.lead.ChannelPlatformLeadService channelPlatformLeadService;
+    @Resource
     private cn.iocoder.yudao.module.channel.service.policy.ChannelSendPolicyService channelSendPolicyService;
     @Resource
     private cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService channelNotifyService;
@@ -55,6 +57,16 @@ public class ChannelAiInboundListener {
                         }
                     } catch (Exception ex) {
                         log.warn("[onInbound][{} {}] 退订识别失败: {}", e.channel(), e.refId(), ex.getMessage());
+                    }
+                    // 0.5 留资邮箱：阿里国际站、中国制造网、官网表单等询盘通知 → 解析建线索，不让 AI 回复通知邮件
+                    if ("mail".equals(e.channel())) {
+                        try {
+                            if (channelPlatformLeadService.handle(e.messageId())) {
+                                return;
+                            }
+                        } catch (Exception ex) {
+                            log.warn("[onInbound][mail {}] 平台询盘解析失败: {}", e.refId(), ex.getMessage());
+                        }
                     }
                     // 1. 线索自动建档（失败不影响 AI 回复）
                     try {
