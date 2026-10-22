@@ -56,6 +56,13 @@ jobs:
         working-directory: backend
         run: mvn -B -ntp -T 2C -DskipTests -Dmaven.javadoc.skip=true clean install 2>&1 | tee ../build.log; exit ${PIPESTATUS[0]}
 
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: yudao-server-jar
+          path: backend/yudao-server/target/yudao-server.jar
+          retention-days: 7
+
       - name: 导入数据库
         run: |
           for f in backend/sql/mysql/ruoyi-vue-pro.sql backend/sql/mysql/quartz.sql backend/sql/mysql/cgch/00-bpm-schema.sql backend/sql/mysql/cgch/00-crm-schema.sql backend/sql/mysql/cgch/00-pay-schema.sql backend/sql/mysql/cgch/00-ai-schema.sql backend/sql/mysql/cgch/00-channel-schema.sql backend/sql/mysql/cgch/01-menu.sql backend/sql/mysql/cgch/02-crm-seed.sql backend/sql/mysql/cgch/03-channel-seed.sql; do
@@ -1475,6 +1482,8 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=8192
         run: |
+          # 生产部署：前端与后端同域，接口走相对路径 /admin-api（见 deploy/Caddyfile）；vben 只从 .env 文件读取配置
+          printf 'VITE_BASE_URL=\nVITE_GLOB_API_URL=/admin-api\n' > apps/web-antd/.env.production.local
           pnpm build:antd 2>&1 | tee ../fe-build.log; code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
             msg=$(grep -nE 'error|Error|ERR' ../fe-build.log | tail -40 | sed 's/%/%25/g' | cut -c1-300 | awk '{printf "%s%%0A", $0}')
@@ -1487,3 +1496,83 @@ jobs:
           name: web-antd-dist
           path: frontend/apps/web-antd/dist*
           if-no-files-found: warn
+
+  release:
+    name: 发布镜像并验证一键安装（main）
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io/rrt887-glitch
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: yudao-server-jar
+          path: ctx/backend
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-antd-dist
+          path: ctx/web-artifact
+
+      - name: 准备镜像内容
+        run: |
+          set -e
+          cp deploy/docker/backend.Dockerfile ctx/backend/Dockerfile
+          mkdir -p ctx/web ctx/mysql/sql
+          cp -r ctx/web-artifact/dist ctx/web/dist
+          test -f ctx/web/dist/index.html
+          grep -q '"/admin-api"' ctx/web/dist/_app-config*.js || { echo "::error::前端接口地址不是 /admin-api"; cat ctx/web/dist/_app-config*.js; exit 1; }
+          ! grep -rq '127.0.0.1:48080' ctx/web/dist --include=*.js || { echo "::error::前端里还有 127.0.0.1:48080"; exit 1; }
+          cp deploy/Caddyfile ctx/web/Caddyfile
+          cp deploy/docker/web.Dockerfile ctx/web/Dockerfile
+          cp deploy/docker/mysql.Dockerfile ctx/mysql/Dockerfile
+          i=10
+          for f in backend/sql/mysql/ruoyi-vue-pro.sql backend/sql/mysql/quartz.sql \
+                   backend/sql/mysql/cgch/00-bpm-schema.sql backend/sql/mysql/cgch/00-crm-schema.sql \
+                   backend/sql/mysql/cgch/00-pay-schema.sql backend/sql/mysql/cgch/00-ai-schema.sql \
+                   backend/sql/mysql/cgch/00-channel-schema.sql backend/sql/mysql/cgch/01-menu.sql \
+                   backend/sql/mysql/cgch/02-crm-seed.sql backend/sql/mysql/cgch/03-channel-seed.sql; do
+            cp "$f" "ctx/mysql/sql/${i}-$(basename "$f")"; i=$((i+1))
+          done
+          ls -R ctx/mysql/sql ctx/backend
+
+      - name: 登录 GitHub 镜像仓库
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: 构建并推送镜像
+        run: |
+          set -e
+          for n in backend web mysql; do
+            docker build -t $REGISTRY/cgch-$n:latest -t $REGISTRY/cgch-$n:${{ github.sha }} \
+              --label org.opencontainers.image.source=https://github.com/${{ github.repository }} ctx/$n
+            docker push $REGISTRY/cgch-$n:${{ github.sha }}
+            docker push $REGISTRY/cgch-$n:latest
+          done
+
+      - name: 在全新环境执行一键安装脚本
+        run: |
+          set -e
+          docker image rm -f $REGISTRY/cgch-backend:${{ github.sha }} $REGISTRY/cgch-web:${{ github.sha }} $REGISTRY/cgch-mysql:${{ github.sha }} >/dev/null 2>&1 || true
+          sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash deploy/install.sh
+          curl -fsS http://127.0.0.1/privacy | grep -q 'Privacy Policy'
+          curl -fsS http://127.0.0.1/ | grep -qi '<div id="app"'
+          code=$(curl -s -o /tmp/login.json -w '%{http_code}' -H 'tenant-id: 1' -H 'Content-Type: application/json' \
+            -d '{"username":"admin","password":"wrong-password"}' http://127.0.0.1/admin-api/system/auth/login)
+          cat /tmp/login.json; echo
+          test "$code" = 200 && grep -q '"code"' /tmp/login.json
+          sudo grep -q '^CGCH_FIELD_ENCRYPT_KEY=' /opt/cgch/.env
+          sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT config FROM infra_file_config WHERE id=4\""' | grep -q '"domain": *"http://'
+          echo "--- 再执行一次（升级场景）---"
+          sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash deploy/install.sh
+          curl -fsS http://127.0.0.1/terms | grep -q 'Terms of Service'
+
+      - name: 安装失败时的日志
+        if: failure()
+        run: sudo bash -c 'cd /opt/cgch && docker compose ps && docker compose logs --tail 200' || true

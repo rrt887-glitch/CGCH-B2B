@@ -30,7 +30,31 @@
 | `CGCH_OAUTH_MICROSOFT_CLIENT_ID` / `_SECRET` | 否 | Outlook / Microsoft 365 授权登录 |
 | `CGCH_META_APP_ID` / `CGCH_META_APP_SECRET` / `CGCH_META_WEBHOOK_VERIFY_TOKEN` | 否 | Facebook 主页、Instagram 私信的「Facebook 登录授权」，见第六节 |
 
-## 三、方式一：Docker Compose（推荐）
+## 三、一键安装（推荐）
+
+每次代码合并到 main，CI 会自动打包三个镜像（`ghcr.io/rrt887-glitch/cgch-backend`、`cgch-web`、`cgch-mysql`），
+并在全新环境里实际跑一遍安装脚本验证。服务器上不需要源码，也不需要装 Java / Node。
+
+**服务器要求**：Ubuntu 22.04 / 24.04，2 核 4G 以上；放在香港或新加坡（国内大陆服务器访问不了 Meta 接口，且需要 ICP 备案）。
+防火墙放行 80、443 端口。
+
+1. 用阿里云控制台的「远程连接」登录服务器（root），执行：
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rrt887-glitch/CGCH-B2B/main/deploy/install.sh | bash
+   ```
+   脚本会安装 Docker、在 `/opt/cgch/.env` 生成随机的数据库密码和加密密钥、下载镜像并启动。完成后用 `http://服务器IP` 访问。
+2. 在域名服务商处添加 A 记录，把域名指向服务器 IP；生效后执行（自动申请 HTTPS 证书）：
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rrt887-glitch/CGCH-B2B/main/deploy/install.sh | DOMAIN=你的域名 bash
+   ```
+3. 编辑 `/opt/cgch/.env` 填写公司信息、Meta / 微软应用参数，然后 `cd /opt/cgch && docker compose up -d` 生效。
+4. **备份 `/opt/cgch/.env`**：里面的 `CGCH_FIELD_ENCRYPT_KEY` 丢失后，数据库里加密保存的令牌和密码都无法解密。
+5. 升级：再执行一次第 1 步（或第 2 步）的命令，数据和配置都会保留。
+
+> 如果仓库或镜像设为私有，在 GitHub 生成一个只有 `read:packages` 权限的令牌，命令改为
+> `... | GHCR_USER=你的GitHub用户名 GHCR_TOKEN=令牌 DOMAIN=你的域名 bash`。
+
+## 三之二、方式一：Docker Compose（从源码构建）
 
 `deploy/docker-compose.prod.yml` 包含 MySQL、Redis、后端和 Nginx。数据库和 Redis 只在容器网络内访问，不暴露端口。
 
@@ -45,7 +69,8 @@ cd backend && mvn -pl yudao-server -am package -DskipTests && cd ..
 # 3. 打包前端（Node 22 + pnpm），接口走同域的 /admin-api
 cd frontend
 pnpm install
-VITE_BASE_URL= VITE_GLOB_API_URL=/admin-api pnpm build:antd
+printf 'VITE_BASE_URL=\nVITE_GLOB_API_URL=/admin-api\n' > apps/web-antd/.env.production.local
+pnpm build:antd
 cd ..
 
 # 4. 启动（首次启动会自动初始化数据库）
