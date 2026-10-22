@@ -72,7 +72,7 @@ jobs:
       - name: 生产配置安全检查
         run: |
           # 1. 仓库里不能再出现公开过的密钥
-          if grep -rn --exclude-dir=.git --exclude-dir=node_modules --exclude=ProductionSecretsCheck.java \
+          if grep -rn --exclude-dir=.git --exclude-dir=node_modules --exclude=ProductionSecretsCheck.java --exclude=build.yml \
                -e 'WLWohCayruUlMUWn' -e 'Z579dnaRSE9uJ2vgpjnILyP0S6grC98z' -e 'qpizJVFuBjkrWRIw1FrVlf6aECC2trdh' . ; then
             echo "::error title=发现明文密钥::仓库中仍有公开过的密钥，请改为环境变量"; exit 1
           fi
