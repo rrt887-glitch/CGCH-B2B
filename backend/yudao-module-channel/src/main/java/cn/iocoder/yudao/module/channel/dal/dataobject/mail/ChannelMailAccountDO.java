@@ -94,7 +94,7 @@ public class ChannelMailAccountDO extends TenantBaseDO {
     /**
      * 访问令牌过期时间
      */
-    private java.time.LocalDateTime oauthExpireTime;
+    private LocalDateTime oauthExpireTime;
     /**
      * 是否启用自动收信
      */

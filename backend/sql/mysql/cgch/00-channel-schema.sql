@@ -259,6 +259,7 @@ CREATE TABLE `channel_mail_account` (
   `auth_type` varchar(255) NULL COMMENT '登录方式：password 密码或授权码（默认）、oauth2 通过 Google / Microsoft 授权（XOAUTH2）',
   `oauth_refresh_token` mediumtext NULL COMMENT 'OAuth 刷新令牌（加密存储）',
   `oauth_access_token` mediumtext NULL COMMENT 'OAuth 访问令牌（加密存储，约 1 小时过期，自动刷新）',
+  `oauth_expire_time` datetime NULL COMMENT '访问令牌过期时间',
   `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否启用自动收信',
   `last_sync_time` datetime NULL COMMENT '最近一次同步时间',
   `last_sync_uid` bigint NULL COMMENT '收件箱已同步到的最大 IMAP UID',
