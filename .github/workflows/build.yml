@@ -1553,7 +1553,7 @@ jobs:
           end = time.time() + 20
           while sql(f"SELECT COUNT(*) FROM channel_mail_message WHERE thread_key = '{th2}' AND direction = 2") == '0' and time.time() < end:
               time.sleep(0.5)
-          assert sql(f"SELECT has_attachments FROM channel_mail_message WHERE thread_key = '{th2}' AND direction = 2 ORDER BY id DESC LIMIT 1") == '1', \
+          assert sql(f"SELECT has_attachments + 0 FROM channel_mail_message WHERE thread_key = '{th2}' AND direction = 2 ORDER BY id DESC LIMIT 1") == '1', \
               'AI 回复应带上云盘文件附件：' + sql(f"SELECT COUNT(*) FROM channel_mail_message WHERE thread_key = '{th2}' AND direction = 2") + ' 封发出；草稿 ' \
               + sql(f"SELECT CONCAT_WS(' | ', status, reason, reason_detail, LEFT(content, 120)) FROM channel_ai_draft WHERE channel = 'mail' AND ref_id = {in2['id']}")
           call('PUT', '/channel/ai/agent-settings', {'skills': dict(s4['skills'], sendFiles=False)})
