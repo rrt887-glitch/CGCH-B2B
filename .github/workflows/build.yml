@@ -1396,6 +1396,8 @@ jobs:
           assert v3['ai']['replies'] > 0 and v3['business']['clues'] > 0, (v3['ai'], v3['business'])
           assert 0 <= (v3['ai']['replyIn1hRate'] or 0) <= 1 and len(v3['trend']) == 7, v3
           assert isinstance(v3['support']['im'], list) and isinstance(v3['support']['mail'], list)
+          empty = call('GET', '/channel/dashboard/v3?startDate=2001-01-01&endDate=2001-01-02')
+          assert empty['traffic']['total'] == 0 and empty['ai']['replyIn1hRate'] is None, empty
           one = call('GET', '/channel/dashboard/v3')
           assert one['startDate'] == one['endDate'] == today, one
           tr = call('POST', '/channel/ai/test-reply', {'channel': 'whatsapp', 'messages': [{'role': 'user', 'content': 'what is the MOQ?'}]})

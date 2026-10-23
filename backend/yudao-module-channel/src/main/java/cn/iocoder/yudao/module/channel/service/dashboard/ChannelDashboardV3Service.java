@@ -276,7 +276,7 @@ public class ChannelDashboardV3Service {
     }
 
     private static Double rate(long a, long b) {
-        return b == 0 ? null : a / (double) b;
+        return b == 0 ? null : Double.valueOf(a / (double) b); // 显式装箱：三元表达式里 null 与 double 混用会拆箱报错
     }
 
     private static long n(Long v) {
