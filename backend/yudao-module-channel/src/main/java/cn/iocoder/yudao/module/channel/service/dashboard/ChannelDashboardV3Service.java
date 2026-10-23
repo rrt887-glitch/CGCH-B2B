@@ -41,19 +41,19 @@ public class ChannelDashboardV3Service {
             ChannelAiDraftDO.REASON_FORBIDDEN, "compliance");
 
     @Resource
-    private ChannelDashboardV3Mapper mapper;
+    private ChannelDashboardV3Mapper channelDashboardV3Mapper;
     @Resource
     private ChannelDashboardService channelDashboardService;
     @Resource
-    private ChannelMailAccountMapper mailAccountMapper;
+    private ChannelMailAccountMapper channelMailAccountMapper;
     @Resource
-    private ChannelWaAccountMapper waAccountMapper;
+    private ChannelWaAccountMapper channelWaAccountMapper;
     @Resource
-    private ChannelAiDraftMapper draftMapper;
+    private ChannelAiDraftMapper channelAiDraftMapper;
     @Resource
-    private ChannelMailMessageMapper mailMessageMapper;
+    private ChannelMailMessageMapper channelMailMessageMapper;
     @Resource
-    private ChannelWaConversationMapper waConversationMapper;
+    private ChannelWaConversationMapper channelWaConversationMapper;
 
     private record Conv(String intent, boolean aiReplied, boolean aiWithin1h, boolean customerBack24h, boolean multiRound) {
     }
@@ -61,9 +61,9 @@ public class ChannelDashboardV3Service {
     public Map<String, Object> overview(Long loginUserId, LocalDate startDate, LocalDate endDate) {
         Scope scope = channelDashboardService.resolveScope(loginUserId, null);
         Set<Long> users = scope.isAll() ? null : new HashSet<>(scope.getUserIds());
-        List<Long> mailAccounts = users == null ? null : owned(mailAccountMapper.selectList().stream()
+        List<Long> mailAccounts = users == null ? null : owned(channelMailAccountMapper.selectList().stream()
                 .map(a -> Map.entry(a.getId(), Objects.requireNonNullElse(a.getUserId(), -1L))).toList(), users);
-        List<Long> waAccounts = users == null ? null : owned(waAccountMapper.selectList().stream()
+        List<Long> waAccounts = users == null ? null : owned(channelWaAccountMapper.selectList().stream()
                 .map(a -> Map.entry(a.getId(), Objects.requireNonNullElse(a.getUserId(), -1L))).toList(), users);
 
         LocalDateTime start = startDate.atStartOfDay();
@@ -71,8 +71,8 @@ public class ChannelDashboardV3Service {
         long days = Math.max(1, Duration.between(start, end).toDays());
         LocalDateTime prevStart = start.minusDays(days);
 
-        List<Conv> convs = new ArrayList<>(conversations(mapper.waMessages(start, end, waAccounts)));
-        convs.addAll(conversations(mapper.mailMessages(start, end, mailAccounts)));
+        List<Conv> convs = new ArrayList<>(conversations(channelDashboardV3Mapper.waMessages(start, end, waAccounts)));
+        convs.addAll(conversations(channelDashboardV3Mapper.mailMessages(start, end, mailAccounts)));
 
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("startDate", startDate.toString());
@@ -85,16 +85,16 @@ public class ChannelDashboardV3Service {
         long aiReplied = convs.stream().filter(Conv::aiReplied).count();
         Map<String, Object> ai = new LinkedHashMap<>();
         ai.put("replies", aiReplies(start, end, mailAccounts, waAccounts));
-        ai.put("tasks", n(mapper.aiTasks(start, end)));
-        ai.put("crmWrites", n(mapper.aiCrmWrites(start, end, users)));
+        ai.put("tasks", n(channelDashboardV3Mapper.aiTasks(start, end)));
+        ai.put("crmWrites", n(channelDashboardV3Mapper.aiCrmWrites(start, end, users)));
         ai.put("replyIn1hRate", rate(convs.stream().filter(Conv::aiWithin1h).count(), total));
         ai.put("customerBack24hRate", rate(convs.stream().filter(Conv::customerBack24h).count(), aiReplied));
         ai.put("multiRoundRate", rate(convs.stream().filter(Conv::multiRound).count(), aiReplied));
         r.put("ai", ai);
 
-        long clues = n(mapper.clueCount(start, end, users));
-        long prevClues = n(mapper.clueCount(prevStart, start, users));
-        List<Map<String, Object>> biz = mapper.businesses(start, end, users);
+        long clues = n(channelDashboardV3Mapper.clueCount(start, end, users));
+        long prevClues = n(channelDashboardV3Mapper.clueCount(prevStart, start, users));
+        List<Map<String, Object>> biz = channelDashboardV3Mapper.businesses(start, end, users);
         long quoted = biz.stream().filter(b -> num(b.get("s")) >= 4 || num(b.get("e")) == 1).count();
         long won = biz.stream().filter(b -> num(b.get("e")) == 1 || num(b.get("s")) >= 8).count();
         Map<String, Object> biz2 = new LinkedHashMap<>();
@@ -201,8 +201,8 @@ public class ChannelDashboardV3Service {
         List<Map<String, Object>> out = new ArrayList<>();
         for (int i = 6; i >= 0; i--) {
             LocalDate d = endDate.minusDays(i);
-            List<Conv> convs = new ArrayList<>(conversations(mapper.waMessages(d.atStartOfDay(), d.plusDays(1).atStartOfDay(), waAccounts)));
-            convs.addAll(conversations(mapper.mailMessages(d.atStartOfDay(), d.plusDays(1).atStartOfDay(), mailAccounts)));
+            List<Conv> convs = new ArrayList<>(conversations(channelDashboardV3Mapper.waMessages(d.atStartOfDay(), d.plusDays(1).atStartOfDay(), waAccounts)));
+            convs.addAll(conversations(channelDashboardV3Mapper.mailMessages(d.atStartOfDay(), d.plusDays(1).atStartOfDay(), mailAccounts)));
             long eff = convs.stream().filter(c -> c.intent() != null && !"invalid".equals(c.intent()) && INTENTS.contains(c.intent())).count();
             out.add(Map.of("date", d.toString(), "total", convs.size(), "effective", eff, "rate", rate(eff, convs.size())));
         }
@@ -211,12 +211,12 @@ public class ChannelDashboardV3Service {
 
     private long aiReplies(LocalDateTime start, LocalDateTime end, List<Long> mailAccounts, List<Long> waAccounts) {
         long n = 0;
-        for (Map<String, Object> m : mapper.waMessages(start, end, waAccounts)) {
+        for (Map<String, Object> m : channelDashboardV3Mapper.waMessages(start, end, waAccounts)) {
             if (num(m.get("d")) == 2 && num(m.get("ai")) == 1) {
                 n++;
             }
         }
-        for (Map<String, Object> m : mapper.mailMessages(start, end, mailAccounts)) {
+        for (Map<String, Object> m : channelDashboardV3Mapper.mailMessages(start, end, mailAccounts)) {
             if (num(m.get("d")) == 2 && num(m.get("ai")) == 1) {
                 n++;
             }
@@ -226,7 +226,7 @@ public class ChannelDashboardV3Service {
 
     /** 待处理（未发出）的 AI 草稿中需要人工支持的事项，分会话与邮件 */
     private Map<String, Object> support(List<Long> mailAccounts, List<Long> waAccounts) {
-        List<ChannelAiDraftDO> pending = draftMapper.selectList(new LambdaQueryWrapperX<ChannelAiDraftDO>()
+        List<ChannelAiDraftDO> pending = channelAiDraftMapper.selectList(new LambdaQueryWrapperX<ChannelAiDraftDO>()
                 .eq(ChannelAiDraftDO::getStatus, "pending")
                 .in(ChannelAiDraftDO::getReason, List.of(ChannelAiDraftDO.REASON_HANDOFF, ChannelAiDraftDO.REASON_FORBIDDEN,
                         ChannelAiDraftDO.REASON_SEND_FAILED, ChannelAiDraftDO.REASON_NO_CREDIT, ChannelAiDraftDO.REASON_WINDOW_CLOSED))
@@ -244,7 +244,7 @@ public class ChannelDashboardV3Service {
             item.put("question", StrUtil.maxLength(d.getQuestion(), 200));
             item.put("time", d.getCreateTime());
             if ("mail".equals(d.getChannel())) {
-                ChannelMailMessageDO m = mailMessageMapper.selectById(d.getRefId());
+                ChannelMailMessageDO m = channelMailMessageMapper.selectById(d.getRefId());
                 if (m == null || (mailAccounts != null && !mailAccounts.contains(m.getAccountId()))) {
                     continue;
                 }
@@ -252,7 +252,7 @@ public class ChannelDashboardV3Service {
                 item.put("subject", m.getSubject());
                 mail.add(item);
             } else {
-                ChannelWaConversationDO c = waConversationMapper.selectById(d.getRefId());
+                ChannelWaConversationDO c = channelWaConversationMapper.selectById(d.getRefId());
                 if (c == null || (waAccounts != null && !waAccounts.contains(c.getAccountId()))) {
                     continue;
                 }
