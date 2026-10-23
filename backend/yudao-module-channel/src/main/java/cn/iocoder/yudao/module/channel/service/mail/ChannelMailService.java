@@ -352,6 +352,15 @@ public class ChannelMailService {
         return BeanUtils.toBean(att, ChannelMailAttachmentRespVO.class);
     }
 
+    /** 已存储的文件（例如企业云盘里的文件）作为待发送附件，返回附件编号 */
+    public Long attachStoredFile(Long userId, String fileName, String contentType, Long size, String url) {
+        ChannelMailAttachmentDO att = ChannelMailAttachmentDO.builder().userId(userId).fileName(StrUtil.maxLength(StrUtil.blankToDefault(fileName, "attachment"), 250))
+                .contentType(StrUtil.blankToDefault(contentType, "application/octet-stream")).fileSize(size == null ? 0L : size)
+                .fileUrl(url).inlined(false).build();
+        attachmentMapper.insert(att);
+        return att.getId();
+    }
+
     private List<ChannelMailAttachmentDO> validatePendingAttachments(Long userId, List<Long> ids) {
         if (CollUtil.isEmpty(ids)) {
             return List.of();

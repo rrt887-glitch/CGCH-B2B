@@ -12,6 +12,7 @@ import cn.iocoder.yudao.module.channel.dal.dataobject.mail.ChannelMailMessageDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaAccountDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaMessageDO;
+import cn.iocoder.yudao.module.channel.dal.dataobject.cloud.ChannelCloudFileDO;
 import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiConfigMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiDraftMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiForbiddenWordMapper;
@@ -337,15 +338,76 @@ public class ChannelAiService {
      * @param intent      咨询意图（模型在回复第一行给出的分类），可能为空
      * @param supportType 转人工时的看板分类（handoff、missing、permission、crisis、other）
      */
+    /** files：AI 决定一并发送的企业云盘文件 */
     public record Generated(String content, boolean handoff, String forbidden, int promptTokens, int completionTokens, String model,
-                            int knowledgeHits, String question, String intent, String supportType) {
+                            int knowledgeHits, String question, String intent, String supportType, List<ChannelCloudFileDO> files) {
+    }
+
+    /** 回复里的发送文件标记 */
+    private static final Pattern SEND_FILE = Pattern.compile("\\[SEND_FILE:\\s*(\\d+)\\s*]");
+
+    @Resource
+    private cn.iocoder.yudao.module.channel.service.cloud.ChannelCloudFileService channelCloudFileService;
+
+    /** 邮件：AI 选的云盘文件转成附件编号 */
+    private List<Long> mailAttachments(Generated g, Long userId) {
+        List<Long> ids = new ArrayList<>();
+        for (ChannelCloudFileDO f : g.files()) {
+            ids.add(mailService.attachStoredFile(userId, f.getName(), f.getMimeType(), f.getSize(), f.getUrl()));
+        }
+        return ids;
+    }
+
+    /** WhatsApp / Messenger：文字发出后逐个发送 AI 选的文件；单个失败只记日志 */
+    private void sendWaFiles(Generated g, Long userId, Long conversationId) {
+        for (ChannelCloudFileDO f : g.files()) {
+            try {
+                byte[] bytes = channelCloudFileService.content(f);
+                var m = whatsAppService.sendMedia(userId, conversationId,
+                        new cn.iocoder.yudao.module.channel.service.file.BytesMultipartFile(f.getName(), f.getMimeType(), bytes), null);
+                if (m != null && m.getId() != null) {
+                    channelWaMessageMapper.updateById(new ChannelWaMessageDO().setId(m.getId()).setAiGenerated(true));
+                }
+            } catch (Exception e) {
+                log.warn("[sendWaFiles][会话 {} 发送文件 {} 失败] {}", conversationId, f.getName(), e.getMessage());
+            }
+        }
+    }
+
+    /** 没有自动发出（起草、转人工）时，把 AI 建议的附件写在草稿末尾，方便业务员一起发 */
+    private static String withFileNote(String content, Generated g) {
+        if (g.files().isEmpty()) {
+            return content;
+        }
+        return StrUtil.nullToEmpty(content) + "\n\n（AI 建议附上云盘文件：" + g.files().stream().map(ChannelCloudFileDO::getName)
+                .collect(java.util.stream.Collectors.joining("、")) + "）";
+    }
+
+    /** 配技能「AI 发送文件」开启时，列出可以发送的文件，告诉 AI 怎么标记 */
+    private String fileBlock(ChannelAiConfigDO cfg, List<ChannelCloudFileDO> files) {
+        if (files.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("\n\n## 可以发给客户的资料文件\n")
+                .append("客户明确需要或明显会用到下列资料（报价单、产品目录、参数表、证书等）时，在回复正文的最后单独一行写 [SEND_FILE:编号]，")
+                .append("系统会把文件作为附件发出。一次最多 3 个，只发和客户需求直接相关的；正文里可以说「附件是……」，不要写文件链接；")
+                .append("没有合适的文件就不要写标记。\n");
+        for (ChannelCloudFileDO f : files) {
+            sb.append("- 编号 ").append(f.getId()).append("：").append(f.getName());
+            if (StrUtil.isNotBlank(f.getDescription())) {
+                sb.append("（").append(f.getDescription()).append("）");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
     }
 
     private Generated generate(ChannelAiConfigDO cfg, String channel, String customerText, List<LlmClient.Message> history) {
         List<ChannelAiKnowledgeDO> knowledge = channelAiKnowledgeMapper.selectEnabled();
         Semantic sem = semanticScores(cfg, knowledge, customerText);
+        List<ChannelCloudFileDO> sendable = ChannelAgentSettings.skills(cfg).isSendFiles() ? channelCloudFileService.aiSendable() : List.of();
         String system = AiPromptBuilder.systemPrompt(cfg, knowledge, customerText, channel, sem == null ? null : sem.scores())
-                + channelAiCaseService.promptBlock(customerText, sem == null ? null : sem.query());
+                + channelAiCaseService.promptBlock(customerText, sem == null ? null : sem.query()) + fileBlock(cfg, sendable);
         List<LlmClient.Message> messages = new ArrayList<>();
         messages.add(LlmClient.Message.system(system));
         messages.addAll(history);
@@ -359,12 +421,19 @@ public class ChannelAiService {
         String intent = AiPromptBuilder.intent(r.content());
         String supportType = handoff ? AiPromptBuilder.handoffType(r.content()) : null;
         String content = handoff ? "" : AiPromptBuilder.stripIntent(r.content());
+        List<ChannelCloudFileDO> files = new ArrayList<>();
+        java.util.regex.Matcher fm = SEND_FILE.matcher(content);
+        while (fm.find() && files.size() < 3) {
+            long id = Long.parseLong(fm.group(1));
+            sendable.stream().filter(f -> f.getId() == id && !files.contains(f)).findFirst().ifPresent(files::add);
+        }
+        content = SEND_FILE.matcher(content).replaceAll("").replaceAll("\\n{3,}", "\n\n").trim();
         String hit = handoff ? null : AiPromptBuilder.firstForbidden(content,
                 channelAiForbiddenWordMapper.selectEnabled().stream().map(ChannelAiForbiddenWordDO::getWord).toList());
         int embedTokens = sem == null ? 0 : sem.tokens(); // 检索用的向量 token 一并计入本次消耗
         int hits = AiPromptBuilder.rank(knowledge, customerText, sem == null ? null : sem.scores()).size();
         return new Generated(content, handoff, hit, r.promptTokens() + embedTokens, r.completionTokens(), cfg.getLlmModel(),
-                hits, StrUtil.maxLength(StrUtil.trim(customerText), 250), intent, supportType);
+                hits, StrUtil.maxLength(StrUtil.trim(customerText), 250), intent, supportType, files);
     }
 
     /** 邮件往来 → 对话历史：客户来信为 user，我方回复为 assistant */
@@ -433,6 +502,7 @@ public class ChannelAiService {
         r.put("handoff", g.handoff());
         r.put("forbidden", g.forbidden());
         r.put("knowledgeHits", g.knowledgeHits());
+        r.put("files", g.files().stream().map(ChannelCloudFileDO::getName).toList());
         r.put("credits", credits);
         return r;
     }
@@ -445,7 +515,7 @@ public class ChannelAiService {
         ChannelAiConfigDO cfg = getConfig();
         List<LlmClient.Message> history = mailHistory(m);
         Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history);
-        return charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), withSignature(g, cfg), g, ChannelAiDraftDO.STATUS_PENDING,
+        return charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), withFileNote(withSignature(g, cfg), g), g, ChannelAiDraftDO.STATUS_PENDING,
                 g.handoff() ? ChannelAiDraftDO.REASON_HANDOFF : g.forbidden() != null ? ChannelAiDraftDO.REASON_FORBIDDEN : ChannelAiDraftDO.REASON_MANUAL,
                 g.forbidden()), userId, "邮件起草");
     }
@@ -456,7 +526,7 @@ public class ChannelAiService {
         ChannelAiConfigDO cfg = getConfig();
         List<LlmClient.Message> history = waHistory(conversationId);
         Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history);
-        return charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING,
+        return charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, withFileNote(g.content(), g), g, ChannelAiDraftDO.STATUS_PENDING,
                 g.handoff() ? ChannelAiDraftDO.REASON_HANDOFF : g.forbidden() != null ? ChannelAiDraftDO.REASON_FORBIDDEN : ChannelAiDraftDO.REASON_MANUAL,
                 g.forbidden()), userId, "WhatsApp 起草");
     }
@@ -591,7 +661,7 @@ public class ChannelAiService {
             reason = wt.reason();
         }
         if (reason != null) {
-            charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), content, g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden()), account.getUserId(), "邮件自动处理");
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), withFileNote(content, g), g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden()), account.getUserId(), "邮件自动处理");
             return;
         }
         ChannelMailSendReqVO req = new ChannelMailSendReqVO();
@@ -601,6 +671,7 @@ public class ChannelAiService {
         req.setText(content);
         req.setReplyToId(m.getId());
         try {
+            req.setAttachmentIds(mailAttachments(g, account.getUserId()));
             mailService.send(account.getUserId(), req, true);
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), content, g, ChannelAiDraftDO.STATUS_SENT, null, null), account.getUserId(), "邮件自动处理");
         } catch (Exception e) {
@@ -665,7 +736,7 @@ public class ChannelAiService {
             reason = ChannelAiDraftDO.REASON_WINDOW_CLOSED;
         }
         if (reason != null) {
-            charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden()), account.getUserId(), "WhatsApp 自动处理");
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, withFileNote(g.content(), g), g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden()), account.getUserId(), "WhatsApp 自动处理");
             if (auto && g.handoff() && StrUtil.isNotBlank(opening.getFallback()) && whatsAppService.isWindowOpen(conv)) {
                 sendQuietly(account.getUserId(), conversationId, opening.getFallback().trim()); // 兜底话术：告诉客户稍后由同事回复
             }
@@ -676,6 +747,7 @@ public class ChannelAiService {
         req.setText(g.content());
         try {
             whatsAppService.send(account.getUserId(), req, true);
+            sendWaFiles(g, account.getUserId(), conversationId);
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_SENT, null, null), account.getUserId(), "WhatsApp 自动处理");
         } catch (Exception e) {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING,
@@ -802,6 +874,7 @@ public class ChannelAiService {
         req.setSubject(StrUtil.startWithIgnoreCase(lastIn.getSubject(), "re:") ? lastIn.getSubject() : "Re: " + StrUtil.nullToEmpty(lastIn.getSubject()));
         req.setText(content);
         req.setReplyToId(lastIn.getId());
+        req.setAttachmentIds(mailAttachments(g, account.getUserId()));
         mailService.send(account.getUserId(), req, true);
         charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, lastIn.getId(), content, g, ChannelAiDraftDO.STATUS_SENT,
                 ChannelAiDraftDO.REASON_FOLLOW_UP, null), account.getUserId(), "智能跟进");
@@ -886,6 +959,7 @@ public class ChannelAiService {
         req.setConversationId(conversationId);
         req.setText(g.content());
         whatsAppService.send(account.getUserId(), req, true);
+        sendWaFiles(g, account.getUserId(), conversationId);
         charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_SENT,
                 ChannelAiDraftDO.REASON_FOLLOW_UP, null), account.getUserId(), "智能跟进");
         log.info("[waFollowUp][会话 {} 第 {} 次跟进已发送]", conversationId, round);

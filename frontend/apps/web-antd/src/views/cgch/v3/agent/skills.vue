@@ -1,12 +1,13 @@
 <script lang="ts" setup>
 /**
  * 配技能：智能询盘接待、自动背调客户、CRM 自动录入（与原网站一致）。
- * 尚未实现的开关（AI 发送文件、联网报价）显示「即将开放」，不会假装生效。
+ * 尚未实现的开关（联网报价）显示「即将开放」，不会假装生效。
  */
 import type { AgentApi } from '#/api/channel/agent';
 import type { ChannelAiApi } from '#/api/channel/ai';
 
 import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { IconifyIcon } from '@vben/icons';
 
@@ -16,6 +17,7 @@ import { getAiConfig, saveAiConfig } from '#/api/channel/ai';
 
 import { clone, useAgentSettings } from './use-settings';
 
+const router = useRouter();
 const { settings, load, save } = useAgentSettings();
 const skills = computed(() => settings.value?.skills);
 const active = ref<'crm' | 'inquiry' | 'research'>('inquiry');
@@ -100,10 +102,14 @@ onMounted(async () => {
         <h3 class="sk__h">智能询盘接待</h3>
 
         <div class="sk__row">
-          <Switch size="small" disabled />
+          <Switch size="small" :checked="skills.sendFiles" @change="(v: any) => patch({ sendFiles: !!v })" />
           <div>
-            <div class="sk__name">AI 发送文件 <Tag class="ml-1">即将开放</Tag></div>
-            <div class="sk__desc">识别到报价单、产品参数、证书等需求时，从企业云盘匹配并发送文件</div>
+            <div class="sk__name">AI 发送文件</div>
+            <div class="sk__desc">
+              识别到报价单、产品参数、证书等需求时，从企业云盘匹配并发送文件
+              <a class="ml-1" @click="router.push({ path: '/v3/settings', query: { tab: 'cloud' } })">上传文件</a>
+            </div>
+            <div class="mt-1 text-xs text-gray-400">只会发送企业云盘里打开了「AI 可发送」的文件，AI 根据文件名和描述判断，一次最多 3 个。</div>
           </div>
         </div>
 

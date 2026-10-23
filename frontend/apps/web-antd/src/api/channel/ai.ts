@@ -116,7 +116,7 @@ export const searchKnowledge = (q: string) =>
 
 /** 智能体测试对话：模拟客户提问，查看数字员工的回复（不保存，按 token 扣点） */
 export const testAgentReply = (channel: 'mail' | 'whatsapp', messages: { content: string; role: 'assistant' | 'user' }[]) =>
-  requestClient.post<{ content: string; credits: number; forbidden?: string; handoff: boolean; knowledgeHits: number }>(
+  requestClient.post<{ content: string; credits: number; files?: string[]; forbidden?: string; handoff: boolean; knowledgeHits: number }>(
     '/channel/ai/test-reply',
     { channel, messages },
   );

@@ -95,6 +95,8 @@ public final class ChannelAgentSettings {
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Skills {
+        /** AI 发送文件：客户需要报价单、目录、证书等资料时，从企业云盘挑选文件发送 */
+        private boolean sendFiles = false;
         /** 自动背调：新线索建档后自动做公司背调 */
         private boolean autoResearch = false;
         /** 预估报价：允许基于知识库回答价格与起订量；关闭时询价一律转人工 */

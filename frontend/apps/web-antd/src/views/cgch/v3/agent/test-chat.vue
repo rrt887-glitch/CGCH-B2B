@@ -47,7 +47,11 @@ async function send(q?: string) {
       msgs.value.push({
         role: 'assistant',
         content: r.content,
-        note: r.forbidden ? `回复中含有违禁内容「${r.forbidden}」，实际不会自动发出` : undefined,
+        note: r.forbidden
+          ? `回复中含有违禁内容「${r.forbidden}」，实际不会自动发出`
+          : r.files?.length
+            ? `附件：${r.files.join('、')}`
+            : undefined,
       });
     }
   } catch (error: any) {

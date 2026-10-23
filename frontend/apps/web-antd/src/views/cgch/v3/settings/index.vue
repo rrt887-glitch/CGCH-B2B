@@ -14,7 +14,7 @@ const groups: HubGroup[] = [
       { key: 'usage', label: '订阅与用量', load: () => import('#/views/cgch/config/credits/index.vue') },
       { key: 'ai', label: 'AI 接待设置', load: () => import('#/views/cgch/agent/profile/index.vue') },
       { key: 'members', label: '成员与部门', load: () => import('#/views/system/user/index.vue') },
-      { key: 'cloud', label: '云盘文件', load: soon },
+      { key: 'cloud', label: '云盘文件', load: () => import('./cloud.vue') },
       { key: 'templates', label: '消息模板', load: () => import('#/views/cgch/config/templates/index.vue') },
       { key: 'emailTemplates', label: '邮件模板', load: soon },
       { key: 'routing', label: '消息分流设置', load: soon },

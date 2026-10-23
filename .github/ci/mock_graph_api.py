@@ -359,6 +359,10 @@ class Handler(BaseHTTPRequestHandler):
                 answer = '{"company": null, "country_code": null, "contact_name": "Pierre", "product": "curling iron", "quantity": null}'
             else:
                 answer = '{"company": null, "country_code": null, "contact_name": null, "product": null, "quantity": null}'
+        elif '可以发给客户的资料文件' in system and 'catalog' in last:  # AI 发送文件
+            import re as _re
+            ids = _re.findall(r'编号 (\d+)：', system)
+            answer = 'Sure, please find our latest catalog attached.' + (f'\n[SEND_FILE:{ids[0]}]' if ids else '')
         elif 'single word' in last:
             answer = 'OK'
         elif 'complaint' in last or 'refund' in last:
