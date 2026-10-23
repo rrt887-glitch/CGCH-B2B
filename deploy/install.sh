@@ -168,7 +168,15 @@ if ! docker compose pull; then
   请把 github.com/rrt887-glitch 下 cgch-backend、cgch-web、cgch-mysql 三个 Package 设为 Public，
   或在命令前加 GHCR_USER=你的GitHub用户名 GHCR_TOKEN=只读令牌 后重试"
 fi
-say "启动服务（首次启动需要导入数据库，约 1～3 分钟）"
+say "启动数据库（首次启动需要导入数据，约 1～3 分钟）"
+docker compose up -d mysql redis
+for i in $(seq 1 120); do
+  [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q mysql)" 2>/dev/null)" = healthy ] && break
+  sleep 3
+done
+say "检查数据库升级"
+docker compose exec -T mysql cgch-migrate </dev/null || die "数据库升级失败，请把上面的输出发给技术支持"
+say "启动服务"
 docker compose up -d --remove-orphans
 
 wait_backend() {

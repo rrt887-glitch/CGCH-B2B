@@ -94,8 +94,8 @@ const tiles = computed(() => {
   ];
 });
 function goto(item: ChannelReportApi.Item) {
-  if (item.channel === 'mail') router.push(`/channel-msg/mail?id=${item.refId}`);
-  else router.push(`/channel-msg/im?conversationId=${item.refId}`);
+  if (item.channel === 'mail') router.push(`/v3/conversation?channel=mail&ref=${item.refId}`);
+  else router.push(`/v3/conversation?channel=whatsapp&ref=${item.refId}`);
 }
 
 // ===== 生成 =====

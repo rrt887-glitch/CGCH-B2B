@@ -46,12 +46,15 @@ import {
 
 defineOptions({ name: 'CgchChannelIm' });
 
+/** 嵌入「会话」页时：账号由左栏选择，隐藏本页的账号下拉 */
+const props = defineProps<{ accountId?: number; embedded?: boolean; openId?: number }>();
+
 const router = useRouter();
 const route = useRoute();
 const POLL_MS = 10_000; // Webhook 写库后前端轮询刷新
 
 const accounts = ref<ChannelWaApi.Account[]>([]);
-const accountId = ref<number>();
+const accountId = ref<number | undefined>(props.accountId);
 const keyword = ref('');
 const unreadOnly = ref(false);
 const conversations = ref<ChannelWaApi.Conversation[]>([]);
@@ -125,13 +128,19 @@ async function refreshCurrent() {
 }
 
 watch([accountId, unreadOnly], () => loadConversations());
+watch(
+  () => props.accountId,
+  (v) => {
+    accountId.value = v;
+  },
+);
 
 let timer: ReturnType<typeof setInterval> | undefined;
 onMounted(async () => {
   accounts.value = await getWaAccountList();
   if (accounts.value.length > 0) await loadConversations();
   // 从工作报告等页面跳转过来时，直接打开指定会话：/channel-msg/im?conversationId=123
-  const cid = Number(route.query.conversationId);
+  const cid = props.openId || Number(route.query.conversationId);
   if (cid) await openConversation(await getWaConversation(cid));
   timer = setInterval(() => {
     if (accounts.value.length === 0 || document.hidden) return;
@@ -320,7 +329,7 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
   <Page auto-content-height>
     <div v-if="accounts.length === 0" class="flex h-full items-center justify-center rounded bg-white">
       <Empty description="还没有绑定 WhatsApp、Facebook 或 Instagram 账号">
-        <Button type="primary" @click="router.push('/config/channels')">去绑定账号</Button>
+        <Button type="primary" @click="router.push('/v3/channel')">去绑定账号</Button>
       </Empty>
     </div>
 
@@ -329,7 +338,8 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
       <div class="flex w-80 shrink-0 flex-col rounded bg-white">
         <div class="flex flex-col gap-2 border-b p-3">
           <div class="flex gap-2">
-            <Select v-model:value="accountId" :options="accountOptions" class="min-w-0 flex-1" />
+            <Select v-if="!embedded" v-model:value="accountId" :options="accountOptions" class="min-w-0 flex-1" />
+            <span v-else class="flex-1"></span>
             <Button v-if="waAccounts.length > 0" type="primary" @click="openTemplate(true)">新会话</Button>
           </div>
           <InputSearch v-model:value="keyword" allow-clear placeholder="号码或昵称" @search="() => loadConversations()" />

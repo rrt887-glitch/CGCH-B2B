@@ -126,6 +126,21 @@ public class ChannelAiController {
         return success(true);
     }
 
+    // ===== 智能体测试对话 =====
+
+    public record TestReq(String channel, List<Map<String, String>> messages) {
+    }
+
+    @PostMapping("/test-reply")
+    @Operation(summary = "智能体测试对话：模拟客户提问，查看数字员工的回复（不保存，按 token 扣点）")
+    @PreAuthorize("@ss.hasPermission('channel:ai:draft')")
+    public CommonResult<Map<String, Object>> testReply(@RequestBody TestReq req) {
+        List<cn.iocoder.yudao.module.channel.service.ai.LlmClient.Message> msgs = req.messages() == null ? List.of()
+                : req.messages().stream().map(m -> new cn.iocoder.yudao.module.channel.service.ai.LlmClient.Message(
+                        StrUtil.nullToEmpty(m.get("role")), StrUtil.nullToEmpty(m.get("content")))).toList();
+        return success(aiService.testReply(getLoginUserId(), req.channel(), msgs));
+    }
+
     // ===== 起草与草稿 =====
 
     @PostMapping("/draft/mail")

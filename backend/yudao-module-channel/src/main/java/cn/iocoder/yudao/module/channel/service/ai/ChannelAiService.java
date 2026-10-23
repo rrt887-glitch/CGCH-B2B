@@ -385,6 +385,35 @@ public class ChannelAiService {
         return "";
     }
 
+    // ==================== 智能体测试对话 ====================
+
+    /**
+     * 测试数字员工：用当前的人设、知识库、话术规则回复一段模拟的客户对话，不保存记录，按 token 扣点。
+     *
+     * @param channel  mail 或 whatsapp（会话），影响回复格式
+     * @param messages 对话历史，role 为 user（客户）或 assistant（数字员工）
+     */
+    public Map<String, Object> testReply(Long userId, String channel, List<LlmClient.Message> messages) {
+        requireCredit();
+        ChannelAiConfigDO cfg = getConfig();
+        String ch = ChannelAiDraftDO.CHANNEL_MAIL.equals(channel) ? ChannelAiDraftDO.CHANNEL_MAIL : ChannelAiDraftDO.CHANNEL_WHATSAPP;
+        List<LlmClient.Message> history = messages.stream()
+                .filter(m -> StrUtil.isNotBlank(m.content()) && ("user".equals(m.role()) || "assistant".equals(m.role())))
+                .map(m -> new LlmClient.Message(m.role(), StrUtil.maxLength(m.content(), HISTORY_CHARS))).toList();
+        if (history.isEmpty() || !"user".equals(history.get(history.size() - 1).role())) {
+            throw exception(AI_LLM_FAIL, "请先输入客户的问题");
+        }
+        Generated g = generate(cfg, ch, lastUserText(history), history.subList(Math.max(0, history.size() - 20), history.size()));
+        long credits = channelCreditService.consume(ch, 0L, userId, g.promptTokens() + g.completionTokens(), "智能体测试对话");
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("content", ChannelAiDraftDO.CHANNEL_MAIL.equals(ch) ? withSignature(g, cfg) : g.content());
+        r.put("handoff", g.handoff());
+        r.put("forbidden", g.forbidden());
+        r.put("knowledgeHits", g.knowledgeHits());
+        r.put("credits", credits);
+        return r;
+    }
+
     // ==================== 手动起草（工作台「AI 起草」按钮） ====================
 
     public ChannelAiDraftDO draftForMail(Long userId, Long messageId) {
