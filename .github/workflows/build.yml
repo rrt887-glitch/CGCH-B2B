@@ -1584,6 +1584,8 @@ jobs:
       - name: 在全新环境执行一键安装脚本
         run: |
           set -e
+          fail() { msg="失败的命令：$BASH_COMMAND%0A$(tail -n 40 /tmp/install*.log 2>/dev/null | sed 's/%/%25/g' | cut -c1-200 | awk '{printf "%s%%0A", $0}')"; echo "::error title=一键安装::$msg"; }
+          trap fail ERR
           docker image rm -f $REGISTRY/cgch-backend:${{ github.sha }} $REGISTRY/cgch-web:${{ github.sha }} $REGISTRY/cgch-mysql:${{ github.sha }} >/dev/null 2>&1 || true
           cat deploy/install.sh | sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash 2>&1 | tee /tmp/install.log  # 与用户一样用管道执行
           grep -q '安装完成' /tmp/install.log || { echo "::error::安装脚本没有执行到最后"; exit 1; }
