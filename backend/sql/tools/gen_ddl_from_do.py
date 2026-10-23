@@ -33,7 +33,7 @@ MEDIUM_TEXT = {'text_body', 'html_body', 'raw_headers', 'last_sync_error', 'to_a
 # 知识条目、AI 回复、跟进记录等正文
 MEDIUM_TEXT |= {'content'}
 # 智能体配置（JSON）与学到的话术
-MEDIUM_TEXT |= {'skills_json', 'handoff_json', 'opening_json', 'learn_json', 'sales_style'}
+MEDIUM_TEXT |= {'skills_json', 'handoff_json', 'opening_json', 'learn_json', 'sales_style', 'company_json'}
 # 知识库向量（JSON 数组，1536 维约 20KB）
 MEDIUM_TEXT |= {'embedding'}
 # AI 工作报告的统计 JSON 与总结

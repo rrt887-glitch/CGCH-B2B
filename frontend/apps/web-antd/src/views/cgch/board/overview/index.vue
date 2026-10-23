@@ -179,7 +179,7 @@ async function load() {
 watch([days, userId], load);
 watch(isDark, renderCharts);
 onMounted(async () => {
-  users.value = await getSimpleUserList();
+  users.value = (await getSimpleUserList()) as any;
   await load();
 });
 </script>

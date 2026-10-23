@@ -104,7 +104,7 @@ function view(r: CgchCrmApi.DedupItem) {
           <template v-else-if="column.key === 'customerName'">{{ record.type === 'customer' ? record.name : '-' }}</template>
           <template v-else-if="column.key === 'clueName'">{{ record.type === 'clue' ? record.name : '-' }}</template>
           <template v-else-if="column.key === 'companyName'">{{ record.companyName || '-' }}</template>
-          <a v-else-if="column.key === 'action'" @click="view(record)">查看</a>
+          <a v-else-if="column.key === 'action'" @click="view(record as any)">查看</a>
         </template>
         <template #emptyText>
           <Empty :description="searched ? '没有找到重复记录' : '暂无数据'" />

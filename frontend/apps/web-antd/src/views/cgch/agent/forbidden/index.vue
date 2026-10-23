@@ -73,12 +73,12 @@ onMounted(load);
       <Table :columns="columns" :data-source="list" :loading="loading" :pagination="false" row-key="id">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'enabled'">
-            <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record, !!v)" />
+            <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record as any, !!v)" />
           </template>
           <template v-else-if="column.key === 'action'">
             <Space>
-              <Button size="small" type="link" @click="openForm(record)">修改</Button>
-              <Popconfirm title="确定删除？" @confirm="remove(record)">
+              <Button size="small" type="link" @click="openForm(record as any)">修改</Button>
+              <Popconfirm title="确定删除？" @confirm="remove(record as any)">
                 <Button size="small" type="link" danger>删除</Button>
               </Popconfirm>
             </Space>

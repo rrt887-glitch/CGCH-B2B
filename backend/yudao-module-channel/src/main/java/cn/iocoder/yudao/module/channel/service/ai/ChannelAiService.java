@@ -208,6 +208,19 @@ public class ChannelAiService {
         return items.size();
     }
 
+    /** 配置了向量模型且有余额时为这些条目生成向量；失败只记日志（之后可在知识库里「建立语义索引」补上） */
+    public void embedQuietly(List<ChannelAiKnowledgeDO> items) {
+        ChannelAiConfigDO cfg = getConfig();
+        if (items.isEmpty() || !semanticEnabled(cfg) || !channelCreditService.hasBalance()) {
+            return;
+        }
+        try {
+            embedKnowledge(cfg, items, currentUserId());
+        } catch (Exception e) {
+            log.warn("[embedQuietly][{} 条生成向量失败，暂按关键词检索] {}", items.size(), e.getMessage());
+        }
+    }
+
     /** 为还没有向量（或向量模型已更换）的启用条目建索引，返回处理条数 */
     public int reindexKnowledge(Long userId) {
         ChannelAiConfigDO cfg = getConfig();

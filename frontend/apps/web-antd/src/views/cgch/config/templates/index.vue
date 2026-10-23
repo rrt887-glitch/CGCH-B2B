@@ -105,9 +105,9 @@ onMounted(async () => {
             <template v-else-if="column.key === 'status'">
               <Tag :color="STATUS[record.status]?.color">{{ STATUS[record.status]?.label ?? record.status }}</Tag>
             </template>
-            <template v-else-if="column.key === 'params'">{{ templateParamCount(record) }}</template>
+            <template v-else-if="column.key === 'params'">{{ templateParamCount(record as any) }}</template>
             <template v-else-if="column.key === 'body'">
-              <div class="whitespace-pre-wrap text-sm">{{ body(record) }}</div>
+              <div class="whitespace-pre-wrap text-sm">{{ body(record as any) }}</div>
             </template>
           </template>
           <template #emptyText>该号码下还没有模板</template>

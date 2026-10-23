@@ -166,7 +166,7 @@ function openManual() {
 function connect(platform: Platform) {
   if (platform === 'whatsapp') {
     connectOpen.value = true;
-  } else if (platform !== 'whatsapp' && props.metaOAuth) {
+  } else if (props.metaOAuth) {
     startMetaOAuth();
   } else {
     openForm(undefined, platform);
@@ -215,14 +215,14 @@ defineExpose({ openForm, connect, connectOfficial, accounts, load, toggle, remov
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'phone'">
           <div class="flex items-center gap-2">
-            <Tag :color="PLATFORM[platformOf(record)].color" class="m-0">{{ PLATFORM[platformOf(record)].label }}</Tag>
+            <Tag :color="PLATFORM[platformOf(record as any)].color" class="m-0">{{ PLATFORM[platformOf(record as any)].label }}</Tag>
             <span class="font-medium">{{ record.displayPhone || record.phoneNumberId }}</span>
             <Tag v-if="record.authType === 'oauth'" class="m-0">授权接入</Tag>
           </div>
-          <div class="text-xs text-gray-500">{{ record.name }} · {{ PLATFORM[platformOf(record)].idLabel }} {{ record.phoneNumberId }}</div>
+          <div class="text-xs text-gray-500">{{ record.name }} · {{ PLATFORM[platformOf(record as any)].idLabel }} {{ record.phoneNumberId }}</div>
         </template>
         <template v-else-if="column.key === 'enabled'">
-          <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record, !!v)" />
+          <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record as any, !!v)" />
         </template>
         <template v-else-if="column.key === 'webhook'">
           <Tag v-if="record.lastWebhookTime" color="green">已收到推送</Tag>
@@ -231,9 +231,9 @@ defineExpose({ openForm, connect, connectOfficial, accounts, load, toggle, remov
         </template>
         <template v-else-if="column.key === 'action'">
           <Space>
-            <Button size="small" type="link" @click="guide = record">回调配置</Button>
-            <Button v-if="record.authType !== 'oauth'" size="small" type="link" @click="openForm(record)">修改</Button>
-            <Popconfirm title="解绑后会话与消息记录也会删除，确定吗？" @confirm="remove(record)">
+            <Button size="small" type="link" @click="guide = record as any">回调配置</Button>
+            <Button v-if="record.authType !== 'oauth'" size="small" type="link" @click="openForm(record as any)">修改</Button>
+            <Popconfirm title="解绑后会话与消息记录也会删除，确定吗？" @confirm="remove(record as any)">
               <Button size="small" type="link" danger>解绑</Button>
             </Popconfirm>
           </Space>

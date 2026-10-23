@@ -231,7 +231,7 @@ async function saveEdit() {
 }
 
 onMounted(async () => {
-  users.value = await getSimpleUserList();
+  users.value = (await getSimpleUserList()) as any;
   await loadTasks();
 });
 </script>
@@ -401,9 +401,9 @@ onMounted(async () => {
             </template>
             <template v-else-if="column.key === 'action'">
               <Space :size="2">
-                <Button size="small" type="link" :disabled="!['draft', 'approved'].includes(record.status) || record.channel !== 'mail'" @click="openEdit(record)">修改</Button>
+                <Button size="small" type="link" :disabled="!['draft', 'approved'].includes(record.status) || record.channel !== 'mail'" @click="openEdit(record as any)">修改</Button>
                 <Tooltip title="让 AI 重新写一封">
-                  <Button size="small" type="link" :disabled="record.channel !== 'mail' || !['draft', 'failed', 'approved'].includes(record.status)" @click="regenerate(record)">重写</Button>
+                  <Button size="small" type="link" :disabled="record.channel !== 'mail' || !['draft', 'failed', 'approved'].includes(record.status)" @click="regenerate(record as any)">重写</Button>
                 </Tooltip>
                 <Button v-if="record.status === 'draft'" size="small" type="link" @click="batch('approve', [record.id])">确认</Button>
               </Space>

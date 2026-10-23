@@ -9,7 +9,11 @@ import cn.iocoder.yudao.module.channel.controller.admin.ai.vo.ChannelAiDraftResp
 import cn.iocoder.yudao.module.channel.dal.dataobject.ai.ChannelAiConfigDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.ai.ChannelAiForbiddenWordDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.ai.ChannelAiKnowledgeDO;
+import cn.iocoder.yudao.module.channel.service.ai.ChannelAgentSettingsService;
 import cn.iocoder.yudao.module.channel.service.ai.ChannelAiService;
+import cn.iocoder.yudao.module.channel.service.ai.ChannelKnowledgeFileService;
+import cn.iocoder.yudao.module.channel.dal.dataobject.ai.ChannelAiKnowledgeFileDO;
+import org.springframework.web.multipart.MultipartFile;
 import cn.hutool.core.util.StrUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -34,6 +38,65 @@ public class ChannelAiController {
 
     @Resource
     private ChannelAiService aiService;
+    @Resource
+    private ChannelAgentSettingsService agentSettingsService;
+    @Resource
+    private ChannelKnowledgeFileService knowledgeFileService;
+
+    // ===== 智能体：配技能、转人工、固定开场白、学习真人销售 =====
+
+    @GetMapping("/agent-settings")
+    @Operation(summary = "获取智能体配置")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<Map<String, Object>> getAgentSettings() {
+        return success(agentSettingsService.get());
+    }
+
+    @PutMapping("/agent-settings")
+    @Operation(summary = "保存智能体配置，只更新请求里带的部分（skills、handoff、opening、learn、salesStyle、humanPauseHours）")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<Boolean> saveAgentSettings(@RequestBody Map<String, Object> req) {
+        agentSettingsService.save(req);
+        return success(true);
+    }
+
+    @PostMapping("/agent-settings/learn")
+    @Operation(summary = "立即学习真人销售的对话，生成话术要点")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<Map<String, Object>> learnNow() {
+        return success(agentSettingsService.learnNow(getLoginUserId()));
+    }
+
+    // ===== 知识库资料文件 =====
+
+    @GetMapping("/knowledge-file/list")
+    @Operation(summary = "资料文件列表")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<List<ChannelAiKnowledgeFileDO>> listKnowledgeFiles() {
+        return success(knowledgeFileService.list());
+    }
+
+    @PostMapping("/knowledge-file/upload")
+    @Operation(summary = "上传资料文件并学习")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<ChannelAiKnowledgeFileDO> uploadKnowledgeFile(@RequestParam("file") MultipartFile file) throws Exception {
+        return success(knowledgeFileService.upload(file.getOriginalFilename(), file.getContentType(), file.getBytes()));
+    }
+
+    @PostMapping("/knowledge-file/relearn")
+    @Operation(summary = "重新学习资料文件")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<ChannelAiKnowledgeFileDO> relearnKnowledgeFile(@RequestParam("id") Long id) {
+        return success(knowledgeFileService.relearn(id));
+    }
+
+    @DeleteMapping("/knowledge-file/delete")
+    @Operation(summary = "删除资料文件及拆出的知识条目")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<Boolean> deleteKnowledgeFile(@RequestParam("id") Long id) {
+        knowledgeFileService.delete(id);
+        return success(true);
+    }
 
     // ===== 配置 =====
 

@@ -154,7 +154,7 @@ onMounted(async () => {
     message.success('支付成功，智点到账可能有几秒延迟');
     router.replace({ path: route.path });
   }
-  users.value = await getSimpleUserList();
+  users.value = (await getSimpleUserList()) as any;
   await Promise.all([loadSummary(), loadLedger(), loadOrders()]);
   packages.value = await getCreditPackages();
 });
@@ -233,7 +233,7 @@ onMounted(async () => {
                 :options="[{ value: 'mail', label: '邮件' }, { value: 'whatsapp', label: 'WhatsApp' }, { value: 'pay', label: '在线支付' }]" />
         <Select v-model:value="filter.userId" allow-clear show-search option-filter-prop="label" placeholder="业务员" class="w-40"
                 :options="users.map((u) => ({ value: u.id, label: u.nickname }))" />
-        <RangePicker v-model:value="filter.range" />
+        <RangePicker :value="filter.range as any" @update:value="(v: any) => (filter.range = v)" />
         <Button type="primary" @click="search">查询</Button>
       </Space>
       <Table

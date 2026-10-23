@@ -23,6 +23,8 @@ public class ChannelAiKnowledgeDO extends TenantBaseDO {
     public static final String TYPE_COMPANY = "company";
     public static final String TYPE_PRODUCT = "product";
     public static final String TYPE_FAQ = "faq";
+    /** 从资料文件拆出的段落，fileId 指向资料文件 */
+    public static final String TYPE_FILE = "file";
 
     /**
      * 编号
@@ -58,5 +60,10 @@ public class ChannelAiKnowledgeDO extends TenantBaseDO {
      * 生成向量所用的模型；与当前配置的向量模型不一致时视为未建索引
      */
     private String embeddingModel;
+
+    /**
+     * 来源资料文件编号（type 为 file 时）
+     */
+    private Long fileId;
 
 }

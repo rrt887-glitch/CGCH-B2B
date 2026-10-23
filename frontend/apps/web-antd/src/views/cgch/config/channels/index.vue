@@ -208,7 +208,7 @@ const advanced = ref(false);
 const saving = ref(false);
 const testing = ref(false);
 const mailChannel = ref<Channel>(CHANNELS[2]!);
-const form = reactive<ChannelMailApi.Account>({ email: '', provider: '163' });
+const form = reactive<ChannelMailApi.Account>({ email: '', provider: '163', imapHost: '', imapPort: 993, smtpHost: '', smtpPort: 465 });
 const provider = computed(() => MAIL[form.provider || 'custom'] ?? MAIL.custom!);
 const isOAuth = computed(() => form.authType === 'oauth2');
 const SSL_OPTIONS = [
@@ -451,13 +451,13 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
           <div class="ch-label"><i>*</i> 加密</div>
           <div class="ch-label"><i>*</i> 端口</div>
           <Input v-model:value="form.imapHost" placeholder="imap.example.com" />
-          <Select v-model:value="form.imapSsl" :options="SSL_OPTIONS" />
+          <Select :value="form.imapSsl as any" :options="SSL_OPTIONS as any" @update:value="(v: any) => (form.imapSsl = v)" />
           <InputNumber v-model:value="form.imapPort" :min="1" :max="65535" :controls="false" class="w-full" />
           <div class="ch-label mt-2"><i>*</i> 发邮件（SMTP）服务器</div>
           <div class="ch-label mt-2"><i>*</i> 加密</div>
           <div class="ch-label mt-2"><i>*</i> 端口</div>
           <Input v-model:value="form.smtpHost" placeholder="smtp.example.com" />
-          <Select v-model:value="form.smtpSsl" :options="SSL_OPTIONS" />
+          <Select :value="form.smtpSsl as any" :options="SSL_OPTIONS as any" @update:value="(v: any) => (form.smtpSsl = v)" />
           <InputNumber v-model:value="form.smtpPort" :min="1" :max="65535" :controls="false" class="w-full" />
         </div>
         <div class="ch-field mt-4">

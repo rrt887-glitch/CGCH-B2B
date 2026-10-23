@@ -1437,6 +1437,59 @@ jobs:
           print('AI 数字员工全部通过')
           PY
 
+          echo "--- 智能体配置、知识库资料文件、CRM 新筛选（特别关注、公海线索、标签、最近联系时间） ---"
+          python3 - <<'PY'
+          import sys, traceback
+          sys.excepthook = lambda t, v, tb: (print('::error title=test failed::' + ''.join(traceback.format_exception(t, v, tb)).replace('%', '%25').replace('\n', '%0A')), sys.__excepthook__(t, v, tb))
+          import json, os, urllib.request, uuid
+          BASE = 'http://127.0.0.1:48080/admin-api'
+          TOKEN = os.environ['TOKEN']
+          H = {'Authorization': 'Bearer ' + TOKEN, 'tenant-id': '1', 'Content-Type': 'application/json'}
+          def call(method, path, body=None, ok=True):
+              req = urllib.request.Request(BASE + path, method=method, headers=H,
+                                           data=json.dumps(body).encode() if body is not None else None)
+              d = json.load(urllib.request.urlopen(req))
+              if ok and d.get('code') != 0:
+                  print(f'::error title={method} {path}::{d}')
+                  raise SystemExit(f'{method} {path} 失败: {d}')
+              return d if not ok else d['data']
+          s = call('GET', '/channel/ai/agent-settings')
+          assert s['skills']['quote'] is True and len(s['skills']['grades']) == 4 and s['presets'], s
+          call('PUT', '/channel/ai/agent-settings', {'company': {'name': 'CGCH Test', 'industry': 'Electronics', 'website': 'https://cgch.test', 'intro': 'We make hair dryers.'},
+                                                    'skills': dict(s['skills'], askMore=True), 'humanPauseHours': 6})
+          s2 = call('GET', '/channel/ai/agent-settings')
+          assert s2['company']['name'] == 'CGCH Test' and s2['skills']['askMore'] is True and s2['humanPauseHours'] == 6, s2
+          assert s2['handoff'] == s['handoff'], '只保存传入的部分'
+          print('智能体配置：读取默认值、按部分保存')
+          # 资料文件：上传 TXT，解析成知识条目
+          boundary = uuid.uuid4().hex
+          text = ('Product catalog\n\n' + 'The HD-200 hair dryer has 1800W power and a 2-year warranty. ' * 40 + '\n\nMOQ is 300 units.').encode()
+          body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="catalog.txt"\r\nContent-Type: text/plain\r\n\r\n').encode() + text + f'\r\n--{boundary}--\r\n'.encode()
+          req = urllib.request.Request(BASE + '/channel/ai/knowledge-file/upload', method='POST', data=body,
+                                       headers={'Authorization': 'Bearer ' + TOKEN, 'tenant-id': '1', 'Content-Type': f'multipart/form-data; boundary={boundary}'})
+          up = json.load(urllib.request.urlopen(req))
+          assert up['code'] == 0 and up['data']['status'] == 'done' and up['data']['chunks'] >= 2, up
+          fid = up['data']['id']
+          chunks = [k for k in call('GET', '/channel/ai/knowledge/list') if k.get('fileId') == fid]
+          assert len(chunks) == up['data']['chunks'] and chunks[0]['type'] == 'file', chunks
+          assert any(f['id'] == fid for f in call('GET', '/channel/ai/knowledge-file/list'))
+          call('DELETE', f'/channel/ai/knowledge-file/delete?id={fid}')
+          assert not [k for k in call('GET', '/channel/ai/knowledge/list') if k.get('fileId') == fid], '删除文件应删除拆出的条目'
+          print('资料文件：上传、解析、拆段、删除')
+          # CRM：特别关注、标签、最近联系时间、公海线索
+          cid = call('POST', '/crm/customer/create', {'name': 'Star Buyer Ltd', 'level': 1, 'source': 1, 'ownerUserId': 1})
+          call('PUT', f'/crm/customer/update-starred?id={cid}&starred=true')
+          starred = call('GET', '/crm/customer/page?pageNo=1&pageSize=10&starred=true')
+          assert any(c['id'] == cid and c['starred'] for c in starred['list']), starred
+          assert call('GET', '/crm/customer/page?pageNo=1&pageSize=10&tagId=999999')['total'] == 0
+          call('GET', '/crm/customer/page?pageNo=1&pageSize=10&contactLastTime=2020-01-01%2000:00:00&contactLastTime=2030-01-01%2000:00:00')
+          call('GET', '/crm/clue/page?pageNo=1&pageSize=10&pool=true')
+          call('GET', '/crm/clue/page?pageNo=1&pageSize=10&tagId=1&contactLastTime=2020-01-01%2000:00:00&contactLastTime=2030-01-01%2000:00:00')
+          levels = call('GET', '/system/dict-data/simple-list')
+          assert [d['label'] for d in levels if d['dictType'] == 'crm_customer_level'] == ['A类客户', 'B类客户', 'C类客户', 'D类客户'], '客户级别应为 A～D'
+          print('CRM：特别关注、标签与最近联系时间筛选、公海线索、A～D 客户级别')
+          PY
+
       - name: 后端日志
         if: always()
         run: tail -300 server.log || true
@@ -1491,9 +1544,24 @@ jobs:
       - name: 安装依赖
         run: pnpm install --no-frozen-lockfile
 
-      - name: 类型检查（web-antd，上游代码存在既有类型错误，仅报告不阻断）
-        continue-on-error: true
-        run: pnpm -F @vben/web-antd run typecheck 2>&1 | tail -40
+      - name: 类型检查（上游代码的既有类型错误只报告；草根出海自己的页面有错误则失败）
+        run: |
+          # setup-node 自带的 tsc 问题匹配器会把上游的既有错误也变成注解（每步最多 10 条），先关掉
+          echo "::remove-matcher owner=tsc::"
+          pnpm -F @vben/web-antd run typecheck > typecheck.log 2>&1 || true
+          sed -i 's/\x1b\[[0-9;]*m//g' typecheck.log
+          echo "全部类型错误：$(grep -c 'error TS' typecheck.log || true) 个（含上游既有错误）"
+          # 草根出海新增 / 改写的代码：views/cgch、api/channel、api/crm/cgch、主框架与路由
+          grep -E "src/(views/cgch|api/channel|api/crm/cgch|layouts/basic\.vue|router/routes/modules/cgch\.ts)" typecheck.log | grep -E "error TS" > own-errors.log || true
+          n=$(wc -l < own-errors.log)
+          echo "草根出海代码的类型错误：$n 个"
+          cat own-errors.log
+          # 全部错误合成一条注解（每步最多 10 条注解）
+          sed -E 's/^src\/views\/cgch\///; s/error TS[0-9]+: //' own-errors.log | split -l 15 - own-part-
+          for f in $(ls own-part-* 2>/dev/null | head -10); do
+            echo "::error title=草根出海代码类型错误（共 $n 个）::$(sed 's/%/%25/g' "$f" | awk '{printf "%s%%0A", $0}')"
+          done
+          [ "$n" -eq 0 ]
 
       - name: 打包（web-antd）
         env:
