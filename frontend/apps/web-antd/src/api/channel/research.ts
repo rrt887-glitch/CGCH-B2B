@@ -48,3 +48,17 @@ export const getResearchPage = (params: PageParam & { clueId?: number; customerI
 export const getResearch = (id: number) => requestClient.get<ChannelResearchApi.Research>(`/channel/research/get?id=${id}`);
 export const applyResearch = (id: number) => requestClient.post<string[]>(`/channel/research/apply?id=${id}`);
 export const deleteResearch = (id: number) => requestClient.delete(`/channel/research/delete?id=${id}`);
+
+export interface LatestResearch {
+  id: number;
+  customerId: number;
+  status: 'done' | 'failed' | 'running';
+  summary?: string;
+  confidence?: string;
+}
+
+/** 每个客户最近一次背调（客户列表「背调结果」列） */
+export const getLatestResearch = (customerIds: number[]) =>
+  requestClient.get<LatestResearch[]>('/channel/research/latest-by-customers', {
+    params: { customerIds: customerIds.join(',') },
+  });

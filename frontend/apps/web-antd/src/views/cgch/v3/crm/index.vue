@@ -15,7 +15,7 @@ const withProps = (load: () => Promise<any>, props: Record<string, any>) => asyn
 };
 
 const groups: HubGroup[] = [
-  { items: [{ key: 'salesmind', label: 'CRM 智枢', load: () => import('#/views/cgch/claw/chat/index.vue') }] },
+  { items: [{ key: 'salesmind', label: 'CRM 智枢', load: () => import('./claw.vue') }] },
   {
     label: '线索',
     items: [

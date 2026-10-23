@@ -51,6 +51,23 @@ public class ChannelResearchController {
         return success(new PageResult<>(p.getList().stream().map(r -> vo(r, false)).toList(), p.getTotal()));
     }
 
+    @GetMapping("/latest-by-customers")
+    @Operation(summary = "每个客户最近一次背调的状态与概况")
+    @PreAuthorize("@ss.hasPermission('channel:research')")
+    public CommonResult<List<Map<String, Object>>> latestByCustomers(@RequestParam("customerIds") List<Long> customerIds) {
+        return success(channelResearchService.latestByCustomers(customerIds.stream().limit(200).toList()).stream().map(r -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", r.getId());
+            m.put("customerId", r.getCustomerId());
+            m.put("status", r.getStatus());
+            m.put("createTime", r.getCreateTime());
+            Object report = vo(r, true).get("report");
+            m.put("summary", report instanceof Map<?, ?> rep ? rep.get("summary") : null);
+            m.put("confidence", report instanceof Map<?, ?> rep ? rep.get("confidence") : null);
+            return m;
+        }).toList());
+    }
+
     @GetMapping("/get")
     @Operation(summary = "背调报告")
     @PreAuthorize("@ss.hasPermission('channel:research')")

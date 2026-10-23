@@ -1488,6 +1488,42 @@ jobs:
           levels = call('GET', '/system/dict-data/simple-list')
           assert [d['label'] for d in levels if d['dictType'] == 'crm_customer_level'] == ['A类客户', 'B类客户', 'C类客户', 'D类客户'], '客户级别应为 A～D'
           print('CRM：特别关注、标签与最近联系时间筛选、公海线索、A～D 客户级别')
+          # 智能跟进：AI 回复后客户一直没回，到时间自动跟进一次，达到轮数后不再跟进
+          import smtplib, subprocess, time, urllib.parse
+          from email.message import EmailMessage
+          from email.utils import make_msgid
+          def sql(q):
+              return subprocess.run(['mysql', '-h', '127.0.0.1', '-uroot', '-p123456', '--default-character-set=utf8mb4', '-N', 'ruoyi-vue-pro', '-e', q],
+                                    capture_output=True, text=True, check=True).stdout.strip()
+          cfg = call('GET', '/channel/ai/config/get')
+          call('PUT', '/channel/ai/config/save', dict(cfg, mailMode='auto', llmApiKey=''))
+          acct = call('GET', '/channel/mail-account/list')[0]['id']
+          subject = 'Follow-up check ' + uuid.uuid4().hex[:8]
+          m = EmailMessage(); m['From'] = 'quiet@silentbuyer.example'; m['To'] = 'sales@cgch.test'; m['Subject'] = subject
+          m['Message-ID'] = make_msgid(domain='silentbuyer.example'); m.set_content('Hello, we are interested in your hair dryers.')
+          with smtplib.SMTP('127.0.0.1', 3025) as smtp:
+              smtp.send_message(m)
+          time.sleep(1)
+          call('POST', f'/channel/mail-account/sync?id={acct}')
+          inbound = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=5&accountId={acct}&keyword={urllib.parse.quote(subject)}')['list'][0]
+          thread = sql(f"SELECT thread_key FROM channel_mail_message WHERE id = {inbound['id']}")
+          def ai_out():
+              return int(sql(f"SELECT COUNT(*) FROM channel_mail_message WHERE thread_key = '{thread}' AND direction = 2 AND ai_generated = 1 AND deleted = 0"))
+          end = time.time() + 20
+          while ai_out() < 1 and time.time() < end:
+              time.sleep(0.5)
+          assert ai_out() == 1, f'AI 应先自动回复一次，实际 {ai_out()}'
+          s3 = call('GET', '/channel/ai/agent-settings')
+          call('PUT', '/channel/ai/agent-settings', {'skills': dict(s3['skills'], followUp=True, followUpHours=1, followUpRounds=1)})
+          assert call('POST', '/channel/ai/follow-up/run') == 0 and ai_out() == 1, '还没到跟进时间，不应跟进'
+          sql(f"UPDATE channel_mail_message SET sent_time = NOW() - INTERVAL 3 HOUR WHERE thread_key = '{thread}'")
+          assert call('POST', '/channel/ai/follow-up/run') >= 1 and ai_out() == 2, f'到时间应跟进一次，实际 AI 发出 {ai_out()} 封'
+          sql(f"UPDATE channel_mail_message SET sent_time = NOW() - INTERVAL 3 HOUR WHERE thread_key = '{thread}'")
+          call('POST', '/channel/ai/follow-up/run')
+          assert ai_out() == 2, '已达到跟进轮数，不应再跟进'
+          call('PUT', '/channel/ai/agent-settings', {'skills': dict(s3['skills'], followUp=False)})
+          call('PUT', '/channel/ai/config/save', dict(cfg, llmApiKey=''))
+          print('智能跟进：未到时间不跟进、到时间跟进一次、达到轮数后停止')
           PY
 
       - name: 后端日志

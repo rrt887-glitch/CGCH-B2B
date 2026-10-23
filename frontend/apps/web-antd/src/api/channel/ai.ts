@@ -83,6 +83,8 @@ export const DRAFT_REASON: Record<string, string> = {
   no_credit: '智点余额不足',
   work_hours: '工作时间设为由业务员发送',
   off_hours: '非工作时间设为只起草',
+  condition: '命中「根据客户条件」转人工',
+  follow_up: '智能跟进',
 };
 
 export const getAiConfig = () => requestClient.get<ChannelAiApi.Config>('/channel/ai/config/get');
