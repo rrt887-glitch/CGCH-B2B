@@ -99,7 +99,13 @@ public class ChannelDashboardV3Service {
         long won = biz.stream().filter(b -> num(b.get("e")) == 1 || num(b.get("s")) >= 8).count();
         Map<String, Object> biz2 = new LinkedHashMap<>();
         biz2.put("clues", clues);
-        biz2.put("cluesChange", prevClues == 0 ? (clues > 0 ? null : 0.0) : (clues - prevClues) / (double) prevClues);
+        Double cluesChange = null; // 上一周期没有线索时无法计算环比
+        if (prevClues > 0) {
+            cluesChange = (clues - prevClues) / (double) prevClues;
+        } else if (clues == 0) {
+            cluesChange = 0.0;
+        }
+        biz2.put("cluesChange", cluesChange);
         biz2.put("inquiryToQuoteRate", rate(quoted, total));
         biz2.put("businessToWinRate", rate(won, biz.size()));
         biz2.put("businesses", biz.size());
