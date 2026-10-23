@@ -1603,7 +1603,7 @@ jobs:
           cat deploy/install.sh | sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash 2>&1 | tee /tmp/install2.log
           curl -fsS http://127.0.0.1/terms | grep -q 'Terms of Service'
           grep -q '执行数据库升级：001-v3-brand-intent.sql' /tmp/install2.log || { echo "::error::升级脚本没有执行"; exit 1; }
-          sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT name FROM system_tenant WHERE id = 1\""' | grep -q '草根出海'
+          sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD --default-character-set=utf8mb4 -N ruoyi-vue-pro -e \"SELECT name FROM system_tenant WHERE id = 1\""' | grep -q '草根出海'
 
       - name: 安装失败时的日志
         if: failure()
