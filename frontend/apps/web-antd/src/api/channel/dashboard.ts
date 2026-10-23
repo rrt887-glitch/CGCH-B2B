@@ -58,3 +58,52 @@ export namespace ChannelDashboardApi {
 
 export const getDashboardOverview = (days: number, userId?: number) =>
   requestClient.get<ChannelDashboardApi.Overview>('/channel/dashboard/overview', { params: { days, userId } });
+
+export namespace ChannelDashboardV3Api {
+  export interface SupportItem {
+    draftId: number;
+    channel: 'mail' | 'whatsapp';
+    refId: number;
+    type: 'compliance' | 'handoff' | 'other';
+    reason: string;
+    detail?: string;
+    question?: string;
+    time?: string;
+    contact?: string;
+    subject?: string;
+    platform?: string;
+  }
+
+  export interface Overview {
+    startDate: string;
+    endDate: string;
+    updateTime: string;
+    traffic: {
+      counts: Record<'after_sales' | 'business' | 'invalid' | 'sales', number>;
+      effective: number;
+      effectiveRate: null | number;
+      total: number;
+      unclassified: number;
+    };
+    trend: { date: string; effective: number; rate: null | number; total: number }[];
+    ai: {
+      crmWrites: number;
+      customerBack24hRate: null | number;
+      multiRoundRate: null | number;
+      replies: number;
+      replyIn1hRate: null | number;
+      tasks: number;
+    };
+    business: {
+      businesses: number;
+      businessToWinRate: null | number;
+      clues: number;
+      cluesChange: null | number;
+      inquiryToQuoteRate: null | number;
+    };
+    support: { im: SupportItem[]; mail: SupportItem[] };
+  }
+}
+
+export const getDashboardV3 = (startDate: string, endDate: string) =>
+  requestClient.get<ChannelDashboardV3Api.Overview>('/channel/dashboard/v3', { params: { startDate, endDate } });

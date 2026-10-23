@@ -1,43 +1,18 @@
 <script lang="ts" setup>
-import type { NotificationItem } from '@vben/layouts';
+/**
+ * 草根出海主框架：左侧图标导航（看板、会话、CRM、智能体、渠道，底部设置与头像），右侧页面内容。
+ * 不使用开源框架自带的顶栏、标签页和多级菜单。
+ */
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 
-import type { SystemTenantApi } from '#/api/system/tenant';
-
-import { computed, onMounted, ref, watch } from 'vue';
-
-import { useAccess } from '@vben/access';
-import { AuthenticationLoginExpiredModal, useVbenModal } from '@vben/common-ui';
-import { VBEN_DOC_URL, VBEN_GITHUB_URL } from '@vben/constants';
-import { isTenantEnable, useTabs, useWatermark } from '@vben/hooks';
-import {
-  AntdProfileOutlined,
-  BookOpenText,
-  CircleHelp,
-  IconifyIcon,
-  SvgGithubIcon,
-} from '@vben/icons';
-import {
-  BasicLayout,
-  Help,
-  LockScreen,
-  Notification,
-  TenantDropdown,
-  UserDropdown,
-} from '@vben/layouts';
-import { preferences, usePreferences } from '@vben/preferences';
+import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
+import { preferences } from '@vben/preferences';
 import { useAccessStore, useUserStore } from '@vben/stores';
-import { formatDateTime, openWindow } from '@vben/utils';
 
-import { message, Tooltip } from 'ant-design-vue';
+import { Avatar, Dropdown, Menu, MenuItem, Tooltip } from 'ant-design-vue';
 
-import {
-  getUnreadNotifyMessageCount,
-  getUnreadNotifyMessageList,
-  updateAllNotifyMessageRead,
-  updateNotifyMessageRead,
-} from '#/api/system/notify/message';
-import { getSimpleTenantList } from '#/api/system/tenant';
-import { $t } from '#/locales';
 import { router } from '#/router';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
@@ -45,299 +20,205 @@ import LoginForm from '#/views/_core/authentication/login.vue';
 const userStore = useUserStore();
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
-const { hasAccessByCodes } = useAccess();
-const { destroyWatermark, updateWatermark } = useWatermark();
-const { closeOtherTabs, refreshTab } = useTabs();
+const route = useRoute();
 
-const notifications = ref<NotificationItem[]>([]);
-const unreadCount = ref(0);
-const showDot = computed(() => unreadCount.value > 0);
+interface NavItem {
+  key: string;
+  label: string;
+  icon: string;
+  path: string;
+}
 
-const [HelpModal, helpModalApi] = useVbenModal({
-  connectedComponent: Help,
-});
-const { isDark } = usePreferences();
+const NAV: NavItem[] = [
+  { key: 'dashboard', label: '看板', icon: 'lucide:chart-no-axes-combined', path: '/v3/dashboard' },
+  { key: 'conversation', label: '会话', icon: 'lucide:message-circle-more', path: '/v3/conversation' },
+  { key: 'crm', label: 'CRM', icon: 'lucide:user-round-search', path: '/v3/crm' },
+  { key: 'agent', label: '智能体', icon: 'lucide:bot', path: '/v3/agent' },
+  { key: 'channel', label: '渠道', icon: 'lucide:cable', path: '/v3/channel' },
+];
+const SETTINGS: NavItem = { key: 'settings', label: '设置', icon: 'lucide:settings', path: '/v3/settings' };
 
-const menus = computed(() => [
-  {
-    handler: () => {
-      router.push({ name: 'Profile' });
-    },
-    icon: AntdProfileOutlined,
-    text: $t('ui.widgets.profile'),
-  },
-  {
-    handler: () => {
-      openWindow(VBEN_DOC_URL, {
-        target: '_blank',
-      });
-    },
-    icon: BookOpenText,
-    text: $t('ui.widgets.document'),
-  },
-  {
-    handler: () => {
-      openWindow(VBEN_GITHUB_URL, {
-        target: '_blank',
-      });
-    },
-    icon: SvgGithubIcon,
-    text: 'GitHub',
-  },
-  {
-    handler: () => {
-      helpModalApi.open();
-    },
-    icon: CircleHelp,
-    text: $t('ui.widgets.qa'),
-  },
-]);
-
-const avatar = computed(() => {
-  return userStore.userInfo?.avatar ?? preferences.app.defaultAvatar;
+/** 当前所在模块：按路径前缀判断，CRM 的客户/线索详情等页面也算 CRM */
+const activeKey = computed(() => {
+  const p = route.path;
+  const hit = [...NAV, SETTINGS].find((n) => p === n.path || p.startsWith(`${n.path}/`));
+  if (hit) return hit.key;
+  if (p.startsWith('/crm')) return 'crm';
+  if (p.startsWith('/system') || p.startsWith('/profile')) return 'settings';
+  return '';
 });
 
-async function handleLogout() {
-  await authStore.logout(false);
+function go(item: NavItem) {
+  if (route.path !== item.path) router.push(item.path);
 }
 
-/** 获得未读消息数 */
-async function handleNotificationGetUnreadCount() {
-  unreadCount.value = await getUnreadNotifyMessageCount();
+const avatar = computed(() => userStore.userInfo?.avatar || preferences.app.defaultAvatar);
+const nickname = computed(() => userStore.userInfo?.nickname || userStore.userInfo?.username || '');
+
+function onUserMenu({ key }: { key: number | string }) {
+  if (key === 'profile') router.push({ name: 'Profile' });
+  if (key === 'logout') authStore.logout(false);
 }
-
-/** 获得消息列表 */
-async function handleNotificationGetList() {
-  const list = await getUnreadNotifyMessageList();
-  notifications.value = list.map((item) => ({
-    avatar: preferences.app.defaultAvatar,
-    date: formatDateTime(item.createTime) as string,
-    isRead: false,
-    id: item.id,
-    message: item.templateContent,
-    title: item.templateNickname,
-    // CGCH 的通知在参数里带了跳转地址（如打开对应会话、线索）
-    link: ((item.templateParams as any)?.link as string) || undefined,
-  }));
-}
-
-/** 跳转我的站内信 */
-function handleNotificationViewAll() {
-  router.push({
-    name: 'MyNotifyMessage',
-  });
-}
-
-/** 标记所有已读 */
-async function handleNotificationMakeAll() {
-  await updateAllNotifyMessageRead();
-  unreadCount.value = 0;
-  notifications.value = [];
-}
-
-/** 清空通知 */
-async function handleNotificationClear() {
-  await handleNotificationMakeAll();
-}
-
-/** 标记单个已读 */
-async function handleNotificationRead(item: NotificationItem) {
-  if (!item.id) {
-    return;
-  }
-  await updateNotifyMessageRead([item.id]);
-  await handleNotificationGetUnreadCount();
-  notifications.value = notifications.value.filter((n) => n.id !== item.id);
-}
-
-/** 处理通知打开 */
-function handleNotificationOpen(open: boolean) {
-  if (!open) {
-    return;
-  }
-  handleNotificationGetList();
-  handleNotificationGetUnreadCount();
-}
-
-/** 打开 IM 聊天 */
-function handleOpenImHome() {
-  const { href } = router.resolve({ name: 'ImHome' });
-  window.open(href, '_blank');
-}
-
-// 租户列表
-const tenants = ref<SystemTenantApi.Tenant[]>([]);
-const tenantEnable = computed(
-  () => hasAccessByCodes(['system:tenant:visit']) && isTenantEnable(),
-);
-
-/** 获取租户列表 */
-async function handleGetTenantList() {
-  if (tenantEnable.value) {
-    tenants.value = await getSimpleTenantList();
-  }
-}
-
-/** 处理租户切换 */
-async function handleTenantChange(tenant: SystemTenantApi.Tenant) {
-  if (!tenant || !tenant.id) {
-    message.error('切换租户失败');
-    return;
-  }
-  // 设置访问租户 ID
-  accessStore.setVisitTenantId(tenant.id as number);
-  // 关闭其他标签页，只保留当前页
-  await closeOtherTabs();
-  // 刷新当前页面
-  await refreshTab();
-  // 提示切换成功
-  message.success(`切换当前租户为: ${tenant.name}`);
-}
-
-// ========== 初始化 ==========
-onMounted(() => {
-  // 首次加载未读数量
-  handleNotificationGetUnreadCount();
-  // 获取租户列表
-  handleGetTenantList();
-  // 轮询刷新未读数量
-  setInterval(
-    () => {
-      if (userStore.userInfo) {
-        handleNotificationGetUnreadCount();
-      }
-    },
-    1000 * 60 * 2,
-  );
-});
-
-const handleClick = (item: NotificationItem) => {
-  // 如果通知项有链接，点击时跳转
-  if (item.link) {
-    navigateTo(item.link, item.query, item.state);
-  }
-};
-
-function navigateTo(
-  link: string,
-  query?: Record<string, any>,
-  state?: Record<string, any>,
-) {
-  if (link.startsWith('http://') || link.startsWith('https://')) {
-    // 外部链接，在新标签页打开
-    window.open(link, '_blank');
-  } else {
-    // 内部路由链接，支持 query 参数和 state
-    router.push({
-      path: link,
-      query: query || {},
-      state,
-    });
-  }
-}
-
-watch(
-  () => ({
-    enable: preferences.app.watermark,
-    content: preferences.app.watermarkContent,
-    isDark: isDark.value,
-  }),
-  async ({ enable, content, isDark: isDarkValue }) => {
-    if (enable) {
-      const watermarkColor = isDarkValue
-        ? 'rgba(255, 255, 255, 0.12)'
-        : 'rgba(0, 0, 0, 0.12)';
-
-      await updateWatermark({
-        advancedStyle: {
-          colorStops: [
-            {
-              color: watermarkColor,
-              offset: 0,
-            },
-            {
-              color: watermarkColor,
-              offset: 1,
-            },
-          ],
-          type: 'linear',
-        },
-        content:
-          content ||
-          `${userStore.userInfo?.id} - ${userStore.userInfo?.nickname}`,
-      });
-    } else {
-      destroyWatermark();
-    }
-  },
-  {
-    immediate: true,
-  },
-);
 </script>
 
 <template>
-  <BasicLayout
-    :avatar
-    :text="userStore.userInfo?.realName"
-    @clear-preferences-and-logout="handleLogout"
-    @logout="handleLogout"
-  >
-    <template #user-dropdown>
-      <UserDropdown
-        :avatar
-        :menus
-        :text="userStore.userInfo?.nickname"
-        :description="userStore.userInfo?.email"
-        :tag-text="userStore.userInfo?.username"
-        @clear-preferences-and-logout="handleLogout"
-        @logout="handleLogout"
-      />
-    </template>
-    <template #notification>
-      <Notification
-        :dot="showDot"
-        :notifications="notifications"
-        @clear="handleNotificationClear"
-        @make-all="handleNotificationMakeAll"
-        @view-all="handleNotificationViewAll"
-        @open="handleNotificationOpen"
-        @read="handleNotificationRead"
-        @on-click="handleClick"
-      />
-    </template>
-    <template #header-right-1>
-      <div v-if="tenantEnable">
-        <TenantDropdown
-          class="mr-2"
-          :tenant-list="tenants"
-          :visit-tenant-id="accessStore.visitTenantId"
-          @success="handleTenantChange"
-        />
+  <div class="cgch-shell">
+    <aside class="cgch-rail">
+      <div class="cgch-rail__logo" title="草根出海" @click="router.push('/v3/dashboard')">
+        <img src="/brand/logo.png" alt="草根出海" />
       </div>
-    </template>
-    <template #header-right-900>
-      <Tooltip title="IM 聊天">
+      <nav class="cgch-rail__nav">
         <button
-          class="hover:bg-accent hover:text-accent-foreground mr-1 inline-flex size-8 items-center justify-center rounded-md transition-colors"
+          v-for="item in NAV"
+          :key="item.key"
           type="button"
-          @click="handleOpenImHome"
+          class="cgch-rail__item"
+          :class="{ 'is-active': activeKey === item.key }"
+          @click="go(item)"
         >
-          <IconifyIcon class="size-4" icon="lucide:message-circle" />
+          <IconifyIcon :icon="item.icon" class="cgch-rail__icon" />
+          <span>{{ item.label }}</span>
         </button>
-      </Tooltip>
-    </template>
-    <template #extra>
-      <AuthenticationLoginExpiredModal
-        v-model:open="accessStore.loginExpired"
-        :avatar
-      >
-        <LoginForm />
-      </AuthenticationLoginExpiredModal>
-    </template>
-    <template #lock-screen>
-      <LockScreen :avatar @to-login="handleLogout" />
-    </template>
-  </BasicLayout>
-  <HelpModal />
+      </nav>
+      <div class="cgch-rail__bottom">
+        <button
+          type="button"
+          class="cgch-rail__item"
+          :class="{ 'is-active': activeKey === 'settings' }"
+          @click="go(SETTINGS)"
+        >
+          <IconifyIcon :icon="SETTINGS.icon" class="cgch-rail__icon" />
+          <span>{{ SETTINGS.label }}</span>
+        </button>
+        <Dropdown placement="topLeft" :trigger="['click']">
+          <Tooltip :title="nickname" placement="right">
+            <button type="button" class="cgch-rail__avatar">
+              <Avatar :src="avatar" :size="34">{{ nickname.slice(0, 1) }}</Avatar>
+            </button>
+          </Tooltip>
+          <template #overlay>
+            <Menu @click="onUserMenu">
+              <div class="px-3 py-2 text-xs text-gray-500">
+                <div class="text-sm font-medium text-gray-800">{{ nickname }}</div>
+                <div v-if="userStore.userInfo?.email">{{ userStore.userInfo?.email }}</div>
+              </div>
+              <MenuItem key="profile">个人中心</MenuItem>
+              <MenuItem key="logout">退出登录</MenuItem>
+            </Menu>
+          </template>
+        </Dropdown>
+      </div>
+    </aside>
+
+    <main class="cgch-main">
+      <RouterView v-slot="{ Component, route: r }">
+        <component :is="Component" :key="r.path" />
+      </RouterView>
+    </main>
+
+    <AuthenticationLoginExpiredModal v-model:open="accessStore.loginExpired" :avatar="avatar">
+      <LoginForm />
+    </AuthenticationLoginExpiredModal>
+  </div>
 </template>
+
+<style scoped>
+.cgch-shell {
+  --vben-content-height: calc(100vh - 16px);
+
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: linear-gradient(135deg, #eef1fb 0%, #e8edfb 50%, #eef0fa 100%);
+}
+
+.cgch-rail {
+  display: flex;
+  flex: 0 0 60px;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.cgch-rail__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 18px;
+  cursor: pointer;
+}
+
+.cgch-rail__logo img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.cgch-rail__nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.cgch-rail__bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.cgch-rail__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 52px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.cgch-rail__item:hover {
+  color: #155dfc;
+  background: rgb(21 93 252 / 6%);
+}
+
+.cgch-rail__item.is-active {
+  color: #155dfc;
+  background: rgb(21 93 252 / 12%);
+}
+
+.cgch-rail__icon {
+  width: 20px;
+  height: 20px;
+}
+
+.cgch-rail__avatar {
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+
+.cgch-main {
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+  padding: 8px 8px 8px 0;
+  overflow: auto;
+}
+</style>

@@ -1070,7 +1070,7 @@ jobs:
               assert code in by, f'缺少 {code} 通知：{sorted(by)}'
           refund = [x for x in by['cgch_handoff'] if 'Buyer 333' in x['templateContent']]
           assert len(refund) == 1 and '需要人工处理' in refund[0]['templateContent'], f'同一会话只提醒一次: {refund}'
-          assert refund[0]['templateParams']['link'].startswith('/channel-msg/im?conversationId='), refund[0]['templateParams']
+          assert refund[0]['templateParams']['link'].startswith('/v3/conversation?channel=whatsapp&ref='), refund[0]['templateParams']
           assert any('guarantee' not in x['templateContent'] and '违禁词' in x['templateContent'] for x in by['cgch_handoff']), '违禁词拦截也应提醒'
           assert any('Hans Müller' in x['templateContent'] and x['templateParams']['link'].startswith('/crm/clue/detail/') for x in by['cgch_new_lead'])
           assert any('Acme Buyer' in x['templateContent'] and '2027 新品唤醒' in x['templateContent'] for x in by['cgch_reactivate_reply'])
@@ -1088,7 +1088,7 @@ jobs:
           call('POST', '/channel/credit/recharge', {'amount': 100 - bal_n, 'remark': '测试：调到提醒线'})
           call('POST', '/channel/assistant/ask', {'question': '你好'})
           low = [x for x in my_notices() if x['templateCode'] == 'cgch_credit_low']
-          assert low and '智点余额仅剩 99' in low[0]['templateContent'] and low[0]['templateParams']['link'] == '/config/credits', low
+          assert low and '智点余额仅剩 99' in low[0]['templateContent'] and low[0]['templateParams']['link'] == '/v3/settings?tab=usage', low
           call('POST', '/channel/credit/recharge', {'amount': 1000, 'remark': '测试：恢复'})
           assert call('GET', '/system/notify-message/get-unread-count') > 0
           call('PUT', '/system/notify-message/update-all-read')
@@ -1389,6 +1389,23 @@ jobs:
               assert e.code == 404
           print('公开页面：产品介绍、隐私政策、服务条款、数据删除说明，无需登录，显示配置的公司信息')
 
+          # ---- v3 看板与智能体测试对话 ----
+          today = time.strftime('%Y-%m-%d')
+          v3 = call('GET', f'/channel/dashboard/v3?startDate=2020-01-01&endDate={today}')
+          assert v3['traffic']['total'] > 0 and v3['traffic']['unclassified'] <= v3['traffic']['total'], v3['traffic']
+          assert v3['ai']['replies'] > 0 and v3['business']['clues'] > 0, (v3['ai'], v3['business'])
+          assert 0 <= (v3['ai']['replyIn1hRate'] or 0) <= 1 and len(v3['trend']) == 7, v3
+          assert isinstance(v3['support']['im'], list) and isinstance(v3['support']['mail'], list)
+          empty = call('GET', '/channel/dashboard/v3?startDate=2001-01-01&endDate=2001-01-02')
+          assert empty['traffic']['total'] == 0 and empty['ai']['replyIn1hRate'] is None, empty
+          one = call('GET', '/channel/dashboard/v3')
+          assert one['startDate'] == one['endDate'] == today, one
+          tr = call('POST', '/channel/ai/test-reply', {'channel': 'whatsapp', 'messages': [{'role': 'user', 'content': 'what is the MOQ?'}]})
+          assert 'MOQ is 500' in tr['content'] and tr['credits'] >= 1 and tr['handoff'] is False, tr
+          bad_tr = call('POST', '/channel/ai/test-reply', {'channel': 'mail', 'messages': []}, ok=False)
+          assert bad_tr['code'] != 0, bad_tr
+          print(f"v3 看板：{v3['traffic']['total']} 次咨询、AI 回复 {v3['ai']['replies']} 条、线索 {v3['business']['clues']}；智能体测试对话按知识库回答")
+
           # ---- WhatsApp 嵌入式注册：客户用 Facebook 弹窗自己开通号码 ----
           wc = call('GET', '/channel/meta/wa-signup/config')
           assert wc['enabled'] and wc['appId'] == 'metaid' and wc['configId'] == 'cfg123' and wc['apiVersion'] == 'v24.0', wc
@@ -1533,6 +1550,9 @@ jobs:
           cp deploy/Caddyfile ctx/web/Caddyfile
           cp deploy/docker/web.Dockerfile ctx/web/Dockerfile
           cp deploy/docker/mysql.Dockerfile ctx/mysql/Dockerfile
+          cp deploy/docker/cgch-migrate.sh ctx/mysql/cgch-migrate.sh
+          mkdir -p ctx/mysql/migrations
+          cp backend/sql/mysql/cgch/migrations/*.sql ctx/mysql/migrations/ 2>/dev/null || true
           i=10
           for f in backend/sql/mysql/ruoyi-vue-pro.sql backend/sql/mysql/quartz.sql \
                    backend/sql/mysql/cgch/00-bpm-schema.sql backend/sql/mysql/cgch/00-crm-schema.sql \
@@ -1541,7 +1561,12 @@ jobs:
                    backend/sql/mysql/cgch/02-crm-seed.sql backend/sql/mysql/cgch/03-channel-seed.sql; do
             cp "$f" "ctx/mysql/sql/${i}-$(basename "$f")"; i=$((i+1))
           done
-          ls -R ctx/mysql/sql ctx/backend
+          # 新装数据库已是最新结构：把现有升级脚本标记为已执行
+          {
+            echo "CREATE TABLE IF NOT EXISTS cgch_migration (name varchar(100) NOT NULL PRIMARY KEY, applied_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP);"
+            for f in ctx/mysql/migrations/*.sql; do [ -f "$f" ] && echo "INSERT IGNORE INTO cgch_migration (name) VALUES ('$(basename "$f")');"; done
+          } > ctx/mysql/sql/99-migrations-baseline.sql
+          ls -R ctx/mysql ctx/backend
 
       - name: 登录 GitHub 镜像仓库
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -1570,9 +1595,13 @@ jobs:
           test "$code" = 200 && grep -q '"code"' /tmp/login.json
           sudo grep -q '^CGCH_FIELD_ENCRYPT_KEY=' /opt/cgch/.env
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT config FROM infra_file_config WHERE id=4\""' | grep -q '"domain": *"http://'
+          echo "--- 模拟老数据库：删掉 v3 新增字段并清除升级记录，验证升级脚本 ---"
+          sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD ruoyi-vue-pro -e \"ALTER TABLE channel_wa_conversation DROP COLUMN intent; ALTER TABLE channel_mail_message DROP COLUMN intent; DELETE FROM cgch_migration;\""'
           echo "--- 再执行一次（升级场景）---"
-          cat deploy/install.sh | sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash  # 与用户一样用管道执行
+          cat deploy/install.sh | sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash 2>&1 | tee /tmp/install2.log
           curl -fsS http://127.0.0.1/terms | grep -q 'Terms of Service'
+          grep -q '执行数据库升级：001-v3-brand-intent.sql' /tmp/install2.log || { echo "::error::升级脚本没有执行"; exit 1; }
+          sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT name FROM system_tenant WHERE id = 1\""' | grep -q '草根出海'
 
       - name: 安装失败时的日志
         if: failure()

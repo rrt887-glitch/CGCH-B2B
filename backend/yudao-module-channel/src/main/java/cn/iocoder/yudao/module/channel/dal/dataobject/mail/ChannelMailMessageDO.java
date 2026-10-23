@@ -122,5 +122,9 @@ public class ChannelMailMessageDO extends TenantBaseDO {
      * 是否由 AI 数字员工生成并发出
      */
     private Boolean aiGenerated;
+    /**
+     * 咨询意图（客户来信）：sales、after_sales、business、invalid；为空表示未分类
+     */
+    private String intent;
 
 }

@@ -129,7 +129,7 @@ public class ChannelNotifyService {
             }
             ChannelMailAccountDO a = channelMailAccountMapper.selectById(m.getAccountId());
             return new Target(StrUtil.blankToDefault(m.getFromName(), m.getFromAddress()), a == null ? null : a.getUserId(),
-                    "/channel-msg/mail?id=" + m.getId());
+                    "/v3/conversation?channel=mail&ref=" + m.getId());
         }
         ChannelWaConversationDO c = channelWaConversationMapper.selectById(refId);
         if (c == null) {
@@ -137,7 +137,7 @@ public class ChannelNotifyService {
         }
         ChannelWaAccountDO a = channelWaAccountMapper.selectById(c.getAccountId());
         return new Target(c.contactLabel(), a == null ? null : a.getUserId(),
-                "/channel-msg/im?conversationId=" + c.getId());
+                "/v3/conversation?channel=whatsapp&ref=" + c.getId());
     }
 
     /** AI 留下需要人工处理的草稿：转人工、违禁词、发送失败 */
@@ -217,7 +217,7 @@ public class ChannelNotifyService {
         Long to = tenant != null && tenant.getContactUserId() != null ? tenant.getContactUserId() : actorUserId;
         if (to != null) {
             send(TYPE_CREDIT_LOW, to, Map.of("balance", Math.max(after, 0),
-                    "hint", usedUp ? "AI 已停止起草和自动回复" : "用完后 AI 将停止回复"), "/config/credits", null);
+                    "hint", usedUp ? "AI 已停止起草和自动回复" : "用完后 AI 将停止回复"), "/v3/settings?tab=usage", null);
         }
     }
 

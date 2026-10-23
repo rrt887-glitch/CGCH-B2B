@@ -25,6 +25,22 @@ public class ChannelDashboardController {
 
     @Resource
     private ChannelDashboardService channelDashboardService;
+    @Resource
+    private cn.iocoder.yudao.module.channel.service.dashboard.ChannelDashboardV3Service channelDashboardV3Service;
+
+    @GetMapping("/v3")
+    @Operation(summary = "看板「数据分析」：流量占比、AI 接待表现、商业转化、需要人工支持的事项")
+    @PreAuthorize("@ss.hasPermission('channel:dashboard:query')")
+    public CommonResult<java.util.Map<String, Object>> v3(
+            @RequestParam(value = "startDate", required = false) @org.springframework.format.annotation.DateTimeFormat(pattern = "yyyy-MM-dd") java.time.LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @org.springframework.format.annotation.DateTimeFormat(pattern = "yyyy-MM-dd") java.time.LocalDate endDate) {
+        java.time.LocalDate end = endDate == null ? java.time.LocalDate.now() : endDate;
+        java.time.LocalDate start = startDate == null ? end : startDate;
+        if (start.isAfter(end) || start.isBefore(end.minusDays(366))) {
+            start = end;
+        }
+        return success(channelDashboardV3Service.overview(getLoginUserId(), start, end));
+    }
 
     @GetMapping("/overview")
     @Operation(summary = "看板总览：最近 N 天（含今天）与上一个同等周期")

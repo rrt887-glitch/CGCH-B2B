@@ -111,3 +111,10 @@ export const closeDraft = (id: number, used: boolean) =>
 export const reindexKnowledge = () => requestClient.post<number>('/channel/ai/knowledge/reindex');
 export const searchKnowledge = (q: string) =>
   requestClient.get<ChannelAiApi.SearchHit[]>('/channel/ai/knowledge/search', { params: { q } });
+
+/** 智能体测试对话：模拟客户提问，查看数字员工的回复（不保存，按 token 扣点） */
+export const testAgentReply = (channel: 'mail' | 'whatsapp', messages: { content: string; role: 'assistant' | 'user' }[]) =>
+  requestClient.post<{ content: string; credits: number; forbidden?: string; handoff: boolean; knowledgeHits: number }>(
+    '/channel/ai/test-reply',
+    { channel, messages },
+  );

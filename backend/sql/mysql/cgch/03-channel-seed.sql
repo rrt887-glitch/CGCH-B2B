@@ -136,3 +136,10 @@ UPDATE `system_menu` SET `component` = 'cgch/board/customer-overview/index' WHER
 DELETE FROM `system_menu` WHERE `id` = 22402;
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
   (22402, '客户概览查询', 'channel:dashboard:query', 3, 1, 20004, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+
+-- 品牌：默认企业名称改为「草根出海」
+UPDATE `system_tenant` SET `name` = '草根出海', `contact_name` = '草根出海', `websites` = 'hig.global,www.hig.global' WHERE `id` = 1;
+
+-- 安全：开源框架自带的演示账号和演示租户密码是公开的，一律停用（只保留 admin，上线后请立即修改其密码）
+UPDATE `system_users` SET `status` = 1 WHERE `id` <> 1 AND `id` <= 240;
+UPDATE `system_tenant` SET `status` = 1 WHERE `id` <> 1;

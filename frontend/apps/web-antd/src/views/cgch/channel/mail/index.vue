@@ -44,6 +44,9 @@ import {
 
 defineOptions({ name: 'CgchChannelMail' });
 
+/** 嵌入「会话」页时：邮箱由左栏选择，隐藏本页的邮箱下拉 */
+const props = defineProps<{ accountId?: number; embedded?: boolean; openId?: number }>();
+
 const router = useRouter();
 const route = useRoute();
 
@@ -55,7 +58,13 @@ const VIEWS: { key: ChannelMailApi.View; label: string }[] = [
 ];
 
 const accounts = ref<ChannelMailApi.Account[]>([]);
-const accountId = ref<number>(); // undefined = 全部邮箱
+const accountId = ref<number | undefined>(props.accountId); // undefined = 全部邮箱
+watch(
+  () => props.accountId,
+  (v) => {
+    accountId.value = v;
+  },
+);
 const view = ref<ChannelMailApi.View>('inbox');
 const keyword = ref('');
 const pageNo = ref(1);
@@ -266,7 +275,7 @@ onMounted(async () => {
   await loadAccounts();
   await loadList();
   // 从工作报告等页面跳转过来时，直接打开指定邮件：/channel-msg/mail?id=123
-  const id = Number(route.query.id);
+  const id = props.openId || Number(route.query.id);
   if (id) await open({ id } as ChannelMailApi.Message);
 });
 </script>
@@ -275,7 +284,7 @@ onMounted(async () => {
   <Page auto-content-height>
     <div v-if="accounts.length === 0" class="flex h-full items-center justify-center rounded bg-white">
       <Empty description="还没有绑定邮箱">
-        <Button type="primary" @click="router.push('/config/channels')">去绑定邮箱</Button>
+        <Button type="primary" @click="router.push('/v3/channel')">去绑定邮箱</Button>
       </Empty>
     </div>
 
@@ -283,7 +292,7 @@ onMounted(async () => {
       <!-- 左：邮箱与文件夹 -->
       <div class="flex w-52 shrink-0 flex-col gap-3 rounded bg-white p-3">
         <Button type="primary" block @click="openCompose">写邮件</Button>
-        <Select v-model:value="accountId" :options="accountOptions" />
+        <Select v-if="!embedded" v-model:value="accountId" :options="accountOptions" />
         <div class="flex flex-col">
           <div
             v-for="v in VIEWS"

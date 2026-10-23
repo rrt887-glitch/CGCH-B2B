@@ -66,6 +66,10 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      * 未读条数
      */
     private Integer unreadCount;
+    /**
+     * 咨询意图：sales 销售咨询、after_sales 售后支持、business 商务合作、invalid 无效咨询；为空表示未分类
+     */
+    private String intent;
 
     public boolean isWhatsApp() {
         return platform == null || ChannelWaAccountDO.PLATFORM_WHATSAPP.equals(platform);

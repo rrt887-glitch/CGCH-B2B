@@ -84,7 +84,7 @@ onMounted(async () => {
       </template>
 
       <Empty v-if="accounts.length === 0" description="还没有绑定 WhatsApp 号码">
-        <Button type="primary" @click="router.push('/config/channels')">去绑定号码</Button>
+        <Button type="primary" @click="router.push('/v3/channel')">去绑定号码</Button>
       </Empty>
       <template v-else>
         <Alert

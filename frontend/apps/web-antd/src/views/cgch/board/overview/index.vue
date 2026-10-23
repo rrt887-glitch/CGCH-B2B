@@ -240,7 +240,7 @@ onMounted(async () => {
       <Row :gutter="16">
         <Col :xs="24" :lg="12" class="mb-4">
           <Card title="每日智点消耗" size="small" :bordered="false">
-            <template #extra><Button type="link" size="small" @click="router.push('/config/credits')">明细</Button></template>
+            <template #extra><Button type="link" size="small" @click="router.push('/v3/settings?tab=usage')">明细</Button></template>
             <EchartsUI ref="creditRef" height="220px" />
           </Card>
         </Col>
