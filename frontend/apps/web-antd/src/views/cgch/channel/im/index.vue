@@ -5,6 +5,7 @@
  */
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
 import type { ChannelAiApi } from '#/api/channel/ai';
+import { loadTranslatePrefs, translateTexts } from '#/api/channel/translate';
 import { closeDraft, DRAFT_REASON, draftWhatsApp, getPendingDraft } from '#/api/channel/ai';
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -183,6 +184,55 @@ async function discardDraft() {
   aiDraft.value = undefined;
 }
 
+// ===== 翻译（设置 → 翻译设置） =====
+const tPrefs = loadTranslatePrefs();
+const translations = ref<Record<number, string>>({});
+async function translateMessages() {
+  if (!tPrefs.chat) return;
+  const todo = messages.value.filter((m) => m.direction === 1 && m.textBody?.trim() && translations.value[m.id] === undefined).slice(-30);
+  if (!todo.length) return;
+  todo.forEach((m) => (translations.value[m.id] = ''));
+  try {
+    const out = await translateTexts(todo.map((m) => m.textBody!));
+    todo.forEach((m, i) => {
+      // 已经是中文的不重复显示
+      translations.value[m.id] = out[i] && out[i]!.trim() !== m.textBody!.trim() ? out[i]! : '';
+    });
+  } catch {
+    todo.forEach((m) => delete translations.value[m.id]);
+  }
+}
+watch(messages, translateMessages);
+
+/** 输入框双语模式：一边输入一边译成客户使用的语言 */
+const inputTranslation = ref('');
+const inputTranslating = ref(false);
+let inputTimer: ReturnType<typeof setTimeout> | undefined;
+const customerSample = computed(() => [...messages.value].reverse().find((m) => m.direction === 1 && m.textBody?.trim())?.textBody ?? '');
+function onInputChange() {
+  if (!tPrefs.input) return;
+  clearTimeout(inputTimer);
+  const v = text.value.trim();
+  if (!v) {
+    inputTranslation.value = '';
+    return;
+  }
+  inputTimer = setTimeout(async () => {
+    inputTranslating.value = true;
+    try {
+      const [t] = await translateTexts([v], customerSample.value ? { sample: customerSample.value } : { target: 'English' });
+      if (text.value.trim() === v) inputTranslation.value = t ?? '';
+    } finally {
+      inputTranslating.value = false;
+    }
+  }, 700);
+}
+function useTranslation() {
+  if (!inputTranslation.value) return;
+  text.value = inputTranslation.value;
+  inputTranslation.value = '';
+}
+
 // ===== 发送文本 =====
 const text = ref('');
 const sending = ref(false);
@@ -194,6 +244,7 @@ async function sendText() {
     if (usedDraftId.value) await closeDraft(usedDraftId.value, true);
     usedDraftId.value = undefined;
     text.value = '';
+    inputTranslation.value = '';
     await refreshCurrent();
     loadConversations(true);
   } finally {
@@ -427,6 +478,9 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
                   </template>
                   <div v-if="m.type === 'template'" class="mb-1 text-xs text-gray-500">[模板 {{ m.templateName }}]</div>
                   <div class="whitespace-pre-wrap break-words">{{ m.textBody }}</div>
+                  <div v-if="translations[m.id]" class="mt-1 whitespace-pre-wrap break-words border-0 border-t border-solid border-gray-200 pt-1 text-gray-600">
+                    {{ translations[m.id] }}
+                  </div>
                   <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-gray-400">
                     <span v-if="m.aiGenerated" class="text-purple-500">AI</span>
                     <span>{{ md(m.messageTime) }} {{ hm(m.messageTime) }}</span>
@@ -460,7 +514,15 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
                 :maxlength="4096"
                 placeholder="输入消息，Enter 发送，Shift+Enter 换行；发送文件时这里的文字会作为说明"
                 @keydown="onKeydown"
+                @change="onInputChange"
               />
+              <div v-if="tPrefs.input && (inputTranslation || inputTranslating)" class="mt-2 rounded bg-gray-50 px-3 py-2 text-sm">
+                <div class="mb-1 flex items-center justify-between text-xs text-gray-500">
+                  <span>{{ inputTranslating ? '正在翻译…' : '译文（客户的语言）' }}</span>
+                  <a v-if="inputTranslation" @click="useTranslation">用译文替换</a>
+                </div>
+                <div class="whitespace-pre-wrap text-gray-700">{{ inputTranslation }}</div>
+              </div>
               <div class="mt-2 flex justify-between">
                 <Space>
                   <Button :loading="fileSending" @click="pickAndSend">发送文件</Button>

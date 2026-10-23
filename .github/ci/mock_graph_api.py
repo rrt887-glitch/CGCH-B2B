@@ -359,6 +359,10 @@ class Handler(BaseHTTPRequestHandler):
                 answer = '{"company": null, "country_code": null, "contact_name": "Pierre", "product": "curling iron", "quantity": null}'
             else:
                 answer = '{"company": null, "country_code": null, "contact_name": null, "product": null, "quantity": null}'
+        elif '专业的外贸翻译' in system:  # 翻译：每项前面加上目标语言标记
+            items = json.loads(msgs[-1]['content'])
+            tag = '[ZH]' if '翻译成中文' in system else '[XX]'
+            answer = json.dumps([f'{tag} {t}' for t in items], ensure_ascii=False)
         elif '可以发给客户的资料文件' in system and 'catalog' in last:  # AI 发送文件
             import re as _re
             ids = _re.findall(r'编号 (\d+)：', system)

@@ -80,6 +80,25 @@ public class ChannelNotifyService {
     @Value("${cgch.credit.low-threshold:100}")
     private long lowThreshold;
 
+    @Resource
+    private cn.iocoder.yudao.module.channel.dal.mysql.notify.ChannelNotifyRuleMapper channelNotifyRuleMapper;
+    @Resource
+    @org.springframework.context.annotation.Lazy
+    private cn.iocoder.yudao.module.channel.service.mail.ChannelMailService channelMailService;
+    @Resource
+    private cn.iocoder.yudao.module.system.api.user.AdminUserApi adminUserApi;
+
+    /** 消息类型 → 名称、邮件正文模板（与站内信模板一致） */
+    public static final Map<String, String[]> TYPES = new LinkedHashMap<>();
+
+    static {
+        TYPES.put(TYPE_HANDOFF, new String[]{"AI 转人工", "「{customer}」的消息需要人工处理：{reason}"});
+        TYPES.put(TYPE_TAKEOVER, new String[]{"AI 接手回复", "「{customer}」的消息等待 {minutes} 分钟无人回复，AI 已接手回复"});
+        TYPES.put(TYPE_NEW_LEAD, new String[]{"新询盘建档", "新询盘：已为「{name}」自动建线索（来自{source}）"});
+        TYPES.put(TYPE_REACTIVATE_REPLY, new String[]{"唤醒客户回复", "「{customer}」回复了客户唤醒「{task}」，请尽快跟进"});
+        TYPES.put(TYPE_CREDIT_LOW, new String[]{"智点不足", "智点余额仅剩 {balance}，{hint}，请及时充值"});
+    }
+
     // ==================== 发送 ====================
 
     private boolean muted(String type) {
@@ -107,11 +126,49 @@ public class ChannelNotifyService {
         Map<String, Object> p = new LinkedHashMap<>(params);
         p.put("type", type);
         p.put("link", StrUtil.nullToEmpty(link));
+        // 通知规则：没有设置过规则的账号默认站内信接收全部；设置过的只按开启的规则发
+        List<cn.iocoder.yudao.module.channel.dal.dataobject.notify.ChannelNotifyRuleDO> rules = channelNotifyRuleMapper.selectByUser(userId);
+        boolean site = rules.isEmpty();
+        boolean email = false;
+        for (var r : rules) {
+            if (Boolean.TRUE.equals(r.getEnabled()) && type.equals(r.getType())) {
+                site |= cn.iocoder.yudao.module.channel.dal.dataobject.notify.ChannelNotifyRuleDO.CHANNEL_SITE.equals(r.getChannel());
+                email |= cn.iocoder.yudao.module.channel.dal.dataobject.notify.ChannelNotifyRuleDO.CHANNEL_EMAIL.equals(r.getChannel());
+            }
+        }
+        if (site) {
+            try {
+                notifyMessageSendApi.sendSingleMessageToAdmin(new NotifySendSingleToUserReqDTO()
+                        .setUserId(userId).setTemplateCode(TEMPLATE_PREFIX + type).setTemplateParams(p));
+            } catch (Exception e) {
+                log.warn("[send][通知 {} 给用户 {} 失败] {}", type, userId, e.getMessage());
+            }
+        }
+        if (email) {
+            sendEmail(type, userId, p, link);
+        }
+    }
+
+    /** 邮件通知：用这个人绑定的邮箱发给他登录账号上的邮箱；没有可用邮箱时只记日志 */
+    private void sendEmail(String type, Long userId, Map<String, Object> p, String link) {
         try {
-            notifyMessageSendApi.sendSingleMessageToAdmin(new NotifySendSingleToUserReqDTO()
-                    .setUserId(userId).setTemplateCode(TEMPLATE_PREFIX + type).setTemplateParams(p));
+            var user = adminUserApi.getUser(userId);
+            String to = user == null ? null : user.getEmail();
+            if (StrUtil.isBlank(to)) {
+                log.info("[sendEmail][用户 {} 没有填写邮箱，跳过邮件通知]", userId);
+                return;
+            }
+            String[] t = TYPES.getOrDefault(type, new String[]{type, type});
+            String text = t[1];
+            for (Map.Entry<String, Object> e : p.entrySet()) {
+                text = text.replace("{" + e.getKey() + "}", String.valueOf(e.getValue()));
+            }
+            if (StrUtil.isNotBlank(link)) {
+                text += "\n\n打开草根出海处理：" + link;
+            }
+            channelMailService.sendNotice(userId, to, "【草根出海】" + t[0], text);
         } catch (Exception e) {
-            log.warn("[send][通知 {} 给用户 {} 失败] {}", type, userId, e.getMessage());
+            log.warn("[sendEmail][邮件通知 {} 给用户 {} 失败] {}", type, userId, e.getMessage());
         }
     }
 

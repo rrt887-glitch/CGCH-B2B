@@ -1560,6 +1560,27 @@ jobs:
           call('PUT', '/channel/ai/config/save', dict(cfg, llmApiKey=''))
           call('DELETE', f"/channel/cloud-file/delete?id={folder}")
           print('云盘文件与 AI 发送文件：上传、文件夹、个人云盘隔离、AI 选文件、邮件自动带附件')
+          # 邮件模板：每个分类只有一个默认模板
+          t1 = call('POST', '/channel/mail-template/save', {'name': 'Promo A', 'category': 'promo', 'visibility': 'all', 'subject': 'New line', 'html': '<p>Hi</p>', 'defaulted': True})
+          t2 = call('POST', '/channel/mail-template/save', {'name': 'Promo B', 'category': 'promo', 'visibility': 'self', 'subject': 'Sale', 'html': '<p>Sale</p>', 'defaulted': True})
+          tl = {t['id']: t for t in call('GET', '/channel/mail-template/list?category=promo')}
+          assert tl[t2]['defaulted'] and not tl[t1]['defaulted'], tl
+          call('PUT', f'/channel/mail-template/enabled?id={t1}&enabled=false')
+          assert [t['id'] for t in call('GET', '/channel/mail-template/list?enabled=true')] == [t2]
+          for t in (t1, t2):
+              call('DELETE', f'/channel/mail-template/delete?id={t}')
+          # 通知规则：同一类型同一方式不能重复
+          nr = call('GET', '/channel/notify-rule/list')
+          assert nr['rules'] == [] and len(nr['types']) == 5, nr
+          rid = call('POST', '/channel/notify-rule/save', {'type': 'new_lead', 'channel': 'email', 'enabled': True})
+          assert call('POST', '/channel/notify-rule/save', {'type': 'new_lead', 'channel': 'email'}, ok=False)['code'] != 0
+          call('DELETE', f'/channel/notify-rule/delete?id={rid}')
+          # 翻译：默认译成中文；带 sample 时译成客户的语言；结果缓存
+          tr1 = call('POST', '/channel/translate', {'texts': ['Hello, my friend', '']})
+          assert tr1 == ['[ZH] Hello, my friend', ''], tr1
+          tr2 = call('POST', '/channel/translate', {'texts': ['你好'], 'sample': 'Hola amigo'})
+          assert tr2 == ['[XX] 你好'], tr2
+          print('邮件模板、通知规则、翻译')
           PY
 
       - name: 后端日志

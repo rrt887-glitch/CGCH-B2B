@@ -6,9 +6,11 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
-import { Button, Checkbox, CheckboxGroup, InputNumber, message, Radio, RadioGroup, Switch, TabPane, Tabs, Tag, Textarea } from 'ant-design-vue';
+import { Button, Checkbox, CheckboxGroup, InputNumber, message, Radio, RadioGroup, Select, Switch, TabPane, Tabs, Tag, Textarea } from 'ant-design-vue';
 
 import { learnNow } from '#/api/channel/agent';
+import type { CloudApi } from '#/api/channel/cloud';
+import { getEnterpriseFiles } from '#/api/channel/cloud';
 
 import { clone, useAgentSettings } from './use-settings';
 
@@ -30,7 +32,7 @@ watch(
     if (!s) return;
     learn.value = clone(s.learn);
     style.value = s.salesStyle;
-    opening.value = clone(s.opening);
+    opening.value = { ...clone(s.opening), fileIds: s.opening.fileIds ?? [] };
   },
   { immediate: true },
 );
@@ -73,7 +75,14 @@ async function saveOpening() {
   await save({ opening: opening.value });
 }
 
-onMounted(() => load().catch(() => {}));
+const cloudFiles = ref<CloudApi.File[]>([]);
+
+onMounted(() => {
+  load().catch(() => {});
+  getEnterpriseFiles()
+    .then((f) => (cloudFiles.value = f))
+    .catch(() => {});
+});
 </script>
 
 <template>
@@ -162,7 +171,17 @@ onMounted(() => load().catch(() => {}));
         <p class="sc__tip">新客户第一次发来消息时，AI 先发送这段问候，再回答客户的问题</p>
         <div class="sc__label">问候内容</div>
         <Textarea v-model:value="opening.greeting" :rows="4" :maxlength="1000" show-count placeholder="Hi, thanks for reaching out! I'm Becky from XX. How can I help you today?" />
-        <div class="mt-4 text-xs text-gray-400">发送文件（可选）：从企业云盘选择文件一并发送 —— 即将开放</div>
+        <div class="sc__label mt-4">发送文件（可选）</div>
+        <Select
+          v-model:value="opening.fileIds"
+          mode="multiple"
+          @change="(v: any) => Array.isArray(v) && v.length > 2 && (opening!.fileIds = v.slice(0, 2))"
+          class="w-full"
+          placeholder="选择企业云盘文件"
+          :options="cloudFiles.map((f) => ({ value: f.id, label: f.name }))"
+          :not-found-content="'企业云盘还没有文件，先到「设置 → 云盘文件」上传'"
+        />
+        <div class="mt-1 text-xs text-gray-400">问候与文件合计最多 3 条消息，按问候、文件的顺序分别发送（WhatsApp / Facebook）</div>
       </div>
       <div class="sc__block">
         <div class="sc__head">文案兜底回复</div>

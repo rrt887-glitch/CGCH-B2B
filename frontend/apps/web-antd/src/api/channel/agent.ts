@@ -41,6 +41,7 @@ export namespace AgentApi {
     enabled: boolean;
     greeting: string;
     fallback: string;
+    fileIds: number[];
   }
   export interface Learn {
     enabled: boolean;

@@ -16,10 +16,10 @@ const groups: HubGroup[] = [
       { key: 'members', label: '成员与部门', load: () => import('#/views/system/user/index.vue') },
       { key: 'cloud', label: '云盘文件', load: () => import('./cloud.vue') },
       { key: 'templates', label: '消息模板', load: () => import('#/views/cgch/config/templates/index.vue') },
-      { key: 'emailTemplates', label: '邮件模板', load: soon },
+      { key: 'emailTemplates', label: '邮件模板', load: () => import('./email-templates.vue') },
       { key: 'routing', label: '消息分流设置', load: soon },
-      { key: 'notifications', label: '通知设置', load: soon },
-      { key: 'translate', label: '翻译设置', load: soon },
+      { key: 'notifications', label: '通知设置', load: () => import('./notifications.vue') },
+      { key: 'translate', label: '翻译设置', load: () => import('./translate.vue') },
     ],
   },
 ];

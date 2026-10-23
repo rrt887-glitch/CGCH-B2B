@@ -316,6 +316,22 @@ public class ChannelMailService {
         return sent.getId();
     }
 
+    /**
+     * 系统通知邮件：用该用户绑定的第一个可用邮箱发出，不记入收发记录、不受发送频率限制。
+     *
+     * @return 是否发出
+     */
+    public boolean sendNotice(Long userId, String to, String subject, String text) throws Exception {
+        ChannelMailAccountDO account = accountMapper.selectList(ChannelMailAccountDO::getUserId, userId).stream()
+                .filter(a -> Boolean.TRUE.equals(a.getEnabled())).findFirst().orElse(null);
+        if (account == null) {
+            log.info("[sendNotice][用户 {} 没有绑定邮箱，跳过邮件通知]", userId);
+            return false;
+        }
+        MailClient.send(credential(account), List.of(to), List.of(), subject, text, null, null, null, List.of());
+        return true;
+    }
+
     // ==================== 附件 ====================
 
     private void saveAttachments(Long messageId, Long userId, List<MailClient.Attachment> list) {

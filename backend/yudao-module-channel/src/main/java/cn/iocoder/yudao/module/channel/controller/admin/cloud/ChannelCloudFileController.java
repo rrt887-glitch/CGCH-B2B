@@ -33,6 +33,12 @@ public class ChannelCloudFileController {
         return success(channelCloudFileService.list(getLoginUserId(), scope, parentId, keyword));
     }
 
+    @GetMapping("/enterprise-files")
+    @Operation(summary = "企业云盘里的全部文件（不含文件夹），用于选择开场白附带的文件")
+    public CommonResult<List<ChannelCloudFileDO>> enterpriseFiles() {
+        return success(channelCloudFileService.enterpriseFiles());
+    }
+
     @GetMapping("/path")
     @Operation(summary = "文件夹路径")
     public CommonResult<List<ChannelCloudFileDO>> path(@RequestParam("id") Long id) {
