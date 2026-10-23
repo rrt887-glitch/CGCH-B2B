@@ -12,13 +12,14 @@ public interface ChannelMailTemplateMapper extends BaseMapperX<ChannelMailTempla
 
     /** 当前用户能看到的模板：全员可见的和自己的 */
     default List<ChannelMailTemplateDO> selectVisible(Long userId, String category, String keyword, Boolean enabled) {
-        return selectList(new LambdaQueryWrapperX<ChannelMailTemplateDO>()
-                .and(w -> w.eq(ChannelMailTemplateDO::getVisibility, ChannelMailTemplateDO.VISIBILITY_ALL)
-                        .or().eq(ChannelMailTemplateDO::getOwnerUserId, userId))
+        LambdaQueryWrapperX<ChannelMailTemplateDO> q = new LambdaQueryWrapperX<ChannelMailTemplateDO>()
                 .eqIfPresent(ChannelMailTemplateDO::getCategory, category)
                 .likeIfPresent(ChannelMailTemplateDO::getName, keyword)
-                .eqIfPresent(ChannelMailTemplateDO::getEnabled, enabled)
-                .orderByDesc(ChannelMailTemplateDO::getDefaulted).orderByDesc(ChannelMailTemplateDO::getUpdateTime));
+                .eqIfPresent(ChannelMailTemplateDO::getEnabled, enabled);
+        q.and(w -> w.eq(ChannelMailTemplateDO::getVisibility, ChannelMailTemplateDO.VISIBILITY_ALL)
+                        .or().eq(ChannelMailTemplateDO::getOwnerUserId, userId))
+                .orderByDesc(ChannelMailTemplateDO::getDefaulted).orderByDesc(ChannelMailTemplateDO::getUpdateTime);
+        return selectList(q);
     }
 
 }
