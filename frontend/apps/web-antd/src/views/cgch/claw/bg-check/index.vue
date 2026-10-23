@@ -133,7 +133,9 @@ onMounted(async () => {
     form.clueId = lid;
     await searchClues('');
   }
-  if (list.value[0]) await open(list.value[0].id);
+  const rid = Number(route.query.researchId);
+  if (rid) await open(rid);
+  else if (list.value[0]) await open(list.value[0].id);
 });
 </script>
 

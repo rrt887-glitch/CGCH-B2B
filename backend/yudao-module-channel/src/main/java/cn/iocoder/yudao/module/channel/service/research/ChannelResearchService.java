@@ -303,6 +303,18 @@ public class ChannelResearchService {
         return channelResearchMapper.selectPage(req, customerId, clueId, null);
     }
 
+    /** 每个客户最近一次背调（客户列表「背调结果」列） */
+    public List<ChannelResearchDO> latestByCustomers(Collection<Long> customerIds) {
+        if (customerIds == null || customerIds.isEmpty()) {
+            return List.of();
+        }
+        List<ChannelResearchDO> all = channelResearchMapper.selectList(new LambdaQueryWrapperX<ChannelResearchDO>()
+                .in(ChannelResearchDO::getCustomerId, customerIds).orderByDesc(ChannelResearchDO::getId));
+        Map<Long, ChannelResearchDO> latest = new LinkedHashMap<>();
+        all.forEach(r -> latest.putIfAbsent(r.getCustomerId(), r));
+        return new ArrayList<>(latest.values());
+    }
+
     public void delete(Long id) {
         get(id);
         channelResearchMapper.deleteById(id);

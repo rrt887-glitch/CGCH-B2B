@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 /**
  * 配技能：智能询盘接待、自动背调客户、CRM 自动录入（与原网站一致）。
- * 尚未实现的开关显示「即将开放」，不会假装生效。
+ * 尚未实现的开关（AI 发送文件、联网报价）显示「即将开放」，不会假装生效。
  */
 import type { AgentApi } from '#/api/channel/agent';
 import type { ChannelAiApi } from '#/api/channel/ai';
@@ -10,7 +10,7 @@ import { computed, onMounted, ref } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
-import { Button, Checkbox, CheckboxGroup, Input, message, Modal, Switch, Tag } from 'ant-design-vue';
+import { Button, Checkbox, CheckboxGroup, Input, InputNumber, message, Modal, Switch, Tag } from 'ant-design-vue';
 
 import { getAiConfig, saveAiConfig } from '#/api/channel/ai';
 
@@ -108,10 +108,20 @@ onMounted(async () => {
         </div>
 
         <div class="sk__row">
-          <Switch size="small" disabled />
-          <div>
-            <div class="sk__name">智能跟进客户 <Tag class="ml-1">即将开放</Tag></div>
-            <div class="sk__desc">AI 发送消息后，如果客户迟迟未回复，AI 自动执行多轮智能跟进</div>
+          <Switch size="small" :checked="skills.followUp" @change="(v: any) => patch({ followUp: !!v })" />
+          <div class="min-w-0 flex-1">
+            <div class="sk__name">智能跟进客户</div>
+            <div class="sk__desc">AI 发送消息后，如果客户迟迟未回复，AI 自动执行多轮智能跟进（仅「自动回复」模式、AI 接待时间内）</div>
+            <div v-if="skills.followUp" class="sk__tags items-center text-sm">
+              <span>客户</span>
+              <InputNumber :value="skills.followUpHours" :min="1" :max="720" size="small" class="w-20" @change="(v: any) => v && patch({ followUpHours: Number(v) })" />
+              <span>小时没回复就跟进，最多跟进</span>
+              <InputNumber :value="skills.followUpRounds" :min="1" :max="3" size="small" class="w-16" @change="(v: any) => v && patch({ followUpRounds: Number(v) })" />
+              <span>次</span>
+            </div>
+            <div v-if="skills.followUp" class="mt-1 text-xs text-gray-400">
+              WhatsApp 只能在客户最后一条消息后 24 小时内主动发送，间隔设为 24 小时及以上时只跟进邮件。人工回复过的对话不会再自动跟进。
+            </div>
           </div>
         </div>
 
@@ -147,8 +157,15 @@ onMounted(async () => {
         <div class="sk__box">
           <div class="sk__name">深度背调</div>
           <div class="sk__desc">根据企业工商、贸易与公开资料，帮助销售快速完成客户背景核验</div>
-          <div class="mt-3 text-sm text-gray-600">
-            现在可以在「CRM → 客户列表」勾选客户后点「一键背调」，由 CRM 智枢完成背调。新线索进线后自动背调即将开放。
+          <div class="mt-4 flex items-start gap-3">
+            <Switch size="small" :checked="skills.autoResearch" @change="(v: any) => patch({ autoResearch: !!v })" />
+            <div>
+              <div class="text-sm font-medium">新线索进线后自动背调</div>
+              <div class="sk__desc">
+                线索有企业官网或企业邮箱时，建档后自动读取对方官网的公开页面和往来记录，生成背调报告（概况、主营产品、采购信号、风险提示），每次消耗智点。
+                也可以在「CRM → 客户列表」勾选客户后点「一键背调」。
+              </div>
+            </div>
           </div>
         </div>
       </template>

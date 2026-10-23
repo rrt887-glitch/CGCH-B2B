@@ -67,6 +67,13 @@ public class ChannelAiController {
         return success(agentSettingsService.learnNow(getLoginUserId()));
     }
 
+    @PostMapping("/follow-up/run")
+    @Operation(summary = "立即执行一次智能跟进检查（平时每 30 分钟自动执行）")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<Integer> runFollowUps() {
+        return success(aiService.runFollowUps());
+    }
+
     // ===== 知识库资料文件 =====
 
     @GetMapping("/knowledge-file/list")

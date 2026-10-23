@@ -199,6 +199,42 @@ public class ChannelLeadService {
         log.info("[createClue] 自动建档线索 {}：{} {}", clue.getId(), clue.getName(), StrUtil.blankToDefault(clue.getEmail(), clue.getWhatsapp()));
         channelNotifyService.onNewLead(clue.getId(), clue.getName(), clue.getOwnerUserId(),
                 sourceLabel(clue.getSource()));
+        autoResearch(clue);
+    }
+
+    @Resource
+    @org.springframework.context.annotation.Lazy
+    private cn.iocoder.yudao.module.channel.service.research.ChannelResearchService channelResearchService;
+
+    /** 配技能「自动背调」：新线索有企业官网（或企业邮箱域名）时，建档后自动发起深度背调 */
+    private void autoResearch(CrmClueDO clue) {
+        ChannelAiConfigDO cfg = channelAiConfigMapper.selectCurrent();
+        if (cfg == null || !ChannelAgentSettings.skills(cfg).isAutoResearch()) {
+            return;
+        }
+        String site = StrUtil.blankToDefault(StrUtil.trimToNull(clue.getWebsite()), LeadInference.websiteFromEmail(clue.getEmail()));
+        if (StrUtil.isBlank(site) || !channelCreditService.hasBalance()) {
+            return;
+        }
+        Runnable start = () -> {
+            try {
+                channelResearchService.create(clue.getOwnerUserId(), null, null, null, clue.getId());
+            } catch (Exception e) {
+                log.warn("[autoResearch][线索 {} 自动背调未发起] {}", clue.getId(), e.getMessage());
+            }
+        };
+        // 线索在事务里新建：等事务提交后再背调，后台线程才能读到线索
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            start.run();
+                        }
+                    });
+        } else {
+            start.run();
+        }
     }
 
     private CrmClueDO findClueByEmail(String email) {

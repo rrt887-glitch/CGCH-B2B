@@ -38,6 +38,8 @@ public class ChannelAiDraftDO extends TenantBaseDO {
     public static final String REASON_NO_CREDIT = "no_credit";
     /** 命中「根据客户条件」转人工（如老客户） */
     public static final String REASON_CONDITION = "condition";
+    /** 智能跟进：客户迟迟未回复时 AI 自动发出的跟进 */
+    public static final String REASON_FOLLOW_UP = "follow_up";
     /** 工作时间设置为「AI 只起草」 */
     public static final String REASON_WORK_HOURS = "work_hours";
     /** 非工作时间设置为「AI 只起草」 */

@@ -77,6 +77,10 @@ public class ChannelAiService {
     private cn.iocoder.yudao.module.channel.service.cases.ChannelAiCaseService channelAiCaseService;
     @Resource
     private ChannelAiDeferredMapper channelAiDeferredMapper;
+    @Resource
+    private cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailMessageMapper channelMailMessageMapper;
+    @Resource
+    private cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaMessageMapper channelWaMessageMapper;
 
     // ==================== 配置 ====================
 
@@ -677,6 +681,215 @@ public class ChannelAiService {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING,
                     ChannelAiDraftDO.REASON_SEND_FAILED, e.getMessage()), account.getUserId(), "WhatsApp 自动处理");
         }
+    }
+
+    // ==================== 智能跟进 ====================
+
+    /** 跟进最多回看多少天内 AI 发出的消息 */
+    private static final int FOLLOW_UP_LOOKBACK_DAYS = 30;
+
+    /**
+     * 智能跟进（定时调用，已在租户上下文中）：AI 发出的消息之后客户一直没回复，到了间隔就由 AI 再跟进一次，最多跟进设定的轮数。
+     * 只在「自动回复」模式、工作时间允许 AI 接待时执行；WhatsApp 只在 24 小时会话窗口内跟进。
+     *
+     * @return 本次发出的跟进条数
+     */
+    public int runFollowUps() {
+        ChannelAiConfigDO cfg = channelAiConfigMapper.selectCurrent();
+        if (cfg == null || StrUtil.hasBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel())) {
+            return 0;
+        }
+        ChannelAgentSettings.Skills s = ChannelAgentSettings.skills(cfg);
+        if (!s.isFollowUp() || !channelCreditService.hasBalance()) {
+            return 0;
+        }
+        int hours = Math.max(1, s.getFollowUpHours());
+        int rounds = Math.max(1, Math.min(3, s.getFollowUpRounds()));
+        int sent = 0;
+        if (ChannelAiConfigDO.MODE_AUTO.equals(cfg.getMailMode()) && Decision.PROCESS.equals(workTime(cfg.getMailMode(), false).action())) {
+            sent += mailFollowUps(cfg, hours, rounds);
+        }
+        if (ChannelAiConfigDO.MODE_AUTO.equals(cfg.getWaMode()) && Decision.PROCESS.equals(workTime(cfg.getWaMode(), false).action())) {
+            sent += waFollowUps(cfg, hours, rounds);
+        }
+        return sent;
+    }
+
+    private static String followUpPrompt(int round, long hoursSince, String channel) {
+        String gap = hoursSince >= 48 ? (hoursSince / 24) + " 天" : hoursSince + " 小时";
+        return "[系统提示，不是客户发的] 客户在你上一条" + ("mail".equals(channel) ? "邮件" : "消息") + "之后 " + gap + "没有回复。"
+                + "请写第 " + round + " 次跟进：简短、礼貌、自然，不要重复上一条的内容；可以补充一条对客户有价值的信息，"
+                + "或提一个容易回答的问题，推动客户回复。不要提到“系统提示”。";
+    }
+
+    private int mailFollowUps(ChannelAiConfigDO cfg, int hours, int rounds) {
+        LocalDateTime now = LocalDateTime.now();
+        List<ChannelMailMessageDO> candidates = channelMailMessageMapper.selectList(
+                new cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX<ChannelMailMessageDO>()
+                        .eq(ChannelMailMessageDO::getDirection, ChannelMailMessageDO.DIRECTION_OUT)
+                        .eq(ChannelMailMessageDO::getAiGenerated, true)
+                        .between(ChannelMailMessageDO::getSentTime, now.minusDays(FOLLOW_UP_LOOKBACK_DAYS), now.minusHours(hours))
+                        .isNotNull(ChannelMailMessageDO::getThreadKey)
+                        .orderByDesc(ChannelMailMessageDO::getId).last("LIMIT 200"));
+        Set<String> seen = new HashSet<>();
+        int sent = 0;
+        for (ChannelMailMessageDO c : candidates) {
+            if (!seen.add(c.getThreadKey())) {
+                continue;
+            }
+            try {
+                if (mailFollowUp(cfg, c, hours, rounds)) {
+                    sent++;
+                }
+            } catch (Exception e) {
+                log.warn("[mailFollowUps][邮件({}) 跟进失败] {}", c.getId(), e.getMessage());
+            }
+        }
+        return sent;
+    }
+
+    private boolean mailFollowUp(ChannelAiConfigDO cfg, ChannelMailMessageDO c, int hours, int rounds) {
+        List<ChannelMailMessageDO> thread = mailService.getThreadInternal(c);
+        if (thread.isEmpty()) {
+            return false;
+        }
+        ChannelMailMessageDO last = thread.get(thread.size() - 1);
+        if (last.getDirection() != ChannelMailMessageDO.DIRECTION_OUT || !Boolean.TRUE.equals(last.getAiGenerated())
+                || last.getSentTime() == null || last.getSentTime().isAfter(LocalDateTime.now().minusHours(hours))) {
+            return false; // 客户已回复、人工回复过，或还没到跟进时间
+        }
+        int trailingAi = 0;
+        ChannelMailMessageDO lastIn = null;
+        for (int i = thread.size() - 1; i >= 0; i--) {
+            ChannelMailMessageDO t = thread.get(i);
+            if (t.getDirection() == ChannelMailMessageDO.DIRECTION_IN) {
+                lastIn = t;
+                break;
+            }
+            if (!Boolean.TRUE.equals(t.getAiGenerated())) {
+                return false; // 中间有人工发出的邮件，交给人工
+            }
+            trailingAi++;
+        }
+        int round = trailingAi; // 第一封是 AI 的回复，之后每一封是一次跟进
+        if (lastIn == null || round > rounds || NO_REPLY.matcher(StrUtil.nullToEmpty(lastIn.getFromAddress())).find()) {
+            return false;
+        }
+        ChannelMailAccountDO account = mailService.getAccountInternal(lastIn.getAccountId());
+        if (account == null || !Boolean.TRUE.equals(account.getEnabled())) {
+            return false;
+        }
+        List<LlmClient.Message> history = new ArrayList<>();
+        for (ChannelMailMessageDO t : thread.subList(Math.max(0, thread.size() - MAIL_HISTORY), thread.size())) {
+            String body = HtmlText.snippet(StrUtil.isNotBlank(t.getTextBody()) ? t.getTextBody() : HtmlText.toText(t.getHtmlBody()), null, HISTORY_CHARS);
+            history.add(t.getDirection() == ChannelMailMessageDO.DIRECTION_IN
+                    ? LlmClient.Message.user("主题：" + StrUtil.nullToEmpty(t.getSubject()) + "\n" + body) : LlmClient.Message.assistant(body));
+        }
+        long since = java.time.Duration.between(last.getSentTime(), LocalDateTime.now()).toHours();
+        history.add(LlmClient.Message.user(followUpPrompt(round, since, ChannelAiDraftDO.CHANNEL_MAIL)));
+        String customerText = HtmlText.snippet(lastIn.getTextBody(), lastIn.getHtmlBody(), HISTORY_CHARS);
+        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, customerText, history);
+        String reason = blockReason(ChannelAiConfigDO.MODE_AUTO, g, lastIn.getCustomerId(), false);
+        if (reason != null || StrUtil.isBlank(g.content())) {
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, lastIn.getId(), g.content(), g, ChannelAiDraftDO.STATUS_DISCARDED,
+                    ChannelAiDraftDO.REASON_FOLLOW_UP, reason), account.getUserId(), "智能跟进（未发送）");
+            return false;
+        }
+        String content = withSignature(g, cfg);
+        ChannelMailSendReqVO req = new ChannelMailSendReqVO();
+        req.setAccountId(account.getId());
+        req.setTo(List.of(lastIn.getFromAddress()));
+        req.setSubject(StrUtil.startWithIgnoreCase(lastIn.getSubject(), "re:") ? lastIn.getSubject() : "Re: " + StrUtil.nullToEmpty(lastIn.getSubject()));
+        req.setText(content);
+        req.setReplyToId(lastIn.getId());
+        mailService.send(account.getUserId(), req, true);
+        charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, lastIn.getId(), content, g, ChannelAiDraftDO.STATUS_SENT,
+                ChannelAiDraftDO.REASON_FOLLOW_UP, null), account.getUserId(), "智能跟进");
+        log.info("[mailFollowUp][邮件往来 {} 第 {} 次跟进已发送]", c.getThreadKey(), round);
+        return true;
+    }
+
+    private int waFollowUps(ChannelAiConfigDO cfg, int hours, int rounds) {
+        if (hours >= 24) {
+            return 0; // WhatsApp 只能在客户最后一条消息后 24 小时内主动发送普通消息
+        }
+        LocalDateTime now = LocalDateTime.now();
+        List<ChannelWaMessageDO> candidates = channelWaMessageMapper.selectList(
+                new cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX<ChannelWaMessageDO>()
+                        .eq(ChannelWaMessageDO::getDirection, ChannelWaMessageDO.DIRECTION_OUT)
+                        .eq(ChannelWaMessageDO::getAiGenerated, true)
+                        .between(ChannelWaMessageDO::getMessageTime, now.minusHours(24), now.minusHours(hours))
+                        .orderByDesc(ChannelWaMessageDO::getId).last("LIMIT 200"));
+        Set<Long> seen = new HashSet<>();
+        int sent = 0;
+        for (ChannelWaMessageDO c : candidates) {
+            if (!seen.add(c.getConversationId())) {
+                continue;
+            }
+            try {
+                if (waFollowUp(cfg, c.getConversationId(), hours, rounds)) {
+                    sent++;
+                }
+            } catch (Exception e) {
+                log.warn("[waFollowUps][会话({}) 跟进失败] {}", c.getConversationId(), e.getMessage());
+            }
+        }
+        return sent;
+    }
+
+    private boolean waFollowUp(ChannelAiConfigDO cfg, Long conversationId, int hours, int rounds) {
+        ChannelWaConversationDO conv = whatsAppService.getConversationInternal(conversationId);
+        if (conv == null || !whatsAppService.isWindowOpen(conv)) {
+            return false;
+        }
+        List<ChannelWaMessageDO> recent = whatsAppService.getRecentMessagesInternal(conversationId, WA_HISTORY);
+        if (recent.isEmpty()) {
+            return false;
+        }
+        ChannelWaMessageDO last = recent.get(recent.size() - 1);
+        if (last.getDirection() != ChannelWaMessageDO.DIRECTION_OUT || !Boolean.TRUE.equals(last.getAiGenerated())
+                || last.getMessageTime() == null || last.getMessageTime().isAfter(LocalDateTime.now().minusHours(hours))) {
+            return false;
+        }
+        int trailingAi = 0;
+        boolean hasIn = false;
+        for (int i = recent.size() - 1; i >= 0; i--) {
+            ChannelWaMessageDO t = recent.get(i);
+            if (t.getDirection() == ChannelWaMessageDO.DIRECTION_IN) {
+                hasIn = true;
+                break;
+            }
+            if (!Boolean.TRUE.equals(t.getAiGenerated())) {
+                return false;
+            }
+            trailingAi++;
+        }
+        int round = trailingAi;
+        if (!hasIn || round > rounds) {
+            return false;
+        }
+        ChannelWaAccountDO account = whatsAppService.getAccountInternal(conv.getAccountId());
+        if (account == null || !Boolean.TRUE.equals(account.getEnabled())) {
+            return false;
+        }
+        List<LlmClient.Message> history = waHistory(conversationId);
+        long since = java.time.Duration.between(last.getMessageTime(), LocalDateTime.now()).toHours();
+        history.add(LlmClient.Message.user(followUpPrompt(round, since, ChannelAiDraftDO.CHANNEL_WHATSAPP)));
+        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(waHistory(conversationId)), history);
+        String reason = blockReason(ChannelAiConfigDO.MODE_AUTO, g, conv.getCustomerId(), false);
+        if (reason != null || StrUtil.isBlank(g.content())) {
+            charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_DISCARDED,
+                    ChannelAiDraftDO.REASON_FOLLOW_UP, reason), account.getUserId(), "智能跟进（未发送）");
+            return false;
+        }
+        ChannelWaSendReqVO req = new ChannelWaSendReqVO();
+        req.setConversationId(conversationId);
+        req.setText(g.content());
+        whatsAppService.send(account.getUserId(), req, true);
+        charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_SENT,
+                ChannelAiDraftDO.REASON_FOLLOW_UP, null), account.getUserId(), "智能跟进");
+        log.info("[waFollowUp][会话 {} 第 {} 次跟进已发送]", conversationId, round);
+        return true;
     }
 
     /** 由 AI 发送一条固定文本（开场白、兜底话术）；失败只记日志 */

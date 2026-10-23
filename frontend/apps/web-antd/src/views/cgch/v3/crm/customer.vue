@@ -15,7 +15,7 @@ import { IconifyIcon } from '@vben/icons';
 import { useUserStore } from '@vben/stores';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Button, message, Popconfirm, Tag } from 'ant-design-vue';
+import { Button, message, Popconfirm, Tag, Tooltip } from 'ant-design-vue';
 
 import { getCustomerGroupList, getTagList } from '#/api/crm/cgch';
 import {
@@ -25,6 +25,9 @@ import {
   putCustomerPool,
   receiveCustomer,
 } from '#/api/crm/customer';
+import { createReactivateTask } from '#/api/channel/reactivate';
+import type { LatestResearch } from '#/api/channel/research';
+import { createResearch, getLatestResearch } from '#/api/channel/research';
 import { requestClient } from '#/api/request';
 import CustomerForm from '#/views/crm/customer/modules/form.vue';
 import ImportForm from '#/views/crm/customer/modules/import-form.vue';
@@ -35,7 +38,7 @@ import { channelTags, countryName, fmtTime, industryLabel, levelLabel, levelRail
 const props = defineProps<{ pool?: boolean }>();
 const router = useRouter();
 const userStore = useUserStore();
-const hubSelect = inject<(k: string) => void>('cgchHubSelect', () => {});
+const hubSelect = inject<(k: string, extra?: Record<string, string>) => void>('cgchHubSelect', () => {});
 const listRef = ref<InstanceType<typeof CrmList>>();
 const selected = ref<any[]>([]);
 
@@ -88,8 +91,8 @@ const columns = computed<CrmColumn[]>(() => [
   { key: 'detailAddress', title: '详细地址', width: 200 },
   { key: 'contactNextTime', title: '下次联系时间', width: 150 },
   { key: 'contactLastTime', title: '最近联系时间', width: 150 },
-  { key: 'research', title: '背调结果', width: 110, hidden: true },
-  { key: 'report', title: '报告', width: 90, hidden: true },
+  { key: 'research', title: '背调结果', width: 180 },
+  { key: 'report', title: '报告', width: 80 },
   { key: 'remark', title: '备注', width: 160 },
   { key: 'action', title: '操作', width: props.pool ? 120 : 190, fixed: 'right', required: true },
 ]);
@@ -132,23 +135,75 @@ async function doExport() {
   downloadFileFromBlobPart({ fileName: props.pool ? '公海客户.xls' : '客户.xls', source: data });
 }
 
-/** 一键唤醒 / 一键背调：把选中的客户交给 CRM 智枢 */
-function aiTask(kind: 'research' | 'wake') {
+// ===== 背调结果 =====
+const research = ref<Record<number, LatestResearch>>({});
+const RESEARCH_STATUS: Record<string, { color: string; text: string }> = {
+  done: { color: 'text-green-600', text: '已背调' },
+  running: { color: 'text-amber-500', text: '背调中' },
+  failed: { color: 'text-red-500', text: '背调失败' },
+};
+
+async function loadResearch(rows: any[]) {
+  if (props.pool || !rows.length) return;
+  try {
+    const list = await getLatestResearch(rows.map((r) => r.id));
+    research.value = Object.fromEntries(list.map((x) => [x.customerId, x]));
+  } catch {
+    research.value = {};
+  }
+}
+
+function openReport(customerId: number) {
+  const r = research.value[customerId];
+  if (r) hubSelect('salesmind', { sub: 'research', researchId: String(r.id) });
+}
+
+/** 一键背调：为勾选的客户发起深度背调（读取官网公开页面与往来记录，AI 生成报告） */
+const busy = ref(false);
+async function oneClickResearch() {
   if (!selected.value.length) {
-    message.info(kind === 'wake' ? '请先勾选要唤醒的客户' : '请先勾选要背调的客户');
+    message.info('请先勾选要背调的客户');
     return;
   }
-  const names = selected.value.map((c) => c.name).join('、');
-  const prompt =
-    kind === 'wake'
-      ? `请为这些久未联系的客户各写一封唤醒邮件草稿：${names}`
-      : `请对这些客户做背景调查（公司规模、主营产品、采购需求、联系方式）：${names}`;
+  const list = selected.value.slice(0, 20);
+  busy.value = true;
+  let ok = 0;
+  const failed: string[] = [];
   try {
-    sessionStorage.setItem('cgch-claw-prompt', prompt);
-  } catch {
-    // 无法存储时只打开 CRM 智枢
+    for (const c of list) {
+      try {
+        await createResearch({ customerId: c.id });
+        ok++;
+      } catch {
+        failed.push(c.name);
+      }
+    }
+  } finally {
+    busy.value = false;
   }
-  hubSelect('salesmind');
+  if (ok) message.success(`已发起 ${ok} 个背调，完成后在「背调结果」列查看${selected.value.length > 20 ? '（一次最多 20 个）' : ''}`);
+  if (failed.length) message.warning(`${failed.join('、')} 未能发起背调（可能缺少官网或企业邮箱）`);
+  listRef.value?.reload();
+}
+
+/** 一键唤醒：为勾选的客户创建唤醒任务，AI 逐个撰写唤醒邮件 / 消息，确认后发送 */
+async function oneClickWake() {
+  if (!selected.value.length) {
+    message.info('请先勾选要唤醒的客户');
+    return;
+  }
+  busy.value = true;
+  try {
+    await createReactivateTask({
+      name: `一键唤醒 ${new Date().toLocaleDateString('zh-CN')}`,
+      customerIds: selected.value.map((c) => c.id),
+      channel: 'auto',
+    });
+    message.success('唤醒任务已创建，AI 正在逐个撰写，确认后再发送');
+    hubSelect('salesmind', { sub: 'wake' });
+  } finally {
+    busy.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -173,10 +228,11 @@ const me = computed(() => userStore.userInfo?.id);
       :storage-key="pool ? 'customer-pool' : 'customer'"
       search-placeholder="搜索客户名称、公司名称"
       @select="(rows) => (selected = rows)"
+      @loaded="loadResearch"
     >
       <template #actions>
-        <Button class="crm-ai-btn" @click="aiTask('wake')"><IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5" />一键唤醒</Button>
-        <Button v-if="!pool" class="crm-ai-btn" @click="aiTask('research')">
+        <Button class="crm-ai-btn" :loading="busy" @click="oneClickWake"><IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5" />一键唤醒</Button>
+        <Button v-if="!pool" class="crm-ai-btn" :loading="busy" @click="oneClickResearch">
           <IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5" />一键背调
         </Button>
         <Button v-if="!pool" type="primary" @click="formApi.setData(null).open()">
@@ -214,6 +270,19 @@ const me = computed(() => userStore.userInfo?.id);
         <template v-else-if="column.key === 'tags'">
           <Tag v-for="id in record.tagIds || []" :key="id" class="m-0 mr-1">{{ tagName(id) || id }}</Tag>
           <span v-if="!record.tagIds?.length">-</span>
+        </template>
+        <template v-else-if="column.key === 'research'">
+          <template v-if="research[record.id]">
+            <Tooltip :title="research[record.id]!.summary">
+              <span :class="RESEARCH_STATUS[research[record.id]!.status]?.color">{{ RESEARCH_STATUS[research[record.id]!.status]?.text }}</span>
+              <span v-if="research[record.id]!.summary" class="ml-1 text-xs text-gray-500">{{ research[record.id]!.summary }}</span>
+            </Tooltip>
+          </template>
+          <span v-else>-</span>
+        </template>
+        <template v-else-if="column.key === 'report'">
+          <a v-if="research[record.id]?.status === 'done'" @click="openReport(record.id)">查看</a>
+          <span v-else>-</span>
         </template>
         <template v-else-if="column.key === 'contactNextTime'">{{ fmtTime(record.contactNextTime) }}</template>
         <template v-else-if="column.key === 'contactLastTime'">{{ fmtTime(record.contactLastTime) }}</template>

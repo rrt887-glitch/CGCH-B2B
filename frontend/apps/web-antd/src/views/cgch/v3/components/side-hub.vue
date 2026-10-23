@@ -36,8 +36,8 @@ const view = computed(() => {
   return cache.get(item.key);
 });
 
-function select(key: string) {
-  if (key !== activeKey.value) router.replace({ query: { tab: key } });
+function select(key: string, extra?: Record<string, string>) {
+  if (key !== activeKey.value || extra) router.replace({ query: { tab: key, ...extra } });
 }
 /** 子页面之间跳转（例如线索转客户后打开客户列表） */
 provide('cgchHubSelect', select);

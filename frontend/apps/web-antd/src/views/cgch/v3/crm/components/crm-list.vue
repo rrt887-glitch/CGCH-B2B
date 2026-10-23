@@ -39,7 +39,7 @@ const props = withDefaults(
   { rail: () => [], stats: () => [], allLabel: '全部', searchField: 'name', searchPlaceholder: '请输入名称', selectable: true, baseParams: () => ({}), showTotal: false },
 );
 
-const emit = defineEmits<{ select: [rows: any[]] }>();
+const emit = defineEmits<{ loaded: [rows: any[]]; select: [rows: any[]] }>();
 
 // ===== 左侧筛选栏 =====
 const railOpen = ref(true);
@@ -150,6 +150,7 @@ async function load() {
     total.value = r.total ?? 0;
     selectedKeys.value = [];
     emit('select', []);
+    emit('loaded', rows.value);
   } finally {
     loading.value = false;
   }
