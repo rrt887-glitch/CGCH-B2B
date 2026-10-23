@@ -858,6 +858,10 @@ public class ChannelWhatsAppService {
 
     // ==================== 供 AI 使用 ====================
 
+    public void updateIntentInternal(Long id, String intent) {
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setIntent(intent));
+    }
+
     public ChannelWaConversationDO getConversationInternal(Long id) {
         return conversationMapper.selectById(id);
     }

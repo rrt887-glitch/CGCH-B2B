@@ -95,5 +95,25 @@ public class ChannelAiConfigDO extends TenantBaseDO {
      * 关闭的通知类型，逗号分隔：handoff、takeover、new_lead、reactivate_reply、credit_low；为空表示全部开启
      */
     private String notifyMuted;
+    /**
+     * 智能体技能配置（JSON，见 ChannelAgentSettings.Skills）
+     */
+    private String skillsJson;
+    /**
+     * 转人工配置（JSON，见 ChannelAgentSettings.Handoff）：按客户意图、按客户条件、人工介入时的托管方式
+     */
+    private String handoffJson;
+    /**
+     * 固定开场白（JSON，见 ChannelAgentSettings.Opening）
+     */
+    private String openingJson;
+    /**
+     * 学习真人销售：学习范围与目标（JSON，见 ChannelAgentSettings.Learn）
+     */
+    private String learnJson;
+    /**
+     * 从真人销售对话中学到的话术要点，回复时附在系统提示里
+     */
+    private String salesStyle;
 
 }

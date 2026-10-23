@@ -36,6 +36,8 @@ public class ChannelAiDraftDO extends TenantBaseDO {
     public static final String REASON_SEND_FAILED = "send_failed";
     public static final String REASON_MANUAL = "manual";
     public static final String REASON_NO_CREDIT = "no_credit";
+    /** 命中「根据客户条件」转人工（如老客户） */
+    public static final String REASON_CONDITION = "condition";
     /** 工作时间设置为「AI 只起草」 */
     public static final String REASON_WORK_HOURS = "work_hours";
     /** 非工作时间设置为「AI 只起草」 */
@@ -94,5 +96,10 @@ public class ChannelAiDraftDO extends TenantBaseDO {
      * 客户本次的问题（截取），用于工作报告里的「知识库缺口」
      */
     private String question;
+    /**
+     * 需要人工支持的类型（看板「需要支持」分类）：handoff 已转人工、missing 信息缺失、permission 权限决策、
+     * crisis 客情危机、compliance 合规风险、other 其他
+     */
+    private String supportType;
 
 }

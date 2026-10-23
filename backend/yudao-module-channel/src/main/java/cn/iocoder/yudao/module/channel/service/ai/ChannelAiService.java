@@ -316,8 +316,12 @@ public class ChannelAiService {
     // ==================== 生成 ====================
 
     /** 一次生成的结果 */
+    /**
+     * @param intent      咨询意图（模型在回复第一行给出的分类），可能为空
+     * @param supportType 转人工时的看板分类（handoff、missing、permission、crisis、other）
+     */
     public record Generated(String content, boolean handoff, String forbidden, int promptTokens, int completionTokens, String model,
-                            int knowledgeHits, String question) {
+                            int knowledgeHits, String question, String intent, String supportType) {
     }
 
     private Generated generate(ChannelAiConfigDO cfg, String channel, String customerText, List<LlmClient.Message> history) {
@@ -335,13 +339,15 @@ public class ChannelAiService {
             throw exception(AI_LLM_FAIL, e.getMessage());
         }
         boolean handoff = AiPromptBuilder.isHandoff(r.content());
-        String content = handoff ? "" : r.content();
+        String intent = AiPromptBuilder.intent(r.content());
+        String supportType = handoff ? AiPromptBuilder.handoffType(r.content()) : null;
+        String content = handoff ? "" : AiPromptBuilder.stripIntent(r.content());
         String hit = handoff ? null : AiPromptBuilder.firstForbidden(content,
                 channelAiForbiddenWordMapper.selectEnabled().stream().map(ChannelAiForbiddenWordDO::getWord).toList());
         int embedTokens = sem == null ? 0 : sem.tokens(); // 检索用的向量 token 一并计入本次消耗
         int hits = AiPromptBuilder.rank(knowledge, customerText, sem == null ? null : sem.scores()).size();
         return new Generated(content, handoff, hit, r.promptTokens() + embedTokens, r.completionTokens(), cfg.getLlmModel(),
-                hits, StrUtil.maxLength(StrUtil.trim(customerText), 250));
+                hits, StrUtil.maxLength(StrUtil.trim(customerText), 250), intent, supportType);
     }
 
     /** 邮件往来 → 对话历史：客户来信为 user，我方回复为 assistant */
@@ -450,9 +456,34 @@ public class ChannelAiService {
         ChannelAiDraftDO d = ChannelAiDraftDO.builder().channel(channel).refId(refId).content(content).status(status)
                 .reason(reason).reasonDetail(StrUtil.maxLength(detail, 250))
                 .promptTokens(g.promptTokens()).completionTokens(g.completionTokens()).model(g.model())
-                .knowledgeHits(g.knowledgeHits()).question(g.question()).build();
+                .knowledgeHits(g.knowledgeHits()).question(g.question())
+                .supportType(g.handoff() ? g.supportType() : g.forbidden() != null ? "compliance"
+                        : ChannelAiDraftDO.REASON_CONDITION.equals(reason) ? "handoff" : null).build();
         channelAiDraftMapper.insert(d);
+        saveIntent(channel, refId, g.intent());
         return d;
+    }
+
+    /** 记录咨询意图（只在尚未分类时写入），看板「流量占比」据此统计 */
+    private void saveIntent(String channel, Long refId, String intent) {
+        if (intent == null || refId == null) {
+            return;
+        }
+        try {
+            if (ChannelAiDraftDO.CHANNEL_MAIL.equals(channel)) {
+                ChannelMailMessageDO m = mailService.getMessageInternal(refId);
+                if (m != null && m.getIntent() == null) {
+                    mailService.updateIntentInternal(m.getId(), intent);
+                }
+            } else {
+                ChannelWaConversationDO c = whatsAppService.getConversationInternal(refId);
+                if (c != null && c.getIntent() == null) {
+                    whatsAppService.updateIntentInternal(c.getId(), intent);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[saveIntent][{} {}] {}", channel, refId, e.getMessage());
+        }
     }
 
     private void requireCredit() {
@@ -598,6 +629,12 @@ public class ChannelAiService {
         if (noCredit(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId)) {
             return;
         }
+        ChannelAgentSettings.Opening opening = ChannelAgentSettings.opening(cfg);
+        boolean auto = ChannelAiConfigDO.MODE_AUTO.equals(cfg.getWaMode()) && !Decision.DRAFT.equals(wt.action());
+        boolean firstContact = recent.stream().noneMatch(x -> x.getDirection() == ChannelWaMessageDO.DIRECTION_OUT);
+        if (auto && firstContact && opening.isEnabled() && StrUtil.isNotBlank(opening.getGreeting()) && whatsAppService.isWindowOpen(conv)) {
+            sendQuietly(account.getUserId(), conversationId, opening.getGreeting().trim()); // 固定开场白：新客户先收到问候
+        }
         List<LlmClient.Message> history = waHistory(conversationId);
         Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history);
         String reason = blockReason(cfg.getWaMode(), g, conv.getCustomerId(),
@@ -612,6 +649,9 @@ public class ChannelAiService {
         }
         if (reason != null) {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden()), account.getUserId(), "WhatsApp 自动处理");
+            if (auto && g.handoff() && StrUtil.isNotBlank(opening.getFallback()) && whatsAppService.isWindowOpen(conv)) {
+                sendQuietly(account.getUserId(), conversationId, opening.getFallback().trim()); // 兜底话术：告诉客户稍后由同事回复
+            }
             return;
         }
         ChannelWaSendReqVO req = new ChannelWaSendReqVO();
@@ -623,6 +663,18 @@ public class ChannelAiService {
         } catch (Exception e) {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_PENDING,
                     ChannelAiDraftDO.REASON_SEND_FAILED, e.getMessage()), account.getUserId(), "WhatsApp 自动处理");
+        }
+    }
+
+    /** 由 AI 发送一条固定文本（开场白、兜底话术）；失败只记日志 */
+    private void sendQuietly(Long userId, Long conversationId, String text) {
+        try {
+            ChannelWaSendReqVO req = new ChannelWaSendReqVO();
+            req.setConversationId(conversationId);
+            req.setText(text);
+            whatsAppService.send(userId, req, true);
+        } catch (Exception e) {
+            log.warn("[sendQuietly][会话 {}] {}", conversationId, e.getMessage());
         }
     }
 
@@ -699,19 +751,51 @@ public class ChannelAiService {
         if (ChannelAiConfigDO.MODE_DRAFT.equals(mode)) {
             return ChannelAiDraftDO.REASON_DRAFT_MODE;
         }
+        ChannelAgentSettings.Handoff h = ChannelAgentSettings.handoff(channelAiConfigMapper.selectCurrent());
+        CrmCustomerDO c = customerId == null ? null : customerMapper.selectById(customerId);
         if (humanActive) {
+            if ("off".equals(h.getTakeoverMode()) && c != null && Boolean.TRUE.equals(c.getAiHosted())) {
+                // 人工介入后关闭该客户的 AI 托管，之后由人工跟进
+                customerMapper.updateById(new CrmCustomerDO().setId(c.getId()).setAiHosted(false));
+                return ChannelAiDraftDO.REASON_NOT_HOSTED;
+            }
             return ChannelAiDraftDO.REASON_HUMAN_ACTIVE;
         }
-        if (customerId != null) { // 已建档的客户需开启「AI 托管」才自动回复；新询盘默认托管
-            CrmCustomerDO c = customerMapper.selectById(customerId);
-            if (c != null && !Boolean.TRUE.equals(c.getAiHosted())) {
+        if (c != null) { // 已建档的客户需开启「AI 托管」才自动回复；新询盘默认托管
+            if (!Boolean.TRUE.equals(c.getAiHosted())) {
                 return ChannelAiDraftDO.REASON_NOT_HOSTED;
+            }
+            String cond = matchedCondition(h, c);
+            if (cond != null) {
+                return ChannelAiDraftDO.REASON_CONDITION;
+            }
+        }
+        return null;
+    }
+
+    /** 「根据客户条件」转人工：返回命中的条件名称，没有命中返回 null */
+    static String matchedCondition(ChannelAgentSettings.Handoff h, CrmCustomerDO c) {
+        for (ChannelAgentSettings.Condition cond : h.getConditions()) {
+            if (!cond.isEnabled() || cond.getField() == null) {
+                continue;
+            }
+            boolean hit = switch (cond.getField()) {
+                case "level" -> c.getLevel() != null && cond.getValues().contains(c.getLevel());
+                case "source" -> c.getSource() != null && cond.getValues().contains(c.getSource());
+                case "deal" -> Boolean.TRUE.equals(c.getDealStatus());
+                default -> false;
+            };
+            if (hit) {
+                return StrUtil.blankToDefault(cond.getName(), cond.getField());
             }
         }
         return null;
     }
 
     private static boolean humanRepliedRecently(List<LocalDateTime> humanTimes, ChannelAiConfigDO cfg) {
+        if ("none".equals(ChannelAgentSettings.handoff(cfg).getTakeoverMode())) {
+            return false; // 人工介入不影响 AI 托管
+        }
         int hours = cfg.getHumanPauseHours() == null ? 12 : cfg.getHumanPauseHours();
         LocalDateTime since = LocalDateTime.now().minusHours(hours);
         return hours > 0 && humanTimes.stream().anyMatch(t -> t != null && t.isAfter(since));

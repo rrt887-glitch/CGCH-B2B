@@ -61,6 +61,9 @@ export const overridesPreferences = defineOverridesPreferences({
   copyright: {
     companyName: import.meta.env.VITE_APP_TITLE,
     companySiteLink: 'https://tkcaogenchuhai.com',
+    date: '2026',
+    icp: '',
+    icpLink: '',
   },
 });
 
