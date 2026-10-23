@@ -1,7 +1,7 @@
 package cn.iocoder.yudao.module.channel.service.template;
 
 import cn.hutool.core.util.StrUtil;
-import cn.iocoder.yudao.framework.mybatis.core.query.LambdaUpdateWrapperX;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import cn.iocoder.yudao.module.channel.dal.dataobject.template.ChannelMailTemplateDO;
 import cn.iocoder.yudao.module.channel.dal.mysql.template.ChannelMailTemplateMapper;
 import jakarta.annotation.Resource;
@@ -72,7 +72,7 @@ public class ChannelMailTemplateService {
 
     /** 每个分类只有一个默认模板 */
     private void clearOtherDefaults(ChannelMailTemplateDO t) {
-        channelMailTemplateMapper.update(null, new LambdaUpdateWrapperX<ChannelMailTemplateDO>()
+        channelMailTemplateMapper.update(null, new LambdaUpdateWrapper<ChannelMailTemplateDO>()
                 .set(ChannelMailTemplateDO::getDefaulted, false)
                 .eq(ChannelMailTemplateDO::getCategory, t.getCategory())
                 .ne(ChannelMailTemplateDO::getId, t.getId()));
