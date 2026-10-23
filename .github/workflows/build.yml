@@ -1547,15 +1547,14 @@ jobs:
       - name: 类型检查（上游代码的既有类型错误只报告；草根出海自己的页面有错误则失败）
         run: |
           pnpm -F @vben/web-antd run typecheck > typecheck.log 2>&1 || true
+          sed -i 's/\x1b\[[0-9;]*m//g' typecheck.log
           tail -20 typecheck.log
           # 草根出海新增 / 改写的代码：views/cgch、api/channel、api/crm/cgch、主框架与路由
           grep -E "src/(views/cgch|api/channel|api/crm/cgch|layouts/basic\.vue|router/routes/modules/cgch\.ts)" typecheck.log | grep -E "error TS" > own-errors.log || true
           n=$(wc -l < own-errors.log)
           echo "草根出海代码的类型错误：$n 个"
-          head -30 own-errors.log | while IFS= read -r line; do
-            f=$(echo "$line" | sed -E 's/^([^(]+)\(([0-9]+),.*/\1/'); l=$(echo "$line" | sed -E 's/^[^(]+\(([0-9]+),.*/\1/')
-            echo "::error file=frontend/apps/web-antd/$f,line=$l::$(echo "$line" | sed -E 's/^[^:]+: //')"
-          done
+          sed -i 's/\x1b\[[0-9;]*m//g' own-errors.log
+          head -40 own-errors.log | while IFS= read -r line; do echo "::error title=类型错误::$line"; done
           [ "$n" -eq 0 ]
 
       - name: 打包（web-antd）
