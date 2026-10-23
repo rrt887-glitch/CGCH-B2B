@@ -100,7 +100,19 @@ function argText(s: ChannelAssistantApi.Step) {
   }
 }
 
-onMounted(loadChats);
+onMounted(() => {
+  loadChats();
+  // 客户列表「一键唤醒 / 一键背调」带过来的问题，填进输入框由用户确认后发送
+  try {
+    const preset = sessionStorage.getItem('cgch-claw-prompt');
+    if (preset) {
+      input.value = preset;
+      sessionStorage.removeItem('cgch-claw-prompt');
+    }
+  } catch {
+    // 浏览器禁止存储时忽略
+  }
+});
 </script>
 
 <template>

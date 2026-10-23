@@ -20,9 +20,13 @@ public interface CrmClueMapper extends BaseMapperX<CrmClueDO> {
 
     default PageResult<CrmClueDO> selectPage(CrmCluePageReqVO pageReqVO, Long userId) {
         MPJLambdaWrapperX<CrmClueDO> query = new MPJLambdaWrapperX<>();
-        // 拼接数据权限的查询条件
-        CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CLUE.getType(),
-                CrmClueDO::getId, userId, pageReqVO.getSceneType());
+        // 拼接数据权限的查询条件；公海线索是没有负责人的线索
+        if (Boolean.TRUE.equals(pageReqVO.getPool())) {
+            query.isNull(CrmClueDO::getOwnerUserId);
+        } else {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CLUE.getType(),
+                    CrmClueDO::getId, userId, pageReqVO.getSceneType());
+        }
         // 拼接自身的查询条件
         query.selectAll(CrmClueDO.class)
                 .likeIfPresent(CrmClueDO::getName, pageReqVO.getName())
@@ -37,7 +41,11 @@ public interface CrmClueMapper extends BaseMapperX<CrmClueDO> {
                 .eqIfPresent(CrmClueDO::getGroupId, pageReqVO.getGroupId())
                 .eqIfPresent(CrmClueDO::getAiHosted, pageReqVO.getAiHosted())
                 .betweenIfPresent(CrmClueDO::getCreateTime, pageReqVO.getCreateTime())
+                .betweenIfPresent(CrmClueDO::getContactLastTime, pageReqVO.getContactLastTime())
                 .orderByDesc(CrmClueDO::getId);
+        if (pageReqVO.getTagId() != null) {
+            query.apply("FIND_IN_SET({0}, t.tag_ids)", pageReqVO.getTagId());
+        }
         return selectJoinPage(pageReqVO, CrmClueDO.class, query);
     }
 

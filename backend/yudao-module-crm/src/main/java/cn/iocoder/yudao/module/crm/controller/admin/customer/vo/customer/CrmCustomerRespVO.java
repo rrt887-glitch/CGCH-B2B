@@ -152,4 +152,7 @@ public class CrmCustomerRespVO {
     @Schema(description = "是否由 AI 数字员工托管接待", example = "true")
     private Boolean aiHosted;
 
+    @Schema(description = "是否特别关注", example = "true")
+    private Boolean starred;
+
 }
