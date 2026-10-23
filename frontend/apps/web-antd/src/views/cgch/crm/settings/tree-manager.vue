@@ -152,8 +152,8 @@ onMounted(load);
         <template v-else-if="column.key === 'action'">
           <Space>
             <Button size="small" type="link" @click="openForm(undefined, record.id)">新增子项</Button>
-            <Button size="small" type="link" @click="openForm(record)">修改</Button>
-            <Popconfirm :title="`确定删除「${record.name}」吗？`" @confirm="remove(record)">
+            <Button size="small" type="link" @click="openForm(record as any)">修改</Button>
+            <Popconfirm :title="`确定删除「${record.name}」吗？`" @confirm="remove(record as any)">
               <Button size="small" type="link" danger>删除</Button>
             </Popconfirm>
           </Space>

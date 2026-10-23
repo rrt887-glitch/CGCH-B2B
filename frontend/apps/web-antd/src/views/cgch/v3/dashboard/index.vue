@@ -45,8 +45,8 @@ const total = computed(() => data.value?.traffic.total ?? 0);
 const share = (n: number) => (total.value ? n / total.value : 0);
 const segs = computed(() => {
   const t = data.value?.traffic;
-  const list = SEGMENTS.map((s) => ({ ...s, value: share(t?.counts[s.key] ?? 0) }));
-  list.push({ key: 'unclassified' as any, label: '未分类咨询', color: '#e4e8f2', value: share(t?.unclassified ?? 0) });
+  const list: { color: string; key: string; label: string; value: number }[] = SEGMENTS.map((s) => ({ ...s, value: share(t?.counts[s.key] ?? 0) }));
+  list.push({ key: 'unclassified', label: '未分类咨询', color: '#e4e8f2', value: share(t?.unclassified ?? 0) });
   return list;
 });
 /** 环形图：每段的 stroke-dasharray */

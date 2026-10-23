@@ -153,15 +153,15 @@ onMounted(async () => {
             <div class="line-clamp-3 whitespace-pre-wrap text-sm">{{ record.content }}</div>
           </template>
           <template v-else-if="column.key === 'index'">
-            <Tag :color="indexed(record) ? 'green' : 'default'">{{ indexed(record) ? '已建立' : '未建立' }}</Tag>
+            <Tag :color="indexed(record as any) ? 'green' : 'default'">{{ indexed(record as any) ? '已建立' : '未建立' }}</Tag>
           </template>
           <template v-else-if="column.key === 'enabled'">
-            <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record, !!v)" />
+            <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record as any, !!v)" />
           </template>
           <template v-else-if="column.key === 'action'">
             <Space>
-              <Button size="small" type="link" @click="openForm(record)">修改</Button>
-              <Popconfirm title="确定删除？" @confirm="remove(record)">
+              <Button size="small" type="link" @click="openForm(record as any)">修改</Button>
+              <Popconfirm title="确定删除？" @confirm="remove(record as any)">
                 <Button size="small" type="link" danger>删除</Button>
               </Popconfirm>
             </Space>

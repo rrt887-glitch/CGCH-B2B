@@ -95,7 +95,7 @@ function view(row: CgchCrmApi.DedupItem) {
             <Tag v-for="f in record.matchedFields" :key="f" color="red">{{ FIELD_LABEL[f] ?? f }}</Tag>
           </template>
           <template v-else-if="column.key === 'action'">
-            <Button size="small" type="link" @click="view(record)">查看</Button>
+            <Button size="small" type="link" @click="view(record as any)">查看</Button>
           </template>
         </template>
         <template #emptyText>{{ searched ? '没有找到重复记录' : '输入关键字后搜索' }}</template>

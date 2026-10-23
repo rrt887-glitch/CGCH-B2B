@@ -132,7 +132,7 @@ onMounted(loadSums);
             <Popconfirm title="确定删除这个订单吗？" @confirm="remove(record)"><a class="text-red-500">删除</a></Popconfirm>
           </div>
         </template>
-        <template v-else>{{ record[column.key] || '-' }}</template>
+        <template v-else>{{ (record as any)[column.key as string] || '-' }}</template>
       </template>
     </CrmList>
   </div>

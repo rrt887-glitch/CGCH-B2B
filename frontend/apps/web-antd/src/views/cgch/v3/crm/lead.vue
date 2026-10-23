@@ -113,7 +113,7 @@ async function transform(r: any) {
             </template>
           </div>
         </template>
-        <template v-else>{{ record[column.key] || '-' }}</template>
+        <template v-else>{{ (record as any)[column.key as string] || '-' }}</template>
       </template>
     </CrmList>
   </div>

@@ -197,7 +197,7 @@ onMounted(() => {
             <Dropdown :trigger="['click']" placement="bottomRight">
               <IconifyIcon icon="lucide:ellipsis" class="size-5 cursor-pointer text-gray-400" />
               <template #overlay>
-                <Menu @click="({ key }: any) => onMenu(record, String(key))">
+                <Menu @click="({ key }: any) => onMenu(record as any, String(key))">
                   <MenuItem key="download">下载</MenuItem>
                   <MenuItem key="relearn">重新学习</MenuItem>
                   <MenuItem key="delete" danger>删除</MenuItem>

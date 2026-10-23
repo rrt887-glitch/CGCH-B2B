@@ -153,11 +153,11 @@ onMounted(async () => {
       <div v-else class="px-4">
         <Table :columns="listColumns" :data-source="rows" :pagination="{ pageSize: 20, showTotal: (t: number) => `共 ${t} 条` }" row-key="id" size="middle" :scroll="{ x: 1280 }">
           <template #bodyCell="{ column, record }">
-            <a v-if="column.key === 'name'" class="font-medium" @click="detail(record)">{{ record.name }}</a>
+            <a v-if="column.key === 'name'" class="font-medium" @click="detail(record as any)">{{ record.name }}</a>
             <template v-else-if="column.key === 'totalPrice'">{{ fmtMoney(record.totalPrice) }}</template>
             <template v-else-if="['dealTime', 'contactLastTime', 'createTime'].includes(String(column.key))">{{ fmtTime(record[column.key as string]) }}</template>
             <template v-else-if="column.key === 'action'">
-              <div class="flex gap-3"><a @click="detail(record)">查看</a><a @click="formApi.setData(record).open()">编辑</a></div>
+              <div class="flex gap-3"><a @click="detail(record as any)">查看</a><a @click="formApi.setData(record as any).open()">编辑</a></div>
             </template>
           </template>
           <template #emptyText><Empty :image="Empty.PRESENTED_IMAGE_SIMPLE" description="暂无商机" /></template>

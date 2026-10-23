@@ -126,12 +126,12 @@ defineExpose({ load });
         </template>
         <template v-else-if="column.key === 'source'">{{ sourceLabel(record.source) }}</template>
         <template v-else-if="column.key === 'enabled'">
-          <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record, !!v)" />
+          <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record as any, !!v)" />
         </template>
         <template v-else-if="column.key === 'action'">
           <Space>
-            <Button size="small" type="link" @click="edit(record)">修改</Button>
-            <Popconfirm title="确定删除这条规则吗？" @confirm="remove(record)">
+            <Button size="small" type="link" @click="edit(record as any)">修改</Button>
+            <Popconfirm title="确定删除这条规则吗？" @confirm="remove(record as any)">
               <Button size="small" type="link" danger>删除</Button>
             </Popconfirm>
           </Space>

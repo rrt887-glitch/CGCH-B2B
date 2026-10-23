@@ -160,7 +160,7 @@ const topColumns = [
 ];
 
 onMounted(async () => {
-  users.value = await getSimpleUserList();
+  users.value = (await getSimpleUserList()) as any;
   await load();
 });
 </script>
