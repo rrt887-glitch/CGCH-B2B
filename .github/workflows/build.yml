@@ -1557,7 +1557,10 @@ jobs:
           echo "草根出海代码的类型错误：$n 个"
           cat own-errors.log
           # 全部错误合成一条注解（每步最多 10 条注解）
-          [ "$n" -eq 0 ] || echo "::error title=草根出海代码类型错误 $n 个::$(head -150 own-errors.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          sed -E 's/^src\/views\/cgch\///; s/error TS[0-9]+: //' own-errors.log | split -l 15 - own-part-
+          for f in $(ls own-part-* 2>/dev/null | head -10); do
+            echo "::error title=草根出海代码类型错误（共 $n 个）::$(sed 's/%/%25/g' "$f" | awk '{printf "%s%%0A", $0}')"
+          done
           [ "$n" -eq 0 ]
 
       - name: 打包（web-antd）
