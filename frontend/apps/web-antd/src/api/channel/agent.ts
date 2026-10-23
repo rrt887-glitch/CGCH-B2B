@@ -8,6 +8,7 @@ export namespace AgentApi {
     desc: string;
   }
   export interface Skills {
+    sendFiles: boolean;
     autoResearch: boolean;
     quote: boolean;
     followUp: boolean;

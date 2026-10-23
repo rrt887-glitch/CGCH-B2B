@@ -11,7 +11,7 @@ import { useRouter } from 'vue-router';
 
 import { IconifyIcon } from '@vben/icons';
 
-import { Button, Checkbox, CheckboxGroup, Input, InputNumber, message, Modal, Switch, Tag } from 'ant-design-vue';
+import { Button, Checkbox, CheckboxGroup, Input, InputNumber, message, Modal, Switch } from 'ant-design-vue';
 
 import { getAiConfig, saveAiConfig } from '#/api/channel/ai';
 
