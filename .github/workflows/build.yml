@@ -1524,6 +1524,42 @@ jobs:
           call('PUT', '/channel/ai/agent-settings', {'skills': dict(s3['skills'], followUp=False)})
           call('PUT', '/channel/ai/config/save', dict(cfg, llmApiKey=''))
           print('智能跟进：未到时间不跟进、到时间跟进一次、达到轮数后停止')
+          # 云盘文件 + AI 发送文件：客户要目录时，AI 回复并把企业云盘里的文件作为附件发出
+          boundary = uuid.uuid4().hex
+          body = (f'--{boundary}\r\nContent-Disposition: form-data; name="scope"\r\n\r\nenterprise\r\n'
+                  f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="catalog-2026.txt"\r\nContent-Type: text/plain\r\n\r\n').encode() \
+                 + b'HD-200 hair dryer catalog' + f'\r\n--{boundary}--\r\n'.encode()
+          req = urllib.request.Request(BASE + '/channel/cloud-file/upload', method='POST', data=body,
+                                       headers={'Authorization': 'Bearer ' + TOKEN, 'tenant-id': '1', 'Content-Type': f'multipart/form-data; boundary={boundary}'})
+          cf = json.load(urllib.request.urlopen(req))
+          assert cf['code'] == 0 and cf['data']['aiSendable'] is True, cf
+          call('PUT', '/channel/cloud-file/update', {'id': cf['data']['id'], 'description': '2026 product catalog'})
+          folder = call('POST', '/channel/cloud-file/folder', {'scope': 'personal', 'name': 'My drafts'})
+          assert [f['name'] for f in call('GET', '/channel/cloud-file/list?scope=personal')] == ['My drafts']
+          s4 = call('GET', '/channel/ai/agent-settings')
+          call('PUT', '/channel/ai/agent-settings', {'skills': dict(s4['skills'], sendFiles=True)})
+          tr = call('POST', '/channel/ai/test-reply', {'channel': 'mail', 'messages': [{'role': 'user', 'content': 'Could you send me your catalog?'}]})
+          assert tr['files'] == ['catalog-2026.txt'] and 'SEND_FILE' not in tr['content'], tr
+          call('PUT', '/channel/ai/config/save', dict(cfg, mailMode='auto', llmApiKey=''))
+          subject2 = 'Catalog please ' + uuid.uuid4().hex[:8]
+          m2 = EmailMessage(); m2['From'] = 'buyer@catalogbuyer.example'; m2['To'] = 'sales@cgch.test'; m2['Subject'] = subject2
+          m2['Message-ID'] = make_msgid(domain='catalogbuyer.example'); m2.set_content('Hi, could you send me your catalog?')
+          with smtplib.SMTP('127.0.0.1', 3025) as smtp:
+              smtp.send_message(m2)
+          time.sleep(1)
+          call('POST', f'/channel/mail-account/sync?id={acct}')
+          in2 = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=5&accountId={acct}&keyword={urllib.parse.quote(subject2)}')['list'][0]
+          th2 = sql(f"SELECT thread_key FROM channel_mail_message WHERE id = {in2['id']}")
+          end = time.time() + 20
+          while sql(f"SELECT COUNT(*) FROM channel_mail_message WHERE thread_key = '{th2}' AND direction = 2") == '0' and time.time() < end:
+              time.sleep(0.5)
+          assert sql(f"SELECT has_attachments + 0 FROM channel_mail_message WHERE thread_key = '{th2}' AND direction = 2 ORDER BY id DESC LIMIT 1") == '1', \
+              'AI 回复应带上云盘文件附件：' + sql(f"SELECT COUNT(*) FROM channel_mail_message WHERE thread_key = '{th2}' AND direction = 2") + ' 封发出；草稿 ' \
+              + sql(f"SELECT CONCAT_WS(' | ', status, reason, reason_detail, LEFT(content, 120)) FROM channel_ai_draft WHERE channel = 'mail' AND ref_id = {in2['id']}")
+          call('PUT', '/channel/ai/agent-settings', {'skills': dict(s4['skills'], sendFiles=False)})
+          call('PUT', '/channel/ai/config/save', dict(cfg, llmApiKey=''))
+          call('DELETE', f"/channel/cloud-file/delete?id={folder}")
+          print('云盘文件与 AI 发送文件：上传、文件夹、个人云盘隔离、AI 选文件、邮件自动带附件')
           PY
 
       - name: 后端日志
