@@ -11,6 +11,7 @@ import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaMessageD
 import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiConfigMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailMessageMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationMapper;
+import cn.iocoder.yudao.module.channel.service.ai.ChannelAgentSettings;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
 import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
 import cn.iocoder.yudao.module.channel.service.mail.ChannelMailService;
@@ -92,8 +93,9 @@ public class ChannelLeadService {
     private CrmPermissionService crmPermissionService;
 
     /** 从询盘中提取的信息 */
-    record Extracted(String company, String countryCode, String contactName, String product, String quantity) {
-        static final Extracted EMPTY = new Extracted(null, null, null, null, null);
+    /** level：按「客户评级」规则打的客户级别 1～4，未判断时为 null */
+    record Extracted(String company, String countryCode, String contactName, String product, String quantity, Integer level) {
+        static final Extracted EMPTY = new Extracted(null, null, null, null, null, null);
     }
 
     // ==================== 邮件 ====================
@@ -131,6 +133,7 @@ public class ChannelLeadService {
                     .ownerUserId(account.getUserId())
                     .contactLastTime(m.getSentTime())
                     .contactLastContent(StrUtil.maxLength(StrUtil.nullToEmpty(m.getSubject()) + " | " + StrUtil.nullToEmpty(m.getSnippet()), 500))
+                    .level(ex.level())
                     .remark(remark("邮件", m.getSubject(), ex))
                     .build();
             createClue(clue);
@@ -175,6 +178,7 @@ public class ChannelLeadService {
                     .ownerUserId(account.getUserId())
                     .contactLastTime(c.getLastMessageTime())
                     .contactLastContent(StrUtil.maxLength(first, 500))
+                    .level(ex.level())
                     .remark(remark(c.platformLabel(), StrUtil.maxLength(first, 80), ex))
                     .build();
             createClue(clue);
@@ -222,9 +226,17 @@ public class ChannelLeadService {
                 || !channelCreditService.hasBalance()) {
             return Extracted.EMPTY;
         }
+        ChannelAgentSettings.Skills skills = ChannelAgentSettings.skills(cfg);
+        StringBuilder grade = new StringBuilder();
+        if (skills.isAutoGrade() && skills.getGrades() != null && !skills.getGrades().isEmpty()) {
+            grade.append("、grade（客户类别，只能是下列编号之一，依据不足时填 null）：");
+            for (ChannelAgentSettings.Grade g : skills.getGrades()) {
+                grade.append(g.getLevel()).append("=").append(g.getName()).append("（").append(StrUtil.nullToEmpty(g.getDesc())).append("）；");
+            }
+        }
         String system = "你负责从外贸询盘中提取客户信息。只输出一个 JSON 对象，不要输出其他文字。字段："
                 + "company（客户公司名）、country_code（客户所在国家的 ISO 3166-1 二字码）、contact_name（联系人姓名）、"
-                + "product（感兴趣的产品）、quantity（数量及单位）。无法确定的字段填 null，不要猜测。Return JSON only.";
+                + "product（感兴趣的产品）、quantity（数量及单位）" + grade + "。无法确定的字段填 null，不要猜测。Return JSON only.";
         try {
             LlmClient.Result r = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(),
                     List.of(LlmClient.Message.system(system), LlmClient.Message.user(StrUtil.maxLength(inquiry, 4000))), 0);
@@ -235,8 +247,15 @@ public class ChannelLeadService {
             }
             JsonNode j = JSON.readTree(mt.group());
             String cc = text(j, "country_code");
+            Integer level = null;
+            String gv = text(j, "grade");
+            if (gv != null && grade.length() > 0) {
+                String d = gv.replaceAll("\\D", "");
+                int lv = d.isEmpty() ? "ABCD".indexOf(Character.toUpperCase(gv.charAt(0))) + 1 : Integer.parseInt(d.substring(0, 1));
+                level = lv >= 1 && lv <= 4 ? lv : null;
+            }
             return new Extracted(text(j, "company"), cc != null && COUNTRY.matcher(cc).matches() ? cc.toUpperCase(Locale.ROOT) : null,
-                    text(j, "contact_name"), text(j, "product"), text(j, "quantity"));
+                    text(j, "contact_name"), text(j, "product"), text(j, "quantity"), level);
         } catch (Exception e) {
             log.warn("[extract][{} {}] 信息提取失败：{}", channel, refId, e.getMessage());
             return Extracted.EMPTY;

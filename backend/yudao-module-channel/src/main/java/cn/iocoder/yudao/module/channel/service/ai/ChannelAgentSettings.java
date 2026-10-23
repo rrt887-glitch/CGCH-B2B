@@ -107,6 +107,26 @@ public final class ChannelAgentSettings {
         private int followUpRounds = 2;
         /** 会话时主动追问的信息 */
         private List<String> askFields = new ArrayList<>(List.of("需求产品", "采购时间", "公司名称"));
+        /** 除追问的信息外，按客户实际情况追问更多需求信息 */
+        private boolean askMore = false;
+        /** 客户进线后自动建档时，按评级规则给客户打级（写入客户级别） */
+        private boolean autoGrade = true;
+        /** 客户评级规则：A～D 四类，对应客户级别 1～4 */
+        private List<Grade> grades = new ArrayList<>(List.of(
+                new Grade(1, "A类客户", "成熟的品牌客户"), new Grade(2, "B类客户", "初创的品牌客户"),
+                new Grade(3, "C类客户", "创业者"), new Grade(4, "D类客户", "自用")));
+    }
+
+    @Data
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Grade {
+        /** 客户级别字典值 1～4 */
+        private int level;
+        private String name;
+        /** 什么样的客户属于这一类 */
+        private String desc;
     }
 
     // ==================== 固定开场白 ====================
@@ -136,6 +156,19 @@ public final class ChannelAgentSettings {
         /** 最近一次学习时间、样本数 */
         private String lastLearnTime;
         private int lastSamples;
+    }
+
+    // ==================== 企业信息 ====================
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Company {
+        private String name = "";
+        /** 所属行业，例如 消费电子(Consumer Electronics) */
+        private String industry = "";
+        private String website = "";
+        /** 企业简介，回复时作为企业背景 */
+        private String intro = "";
     }
 
     // ==================== 读写 ====================
@@ -170,6 +203,10 @@ public final class ChannelAgentSettings {
 
     public static Opening opening(ChannelAiConfigDO c) {
         return read(c == null ? null : c.getOpeningJson(), Opening.class);
+    }
+
+    public static Company company(ChannelAiConfigDO c) {
+        return read(c == null ? null : c.getCompanyJson(), Company.class);
     }
 
     public static Learn learn(ChannelAiConfigDO c) {

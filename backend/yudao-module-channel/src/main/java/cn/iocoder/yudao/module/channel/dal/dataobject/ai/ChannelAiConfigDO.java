@@ -116,4 +116,9 @@ public class ChannelAiConfigDO extends TenantBaseDO {
      */
     private String salesStyle;
 
+    /**
+     * 企业信息（JSON，见 ChannelAgentSettings.Company）：公司名称、行业、官网、简介
+     */
+    private String companyJson;
+
 }

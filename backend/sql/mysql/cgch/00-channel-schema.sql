@@ -53,6 +53,7 @@ CREATE TABLE `channel_ai_config` (
   `opening_json` mediumtext NULL COMMENT '固定开场白（JSON，见 ChannelAgentSettings.Opening）',
   `learn_json` mediumtext NULL COMMENT '学习真人销售：学习范围与目标（JSON，见 ChannelAgentSettings.Learn）',
   `sales_style` mediumtext NULL COMMENT '从真人销售对话中学到的话术要点，回复时附在系统提示里',
+  `company_json` mediumtext NULL COMMENT '企业信息（JSON，见 ChannelAgentSettings.Company）：公司名称、行业、官网、简介',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
@@ -112,6 +113,7 @@ CREATE TABLE `channel_ai_knowledge` (
   `sort` int NULL COMMENT '排序',
   `embedding` mediumtext NULL COMMENT '标题+内容的向量（JSON 数组），用于语义检索；不对外返回',
   `embedding_model` varchar(255) NULL COMMENT '生成向量所用的模型；与当前配置的向量模型不一致时视为未建索引',
+  `file_id` bigint NULL COMMENT '来源资料文件编号（type 为 file 时）',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
@@ -120,6 +122,25 @@ CREATE TABLE `channel_ai_knowledge` (
   `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '知识库条目：企业介绍、产品资料、常见问答';
+
+DROP TABLE IF EXISTS `channel_ai_knowledge_file`;
+CREATE TABLE `channel_ai_knowledge_file` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `name` varchar(255) NULL COMMENT '文件名',
+  `url` varchar(255) NULL COMMENT '文件访问地址',
+  `size` bigint NULL COMMENT '文件大小（字节）',
+  `file_type` varchar(255) NULL COMMENT '文件类型（扩展名，例如 pdf、docx）',
+  `status` varchar(255) NULL COMMENT '学习进度：learning 学习中、done 学习完成、failed 学习失败',
+  `chunks` int NULL COMMENT '拆出的知识条目数',
+  `error_msg` varchar(255) NULL COMMENT '学习失败的原因',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '知识库资料文件：上传后解析成文字、按段落拆成知识条目供 AI 检索';
 
 DROP TABLE IF EXISTS `channel_ai_report`;
 CREATE TABLE `channel_ai_report` (

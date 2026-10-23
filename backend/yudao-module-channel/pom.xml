@@ -51,6 +51,11 @@
             <groupId>cn.iocoder.boot</groupId>
             <artifactId>yudao-spring-boot-starter-mybatis</artifactId>
         </dependency>
+        <!-- 知识库资料文件解析（PDF、Word、Excel、PPT 等）；解析器由 yudao-module-ai 引入的 Tika 解析包提供 -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+        </dependency>
         <!-- IMAP 收信、SMTP 发信（jakarta.mail / Angus Mail） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
