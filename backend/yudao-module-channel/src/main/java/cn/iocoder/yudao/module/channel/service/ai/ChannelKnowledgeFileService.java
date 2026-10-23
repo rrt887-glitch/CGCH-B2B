@@ -37,16 +37,16 @@ public class ChannelKnowledgeFileService {
     private static final Set<String> TYPES = Set.of("pdf", "doc", "docx", "xls", "xlsx", "csv", "ppt", "pptx", "txt", "md", "html", "htm", "rtf");
 
     @Resource
-    private ChannelAiKnowledgeFileMapper fileMapper;
+    private ChannelAiKnowledgeFileMapper channelKnowledgeFileMapper;
     @Resource
-    private ChannelAiKnowledgeMapper knowledgeMapper;
+    private ChannelAiKnowledgeMapper channelKnowledgeMapper;
     @Resource
     private ChannelFileHelper channelFileHelper;
     @Resource
     private ChannelAiService channelAiService;
 
     public List<ChannelAiKnowledgeFileDO> list() {
-        return fileMapper.selectAll();
+        return channelKnowledgeFileMapper.selectAll();
     }
 
     /** 保存并学习一个资料文件，返回文件记录（失败时 status 为 failed，带原因） */
@@ -65,14 +65,14 @@ public class ChannelKnowledgeFileService {
         String url = channelFileHelper.save(content, name, "knowledge", mimeType);
         ChannelAiKnowledgeFileDO f = ChannelAiKnowledgeFileDO.builder().name(name).url(url).size((long) content.length)
                 .fileType(ext).status(ChannelAiKnowledgeFileDO.STATUS_LEARNING).chunks(0).build();
-        fileMapper.insert(f);
+        channelKnowledgeFileMapper.insert(f);
         learn(f, content);
-        return fileMapper.selectById(f.getId());
+        return channelKnowledgeFileMapper.selectById(f.getId());
     }
 
     /** 重新学习（例如之前解析失败） */
     public ChannelAiKnowledgeFileDO relearn(Long id) {
-        ChannelAiKnowledgeFileDO f = fileMapper.selectById(id);
+        ChannelAiKnowledgeFileDO f = channelKnowledgeFileMapper.selectById(id);
         if (f == null) {
             throw exception(AI_LLM_FAIL, "资料文件不存在");
         }
@@ -81,12 +81,12 @@ public class ChannelKnowledgeFileService {
         } catch (Exception e) {
             fail(f, "读取文件失败：" + e.getMessage());
         }
-        return fileMapper.selectById(id);
+        return channelKnowledgeFileMapper.selectById(id);
     }
 
     public void delete(Long id) {
-        knowledgeMapper.delete(new LambdaQueryWrapperX<ChannelAiKnowledgeDO>().eq(ChannelAiKnowledgeDO::getFileId, id));
-        fileMapper.deleteById(id);
+        channelKnowledgeMapper.delete(new LambdaQueryWrapperX<ChannelAiKnowledgeDO>().eq(ChannelAiKnowledgeDO::getFileId, id));
+        channelKnowledgeFileMapper.deleteById(id);
     }
 
     private void learn(ChannelAiKnowledgeFileDO f, byte[] content) {
@@ -105,23 +105,23 @@ public class ChannelKnowledgeFileService {
             fail(f, "没有识别到文字（可能是扫描件或图片），请上传可复制文字的文件");
             return;
         }
-        knowledgeMapper.delete(new LambdaQueryWrapperX<ChannelAiKnowledgeDO>().eq(ChannelAiKnowledgeDO::getFileId, f.getId()));
+        channelKnowledgeMapper.delete(new LambdaQueryWrapperX<ChannelAiKnowledgeDO>().eq(ChannelAiKnowledgeDO::getFileId, f.getId()));
         String base = StrUtil.removeSuffix(f.getName(), "." + f.getFileType());
         List<ChannelAiKnowledgeDO> rows = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i++) {
             ChannelAiKnowledgeDO k = ChannelAiKnowledgeDO.builder().type(ChannelAiKnowledgeDO.TYPE_FILE).fileId(f.getId())
                     .title(chunks.size() == 1 ? base : base + "（第 " + (i + 1) + " 段）").content(chunks.get(i))
                     .enabled(true).sort(100).embedding("").embeddingModel("").build();
-            knowledgeMapper.insert(k);
+            channelKnowledgeMapper.insert(k);
             rows.add(k);
         }
-        fileMapper.updateById(new ChannelAiKnowledgeFileDO().setId(f.getId()).setStatus(ChannelAiKnowledgeFileDO.STATUS_DONE)
+        channelKnowledgeFileMapper.updateById(new ChannelAiKnowledgeFileDO().setId(f.getId()).setStatus(ChannelAiKnowledgeFileDO.STATUS_DONE)
                 .setChunks(rows.size()).setErrorMsg(""));
         channelAiService.embedQuietly(rows);
     }
 
     private void fail(ChannelAiKnowledgeFileDO f, String reason) {
-        fileMapper.updateById(new ChannelAiKnowledgeFileDO().setId(f.getId()).setStatus(ChannelAiKnowledgeFileDO.STATUS_FAILED)
+        channelKnowledgeFileMapper.updateById(new ChannelAiKnowledgeFileDO().setId(f.getId()).setStatus(ChannelAiKnowledgeFileDO.STATUS_FAILED)
                 .setErrorMsg(StrUtil.maxLength(reason, 250)));
     }
 
