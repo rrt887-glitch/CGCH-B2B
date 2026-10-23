@@ -28,8 +28,8 @@ export function getWaSignupConfig() {
   return requestClient.get<WaSignupConfig>('/channel/meta/wa-signup/config');
 }
 
-/** 嵌入式注册完成后提交 code、号码编号与 WABA 编号 */
-export function completeWaSignup(data: { code: string; phoneNumberId: string; wabaId: string }) {
+/** 嵌入式注册完成后提交 code、号码编号与 WABA 编号；mode=coexist 表示共存模式（手机 App 扫码接入，号码编号可空） */
+export function completeWaSignup(data: { code: string; mode?: 'coexist' | 'new'; phoneNumberId?: string; wabaId: string }) {
   return requestClient.post<{ displayPhone?: string; id: number; pin?: string; warning?: string }>(
     '/channel/meta/wa-signup/complete',
     data,

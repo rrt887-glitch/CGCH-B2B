@@ -441,6 +441,10 @@ public class ChannelMailService {
 
     // ==================== 供 AI 使用（调用方需处于正确租户） ====================
 
+    public void updateIntentInternal(Long id, String intent) {
+        messageMapper.updateById(new ChannelMailMessageDO().setId(id).setIntent(intent));
+    }
+
     public ChannelMailMessageDO getMessageInternal(Long id) {
         return messageMapper.selectById(id);
     }

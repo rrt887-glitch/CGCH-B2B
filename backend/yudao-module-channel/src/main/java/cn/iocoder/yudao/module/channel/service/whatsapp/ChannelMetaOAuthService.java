@@ -194,14 +194,21 @@ public class ChannelMetaOAuthService {
      * 注册号码（设置两步验证 PIN）→ 建立账号。推送走应用级 Webhook。
      */
     public WaSignupResult completeWaSignup(Long userId, String code, String phoneNumberId, String wabaId) {
+        return completeWaSignup(userId, code, phoneNumberId, wabaId, false);
+    }
+
+    /**
+     * @param coexist 共存模式：客户的号码继续在手机 WhatsApp Business App 上使用，扫码确认后接入。
+     *                这种号码不需要（也不能）再注册，接入后请求同步通讯录和最近 6 个月的聊天记录。
+     */
+    public WaSignupResult completeWaSignup(Long userId, String code, String phoneNumberId, String wabaId, boolean coexist) {
         ChannelOAuthProperties.Meta m = meta();
         if (StrUtil.isBlank(m.getWaConfigId())) {
             throw exception(META_OAUTH_FAIL, "未配置 WhatsApp 嵌入式注册（CGCH_META_WA_CONFIG_ID）");
         }
-        if (StrUtil.hasBlank(code, phoneNumberId, wabaId)) {
+        if (StrUtil.hasBlank(code, wabaId) || (!coexist && StrUtil.isBlank(phoneNumberId))) {
             throw exception(META_OAUTH_FAIL, "开通流程没有完成，请在弹窗中选择或添加号码后再试");
         }
-        String pnid = phoneNumberId.trim();
         String waba = wabaId.trim();
         try {
             String token = WaGraphClient.call(graph(m, null), "GET", "oauth/access_token?client_id=" + enc(m.getClientId())
@@ -209,21 +216,33 @@ public class ChannelMetaOAuthService {
             if (token.isBlank()) {
                 throw exception(META_OAUTH_FAIL, "没有拿到访问令牌");
             }
+            String pnid = StrUtil.isNotBlank(phoneNumberId) ? phoneNumberId.trim() : null;
+            if (pnid == null) { // 共存模式的完成消息里可能不带号码编号，从企业账户下查
+                JsonNode nums = WaGraphClient.call(graph(m, token).setWabaId(waba), "GET", waba + "/phone_numbers?fields=id", null).path("data");
+                pnid = nums.isArray() && !nums.isEmpty() ? nums.get(0).path("id").asText(null) : null;
+                if (StrUtil.isBlank(pnid)) {
+                    throw exception(META_OAUTH_FAIL, "没有找到接入的号码，请重新扫码连接");
+                }
+            }
+            final String pnidF = pnid;
             ChannelWaAccountDO probe = graph(m, token).setPhoneNumberId(pnid).setWabaId(waba)
                     .setPlatform(ChannelWaAccountDO.PLATFORM_WHATSAPP);
             String display = WaGraphClient.getDisplayPhone(probe); // 同时验证令牌能访问这个号码
             WaGraphClient.call(probe, "POST", waba + "/subscribed_apps", null);
-            String pin = String.valueOf(100000 + new java.security.SecureRandom().nextInt(900000));
+            String pin = null;
             String warning = null;
-            try {
-                WaGraphClient.call(probe, "POST", pnid + "/register", WaGraphClient.parse(
-                        ("{\"messaging_product\":\"whatsapp\",\"pin\":\"" + pin + "\"}").getBytes(StandardCharsets.UTF_8)));
-            } catch (WaGraphClient.WaApiException e) {
-                pin = null; // 号码之前已注册过（例如已设置两步验证），沿用原有设置
-                warning = "号码注册提示：" + e.getMessage();
-                log.warn("[completeWaSignup][号码 {} 注册失败] {}", pnid, e.getMessage());
+            if (!coexist) {
+                pin = String.valueOf(100000 + new java.security.SecureRandom().nextInt(900000));
+                try {
+                    WaGraphClient.call(probe, "POST", pnid + "/register", WaGraphClient.parse(
+                            ("{\"messaging_product\":\"whatsapp\",\"pin\":\"" + pin + "\"}").getBytes(StandardCharsets.UTF_8)));
+                } catch (WaGraphClient.WaApiException e) {
+                    pin = null; // 号码之前已注册过（例如已设置两步验证），沿用原有设置
+                    warning = "号码注册提示：" + e.getMessage();
+                    log.warn("[completeWaSignup][号码 {} 注册失败] {}", pnid, e.getMessage());
+                }
             }
-            ChannelWaAccountDO old = TenantUtils.executeIgnore(() -> accountMapper.selectByPhoneNumberId(pnid));
+            ChannelWaAccountDO old = TenantUtils.executeIgnore(() -> accountMapper.selectByPhoneNumberId(pnidF));
             if (old != null && !Objects.equals(old.getTenantId(), TenantContextHolder.getTenantId())) {
                 throw exception(META_OAUTH_FAIL, "该号码已被其他企业绑定");
             }
@@ -237,7 +256,19 @@ public class ChannelMetaOAuthService {
             } else {
                 accountMapper.updateById(a);
             }
-            log.info("[completeWaSignup][用户 {} 通过嵌入式注册开通 WhatsApp {}（WABA {}）]", userId, display, waba);
+            if (coexist) {
+                // 先同步通讯录，再同步聊天记录；必须在接入后 24 小时内发起，结果通过 Webhook 分批推送
+                for (String type : new String[]{"smb_app_state_sync", "history"}) {
+                    try {
+                        WaGraphClient.call(probe, "POST", pnid + "/smb_app_data", WaGraphClient.parse(
+                                ("{\"messaging_product\":\"whatsapp\",\"sync_type\":\"" + type + "\"}").getBytes(StandardCharsets.UTF_8)));
+                    } catch (WaGraphClient.WaApiException e) {
+                        warning = "聊天记录同步提示：" + e.getMessage();
+                        log.warn("[completeWaSignup][号码 {} 同步 {} 失败] {}", pnid, type, e.getMessage());
+                    }
+                }
+            }
+            log.info("[completeWaSignup][用户 {} 通过{}开通 WhatsApp {}（WABA {}）]", userId, coexist ? "共存模式" : "嵌入式注册", display, waba);
             return new WaSignupResult(a.getId(), display, pin, warning);
         } catch (WaGraphClient.WaApiException e) {
             throw exception(META_OAUTH_FAIL, e.getMessage());

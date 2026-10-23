@@ -34,10 +34,11 @@ Gmail 暂用「应用专用密码」绑定，不申请 Google 受限权限（需
    - 取消授权回调网址：`https://你的域名/admin-api/channel/meta/deauthorize`
    - 允许的 JavaScript SDK 域名：`https://你的域名`
 5. Facebook 登录 for Business → 配置 → 新建配置，类型选「WhatsApp 嵌入式注册」，记下配置编号，填到 `CGCH_META_WA_CONFIG_ID`。
+   渠道页的「连接 WhatsApp」默认走**共存模式**（featureType `whatsapp_business_app_onboarding`）：客户输入正在用 WhatsApp Business App 的号码，用手机 App 扫码确认，手机照常使用，最近 6 个月聊天记录同步进来；也可以切换为开通新号码。
 6. Webhooks（回调地址都填 `https://你的域名/admin-api/channel/meta/webhook`，验证令牌填 `CGCH_META_WEBHOOK_VERIFY_TOKEN`）：
    - Page：订阅 `messages`、`messaging_postbacks`、`message_echoes`、`message_deliveries`、`message_reads`
    - Instagram：订阅 `messages`
-   - WhatsApp Business Account：订阅 `messages`
+   - WhatsApp Business Account：订阅 `messages`，以及共存模式需要的 `smb_message_echoes`（手机 App 发出的消息）、`history`（聊天记录同步）、`smb_app_state_sync`（通讯录同步）
 7. 把应用编号、应用密钥填到 `CGCH_META_APP_ID`、`CGCH_META_APP_SECRET`，重启后端。应用密钥只能由管理员复制，不要发到聊天里。
 
 ### 2. 商家验证（Business Verification）
@@ -68,7 +69,7 @@ Gmail 暂用「应用专用密码」绑定，不申请 Google 受限权限（需
 1. 打开网站登录 → 渠道管理 → 点「Facebook 登录授权」→ 在 Facebook 弹窗中勾选主页并同意；
 2. 用另一个 Facebook 账号给主页发私信 → 在消息工作台看到这条消息 → 回复 → 对方收到；
 3. Instagram 同样演示一遍；
-4. WhatsApp：点「开通 WhatsApp」→ 完成弹窗 → 用手机发消息 → 工作台收到并回复。
+4. WhatsApp：渠道页点「连接 WhatsApp」→ 开始连接 → 在 Meta 弹窗输入号码并用 WhatsApp Business App 扫码 → 用另一部手机发消息 → 会话页收到并回复，手机 App 上也能看到这条回复。
 
 还要提供一个测试账号（网站的用户名和密码）给审核员。一般 3～10 个工作日，被拒绝会写明原因，修改后可重新提交。
 

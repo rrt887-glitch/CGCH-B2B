@@ -50,7 +50,7 @@ public class ChannelMetaController {
     @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
     public CommonResult<ChannelMetaOAuthService.WaSignupResult> waSignupComplete(@RequestBody java.util.Map<String, String> req) {
         return success(channelMetaOAuthService.completeWaSignup(getLoginUserId(), req.get("code"),
-                req.get("phoneNumberId"), req.get("wabaId")));
+                req.get("phoneNumberId"), req.get("wabaId"), "coexist".equals(req.get("mode"))));
     }
 
     @GetMapping(value = "/oauth/callback", produces = MediaType.TEXT_HTML_VALUE + ";charset=UTF-8")
