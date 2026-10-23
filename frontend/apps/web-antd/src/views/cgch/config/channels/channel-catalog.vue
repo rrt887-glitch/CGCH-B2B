@@ -44,7 +44,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
   {
     title: '即时通讯',
     items: [
-      { key: 'wa', name: 'WhatsApp Business 官方 API', abbr: 'WA', color: '#25a244', desc: 'Meta Cloud API，收发消息、模板消息、AI 自动接待', kind: 'wa' },
+      { key: 'wa', name: 'WhatsApp', abbr: 'WA', color: '#25a244', desc: '用手机 WhatsApp Business App 扫码连接，消息两边同步，AI 自动接待', kind: 'wa' },
       { key: 'im', name: '官网 IM', abbr: 'IM', color: '#3b6fd8', desc: '在官网嵌入聊天窗口，访客消息进入统一收件箱', kind: 'soon', soonText: '开发中' },
     ],
   },

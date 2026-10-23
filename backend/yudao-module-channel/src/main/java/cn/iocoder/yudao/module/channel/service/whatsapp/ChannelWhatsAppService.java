@@ -254,7 +254,7 @@ public class ChannelWhatsAppService {
                     if (StrUtil.isNotBlank(phoneNumberId) && !phoneNumberId.equals(a.getPhoneNumberId())) {
                         continue; // 同一应用下其他号码的推送
                     }
-                    processWaChange(a, value);
+                    processWaChange(a, change.path("field").asText("messages"), value);
                 }
             }
             accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setLastWebhookTime(LocalDateTime.now()));
@@ -262,8 +262,12 @@ public class ChannelWhatsAppService {
         return true;
     }
 
-    /** 处理一条 WhatsApp 推送（messages / statuses），调用方已切换到账号所属租户 */
-    private void processWaChange(ChannelWaAccountDO a, JsonNode value) {
+    /** 处理一条 WhatsApp 推送（messages / statuses，以及共存模式的同步推送），调用方已切换到账号所属租户 */
+    private void processWaChange(ChannelWaAccountDO a, String field, JsonNode value) {
+        if (!"messages".equals(field)) {
+            processCoexistChange(a, field, value);
+            return;
+        }
         Map<String, String> names = new HashMap<>();
         for (JsonNode c : value.path("contacts")) {
             names.put(c.path("wa_id").asText(), c.path("profile").path("name").asText(null));
@@ -339,7 +343,7 @@ public class ChannelWhatsAppService {
                     continue;
                 }
                 TenantUtils.execute(a.getTenantId(), () -> {
-                    processWaChange(a, value);
+                    processWaChange(a, change.path("field").asText("messages"), value);
                     accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setLastWebhookTime(LocalDateTime.now()));
                 });
             }
@@ -529,29 +533,7 @@ public class ChannelWhatsAppService {
         ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
                 .accountId(a.getId()).direction(ChannelWaMessageDO.DIRECTION_IN)
                 .waMessageId(wamid).type(type).status(ChannelWaMessageDO.STATUS_RECEIVED).messageTime(time).build();
-        switch (type) {
-            case "text" -> msg.setTextBody(m.path("text").path("body").asText());
-            case "image", "video", "audio", "document", "sticker" -> {
-                JsonNode media = m.path(type);
-                msg.setMediaId(media.path("id").asText(null));
-                msg.setMimeType(media.path("mime_type").asText(null));
-                msg.setFileName(media.path("filename").asText(null));
-                msg.setTextBody(media.path("caption").asText(null));
-            }
-            case "location" -> {
-                JsonNode l = m.path("location");
-                msg.setTextBody(StrUtil.format("位置：{} {}（{}, {}）", l.path("name").asText(""),
-                        l.path("address").asText(""), l.path("latitude").asText(), l.path("longitude").asText()).trim());
-            }
-            case "button" -> msg.setTextBody(m.path("button").path("text").asText());
-            case "interactive" -> {
-                JsonNode i = m.path("interactive");
-                JsonNode reply = i.has("button_reply") ? i.path("button_reply") : i.path("list_reply");
-                msg.setTextBody(reply.path("title").asText(null));
-            }
-            case "reaction" -> msg.setTextBody("回应了表情 " + m.path("reaction").path("emoji").asText(""));
-            default -> msg.setTextBody("[暂不支持的消息类型：" + type + "]");
-        }
+        fillBody(msg, m, type);
         ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), from);
         if (conv == null) {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
@@ -575,6 +557,129 @@ public class ChannelWhatsAppService {
         conversationMapper.updateById(upd);
         if (!"reaction".equals(type)) { // 表情回应不需要回复
             eventPublisher.publishEvent(new ChannelInboundEvent("whatsapp", conv.getId(), msg.getId(), a.getTenantId()));
+        }
+    }
+
+    /** 按消息类型填充正文 / 媒体字段（收到的消息、手机端发出的回显、历史记录共用） */
+    private static void fillBody(ChannelWaMessageDO msg, JsonNode m, String type) {
+        switch (type) {
+            case "text" -> msg.setTextBody(m.path("text").path("body").asText());
+            case "image", "video", "audio", "document", "sticker" -> {
+                JsonNode media = m.path(type);
+                msg.setMediaId(media.path("id").asText(null));
+                msg.setMimeType(media.path("mime_type").asText(null));
+                msg.setFileName(media.path("filename").asText(null));
+                msg.setTextBody(media.path("caption").asText(null));
+            }
+            case "location" -> {
+                JsonNode l = m.path("location");
+                msg.setTextBody(StrUtil.format("位置：{} {}（{}, {}）", l.path("name").asText(""),
+                        l.path("address").asText(""), l.path("latitude").asText(), l.path("longitude").asText()).trim());
+            }
+            case "button" -> msg.setTextBody(m.path("button").path("text").asText());
+            case "interactive" -> {
+                JsonNode i = m.path("interactive");
+                JsonNode reply = i.has("button_reply") ? i.path("button_reply") : i.path("list_reply");
+                msg.setTextBody(reply.path("title").asText(null));
+            }
+            case "reaction" -> msg.setTextBody("回应了表情 " + m.path("reaction").path("emoji").asText(""));
+            default -> msg.setTextBody("[暂不支持的消息类型：" + type + "]");
+        }
+    }
+
+    // ==================== 共存模式：手机 WhatsApp Business App 与系统同时使用 ====================
+
+    /**
+     * 同步过来的消息（手机端发出的回显、接入前的聊天记录）：按 wamid 去重，不计未读、不触发 AI 回复。
+     *
+     * @param customer 客户的 WhatsApp 号码
+     * @param outbound 是否是企业一方发出的
+     */
+    private void saveSynced(ChannelWaAccountDO a, JsonNode m, String customer, boolean outbound, String profileName) {
+        String wamid = m.path("id").asText();
+        String waId = digits(customer);
+        if (StrUtil.isBlank(wamid) || StrUtil.isBlank(waId) || messageMapper.selectByWaMessageId(a.getId(), wamid) != null) {
+            return;
+        }
+        String type = m.path("type").asText("unknown");
+        if ("reaction".equals(type)) {
+            return;
+        }
+        LocalDateTime time = epoch(m.path("timestamp").asLong(0));
+        ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
+                .accountId(a.getId()).direction(outbound ? ChannelWaMessageDO.DIRECTION_OUT : ChannelWaMessageDO.DIRECTION_IN)
+                .waMessageId(wamid).type(type).messageTime(time)
+                .status(outbound ? ChannelWaMessageDO.STATUS_SENT : ChannelWaMessageDO.STATUS_RECEIVED).build();
+        if (outbound) {
+            msg.setAiGenerated(false);
+        }
+        fillBody(msg, m, type);
+        ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), waId);
+        if (conv == null) {
+            conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
+                    .waId(waId).profileName(profileName).customerId(findCustomerId(waId)).unreadCount(0).build();
+            conversationMapper.insert(conv);
+        }
+        msg.setConversationId(conv.getId());
+        messageMapper.insert(msg);
+        ChannelWaConversationDO upd = new ChannelWaConversationDO().setId(conv.getId())
+                .setLastMessageTime(max(conv.getLastMessageTime(), time));
+        if (conv.getLastMessageTime() == null || !time.isBefore(conv.getLastMessageTime())) {
+            upd.setLastMessagePreview(preview(msg));
+        }
+        if (!outbound) {
+            upd.setLastInboundTime(max(conv.getLastInboundTime(), time));
+        }
+        if (StrUtil.isNotBlank(profileName) && StrUtil.isBlank(conv.getProfileName())) {
+            upd.setProfileName(profileName);
+        }
+        conversationMapper.updateById(upd);
+    }
+
+    /** 共存模式的推送：smb_message_echoes（手机端发出的消息）、history（聊天记录）、smb_app_state_sync（通讯录） */
+    private void processCoexistChange(ChannelWaAccountDO a, String field, JsonNode value) {
+        switch (field) {
+            case "smb_message_echoes" -> {
+                for (JsonNode m : value.path("message_echoes")) {
+                    try {
+                        saveSynced(a, m, m.path("to").asText(), true, null);
+                    } catch (Exception e) {
+                        log.warn("[processCoexistChange][{}] 回显处理失败 {}", a.getId(), m, e);
+                    }
+                }
+            }
+            case "history" -> {
+                for (JsonNode h : value.path("history")) {
+                    for (JsonNode t : h.path("threads")) {
+                        String customer = t.path("id").asText();
+                        for (JsonNode m : t.path("messages")) {
+                            try {
+                                // 线程编号是客户号码；不是客户发的就是企业一方在手机上发的
+                                boolean out = !digits(m.path("from").asText()).equals(digits(customer));
+                                saveSynced(a, m, customer, out, null);
+                            } catch (Exception e) {
+                                log.warn("[processCoexistChange][{}] 历史消息处理失败 {}", a.getId(), m, e);
+                            }
+                        }
+                    }
+                }
+            }
+            case "smb_app_state_sync" -> {
+                for (JsonNode s : value.path("state_sync")) {
+                    JsonNode c = s.path("contact");
+                    String waId = digits(c.path("phone_number").asText());
+                    String name = StrUtil.blankToDefault(c.path("full_name").asText(null), c.path("first_name").asText(null));
+                    if (waId.isEmpty() || StrUtil.isBlank(name) || "remove".equals(s.path("action").asText())) {
+                        continue;
+                    }
+                    ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), waId);
+                    if (conv != null) {
+                        conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId()).setProfileName(name));
+                    }
+                }
+            }
+            default -> {
+            }
         }
     }
 
