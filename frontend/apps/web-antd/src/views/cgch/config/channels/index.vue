@@ -1,37 +1,28 @@
 <script lang="ts" setup>
 /**
- * 渠道管理：渠道总表 + 邮箱（IMAP/SMTP，Gmail/Outlook 支持 OAuth 授权）+ WhatsApp + 留资邮箱。
+ * 渠道账号：一张总表列出所有可接入的渠道（顺序与原网站一致），每个渠道下面列出已连接的账号。
+ * 邮箱用「邮箱地址 + 授权码」绑定（高级配置里可改收发信服务器），Gmail / Outlook 配置了授权应用时走一键授权；
+ * WhatsApp 走 Meta 官方共存模式扫码连接；Facebook 主页、Instagram 走 Facebook 登录授权；
+ * 阿里国际站、中国制造网通过留资邮箱接入；TikTok、YouTube、官网 IM 暂未开放。
  */
 import type { ChannelMailApi } from '#/api/channel/mail';
-import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
-
-import ChannelCatalog from './channel-catalog.vue';
-import LeadRules from './lead-rules.vue';
-import WaAccounts from './wa-accounts.vue';
+import type { ChannelWaApi } from '#/api/channel/whatsapp';
 
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 
-import { Page } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
 import {
-  Alert,
   Button,
-  Card,
-  Col,
-  Form,
-  FormItem,
   Input,
   InputNumber,
   InputPassword,
   message,
   Modal,
   Popconfirm,
-  Row,
+  Popover,
   Select,
-  Space,
-  Switch,
-  Table,
-  Tag,
+  Spin,
   Tooltip,
 } from 'ant-design-vue';
 
@@ -43,107 +34,158 @@ import {
   testMailAccount,
   updateMailAccount,
 } from '#/api/channel/mail';
+import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
+
+import LeadRules from './lead-rules.vue';
+import WaAccounts from './wa-accounts.vue';
 
 defineOptions({ name: 'CgchConfigChannels' });
 
-/** 常见邮箱服务商的服务器设置；tip 提示需要在邮箱里开启什么 */
-const PROVIDERS: Record<string, { label: string; imap: [string, number]; smtp: [string, number]; tip?: string }> = {
-  gmail: { label: 'Gmail', imap: ['imap.gmail.com', 993], smtp: ['smtp.gmail.com', 465], tip: '需开启两步验证并生成「应用专用密码」' },
-  outlook: { label: 'Outlook 国际版', imap: ['outlook.office365.com', 993], smtp: ['smtp.office365.com', 587], tip: '个人账号需开启 IMAP；企业账号可能被管理员禁用基础认证' },
-  qq: { label: 'QQ 邮箱', imap: ['imap.qq.com', 993], smtp: ['smtp.qq.com', 465], tip: '在 设置 → 账户 中开启 IMAP/SMTP 并获取授权码' },
-  exmail: { label: '腾讯企业邮箱', imap: ['imap.exmail.qq.com', 993], smtp: ['smtp.exmail.qq.com', 465] },
-  '163': { label: '163 邮箱', imap: ['imap.163.com', 993], smtp: ['smtp.163.com', 465], tip: '需开启 IMAP/SMTP 并使用授权码' },
-  '126': { label: '126 邮箱', imap: ['imap.126.com', 993], smtp: ['smtp.126.com', 465], tip: '需开启 IMAP/SMTP 并使用授权码' },
-  '263': { label: '263 企业邮箱', imap: ['imap.263.net', 993], smtp: ['smtp.263.net', 465] },
-  aliyun: { label: '阿里邮箱', imap: ['imap.qiye.aliyun.com', 993], smtp: ['smtp.qiye.aliyun.com', 465] },
-  custom: { label: '其他邮箱（自定义）', imap: ['', 993], smtp: ['', 465] },
+/** 常见邮箱的收发信服务器；guide 是「绑定指引」里的说明 */
+interface MailProvider {
+  imap: [string, number, boolean];
+  smtp: [string, number, boolean];
+  secret: string;
+  guide: string;
+}
+const MAIL: Record<string, MailProvider> = {
+  '163': { imap: ['imap.163.com', 993, true], smtp: ['smtp.163.com', 465, true], secret: '授权码', guide: '登录网页版网易邮箱 → 设置 → POP3/SMTP/IMAP，开启 IMAP/SMTP 服务，按提示获取授权码。' },
+  gmail: { imap: ['imap.gmail.com', 993, true], smtp: ['smtp.gmail.com', 465, true], secret: '应用专用密码', guide: '在 Google 账号中开启两步验证，然后在「安全性 → 应用专用密码」生成 16 位密码，填到下方。' },
+  '126': { imap: ['imap.126.com', 993, true], smtp: ['smtp.126.com', 465, true], secret: '授权码', guide: '登录网页版 126 邮箱 → 设置 → POP3/SMTP/IMAP，开启 IMAP/SMTP 服务，按提示获取授权码。' },
+  outlook: { imap: ['outlook.office365.com', 993, true], smtp: ['smtp.office365.com', 587, false], secret: '密码', guide: '个人 Outlook 账号需在网页版设置中开启 IMAP；企业账号可能被管理员禁用了密码登录，建议使用一键授权。' },
+  '263': { imap: ['imap.263.net', 993, true], smtp: ['smtp.263.net', 465, true], secret: '密码', guide: '使用 263 企业邮箱的登录密码；如管理员开启了客户端授权码，请填写授权码。' },
+  aliyun: { imap: ['imap.qiye.aliyun.com', 993, true], smtp: ['smtp.qiye.aliyun.com', 465, true], secret: '密码', guide: '使用阿里邮箱的登录密码；开启了三方客户端安全密码的，请填写安全密码。' },
+  custom: { imap: ['', 993, true], smtp: ['', 465, true], secret: '密码或授权码', guide: '任何支持 IMAP / SMTP 的邮箱都可以绑定，在「高级配置」里填写邮箱服务商提供的收发信服务器。' },
+  exmail: { imap: ['imap.exmail.qq.com', 993, true], smtp: ['smtp.exmail.qq.com', 465, true], secret: '客户端专用密码', guide: '登录腾讯企业邮箱 → 设置 → 账户 → 开启安全登录后生成「客户端专用密码」。' },
+  boss: { imap: ['p80w.chinaemail.cn', 143, false], smtp: ['s80w.chinaemail.cn', 465, true], secret: '授权码', guide: '在 BOSS 邮箱网页版的设置中开启 IMAP/SMTP，获取客户端授权码。' },
+  qq: { imap: ['imap.qq.com', 993, true], smtp: ['smtp.qq.com', 465, true], secret: '授权码', guide: '登录网页版 QQ 邮箱 → 设置 → 账号，开启 IMAP/SMTP 服务，按提示获取授权码。' },
 };
-const providerOptions = Object.entries(PROVIDERS).map(([value, p]) => ({ value, label: p.label }));
 
-const loading = ref(false);
-const accounts = ref<ChannelMailApi.Account[]>([]);
+type Kind = 'lead' | 'mail' | 'meta' | 'soon' | 'wa' | 'wa-official';
+interface Channel {
+  key: string;
+  name: string;
+  abbr: string;
+  color: string;
+  kind: Kind;
+  /** 邮箱服务商 */
+  provider?: string;
+  /** 一键授权的服务商 */
+  oauth?: string;
+  platform?: 'instagram' | 'messenger';
+}
 
-const columns = [
-  { title: '邮箱', key: 'email' },
-  { title: '服务商', key: 'provider', width: 140 },
-  { title: '自动收信', key: 'enabled', width: 100 },
-  { title: '状态', key: 'status', width: 220 },
-  { title: '未回复', dataIndex: 'unrepliedCount', key: 'unreplied', width: 90 },
-  { title: '操作', key: 'action', width: 220 },
+/** 渠道顺序与原网站一致 */
+const CHANNELS: Channel[] = [
+  { key: 'whatsapp', name: 'WhatsApp', abbr: 'WA', color: '#25d366', kind: 'wa' },
+  { key: 'instagram', name: 'Instagram', abbr: 'IG', color: '#d62976', kind: 'meta', platform: 'instagram' },
+  { key: '163', name: '网易邮箱', abbr: '163', color: '#d7000f', kind: 'mail', provider: '163' },
+  { key: 'gmail', name: '谷歌邮箱', abbr: 'G', color: '#ea4335', kind: 'mail', provider: 'gmail', oauth: 'google' },
+  { key: 'tiktok', name: 'TikTok', abbr: 'TT', color: '#111111', kind: 'soon' },
+  { key: 'youtube', name: 'YouTube', abbr: 'YT', color: '#ff0000', kind: 'soon' },
+  { key: 'messenger', name: 'Facebook Page', abbr: 'f', color: '#1877f2', kind: 'meta', platform: 'messenger' },
+  { key: '126', name: '126 邮箱', abbr: '126', color: '#1a7f37', kind: 'mail', provider: '126' },
+  { key: 'outlook', name: 'Outlook邮箱', abbr: 'O', color: '#0f6cbd', kind: 'mail', provider: 'outlook', oauth: 'microsoft' },
+  { key: 'wa-official', name: 'WhatsApp Business Official API', abbr: 'B', color: '#25d366', kind: 'wa-official' },
+  { key: 'im', name: '官网IM', abbr: 'Ai', color: '#1d4ed8', kind: 'soon' },
+  { key: 'alibaba', name: '阿里国际', abbr: '阿', color: '#ff6a00', kind: 'lead' },
+  { key: 'mic', name: '中国制造网', abbr: 'M', color: '#c8102e', kind: 'lead' },
+  { key: '263', name: '263邮箱', abbr: '263', color: '#c8102e', kind: 'mail', provider: '263' },
+  { key: 'aliyun', name: '阿里邮箱', abbr: 'M', color: '#ff6a00', kind: 'mail', provider: 'aliyun' },
+  { key: 'custom', name: '其他邮箱', abbr: '@', color: '#0ea5a4', kind: 'mail', provider: 'custom' },
+  { key: 'exmail', name: '腾讯企业邮箱', abbr: 'M', color: '#1677ff', kind: 'mail', provider: 'exmail' },
+  { key: 'boss', name: 'BOSS邮箱', abbr: 'BOSS', color: '#00a6a7', kind: 'mail', provider: 'boss' },
+  { key: 'qq', name: 'QQ邮箱', abbr: 'QQ', color: '#12b7f5', kind: 'mail', provider: 'qq' },
 ];
 
-async function load() {
-  loading.value = true;
-  try {
-    accounts.value = await getMailAccountList();
-  } finally {
-    loading.value = false;
-  }
-}
-
-// ===== 绑定 / 修改 =====
-const open = ref(false);
-const saving = ref(false);
-const testing = ref(false);
-const emptyForm = (): ChannelMailApi.Account => ({
-  provider: 'gmail',
-  email: '',
-  displayName: '',
-  imapHost: PROVIDERS.gmail!.imap[0],
-  imapPort: PROVIDERS.gmail!.imap[1],
-  imapSsl: true,
-  smtpHost: PROVIDERS.gmail!.smtp[0],
-  smtpPort: PROVIDERS.gmail!.smtp[1],
-  smtpSsl: true,
-  username: '',
-  password: '',
-  enabled: true,
-});
-const form = reactive<ChannelMailApi.Account>(emptyForm());
-
-function applyProvider(key: string) {
-  const p = PROVIDERS[key];
-  if (!p || key === 'custom') return;
-  form.imapHost = p.imap[0];
-  form.imapPort = p.imap[1];
-  form.imapSsl = true;
-  form.smtpHost = p.smtp[0];
-  form.smtpPort = p.smtp[1];
-  form.smtpSsl = p.smtp[1] === 465; // 587 走 STARTTLS
-}
-
-function openForm(row?: ChannelMailApi.Account, provider?: string) {
-  Object.assign(form, emptyForm(), row ? { ...row, password: '' } : {});
-  if (!row && provider) {
-    form.provider = provider;
-    applyProvider(provider);
-    if (provider === 'custom') {
-      form.imapHost = '';
-      form.smtpHost = '';
-    }
-  }
-  open.value = true;
-}
-
-const isOAuth = computed(() => form.authType === 'oauth2');
-
-// ===== 渠道总表 / OAuth 授权 / 留资邮箱 =====
+const loading = ref(true);
+const mailAccounts = ref<ChannelMailApi.Account[]>([]);
 const waRef = ref<InstanceType<typeof WaAccounts>>();
-const waAccounts = computed(() => waRef.value?.accounts ?? []);
+const waAccounts = ref<ChannelWaApi.Account[]>([]);
 const oauthProviders = ref<string[]>([]);
 const leadOpen = ref(false);
-const mailboxes = computed(() => accounts.value.map((a) => a.email));
+const mailboxes = computed(() => mailAccounts.value.map((a) => a.email));
+
+async function loadMail() {
+  mailAccounts.value = await getMailAccountList();
+}
+
+function onWaChanged() {
+  waAccounts.value = waRef.value?.accounts ?? [];
+}
+
+/** 一行已连接账号 */
+interface AccountRow {
+  id: number;
+  label: string;
+  sub?: string;
+  status: { color: string; text: string; tip?: string };
+  mail?: ChannelMailApi.Account;
+  wa?: ChannelWaApi.Account;
+}
+
+function mailRow(a: ChannelMailApi.Account): AccountRow {
+  let status = { color: 'gray', text: '等待首次收信' } as AccountRow['status'];
+  if (!a.enabled) status = { color: 'gray', text: '已暂停' };
+  else if (a.lastSyncError) status = { color: 'red', text: '收信失败', tip: a.lastSyncError };
+  else if (a.lastSyncTime) status = { color: 'green', text: '正常', tip: `上次收信 ${a.lastSyncTime}` };
+  return { id: a.id!, label: a.email, sub: a.authType === 'oauth2' ? '一键授权' : undefined, status, mail: a };
+}
+
+function waRow(a: ChannelWaApi.Account): AccountRow {
+  let status = { color: 'orange', text: '等待消息' } as AccountRow['status'];
+  if (!a.enabled) status = { color: 'gray', text: '已停用' };
+  else if (a.lastWebhookTime) status = { color: 'green', text: '正常', tip: `最近消息 ${a.lastWebhookTime}` };
+  return { id: a.id!, label: a.displayPhone || a.name || a.phoneNumberId, sub: a.name && a.name !== a.displayPhone ? a.name : undefined, status, wa: a };
+}
+
+function accountsOf(c: Channel): AccountRow[] {
+  const wa = (a: ChannelWaApi.Account) => !a.platform || a.platform === 'whatsapp';
+  switch (c.kind) {
+    case 'mail':
+      return mailAccounts.value.filter((a) => (a.provider || 'custom') === c.provider).map(mailRow);
+    case 'meta':
+      return waAccounts.value.filter((a) => a.platform === c.platform).map(waRow);
+    case 'wa':
+      return waAccounts.value.filter((a) => wa(a) && a.authType === 'oauth').map(waRow);
+    case 'wa-official':
+      return waAccounts.value.filter((a) => wa(a) && a.authType !== 'oauth').map(waRow);
+    default:
+      return [];
+  }
+}
+
+const total = computed(() => mailAccounts.value.length + waAccounts.value.length);
+
+// ===== 连接新账号 =====
+function connect(c: Channel) {
+  switch (c.kind) {
+    case 'mail':
+      if (c.oauth && oauthProviders.value.includes(c.oauth)) startOAuth(c.oauth);
+      else openMail(c);
+      break;
+    case 'wa':
+      waRef.value?.connect('whatsapp');
+      break;
+    case 'wa-official':
+      waRef.value?.connectOfficial();
+      break;
+    case 'meta':
+      waRef.value?.connect(c.platform!);
+      break;
+    case 'lead':
+      leadOpen.value = true;
+      break;
+  }
+}
 
 async function startOAuth(provider: string) {
   // 先同步打开窗口，避免被浏览器拦截弹窗
   const win = window.open('about:blank', 'cgch-mail-oauth', 'width=560,height=720');
   try {
     const url = await getOAuthAuthorizeUrl(provider);
-    if (win) {
-      win.location.href = url;
-    } else {
-      window.location.href = url;
-    }
+    if (win) win.location.href = url;
+    else window.location.href = url;
   } catch (error) {
     win?.close();
     throw error;
@@ -154,25 +196,68 @@ function onOAuthMessage(e: MessageEvent) {
   if (e.data?.type !== 'cgch-mail-oauth') return;
   if (e.data.ok) {
     message.success(e.data.email ? `已授权绑定 ${e.data.email}` : '已授权绑定');
-    load();
+    loadMail();
   } else {
     message.error(e.data.message || '授权失败');
   }
 }
 
+// ===== 邮箱绑定弹窗 =====
+const mailOpen = ref(false);
+const advanced = ref(false);
+const saving = ref(false);
+const testing = ref(false);
+const mailChannel = ref<Channel>(CHANNELS[2]!);
+const form = reactive<ChannelMailApi.Account>({ email: '', provider: '163' });
+const provider = computed(() => MAIL[form.provider || 'custom'] ?? MAIL.custom!);
+const isOAuth = computed(() => form.authType === 'oauth2');
+const SSL_OPTIONS = [
+  { value: true, label: 'SSL' },
+  { value: false, label: '无' },
+];
+
+function openMail(c: Channel, row?: ChannelMailApi.Account) {
+  mailChannel.value = c;
+  const p = MAIL[c.provider!] ?? MAIL.custom!;
+  Object.assign(form, {
+    id: undefined,
+    authType: undefined,
+    displayName: '',
+    username: '',
+    enabled: true,
+    email: '',
+    provider: c.provider,
+    imapHost: p.imap[0],
+    imapPort: p.imap[1],
+    imapSsl: p.imap[2],
+    smtpHost: p.smtp[0],
+    smtpPort: p.smtp[1],
+    smtpSsl: p.smtp[2],
+    ...row,
+    password: '',
+  });
+  advanced.value = false;
+  mailOpen.value = true;
+}
+
 function validate() {
-  if (!form.email || !form.imapHost || !form.smtpHost) {
-    message.warning('请填写邮箱地址和服务器');
+  if (!form.email?.includes('@')) {
+    message.warning('请输入正确的邮箱地址');
     return false;
   }
   if (!form.id && !form.password && !isOAuth.value) {
-    message.warning('请填写密码或授权码');
+    message.warning(`请输入${provider.value.secret}`);
+    return false;
+  }
+  if (!form.imapHost || !form.smtpHost) {
+    advanced.value = true;
+    message.warning('请在高级配置中填写收发信服务器');
     return false;
   }
   return true;
 }
 
-async function test() {
+async function testMail() {
   if (!validate()) return;
   testing.value = true;
   try {
@@ -183,160 +268,454 @@ async function test() {
   }
 }
 
-async function save() {
+async function saveMail() {
   if (!validate()) return;
   saving.value = true;
   try {
     await (form.id ? updateMailAccount({ ...form }) : createMailAccount({ ...form }));
-    message.success(form.id ? '已保存' : '已绑定，几分钟内会开始收信');
-    open.value = false;
-    await load();
+    message.success(form.id ? '已保存' : '绑定成功，几分钟内会开始收信');
+    mailOpen.value = false;
+    await loadMail();
   } finally {
     saving.value = false;
   }
 }
 
-async function toggle(row: ChannelMailApi.Account, enabled: boolean) {
-  await updateMailAccount({ ...row, enabled, password: '' });
-  row.enabled = enabled;
-  message.success(enabled ? '已开启自动收信' : '已暂停自动收信');
-}
+// ===== 账号操作 =====
+const busy = ref<string>();
 
-const syncing = ref<number>();
-async function syncNow(row: ChannelMailApi.Account) {
-  syncing.value = row.id;
+async function syncNow(a: ChannelMailApi.Account) {
+  busy.value = `sync-${a.id}`;
   try {
-    const n = await syncMailAccount(row.id!);
+    const n = await syncMailAccount(a.id!);
     message.success(n > 0 ? `收到 ${n} 封新邮件` : '没有新邮件');
-    await load();
+    await loadMail();
   } finally {
-    syncing.value = undefined;
+    busy.value = undefined;
   }
 }
 
-async function remove(row: ChannelMailApi.Account) {
-  await deleteMailAccount(row.id!);
-  message.success('已解绑');
-  await load();
+async function toggle(r: AccountRow) {
+  if (r.mail) {
+    await updateMailAccount({ ...r.mail, enabled: !r.mail.enabled, password: '' });
+    message.success(r.mail.enabled ? '已暂停自动收信' : '已开启自动收信');
+    await loadMail();
+  } else if (r.wa) {
+    await waRef.value?.toggle(r.wa, !r.wa.enabled);
+    await waRef.value?.load();
+  }
+}
+
+async function unbind(r: AccountRow) {
+  if (r.mail) {
+    await deleteMailAccount(r.mail.id!);
+    message.success('已解绑');
+    await loadMail();
+  } else if (r.wa) {
+    await waRef.value?.remove(r.wa);
+  }
+}
+
+function edit(c: Channel, r: AccountRow) {
+  if (r.mail) {
+    if (r.mail.authType === 'oauth2' && c.oauth) startOAuth(c.oauth);
+    else openMail(c, r.mail);
+  } else if (r.wa) {
+    waRef.value?.openForm(r.wa, (r.wa.platform as any) || 'whatsapp');
+  }
 }
 
 onMounted(async () => {
   window.addEventListener('message', onOAuthMessage);
-  await load();
+  try {
+    await loadMail();
+  } finally {
+    loading.value = false;
+  }
   oauthProviders.value = await getOAuthProviders().catch(() => []);
 });
 onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 </script>
 
 <template>
-  <Page auto-content-height>
-    <ChannelCatalog
-      :mail-accounts="accounts"
-      :wa-accounts="waAccounts"
-      :oauth-providers="oauthProviders"
-      @mail="(p) => openForm(undefined, p)"
-      @oauth="startOAuth"
-      @wa="waRef?.connect('whatsapp')"
-      @meta="(p) => waRef?.connect(p)"
-      @lead-rules="leadOpen = true"
-    />
+  <div class="ch-page">
+    <div class="ch-head">
+      <div class="flex items-center gap-3">
+        <h2 class="ch-title">渠道账号</h2>
+        <span class="ch-count">
+          <IconifyIcon icon="lucide:info" class="size-4 text-gray-400" />
+          已绑定 <b>{{ total }}</b> 个账号
+        </span>
+      </div>
+      <Button @click="leadOpen = true">设置留资邮箱</Button>
+    </div>
 
-    <Card title="邮箱" :bordered="false" class="mt-4">
-      <template #extra>
-        <Button type="primary" @click="openForm()">绑定邮箱</Button>
-      </template>
-      <Alert
-        class="mb-4"
-        type="info"
-        show-icon
-        message="绑定后系统每 5 分钟自动收信，可在「渠道消息 → 邮件工作台」查看与回复。"
-      />
-      <Table :columns="columns" :data-source="accounts" :loading="loading" :pagination="false" row-key="id">
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'email'">
-            <div class="font-medium">{{ record.email }}</div>
-            <div v-if="record.displayName" class="text-xs text-gray-500">{{ record.displayName }}</div>
-          </template>
-          <template v-else-if="column.key === 'provider'">
-            {{ PROVIDERS[record.provider]?.label ?? record.provider }}
-            <Tag v-if="record.authType === 'oauth2'" color="blue" class="ml-1">OAuth</Tag>
-          </template>
-          <template v-else-if="column.key === 'enabled'">
-            <Switch :checked="record.enabled" size="small" @change="(v: any) => toggle(record, !!v)" />
-          </template>
-          <template v-else-if="column.key === 'status'">
-            <Tooltip v-if="record.lastSyncError" :title="record.lastSyncError">
-              <Tag color="red">收信失败</Tag>
-            </Tooltip>
-            <Tag v-else-if="record.lastSyncTime" color="green">正常</Tag>
-            <Tag v-else>等待首次收信</Tag>
-            <span v-if="record.lastSyncTime" class="text-xs text-gray-500">{{ record.lastSyncTime }}</span>
-          </template>
-          <template v-else-if="column.key === 'action'">
-            <Space>
-              <Button size="small" type="link" :loading="syncing === record.id" @click="syncNow(record)">立即收信</Button>
-              <Button size="small" type="link" @click="openForm(record)">修改</Button>
-              <Popconfirm title="解绑后已同步的邮件也会删除，确定吗？" @confirm="remove(record)">
-                <Button size="small" type="link" danger>解绑</Button>
-              </Popconfirm>
-            </Space>
-          </template>
-        </template>
-        <template #emptyText>还没有绑定邮箱</template>
-      </Table>
-    </Card>
+    <Spin :spinning="loading" wrapper-class-name="ch-spin">
+      <div class="ch-table">
+        <div class="ch-row ch-row--head">
+          <div class="ch-col-name">渠道</div>
+          <div class="ch-col-status">状态</div>
+          <div class="ch-col-account">账号</div>
+          <div class="ch-col-op">操作</div>
+        </div>
+        <div class="ch-body">
+          <template v-for="c in CHANNELS" :key="c.key">
+            <div class="ch-row">
+              <div class="ch-col-name">
+                <span class="ch-badge" :style="{ background: c.color }" :class="{ 'is-long': c.abbr.length > 2 }">{{ c.abbr }}</span>
+                <span class="truncate">{{ c.name }}</span>
+              </div>
+              <div class="ch-col-status">
+                <span v-if="c.kind === 'lead'" class="text-xs text-gray-500">通过留资邮箱接入</span>
+                <span v-else-if="c.kind === 'soon'" class="text-xs text-gray-400">即将开放</span>
+              </div>
+              <div class="ch-col-account"></div>
+              <div class="ch-col-op">
+                <span v-if="c.kind === 'soon'" class="text-gray-300">即将开放</span>
+                <a v-else-if="c.kind === 'lead'" @click="connect(c)">设置留资邮箱</a>
+                <a v-else @click="connect(c)">连接新账号</a>
+              </div>
+            </div>
 
-    <WaAccounts ref="waRef" :meta-o-auth="oauthProviders.includes('meta')" />
+            <div v-for="r in accountsOf(c)" :key="`${c.key}-${r.id}`" class="ch-row ch-row--sub">
+              <div class="ch-col-name">
+                <IconifyIcon icon="lucide:corner-down-right" class="ml-2 size-4 text-gray-300" />
+              </div>
+              <div class="ch-col-status">
+                <Tooltip :title="r.status.tip">
+                  <span class="ch-status" :class="`is-${r.status.color}`">{{ r.status.text }}</span>
+                </Tooltip>
+              </div>
+              <div class="ch-col-account">
+                <span class="truncate">{{ r.label }}</span>
+                <span v-if="r.sub" class="ml-2 text-xs text-gray-400">{{ r.sub }}</span>
+              </div>
+              <div class="ch-col-op ch-ops">
+                <a v-if="r.mail" :class="{ 'opacity-50': busy === `sync-${r.id}` }" @click="syncNow(r.mail)">立即收信</a>
+                <a v-if="r.wa && r.wa.authType !== 'oauth'" @click="waRef?.showGuide(r.wa)">回调配置</a>
+                <a v-if="r.mail || (r.wa && r.wa.authType !== 'oauth')" @click="edit(c, r)">{{ r.mail?.authType === 'oauth2' ? '重新授权' : '修改' }}</a>
+                <a @click="toggle(r)">{{ (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停' : '停用') : '启用' }}</a>
+                <Popconfirm
+                  :title="r.mail ? '解绑后已同步的邮件也会删除，确定吗？' : '解绑后会话与消息记录也会删除，确定吗？'"
+                  @confirm="unbind(r)"
+                >
+                  <a class="text-red-500">解绑</a>
+                </Popconfirm>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </Spin>
 
+    <WaAccounts ref="waRef" headless :meta-o-auth="oauthProviders.includes('meta')" @changed="onWaChanged" />
     <LeadRules v-model:open="leadOpen" :mailboxes="mailboxes" />
 
-    <Modal v-model:open="open" :title="form.id ? '修改邮箱' : '绑定邮箱'" :width="640" :footer="null">
-      <Form layout="vertical">
-        <Alert v-if="isOAuth" class="mb-4" type="success" show-icon message="此邮箱通过 OAuth 授权登录，无需密码；授权失效时请在上方重新「授权登录」。" />
-        <FormItem v-else label="邮箱服务商">
-          <Select v-model:value="form.provider" :options="providerOptions" @change="(v: any) => applyProvider(String(v))" />
-        </FormItem>
-        <Alert v-if="!isOAuth && PROVIDERS[form.provider || '']?.tip" class="mb-4" type="warning" :message="PROVIDERS[form.provider || '']?.tip" />
-        <Row :gutter="16">
-          <Col :span="12">
-            <FormItem label="邮箱地址" required><Input v-model:value="form.email" placeholder="sales@yourcompany.com" /></FormItem>
-          </Col>
-          <Col :span="12">
-            <FormItem label="发件人名称"><Input v-model:value="form.displayName" placeholder="客户看到的名字" /></FormItem>
-          </Col>
-          <Col v-if="!isOAuth" :span="12">
-            <FormItem :label="form.id ? '密码或授权码（不改请留空）' : '密码或授权码'" :required="!form.id">
-              <InputPassword v-model:value="form.password" autocomplete="new-password" />
-            </FormItem>
-          </Col>
-          <Col v-if="!isOAuth" :span="12">
-            <FormItem label="登录名（默认同邮箱地址）"><Input v-model:value="form.username" /></FormItem>
-          </Col>
-          <Col :span="12">
-            <FormItem label="IMAP 服务器" required><Input v-model:value="form.imapHost" /></FormItem>
-          </Col>
-          <Col :span="6">
-            <FormItem label="端口"><InputNumber v-model:value="form.imapPort" :min="1" :max="65535" class="w-full" /></FormItem>
-          </Col>
-          <Col :span="6">
-            <FormItem label="SSL"><Switch v-model:checked="form.imapSsl" /></FormItem>
-          </Col>
-          <Col :span="12">
-            <FormItem label="SMTP 服务器" required><Input v-model:value="form.smtpHost" /></FormItem>
-          </Col>
-          <Col :span="6">
-            <FormItem label="端口"><InputNumber v-model:value="form.smtpPort" :min="1" :max="65535" class="w-full" /></FormItem>
-          </Col>
-          <Col :span="6">
-            <FormItem label="SSL"><Switch v-model:checked="form.smtpSsl" /></FormItem>
-          </Col>
-        </Row>
-        <div class="flex justify-end gap-2">
-          <Button :loading="testing" @click="test">测试连接</Button>
-          <Button @click="open = false">取消</Button>
-          <Button type="primary" :loading="saving" @click="save">保存</Button>
+    <Modal v-model:open="mailOpen" :footer="null" :width="476" centered :closable="false">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="text-base font-semibold">{{ form.id ? '修改' : '添加' }}{{ mailChannel.name }}账号</span>
+        <Popover :title="`${mailChannel.name}绑定指引`" placement="bottom" :overlay-style="{ maxWidth: '320px' }">
+          <template #content>
+            <div class="text-sm leading-6">{{ provider.guide }}</div>
+          </template>
+          <a class="inline-flex items-center gap-1 text-sm"><IconifyIcon icon="lucide:link" class="size-3.5" />绑定指引</a>
+        </Popover>
+      </div>
+
+      <template v-if="!advanced">
+        <div class="ch-field">
+          <div class="ch-label">邮箱地址</div>
+          <Input v-model:value="form.email" size="large" placeholder="请输入邮箱地址" :disabled="!!form.id" />
         </div>
-      </Form>
+        <div v-if="!isOAuth" class="ch-field">
+          <div class="ch-label">{{ provider.secret }}</div>
+          <InputPassword
+            v-model:value="form.password"
+            size="large"
+            autocomplete="new-password"
+            :placeholder="form.id ? '不修改请留空' : `请输入${provider.secret}`"
+          />
+        </div>
+        <div class="ch-divider">
+          <a @click="advanced = true">高级配置 <IconifyIcon icon="lucide:chevrons-down" class="size-4" /></a>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="ch-field">
+          <div class="ch-label"><i>*</i> 协议类型</div>
+          <label class="inline-flex items-center gap-2 text-sm"><span class="ch-radio"></span>IMAP</label>
+        </div>
+        <div class="ch-server">
+          <div class="ch-label"><i>*</i> 收邮件（IMAP）服务器</div>
+          <div class="ch-label"><i>*</i> 加密</div>
+          <div class="ch-label"><i>*</i> 端口</div>
+          <Input v-model:value="form.imapHost" placeholder="imap.example.com" />
+          <Select v-model:value="form.imapSsl" :options="SSL_OPTIONS" />
+          <InputNumber v-model:value="form.imapPort" :min="1" :max="65535" :controls="false" class="w-full" />
+          <div class="ch-label mt-2"><i>*</i> 发邮件（SMTP）服务器</div>
+          <div class="ch-label mt-2"><i>*</i> 加密</div>
+          <div class="ch-label mt-2"><i>*</i> 端口</div>
+          <Input v-model:value="form.smtpHost" placeholder="smtp.example.com" />
+          <Select v-model:value="form.smtpSsl" :options="SSL_OPTIONS" />
+          <InputNumber v-model:value="form.smtpPort" :min="1" :max="65535" :controls="false" class="w-full" />
+        </div>
+        <div class="ch-field mt-4">
+          <div class="ch-label">发件人名称</div>
+          <Input v-model:value="form.displayName" placeholder="客户看到的名字，默认用邮箱地址" />
+        </div>
+      </template>
+
+      <div class="mt-6 flex items-center justify-end gap-3">
+        <a v-if="!advanced" class="mr-auto text-sm" :class="{ 'opacity-50': testing }" @click="testMail">测试连接</a>
+        <Button size="large" class="ch-btn-gray" @click="advanced ? (advanced = false) : (mailOpen = false)">
+          {{ advanced ? '返回' : '取 消' }}
+        </Button>
+        <Button size="large" type="primary" :loading="saving" :disabled="!form.email" @click="saveMail">确认绑定</Button>
+      </div>
     </Modal>
-  </Page>
+  </div>
 </template>
+
+<style scoped>
+.ch-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 16px);
+  padding: 20px 16px 12px;
+  background: #fff;
+  border-radius: 12px;
+}
+
+.ch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 16px;
+}
+
+.ch-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.ch-count {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.ch-count b {
+  color: #155dfc;
+}
+
+.ch-spin {
+  flex: 1;
+  min-height: 0;
+}
+
+.ch-spin :deep(.ant-spin-container) {
+  height: 100%;
+}
+
+.ch-table {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ch-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ch-row {
+  display: flex;
+  align-items: center;
+  min-height: 43px;
+  padding: 0 12px;
+  font-size: 14px;
+  color: #1f2937;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.ch-row--head {
+  min-height: 42px;
+  color: #6b7280;
+  background: #f5f7fa;
+  border-bottom: 0;
+  border-radius: 6px;
+}
+
+.ch-row--sub {
+  min-height: 38px;
+  font-size: 13px;
+  background: #fafbfc;
+}
+
+.ch-col-name {
+  display: flex;
+  flex: 0 0 180px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.ch-col-status {
+  flex: 0 0 90px;
+}
+
+.ch-col-account {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+
+.ch-col-op {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.ch-col-op a {
+  color: #155dfc;
+}
+
+.ch-ops {
+  display: flex;
+  gap: 14px;
+}
+
+.ch-badge {
+  display: inline-flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 6px;
+}
+
+.ch-badge.is-long {
+  font-size: 8px;
+  letter-spacing: -0.3px;
+}
+
+.ch-status {
+  font-size: 12px;
+}
+
+.ch-status::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  vertical-align: middle;
+  content: '';
+  border-radius: 50%;
+}
+
+.ch-status.is-green::before {
+  background: #22c55e;
+}
+
+.ch-status.is-red {
+  color: #dc2626;
+}
+
+.ch-status.is-red::before {
+  background: #dc2626;
+}
+
+.ch-status.is-orange::before {
+  background: #f59e0b;
+}
+
+.ch-status.is-gray {
+  color: #9ca3af;
+}
+
+.ch-status.is-gray::before {
+  background: #d1d5db;
+}
+
+.ch-field {
+  margin-bottom: 18px;
+}
+
+.ch-label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.ch-label i {
+  font-style: normal;
+  color: #ef4444;
+}
+
+.ch-divider {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.ch-divider::before,
+.ch-divider::after {
+  flex: 1;
+  height: 1px;
+  content: '';
+  background: #e5e7eb;
+}
+
+.ch-divider a {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  color: #374151;
+}
+
+.ch-radio {
+  width: 16px;
+  height: 16px;
+  border: 5px solid #155dfc;
+  border-radius: 50%;
+}
+
+.ch-server {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 0.6fr;
+  gap: 0 12px;
+  margin-top: 4px;
+}
+
+.ch-btn-gray {
+  min-width: 98px;
+  color: #155dfc;
+  background: #f3f4f6;
+  border: 0;
+}
+
+@media (max-width: 640px) {
+  .ch-col-name {
+    flex-basis: 130px;
+  }
+
+  .ch-col-status {
+    flex-basis: 64px;
+  }
+
+  .ch-ops {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+</style>

@@ -38,7 +38,9 @@ import WaConnectModal from './wa-connect-modal.vue';
 
 type Platform = 'instagram' | 'messenger' | 'whatsapp';
 
-const props = defineProps<{ metaOAuth?: boolean }>();
+/** headless：只提供弹窗（渠道总表里使用），不显示自带的账号表格 */
+const props = defineProps<{ headless?: boolean; metaOAuth?: boolean }>();
+const emit = defineEmits<{ changed: [] }>();
 
 const PLATFORM: Record<Platform, { color: string; idLabel: string; label: string }> = {
   whatsapp: { label: 'WhatsApp', color: 'green', idLabel: 'Phone number ID' },
@@ -63,6 +65,7 @@ async function load() {
   loading.value = true;
   try {
     accounts.value = await getWaAccountList();
+    emit('changed');
   } finally {
     loading.value = false;
   }
@@ -179,11 +182,21 @@ onMounted(() => {
 });
 onBeforeUnmount(() => window.removeEventListener('message', onMessage));
 
-defineExpose({ openForm, connect, accounts });
+/** 渠道总表「WhatsApp Business Official API」：开通新号码；没配置嵌入式注册时手动填写 */
+function connectOfficial() {
+  if (signupCfg.value.enabled) {
+    connectOpen.value = true;
+  } else {
+    openForm(undefined, 'whatsapp');
+  }
+}
+
+defineExpose({ openForm, connect, connectOfficial, accounts, load, toggle, remove, showGuide: (a: ChannelWaApi.Account) => (guide.value = a) });
 </script>
 
 <template>
-  <Card title="WhatsApp / Facebook / Instagram" :bordered="false" class="mt-4">
+  <div>
+  <Card v-if="!headless" title="WhatsApp / Facebook / Instagram" :bordered="false" class="mt-4">
     <template #extra>
       <Space>
         <Button v-if="metaOAuth" @click="startMetaOAuth">Facebook 登录授权</Button>
@@ -228,6 +241,7 @@ defineExpose({ openForm, connect, accounts });
       </template>
       <template #emptyText>还没有绑定账号</template>
     </Table>
+  </Card>
 
     <Modal
       v-model:open="open"
@@ -324,5 +338,5 @@ defineExpose({ openForm, connect, accounts });
       </template>
     </Modal>
     <WaConnectModal v-model:open="connectOpen" :config="signupCfg" @done="load" @manual="openManual" />
-  </Card>
+  </div>
 </template>
