@@ -204,7 +204,12 @@ public class ChannelDashboardV3Service {
             List<Conv> convs = new ArrayList<>(conversations(channelDashboardV3Mapper.waMessages(d.atStartOfDay(), d.plusDays(1).atStartOfDay(), waAccounts)));
             convs.addAll(conversations(channelDashboardV3Mapper.mailMessages(d.atStartOfDay(), d.plusDays(1).atStartOfDay(), mailAccounts)));
             long eff = convs.stream().filter(c -> c.intent() != null && !"invalid".equals(c.intent()) && INTENTS.contains(c.intent())).count();
-            out.add(Map.of("date", d.toString(), "total", convs.size(), "effective", eff, "rate", rate(eff, convs.size())));
+            Map<String, Object> day = new LinkedHashMap<>();
+            day.put("date", d.toString());
+            day.put("total", convs.size());
+            day.put("effective", eff);
+            day.put("rate", rate(eff, convs.size())); // 当天没有咨询时为 null
+            out.add(day);
         }
         return out;
     }
