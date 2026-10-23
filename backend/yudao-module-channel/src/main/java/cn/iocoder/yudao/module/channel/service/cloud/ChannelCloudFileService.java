@@ -131,9 +131,26 @@ public class ChannelCloudFileService {
         channelCloudFileMapper.deleteByIds(ids);
     }
 
+    public List<ChannelCloudFileDO> enterpriseFiles() {
+        return channelCloudFileMapper.selectList(new LambdaQueryWrapperX<ChannelCloudFileDO>()
+                .eq(ChannelCloudFileDO::getScope, ChannelCloudFileDO.SCOPE_ENTERPRISE).eq(ChannelCloudFileDO::getFolder, false)
+                .orderByDesc(ChannelCloudFileDO::getUpdateTime).last("LIMIT 500"));
+    }
+
     /** AI 可以发给客户的文件（企业云盘里允许 AI 发送的） */
     public List<ChannelCloudFileDO> aiSendable() {
         return channelCloudFileMapper.selectAiSendable(50);
+    }
+
+    /** 按编号取企业云盘的文件（不含文件夹），顺序与传入一致 */
+    public List<ChannelCloudFileDO> getEnterpriseFiles(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<ChannelCloudFileDO> list = channelCloudFileMapper.selectByIds(ids);
+        return ids.stream().map(id -> list.stream().filter(f -> f.getId().equals(id)).findFirst().orElse(null))
+                .filter(f -> f != null && !Boolean.TRUE.equals(f.getFolder()) && ChannelCloudFileDO.SCOPE_ENTERPRISE.equals(f.getScope()))
+                .toList();
     }
 
     public byte[] content(ChannelCloudFileDO f) throws Exception {

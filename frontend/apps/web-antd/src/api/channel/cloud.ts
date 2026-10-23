@@ -32,3 +32,5 @@ export const updateCloudFile = (data: { aiSendable?: boolean; description?: stri
   requestClient.put('/channel/cloud-file/update', data);
 
 export const deleteCloudFile = (id: number) => requestClient.delete(`/channel/cloud-file/delete?id=${id}`);
+
+export const getEnterpriseFiles = () => requestClient.get<CloudApi.File[]>('/channel/cloud-file/enterprise-files');

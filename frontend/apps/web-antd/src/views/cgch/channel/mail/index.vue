@@ -5,6 +5,9 @@
  */
 import type { ChannelMailApi } from '#/api/channel/mail';
 import type { ChannelAiApi } from '#/api/channel/ai';
+import type { MailTemplateApi } from '#/api/channel/mail-template';
+import { getMailTemplates } from '#/api/channel/mail-template';
+import { Tinymce } from '#/components/tinymce';
 import { closeDraft, draftMail, DRAFT_REASON, getPendingDraft } from '#/api/channel/ai';
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -242,12 +245,29 @@ async function reply() {
 
 // ===== 写邮件 =====
 const composeOpen = ref(false);
-const compose = reactive({ accountId: undefined as number | undefined, to: '', cc: '', subject: '', text: '' });
+const compose = reactive({ accountId: undefined as number | undefined, to: '', cc: '', subject: '', text: '', html: '' });
 const composeFiles = ref<ChannelMailApi.Attachment[]>([]);
-function openCompose() {
-  Object.assign(compose, { accountId: accountId.value ?? accounts.value[0]?.id, to: '', cc: '', subject: '', text: '' });
+/** 邮件模板（设置 → 邮件模板）；套用后正文改为富文本 */
+const templates = ref<MailTemplateApi.Template[]>([]);
+const templateId = ref<number>();
+async function openCompose() {
+  Object.assign(compose, { accountId: accountId.value ?? accounts.value[0]?.id, to: '', cc: '', subject: '', text: '', html: '' });
   composeFiles.value = [];
+  templateId.value = undefined;
   composeOpen.value = true;
+  templates.value = await getMailTemplates({ enabled: true }).catch(() => []);
+  const def = templates.value.find((t) => t.defaulted && t.category === 'promo');
+  if (def) applyTemplate(def.id!);
+}
+function applyTemplate(id?: number) {
+  const t = templates.value.find((x) => x.id === id);
+  templateId.value = t?.id;
+  if (!t) {
+    compose.html = '';
+    return;
+  }
+  compose.subject = t.subject;
+  compose.html = t.html;
 }
 const split = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
 async function sendCompose() {
@@ -260,7 +280,8 @@ async function sendCompose() {
     to: split(compose.to),
     cc: split(compose.cc),
     subject: compose.subject,
-    text: compose.text,
+    text: compose.html ? '' : compose.text,
+    html: compose.html || undefined,
     attachmentIds: composeFiles.value.map((a) => a.id),
   });
   message.success('已发送');
@@ -460,8 +481,16 @@ onMounted(async () => {
         />
         <Input v-model:value="compose.to" placeholder="收件人，多个用逗号分隔" />
         <Input v-model:value="compose.cc" placeholder="抄送（可选）" />
+        <Select
+          :value="templateId"
+          allow-clear
+          placeholder="套用邮件模板（可选，在「设置 → 邮件模板」里管理）"
+          :options="templates.map((t) => ({ label: `${t.name}${t.defaulted ? '（默认）' : ''}`, value: t.id }))"
+          @change="(v: any) => applyTemplate(v)"
+        />
         <Input v-model:value="compose.subject" placeholder="主题" />
-        <Textarea v-model:value="compose.text" :rows="10" placeholder="正文" />
+        <Tinymce v-if="compose.html || templateId" v-model="compose.html" :height="320" />
+        <Textarea v-else v-model:value="compose.text" :rows="10" placeholder="正文" />
         <div class="flex flex-wrap items-center gap-2">
           <Button size="small" :loading="uploading" @click="pickFiles(composeFiles)">添加附件</Button>
           <Tag v-for="a in composeFiles" :key="a.id" closable @close="removeFile(composeFiles, a.id)">

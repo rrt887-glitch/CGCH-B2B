@@ -722,6 +722,7 @@ public class ChannelAiService {
         boolean firstContact = recent.stream().noneMatch(x -> x.getDirection() == ChannelWaMessageDO.DIRECTION_OUT);
         if (auto && firstContact && opening.isEnabled() && StrUtil.isNotBlank(opening.getGreeting()) && whatsAppService.isWindowOpen(conv)) {
             sendQuietly(account.getUserId(), conversationId, opening.getGreeting().trim()); // 固定开场白：新客户先收到问候
+            sendOpeningFiles(account.getUserId(), conversationId, opening.getFileIds());
         }
         List<LlmClient.Message> history = waHistory(conversationId);
         Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history);
@@ -964,6 +965,15 @@ public class ChannelAiService {
                 ChannelAiDraftDO.REASON_FOLLOW_UP, null), account.getUserId(), "智能跟进");
         log.info("[waFollowUp][会话 {} 第 {} 次跟进已发送]", conversationId, round);
         return true;
+    }
+
+    /** 固定开场白附带的企业云盘文件 */
+    private void sendOpeningFiles(Long userId, Long conversationId, List<Long> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return;
+        }
+        List<ChannelCloudFileDO> files = channelCloudFileService.getEnterpriseFiles(fileIds.stream().limit(2).toList());
+        sendWaFiles(new Generated("", false, null, 0, 0, null, 0, null, null, null, files), userId, conversationId);
     }
 
     /** 由 AI 发送一条固定文本（开场白、兜底话术）；失败只记日志 */

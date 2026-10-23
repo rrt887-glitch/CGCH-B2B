@@ -141,6 +141,8 @@ public final class ChannelAgentSettings {
         private String greeting = "";
         /** AI 不能回复（转人工等）时发给客户的兜底话术；为空则不发 */
         private String fallback = "";
+        /** 开场问候后一并发送的企业云盘文件（最多 2 个，问候 + 文件合计最多 3 条消息） */
+        private List<Long> fileIds = new ArrayList<>();
     }
 
     // ==================== 学习真人销售 ====================
