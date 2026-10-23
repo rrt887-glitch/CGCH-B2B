@@ -1556,7 +1556,8 @@ jobs:
           n=$(wc -l < own-errors.log)
           echo "草根出海代码的类型错误：$n 个"
           cat own-errors.log
-          head -10 own-errors.log | sed 's/%/%25/g' | while IFS= read -r line; do echo "::error title=类型错误::$line"; done
+          # 全部错误合成一条注解（每步最多 10 条注解）
+          [ "$n" -eq 0 ] || echo "::error title=草根出海代码类型错误 $n 个::$(head -150 own-errors.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
           [ "$n" -eq 0 ]
 
       - name: 打包（web-antd）
