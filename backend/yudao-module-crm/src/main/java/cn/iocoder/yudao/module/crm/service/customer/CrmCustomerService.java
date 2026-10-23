@@ -45,6 +45,11 @@ public interface CrmCustomerService {
     void updateCustomerDealStatus(Long id, Boolean dealStatus);
 
     /**
+     * 设置 / 取消特别关注
+     */
+    void updateCustomerStarred(Long id, Boolean starred);
+
+    /**
      * 更新客户相关的跟进信息
      *
      * @param id                 编号

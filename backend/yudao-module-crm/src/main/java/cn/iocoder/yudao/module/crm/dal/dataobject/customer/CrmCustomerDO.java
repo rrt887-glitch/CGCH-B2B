@@ -159,5 +159,9 @@ public class CrmCustomerDO extends BaseDO {
      * 是否由 AI 数字员工托管接待
      */
     private Boolean aiHosted;
+    /**
+     * 是否特别关注
+     */
+    private Boolean starred;
 
 }

@@ -147,6 +147,13 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     }
 
     @Override
+    @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#id", level = CrmPermissionLevelEnum.READ)
+    public void updateCustomerStarred(Long id, Boolean starred) {
+        validateCustomerExists(id);
+        customerMapper.updateById(new CrmCustomerDO().setId(id).setStarred(starred));
+    }
+
+    @Override
     @LogRecord(type = CRM_CUSTOMER_TYPE, subType = CRM_CUSTOMER_UPDATE_DEAL_STATUS_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_CUSTOMER_UPDATE_DEAL_STATUS_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)

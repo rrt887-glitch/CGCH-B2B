@@ -77,6 +77,15 @@ public class CrmCustomerController {
         return success(true);
     }
 
+    @PutMapping("/update-starred")
+    @Operation(summary = "设置 / 取消特别关注")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<Boolean> updateCustomerStarred(@RequestParam("id") Long id,
+                                                       @RequestParam("starred") Boolean starred) {
+        customerService.updateCustomerStarred(id, starred);
+        return success(true);
+    }
+
     @PutMapping("/update-deal-status")
     @Operation(summary = "更新客户的成交状态")
     @Parameters({

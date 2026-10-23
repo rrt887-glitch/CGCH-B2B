@@ -1,32 +1,40 @@
 <script lang="ts" setup>
-/** CRM：CRM 智枢、线索、客户、商机、订单管理、CRM 设置，通过「页面菜单」切换 */
+/** CRM：左侧常驻子菜单（CRM 智枢、线索、客户、商机、订单管理、CRM 设置），右侧为所选页面 */
 import type { HubGroup } from '../components/types';
 
-import MenuHub from '../components/menu-hub.vue';
+import { defineComponent, h } from 'vue';
+
+import SideHub from '../components/side-hub.vue';
 
 defineOptions({ name: 'CgchV3Crm' });
+
+/** 同一个页面组件带不同参数（例如公海） */
+const withProps = (load: () => Promise<any>, props: Record<string, any>) => async () => {
+  const m = await load();
+  return defineComponent({ name: 'CgchCrmPoolPage', setup: () => () => h(m.default, props) });
+};
 
 const groups: HubGroup[] = [
   { items: [{ key: 'salesmind', label: 'CRM 智枢', load: () => import('#/views/cgch/claw/chat/index.vue') }] },
   {
     label: '线索',
     items: [
-      { key: 'lead', label: '线索列表', load: () => import('#/views/crm/clue/index.vue') },
-      { key: 'lead-pool', label: '公海线索', load: () => import('../components/coming-soon.vue') },
+      { key: 'lead', label: '线索列表', load: () => import('./lead.vue') },
+      { key: 'lead-pool', label: '公海线索', load: withProps(() => import('./lead.vue'), { pool: true }) },
     ],
   },
   {
     label: '客户',
     items: [
-      { key: 'customer', label: '客户列表', load: () => import('#/views/crm/customer/index.vue') },
-      { key: 'customer-pool', label: '公海客户', load: () => import('#/views/crm/customer/pool/index.vue') },
-      { key: 'dedup', label: '查重', load: () => import('#/views/cgch/crm/dedup/index.vue') },
+      { key: 'customer', label: '客户列表', load: () => import('./customer.vue') },
+      { key: 'customer-pool', label: '公海客户', load: withProps(() => import('./customer.vue'), { pool: true }) },
+      { key: 'dedup', label: '查重', load: () => import('./dedup.vue') },
     ],
   },
   {
     items: [
-      { key: 'business', label: '商机', load: () => import('#/views/crm/business/index.vue') },
-      { key: 'order', label: '订单管理', load: () => import('#/views/crm/contract/index.vue') },
+      { key: 'business', label: '商机', load: () => import('./business.vue') },
+      { key: 'order', label: '订单管理', load: () => import('./order.vue') },
       { key: 'settings', label: 'CRM设置', load: () => import('./settings.vue') },
     ],
   },
@@ -34,5 +42,5 @@ const groups: HubGroup[] = [
 </script>
 
 <template>
-  <MenuHub :groups="groups" menu-label="页面菜单" />
+  <SideHub :groups="groups" />
 </template>
