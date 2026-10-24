@@ -6,9 +6,11 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
-import { Button, Checkbox, CheckboxGroup, InputNumber, message, Radio, RadioGroup, Select, Switch, TabPane, Tabs, Tag, Textarea } from 'ant-design-vue';
+import { Button, Checkbox, CheckboxGroup, InputNumber, message, Radio, RadioGroup, Select, Switch, TabPane, Tabs, Textarea } from 'ant-design-vue';
 
-import { learnNow } from '#/api/channel/agent';
+import type { LearnChannel, LearnConversation, LearnMember } from '#/api/channel/agent';
+
+import { getLearnConversations, getLearnScope, learnNow } from '#/api/channel/agent';
 import type { CloudApi } from '#/api/channel/cloud';
 import { getEnterpriseFiles } from '#/api/channel/cloud';
 
@@ -31,13 +33,75 @@ watch(
   (s) => {
     if (!s) return;
     learn.value = clone(s.learn);
+    ensureScope();
+    if (learn.value.scope === 'some') Promise.resolve().then(loadScope).catch(() => {}); // 等下方的选项数据初始化后再加载
     style.value = s.salesStyle;
     opening.value = { ...clone(s.opening), fileIds: s.opening.fileIds ?? [] };
   },
   { immediate: true },
 );
 
+// 学习范围：指定账号（成员）→ 渠道 → 会话
+const PLATFORM_LABEL: Record<string, string> = { whatsapp: 'WhatsApp', messenger: 'Facebook', instagram: 'Instagram', web: '官网IM', mail: '邮箱' };
+const members = ref<LearnMember[]>([]);
+const activeMember = ref<number>();
+const convs = ref<LearnConversation[]>([]);
+const currentMember = computed(() => members.value.find((m) => m.userId === activeMember.value));
+const isPicked = (c: LearnChannel) => (c.type === 'wa' ? learn.value!.waAccountIds : learn.value!.mailAccountIds).includes(c.id);
+const pickedMembers = computed(() => members.value.filter((m) => m.channels.some(isPicked)).length);
+
+function ensureScope() {
+  const l = learn.value!;
+  l.scope ??= 'all';
+  l.waAccountIds ??= [];
+  l.mailAccountIds ??= [];
+  l.conversations ??= [];
+}
+
+async function loadScope() {
+  if (!members.value.length) {
+    members.value = await getLearnScope();
+    activeMember.value ??= members.value[0]?.userId;
+  }
+  await loadConvs();
+}
+
+async function loadConvs() {
+  const l = learn.value!;
+  convs.value = l.waAccountIds.length || l.mailAccountIds.length ? await getLearnConversations(l.waAccountIds, l.mailAccountIds, l.days) : [];
+  const keys = new Set(convs.value.map((c) => c.key));
+  l.conversations = l.conversations.filter((k) => keys.has(k));
+}
+
+async function setScope(v: 'all' | 'some') {
+  ensureScope();
+  learn.value!.scope = v;
+  learnDirty.value = true;
+  if (v === 'some') await loadScope();
+}
+
+async function pickChannel(c: LearnChannel, on: boolean) {
+  const list = c.type === 'wa' ? learn.value!.waAccountIds : learn.value!.mailAccountIds;
+  const i = list.indexOf(c.id);
+  if (on && i < 0) list.push(c.id);
+  if (!on && i >= 0) list.splice(i, 1);
+  learnDirty.value = true;
+  await loadConvs();
+}
+
+function pickConv(key: string, on: boolean) {
+  const l = learn.value!.conversations;
+  const i = l.indexOf(key);
+  if (on && i < 0) l.push(key);
+  if (!on && i >= 0) l.splice(i, 1);
+  learnDirty.value = true;
+}
+
 async function saveLearn() {
+  if (learn.value?.scope === 'some' && !learn.value.waAccountIds.length && !learn.value.mailAccountIds.length) {
+    message.warning('请选择要学习的账号和渠道');
+    throw new Error('scope');
+  }
   await save({ learn: learn.value });
   learnDirty.value = false;
 }
@@ -103,15 +167,62 @@ onMounted(() => {
       <div class="sc__block">
         <div class="sc__head"><span class="sc__no">1</span>选择学习范围</div>
         <p class="sc__tip">选择用于学习的人工对话数据范围</p>
-        <RadioGroup value="all" class="flex flex-col gap-2">
-          <Radio value="all">
+        <RadioGroup :value="learn.scope || 'all'" class="sc__scope" @update:value="(v: any) => setScope(v)">
+          <Radio value="all" class="sc__scope-card">
             <span class="font-medium">全部账号 · 全部渠道（默认）</span>
             <div class="text-xs text-gray-500">学习当前企业下全部已接入账号的人工对话</div>
           </Radio>
-          <Radio value="some" disabled>
-            <span>指定账号 · 指定渠道</span> <Tag class="ml-1">即将开放</Tag>
+          <Radio value="some" class="sc__scope-card">
+            <span class="font-medium">指定账号 · 指定渠道</span>
+            <div class="text-xs text-gray-500">从指定账号的指定渠道中选择学习样本</div>
           </Radio>
         </RadioGroup>
+
+        <div v-if="learn.scope === 'some'" class="sc__picker">
+          <div class="sc__col">
+            <div class="sc__col-head">选择账号 <span>已选 {{ pickedMembers }}</span></div>
+            <div v-if="!members.length" class="sc__empty">还没有接入任何渠道账号</div>
+            <div
+              v-for="m in members"
+              :key="m.userId"
+              class="sc__item"
+              :class="{ on: activeMember === m.userId }"
+              @click="activeMember = m.userId"
+            >
+              <span class="sc__avatar">{{ m.name.slice(0, 1) }}</span>
+              <span class="flex-1 truncate">{{ m.name }}</span>
+              <span class="text-xs text-gray-400">{{ m.channels.filter(isPicked).length }}/{{ m.channels.length }}</span>
+            </div>
+          </div>
+          <div class="sc__col">
+            <div class="sc__col-head">选择渠道 <span>已选 {{ learn.waAccountIds.length + learn.mailAccountIds.length }}</span></div>
+            <div v-if="!currentMember" class="sc__empty">点击左侧账号查看渠道</div>
+            <label v-for="c in currentMember?.channels ?? []" :key="`${c.type}${c.id}`" class="sc__item">
+              <Checkbox :checked="isPicked(c)" @change="(e: any) => pickChannel(c, !!e.target.checked)" />
+              <span class="sc__ptag">{{ PLATFORM_LABEL[c.platform] ?? c.platform }}</span>
+              <span class="flex-1 truncate">{{ c.label }}</span>
+            </label>
+          </div>
+          <div class="sc__col sc__col--wide">
+            <div class="sc__col-head">
+              选择会话 <span>{{ learn.conversations.length ? `已选 ${learn.conversations.length}` : '不选表示全部会话' }}</span>
+            </div>
+            <div v-if="!learn.waAccountIds.length && !learn.mailAccountIds.length" class="sc__empty">请先选择左侧账号和渠道</div>
+            <div v-else-if="!convs.length" class="sc__empty">最近 {{ learn.days }} 天这些渠道没有人工回复的会话</div>
+            <label v-for="c in convs" :key="c.key" class="sc__item">
+              <Checkbox :checked="learn.conversations.includes(c.key)" @change="(e: any) => pickConv(c.key, !!e.target.checked)" />
+              <div class="min-w-0 flex-1">
+                <div class="truncate"><span class="sc__ptag">{{ c.channel }}</span>{{ c.title }}</div>
+                <div class="truncate text-xs text-gray-400">{{ c.preview }}</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div v-if="learn.scope === 'some'" class="mt-2 text-sm text-gray-500">
+          已选择 <b>{{ pickedMembers }}</b> 个账号 · <b>{{ learn.waAccountIds.length + learn.mailAccountIds.length }}</b> 个渠道{{
+            learn.conversations.length ? ` · ${learn.conversations.length} 个会话` : ''
+          }}
+        </div>
       </div>
 
       <div class="sc__block">
@@ -254,5 +365,101 @@ onMounted(() => {
 .sc__embed :deep(.p-5),
 .sc__embed :deep(.p-4) {
   padding: 0;
+}
+
+.sc__scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.sc__scope-card {
+  padding: 12px;
+  margin: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.sc__picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+@media (width <= 900px) {
+  .sc__picker,
+  .sc__scope {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sc__col {
+  min-height: 180px;
+  max-height: 320px;
+  padding: 10px;
+  overflow-y: auto;
+  background: #f8fafc;
+  border: 1px solid #eef0f3;
+  border-radius: 10px;
+}
+
+.sc__col-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.sc__col-head span {
+  font-weight: 400;
+  color: #9ca3af;
+}
+
+.sc__empty {
+  padding: 30px 8px;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.sc__item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.sc__item:hover,
+.sc__item.on {
+  background: #eef3fe;
+}
+
+.sc__avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  color: #155dfc;
+  background: #dbe5fd;
+  border-radius: 50%;
+}
+
+.sc__ptag {
+  flex: none;
+  padding: 0 6px;
+  margin-right: 4px;
+  font-size: 11px;
+  color: #4b5563;
+  background: #e5e7eb;
+  border-radius: 4px;
 }
 </style>

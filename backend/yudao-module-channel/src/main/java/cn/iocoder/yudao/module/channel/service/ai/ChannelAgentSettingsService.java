@@ -3,7 +3,11 @@ package cn.iocoder.yudao.module.channel.service.ai;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.channel.dal.dataobject.ai.ChannelAiConfigDO;
+import cn.iocoder.yudao.module.channel.dal.dataobject.mail.ChannelMailAccountDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.mail.ChannelMailMessageDO;
+import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaAccountDO;
+import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationDO;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaMessageDO;
 import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiConfigMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailMessageMapper;
@@ -46,6 +50,14 @@ public class ChannelAgentSettingsService {
     private ChannelMailMessageMapper channelMailMessageMapper;
     @Resource
     private ChannelCreditService channelCreditService;
+    @Resource
+    private cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaAccountMapper channelWaAccountMapper;
+    @Resource
+    private cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationMapper channelWaConversationMapper;
+    @Resource
+    private cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailAccountMapper channelMailAccountMapper;
+    @Resource
+    private cn.iocoder.yudao.module.system.api.user.AdminUserApi adminUserApi;
 
     /** 当前配置（补齐默认值）与页面需要的选项 */
     public Map<String, Object> get() {
@@ -58,6 +70,10 @@ public class ChannelAgentSettingsService {
         r.put("company", ChannelAgentSettings.company(cfg));
         r.put("salesStyle", StrUtil.nullToEmpty(cfg.getSalesStyle()));
         r.put("humanPauseHours", cfg.getHumanPauseHours() == null ? 12 : cfg.getHumanPauseHours());
+        Map<String, Object> ws = new LinkedHashMap<>();
+        ws.put("baseUrl", StrUtil.nullToEmpty(cfg.getSearchBaseUrl()));
+        ws.put("hasKey", StrUtil.isNotBlank(cfg.getSearchApiKey()));
+        r.put("webSearch", ws);
         List<Map<String, String>> presets = new ArrayList<>();
         ChannelAgentSettings.HANDOFF_PRESETS.forEach((k, v) -> presets.add(Map.of("key", k, "group", v[0], "text", v[1], "type", v[2])));
         r.put("presets", presets);
@@ -112,6 +128,12 @@ public class ChannelAgentSettingsService {
         if (req.containsKey("salesStyle")) {
             upd.setSalesStyle(StrUtil.maxLength(StrUtil.nullToEmpty((String) req.get("salesStyle")), 3000));
         }
+        if (req.get("webSearch") instanceof Map<?, ?> ws) {
+            upd.setSearchBaseUrl(StrUtil.maxLength(StrUtil.nullToEmpty(StrUtil.trim((String) ws.get("baseUrl"))), 255));
+            if (ws.get("apiKey") instanceof String k && StrUtil.isNotBlank(k)) {
+                upd.setSearchApiKey(k.trim()); // 不填表示不修改
+            }
+        }
         if (req.get("humanPauseHours") instanceof Number n) {
             upd.setHumanPauseHours(Math.max(0, Math.min(n.intValue(), 720)));
         }
@@ -145,10 +167,14 @@ public class ChannelAgentSettingsService {
         ChannelAgentSettings.Learn learn = ChannelAgentSettings.learn(cfg);
         LocalDateTime since = LocalDateTime.now().minusDays(Math.max(1, learn.getDays()));
         List<String> threads = new ArrayList<>();
-        threads.addAll(waThreads(since, learn.isRepliedOnly()));
-        threads.addAll(mailThreads(since, learn.isRepliedOnly()));
+        Scope sc = Scope.of(learn);
+        if (sc != null && sc.empty()) {
+            throw exception(AI_LLM_FAIL, "请先选择要学习的账号和渠道");
+        }
+        threads.addAll(waThreads(since, learn.isRepliedOnly(), sc));
+        threads.addAll(mailThreads(since, learn.isRepliedOnly(), sc));
         if (threads.isEmpty()) {
-            throw exception(AI_LLM_FAIL, "最近 " + learn.getDays() + " 天没有可学习的人工回复对话");
+            throw exception(AI_LLM_FAIL, "最近 " + learn.getDays() + " 天" + (sc == null ? "" : "所选范围内") + "没有可学习的人工回复对话");
         }
         if (threads.size() > MAX_THREADS) {
             threads = threads.subList(0, MAX_THREADS);
@@ -183,9 +209,45 @@ public class ChannelAgentSettingsService {
         }
     }
 
-    /** WhatsApp / Facebook / Instagram：有人工发出消息的会话 */
-    private List<String> waThreads(LocalDateTime since, boolean repliedOnly) {
+    /** 「指定账号 · 指定渠道」的学习范围；null 表示全部 */
+    private record Scope(Set<Long> wa, Set<Long> mail, Set<Long> waConvs, Set<String> mailThreads) {
+        static Scope of(ChannelAgentSettings.Learn l) {
+            if (!"some".equals(l.getScope())) {
+                return null;
+            }
+            Set<Long> waConvs = new HashSet<>();
+            Set<String> mailThreads = new HashSet<>();
+            for (String k : l.getConversations() == null ? List.<String>of() : l.getConversations()) {
+                if (k == null) {
+                    continue;
+                }
+                if (k.startsWith("wa:") && StrUtil.isNumeric(k.substring(3))) {
+                    waConvs.add(Long.parseLong(k.substring(3)));
+                } else if (k.startsWith("mail:") && k.length() > 5) {
+                    mailThreads.add(k.substring(5));
+                }
+            }
+            return new Scope(new HashSet<>(l.getWaAccountIds() == null ? List.of() : l.getWaAccountIds()),
+                    new HashSet<>(l.getMailAccountIds() == null ? List.of() : l.getMailAccountIds()), waConvs, mailThreads);
+        }
+
+        boolean picked() {
+            return !waConvs.isEmpty() || !mailThreads.isEmpty();
+        }
+
+        boolean empty() {
+            return wa.isEmpty() && mail.isEmpty();
+        }
+    }
+
+    /** WhatsApp / Facebook / Instagram / 官网IM：有人工发出消息的会话 */
+    private List<String> waThreads(LocalDateTime since, boolean repliedOnly, Scope sc) {
+        if (sc != null && (sc.wa().isEmpty() || sc.picked() && sc.waConvs().isEmpty())) {
+            return List.of(); // 指定了会话时，只学习指定的会话
+        }
         List<ChannelWaMessageDO> manual = channelWaMessageMapper.selectList(new LambdaQueryWrapperX<ChannelWaMessageDO>()
+                .inIfPresent(ChannelWaMessageDO::getAccountId, sc == null ? null : sc.wa())
+                .inIfPresent(ChannelWaMessageDO::getConversationId, sc == null || sc.waConvs().isEmpty() ? null : sc.waConvs())
                 .eq(ChannelWaMessageDO::getDirection, ChannelWaMessageDO.DIRECTION_OUT)
                 .and(w -> w.eq(ChannelWaMessageDO::getAiGenerated, false).or().isNull(ChannelWaMessageDO::getAiGenerated))
                 .ge(ChannelWaMessageDO::getMessageTime, since)
@@ -212,8 +274,13 @@ public class ChannelAgentSettingsService {
     }
 
     /** 邮件：有人工发出邮件的往来 */
-    private List<String> mailThreads(LocalDateTime since, boolean repliedOnly) {
+    private List<String> mailThreads(LocalDateTime since, boolean repliedOnly, Scope sc) {
+        if (sc != null && (sc.mail().isEmpty() || sc.picked() && sc.mailThreads().isEmpty())) {
+            return List.of();
+        }
         List<ChannelMailMessageDO> manual = channelMailMessageMapper.selectList(new LambdaQueryWrapperX<ChannelMailMessageDO>()
+                .inIfPresent(ChannelMailMessageDO::getAccountId, sc == null ? null : sc.mail())
+                .inIfPresent(ChannelMailMessageDO::getThreadKey, sc == null || sc.mailThreads().isEmpty() ? null : sc.mailThreads())
                 .eq(ChannelMailMessageDO::getDirection, ChannelMailMessageDO.DIRECTION_OUT)
                 .and(w -> w.eq(ChannelMailMessageDO::getAiGenerated, false).or().isNull(ChannelMailMessageDO::getAiGenerated))
                 .ge(ChannelMailMessageDO::getSentTime, since)
@@ -235,6 +302,90 @@ public class ChannelAgentSettingsService {
                 out.add(StrUtil.maxLength(t, THREAD_CHARS));
             }
         }
+        return out;
+    }
+
+    // ==================== 学习范围：账号、渠道、会话 ====================
+
+    /** 可选的账号（成员）及其渠道账号 */
+    public List<Map<String, Object>> learnScopeOptions() {
+        List<Map<String, Object>> channels = new ArrayList<>();
+        for (ChannelWaAccountDO a : channelWaAccountMapper.selectList()) {
+            String p = StrUtil.blankToDefault(a.getPlatform(), ChannelWaAccountDO.PLATFORM_WHATSAPP);
+            channels.add(channelOption("wa", a.getId(), a.getUserId(), p, StrUtil.blankToDefault(a.getDisplayPhone(), a.getName())));
+        }
+        for (ChannelMailAccountDO a : channelMailAccountMapper.selectList()) {
+            channels.add(channelOption("mail", a.getId(), a.getUserId(), "mail", a.getEmail()));
+        }
+        Set<Long> userIds = new LinkedHashSet<>();
+        channels.forEach(c -> userIds.add((Long) c.get("userId")));
+        userIds.remove(null);
+        Map<Long, AdminUserRespDTO> users = adminUserApi.getUserMap(userIds);
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Long uid : userIds) {
+            Map<String, Object> u = new LinkedHashMap<>();
+            u.put("userId", uid);
+            u.put("name", users.containsKey(uid) ? users.get(uid).getNickname() : "成员 " + uid);
+            u.put("channels", channels.stream().filter(c -> uid.equals(c.get("userId"))).toList());
+            out.add(u);
+        }
+        return out;
+    }
+
+    private static Map<String, Object> channelOption(String type, Long id, Long userId, String platform, String label) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("type", type);
+        m.put("id", id);
+        m.put("userId", userId);
+        m.put("platform", platform);
+        m.put("label", StrUtil.blankToDefault(label, "#" + id));
+        return m;
+    }
+
+    /** 选中渠道下最近 N 天有人工回复的会话 */
+    public List<Map<String, Object>> learnConversations(Collection<Long> waIds, Collection<Long> mailIds, int days) {
+        LocalDateTime since = LocalDateTime.now().minusDays(Math.max(1, Math.min(days, 365)));
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (waIds != null && !waIds.isEmpty()) {
+            List<Long> convIds = channelWaMessageMapper.selectList(new LambdaQueryWrapperX<ChannelWaMessageDO>()
+                            .in(ChannelWaMessageDO::getAccountId, waIds)
+                            .eq(ChannelWaMessageDO::getDirection, ChannelWaMessageDO.DIRECTION_OUT)
+                            .and(w -> w.eq(ChannelWaMessageDO::getAiGenerated, false).or().isNull(ChannelWaMessageDO::getAiGenerated))
+                            .ge(ChannelWaMessageDO::getMessageTime, since)
+                            .orderByDesc(ChannelWaMessageDO::getId).last("LIMIT 500"))
+                    .stream().map(ChannelWaMessageDO::getConversationId).distinct().limit(100).toList();
+            if (!convIds.isEmpty()) {
+                for (ChannelWaConversationDO c : channelWaConversationMapper.selectByIds(convIds)) {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("key", "wa:" + c.getId());
+                    m.put("channel", c.platformLabel());
+                    m.put("title", c.contactLabel());
+                    m.put("preview", c.getLastMessagePreview());
+                    m.put("time", c.getLastMessageTime());
+                    out.add(m);
+                }
+            }
+        }
+        if (mailIds != null && !mailIds.isEmpty()) {
+            Map<String, ChannelMailMessageDO> threads = new LinkedHashMap<>();
+            channelMailMessageMapper.selectList(new LambdaQueryWrapperX<ChannelMailMessageDO>()
+                            .in(ChannelMailMessageDO::getAccountId, mailIds)
+                            .eq(ChannelMailMessageDO::getDirection, ChannelMailMessageDO.DIRECTION_OUT)
+                            .and(w -> w.eq(ChannelMailMessageDO::getAiGenerated, false).or().isNull(ChannelMailMessageDO::getAiGenerated))
+                            .ge(ChannelMailMessageDO::getSentTime, since).isNotNull(ChannelMailMessageDO::getThreadKey)
+                            .orderByDesc(ChannelMailMessageDO::getId).last("LIMIT 300"))
+                    .forEach(m -> threads.putIfAbsent(m.getThreadKey(), m));
+            threads.values().stream().limit(100).forEach(mm -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("key", "mail:" + mm.getThreadKey());
+                m.put("channel", "邮件");
+                m.put("title", StrUtil.blankToDefault(mm.getSubject(), "(无主题)"));
+                m.put("preview", StrUtil.blankToDefault(mm.getToAddresses(), ""));
+                m.put("time", mm.getSentTime());
+                out.add(m);
+            });
+        }
+        out.sort((a, b) -> String.valueOf(b.get("time")).compareTo(String.valueOf(a.get("time"))));
         return out;
     }
 

@@ -14,6 +14,7 @@
 - POST /{ver}/{page_id}/subscribed_apps    订阅主页消息推送
 - POST /{ver}/me/messages                  Messenger / Instagram 发消息（JSON 或带附件的 multipart）
 - GET  /_fbsent、/_subs                     查看 Messenger 发送记录与主页订阅
+- POST /search                             模拟联网搜索（Tavily 兼容），GET /_search 查看搜索记录
 """
 import base64
 import json
@@ -26,6 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 SENT = []
 UPLOADS = []
 LLM = []
+SEARCH = []
 SITE_HITS = []
 OAUTH = []
 EMBEDS = []
@@ -110,6 +112,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, SENT)
         if path == ['_uploads']:
             return self._json(200, UPLOADS)
+        if path == ['_search']:
+            return self._json(200, SEARCH)
         if path == ['_llm']:
             return self._json(200, LLM)
         if path == ['_fbsent']:
@@ -160,6 +164,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._llm(json.loads(raw or b'{}'))
         if path == ['v1', 'embeddings']:
             return self._embed(json.loads(raw or b'{}'))
+        if path == ['search']:
+            body = json.loads(raw or b'{}')
+            if self.headers.get('Authorization') != 'Bearer search-key' and body.get('api_key') != 'search-key':
+                return self._json(401, {'detail': {'error': 'Unauthorized: missing or invalid API key.'}})
+            SEARCH.append(body)
+            return self._json(200, {'query': body.get('query'), 'results': [
+                {'title': 'Hair dryer wholesale price - Example B2B', 'url': 'https://b2b.example/hair-dryer',
+                 'content': 'Wholesale hair dryers from verified suppliers: US$ 6.20 - 9.80 / piece, MOQ 500 pieces.'},
+                {'title': 'Ionic hair dryer factory', 'url': 'https://factory.example/ionic',
+                 'content': 'Ionic 1800W hair dryer, FOB price US$ 7.5 per unit for 1000 units.'}]})
         if len(path) == 3 and path[0] == 'oauth' and path[2] == 'token':  # 模拟 Google / Microsoft 令牌接口
             return self._oauth_token(path[1], raw)
         if not self._auth_ok():
@@ -367,6 +381,9 @@ class Handler(BaseHTTPRequestHandler):
             import re as _re
             ids = _re.findall(r'编号 (\d+)：', system)
             answer = 'Sure, please find our latest catalog attached.' + (f'\n[SEND_FILE:{ids[0]}]' if ids else '')
+        elif '公开市场参考价' in system and 'price' in last:  # 允许联网报价
+            answer = ('The market reference price is about US$ 6.20 - 9.80 per piece; our formal quotation depends on quantity and specs.'
+                      if 'US$ 6.20 - 9.80' in system else 'I will confirm the price and get back to you.')
         elif 'single word' in last:
             answer = 'OK'
         elif 'complaint' in last or 'refund' in last:

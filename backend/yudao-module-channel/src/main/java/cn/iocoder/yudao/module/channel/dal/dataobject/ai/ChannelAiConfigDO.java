@@ -15,7 +15,7 @@ import lombok.*;
 @KeySequence("channel_ai_config_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
-@ToString(callSuper = true, exclude = "llmApiKey")
+@ToString(callSuper = true, exclude = {"llmApiKey", "searchApiKey"})
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -59,6 +59,15 @@ public class ChannelAiConfigDO extends TenantBaseDO {
      * 向量模型（OpenAI 兼容 /embeddings，与对话模型共用接口地址和 Key）；为空时知识库按关键词检索
      */
     private String embeddingModel;
+    /**
+     * 联网搜索接口地址（Tavily 兼容），为空时使用 https://api.tavily.com；用于「允许联网报价」
+     */
+    private String searchBaseUrl;
+    /**
+     * 联网搜索 API Key，加密存储
+     */
+    @TableField(typeHandler = EncryptTypeHandler.class)
+    private String searchApiKey;
     /**
      * 邮件回复模式：off、draft、auto
      */

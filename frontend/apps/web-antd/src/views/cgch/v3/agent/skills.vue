@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 /**
  * 配技能：智能询盘接待、自动背调客户、CRM 自动录入（与原网站一致）。
- * 尚未实现的开关（联网报价）显示「即将开放」，不会假装生效。
+ * 允许联网报价需要配置联网搜索（Tavily 兼容接口）的 API Key，没有配置时不会检索。
  */
 import type { AgentApi } from '#/api/channel/agent';
 import type { ChannelAiApi } from '#/api/channel/ai';
@@ -33,6 +33,31 @@ async function patch(p: Partial<AgentApi.Skills>) {
   if (!skills.value) return;
   const next = { ...clone(skills.value), ...p };
   await save({ skills: next });
+}
+
+// ===== 允许联网报价 =====
+const searchOpen = ref(false);
+const searchForm = ref({ baseUrl: '', apiKey: '' });
+
+function openSearch() {
+  searchForm.value = { baseUrl: settings.value?.webSearch?.baseUrl ?? '', apiKey: '' };
+  searchOpen.value = true;
+}
+
+async function toggleWebQuote(v: boolean) {
+  await patch({ webQuote: v });
+  if (v && !settings.value?.webSearch?.hasKey) openSearch();
+}
+
+async function saveSearch() {
+  const hasKey = !!settings.value?.webSearch?.hasKey || !!searchForm.value.apiKey.trim();
+  if (!hasKey) {
+    message.warning('请填写联网搜索的 API Key');
+    return;
+  }
+  await save({ webSearch: { baseUrl: searchForm.value.baseUrl.trim(), apiKey: searchForm.value.apiKey.trim() } });
+  if (settings.value) settings.value.webSearch = { baseUrl: searchForm.value.baseUrl.trim(), hasKey: true };
+  searchOpen.value = false;
 }
 
 // ===== 主动追问 =====
@@ -136,7 +161,21 @@ onMounted(async () => {
           <div>
             <div class="sk__name">预估报价</div>
             <div class="sk__desc">基于授权知识库回答产品价格和 MOQ 问题；关闭时客户询价一律转人工</div>
-            <Checkbox disabled class="mt-1 text-xs">允许联网报价：在知识库缺少价格时，检索公开市场参考价（即将开放）</Checkbox>
+            <Checkbox
+              class="mt-1 text-xs"
+              :checked="skills.webQuote"
+              :disabled="!skills.quote"
+              @change="(e: any) => toggleWebQuote(!!e.target.checked)"
+            >
+              允许联网报价：在知识库缺少价格时，检索公开市场参考价
+            </Checkbox>
+            <div v-if="skills.quote && skills.webQuote" class="sk__tags text-xs text-gray-500">
+              <span>{{ settings?.webSearch?.hasKey ? '已配置联网搜索' : '还没有配置联网搜索，不会检索' }}</span>
+              <a @click="openSearch">{{ settings?.webSearch?.hasKey ? '修改' : '去配置' }}</a>
+            </div>
+            <div v-if="skills.quote && skills.webQuote" class="mt-1 text-xs text-gray-400">
+              只在客户问价、且企业资料里没有价格时检索；AI 会说明这是市场参考价，最终以正式报价为准。
+            </div>
           </div>
         </div>
 
@@ -222,6 +261,14 @@ onMounted(async () => {
         <Input v-model:value="g.name" class="w-28" :maxlength="20" />
         <Input v-model:value="g.desc" :maxlength="100" placeholder="例如：年采购额 100 万美元以上的成熟品牌" />
       </div>
+    </Modal>
+    <Modal v-model:open="searchOpen" title="联网搜索" ok-text="保存" @ok="saveSearch">
+      <p class="text-sm text-gray-500">允许联网报价时，用联网搜索检索公开市场价格。支持 Tavily 及兼容 Tavily 接口的搜索服务。</p>
+      <div class="mb-1 mt-3 text-sm">接口地址</div>
+      <Input v-model:value="searchForm.baseUrl" placeholder="https://api.tavily.com（留空使用默认）" />
+      <div class="mb-1 mt-3 text-sm">API Key</div>
+      <Input v-model:value="searchForm.apiKey" :placeholder="settings?.webSearch?.hasKey ? '已配置，不修改请留空' : 'tvly-...'" />
+      <div class="mt-2 text-xs text-gray-400">API Key 加密保存，不会显示在页面上。检索费用由搜索服务商收取。</div>
     </Modal>
   </div>
 </template>

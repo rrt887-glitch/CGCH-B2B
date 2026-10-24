@@ -11,6 +11,8 @@ export namespace AgentApi {
     sendFiles: boolean;
     autoResearch: boolean;
     quote: boolean;
+    /** 允许联网报价：企业资料里没有价格时检索公开市场参考价 */
+    webQuote: boolean;
     followUp: boolean;
     followUpHours: number;
     followUpRounds: number;
@@ -48,6 +50,12 @@ export namespace AgentApi {
     days: number;
     goals: string[];
     repliedOnly: boolean;
+    /** all 全部账号全部渠道、some 指定账号的指定渠道 */
+    scope: 'all' | 'some';
+    waAccountIds: number[];
+    mailAccountIds: number[];
+    /** wa:会话编号、mail:邮件往来编号；为空 = 所选渠道的全部会话 */
+    conversations: string[];
     lastLearnTime?: string;
     lastSamples?: number;
   }
@@ -71,6 +79,7 @@ export namespace AgentApi {
     company: Company;
     salesStyle: string;
     humanPauseHours: number;
+    webSearch: { apiKey?: string; baseUrl: string; hasKey?: boolean };
     presets: Preset[];
     askFieldOptions: string[];
   }
@@ -92,6 +101,33 @@ export const getAgentSettings = () => requestClient.get<AgentApi.Settings>('/cha
 /** 只保存传入的部分 */
 export const saveAgentSettings = (data: Partial<Omit<AgentApi.Settings, 'askFieldOptions' | 'presets'>>) =>
   requestClient.put('/channel/ai/agent-settings', data);
+
+export interface LearnChannel {
+  type: 'mail' | 'wa';
+  id: number;
+  userId: number;
+  platform: string;
+  label: string;
+}
+export interface LearnMember {
+  userId: number;
+  name: string;
+  channels: LearnChannel[];
+}
+export interface LearnConversation {
+  key: string;
+  channel: string;
+  title: string;
+  preview?: string;
+  time?: string;
+}
+
+export const getLearnScope = () => requestClient.get<LearnMember[]>('/channel/ai/agent-settings/learn-scope');
+
+export const getLearnConversations = (wa: number[], mail: number[], days: number) =>
+  requestClient.get<LearnConversation[]>('/channel/ai/agent-settings/learn-conversations', {
+    params: { wa: wa.join(',') || undefined, mail: mail.join(',') || undefined, days },
+  });
 
 export const learnNow = () =>
   requestClient.post<{ lastLearnTime: string; salesStyle: string; samples: number }>('/channel/ai/agent-settings/learn');

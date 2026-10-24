@@ -39,6 +39,8 @@ CREATE TABLE `channel_ai_config` (
   `llm_api_key` varchar(1024) NULL COMMENT '大模型 API Key，加密存储',
   `llm_model` varchar(255) NULL COMMENT '模型名称，例如 deepseek-chat、qwen-plus、gpt-4o-mini',
   `embedding_model` varchar(255) NULL COMMENT '向量模型（OpenAI 兼容 /embeddings，与对话模型共用接口地址和 Key）；为空时知识库按关键词检索',
+  `search_base_url` varchar(255) NULL COMMENT '联网搜索接口地址（Tavily 兼容），为空时使用 https://api.tavily.com；用于「允许联网报价」',
+  `search_api_key` varchar(1024) NULL COMMENT '联网搜索 API Key，加密存储',
   `mail_mode` varchar(255) NULL COMMENT '邮件回复模式：off、draft、auto',
   `wa_mode` varchar(255) NULL COMMENT 'WhatsApp 回复模式：off、draft、auto',
   `mail_signature` varchar(1024) NULL COMMENT '邮件签名，追加在 AI 回复末尾',
