@@ -1581,6 +1581,77 @@ jobs:
           tr2 = call('POST', '/channel/translate', {'texts': ['你好'], 'sample': 'Hola amigo'})
           assert tr2 == ['[XX] 你好'], tr2
           print('邮件模板、通知规则、翻译')
+          # ---- 官网 IM：绑定网站、嵌入脚本、访客发消息（无需登录）、业务员回复、访客窗口拉取 ----
+          def pub(method, path, body=None, origin=None):
+              h = {'Content-Type': 'application/json'} if body is not None else {}
+              if origin:
+                  h['Origin'] = origin
+              req = urllib.request.Request(BASE + '/channel/web-im' + path, method=method, headers=h,
+                                           data=json.dumps(body).encode() if body is not None else None)
+              return json.load(urllib.request.urlopen(req))
+          def wait(fn, what, timeout=15):
+              end = time.time() + timeout
+              while time.time() < end:
+                  v = fn()
+                  if v:
+                      return v
+                  time.sleep(0.5)
+              raise SystemExit('等待超时：' + what)
+          assert call('POST', '/channel/web-im/site', {'domain': 'not a domain', 'name': 'x'}, ok=False)['code'] != 0
+          site = call('POST', '/channel/web-im/site', {'domain': 'https://www.Example-Shop.com/en/', 'name': 'Example Shop'})
+          sa = next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == site)
+          assert sa['platform'] == 'web' and sa['displayPhone'] == 'example-shop.com' and sa['phoneNumberId'].startswith('web_'), sa
+          K = sa['phoneNumberId']
+          js = urllib.request.urlopen(BASE + '/channel/web-im/widget.js?k=' + K).read().decode()
+          assert 'cgch_im_v_' in js and '/messages?k=' in js, js[:200]
+          assert pub('GET', '/config?k=' + K, origin='https://shop.example-shop.com')['data'] == {'name': 'Example Shop', 'domain': 'example-shop.com'}
+          assert pub('GET', '/config?k=' + K, origin='https://evil.example.com')['code'] != 0, '未绑定的域名不能使用'
+          assert pub('GET', '/config?k=web_nope')['code'] != 0
+          assert pub('POST', '/send', {'k': K, 'visitorId': 'bad id!', 'text': 'hi'})['code'] != 0
+          # 消息分流：第一条命中的启用规则；多位负责人轮流分配；停用的规则不生效
+          uid = next(u['id'] for u in call('GET', '/system/user/simple-list') if u['nickname'] == '业务员小王')
+          assert call('POST', '/channel/routing-rule/save', {'name': 'x', 'sources': 'web', 'assigneeIds': []}, ok=False)['code'] != 0
+          assert call('POST', '/channel/routing-rule/save', {'name': 'x', 'countryOp': 'in', 'countries': '', 'assigneeIds': [1]}, ok=False)['code'] != 0
+          r0 = call('POST', '/channel/routing-rule/save', {'name': '停用的', 'enabled': False, 'sort': 0, 'sources': 'web', 'assigneeIds': [1]})
+          r1 = call('POST', '/channel/routing-rule/save', {'name': '官网询盘', 'sort': 1, 'sources': 'web,whatsapp', 'assigneeIds': [uid, 1]})
+          r2 = call('POST', '/channel/routing-rule/save', {'name': '西班牙邮件', 'sort': 2, 'sources': 'mail', 'countryOp': 'in', 'countries': 'es,xx1', 'assigneeIds': [uid]})
+          rl = call('GET', '/channel/routing-rule/list')
+          assert [r['id'] for r in rl] == [r0, r1, r2] and rl[2]['countries'] == 'ES' and rl[1]['assigneeIds'] == [uid, 1], rl
+          cfg_r = call('GET', '/channel/ai/config/get')
+          call('PUT', '/channel/ai/config/save', dict(cfg_r, llmApiKey='', waMode='off', leadAutoCreate=True))
+          def owner_of(v):
+              return sql(f"SELECT IFNULL((SELECT owner_user_id FROM crm_clue WHERE id = (SELECT clue_id FROM channel_wa_conversation WHERE wa_id = '{v}' AND deleted = 0)), '')")
+          m1 = pub('POST', '/send', {'k': K, 'visitorId': 'vtestvisitor01', 'text': 'Hello, I need 500 pcs hair dryer', 'page': 'https://example-shop.com/p/1'},
+                   origin='https://example-shop.com')
+          assert m1['code'] == 0 and m1['data']['from'] == 'visitor' and m1['data']['text'] == 'Hello, I need 500 pcs hair dryer', m1
+          assert wait(lambda: owner_of('vtestvisitor01'), '官网询盘建档') == str(uid), '命中「官网询盘」规则，轮到第一位'
+          pub('POST', '/send', {'k': K, 'visitorId': 'vtestvisitor02', 'text': 'Price list please'})
+          assert wait(lambda: owner_of('vtestvisitor02'), '官网询盘建档 2') == '1', '轮流分配给第二位'
+          call('PUT', f'/channel/routing-rule/enabled?id={r1}&enabled=false')
+          pub('POST', '/send', {'k': K, 'visitorId': 'vtestvisitor03', 'text': 'Do you ship to Spain?'})
+          assert wait(lambda: owner_of('vtestvisitor03'), '官网询盘建档 3') == '1', '没有命中启用规则时，沿用网站所属成员'
+          assert sql("SELECT source FROM crm_clue WHERE id = (SELECT clue_id FROM channel_wa_conversation WHERE wa_id = 'vtestvisitor01')") == '17'
+          assert [r['enabled'] for r in call('GET', '/channel/routing-rule/list')] == [False, False, True]
+          for r in (r0, r1, r2):
+              call('DELETE', f'/channel/routing-rule/delete?id={r}')
+          print('消息分流：按渠道命中规则，多位负责人轮流分配，停用与未命中时沿用默认')
+          # 业务员在会话工作台回复，访客窗口拉到回复（没有 24 小时窗口限制），拉取后标记已读
+          cv = call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
+          c1 = next(c for c in cv if c['waId'] == 'vtestvisitor01')
+          assert c1['platform'] == 'web' and c1['windowOpen'] is True, c1
+          inbox = call('GET', f"/channel/wa/message/list?conversationId={c1['id']}")
+          assert 'example-shop.com/p/1' in inbox[0]['textBody'], '第一条消息记下访客所在页面'
+          sent = call('POST', '/channel/wa/message/send', {'conversationId': c1['id'], 'text': 'Sure, MOQ is 300 pcs.'})
+          got = pub('GET', f"/messages?k={K}&v=vtestvisitor01&after={m1['data']['id']}")['data']
+          assert [(x['from'], x['text']) for x in got] == [('agent', 'Sure, MOQ is 300 pcs.')], got
+          assert pub('GET', f"/messages?k={K}&v=vtestvisitor01")['data'][0]['text'] == 'Hello, I need 500 pcs hair dryer', '访客看到的消息不带页面地址'
+          assert sql(f"SELECT status FROM channel_wa_message WHERE id = {sent['id']}") == 'read'
+          assert pub('GET', f"/messages?k={K}&v=vnobody00000")['data'] == []
+          call('PUT', '/channel/wa-account/update', dict(sa, enabled=False))
+          assert pub('GET', '/config?k=' + K)['code'] != 0, '停用后聊天窗口不再显示'
+          call('DELETE', f'/channel/wa-account/delete?id={site}')
+          call('PUT', '/channel/ai/config/save', dict(cfg_r, llmApiKey=''))
+          print('官网 IM：绑定域名、校验来源、访客发消息进会话、建档来源为官网IM、业务员回复访客可见、停用后不可用')
           PY
 
       - name: 后端日志

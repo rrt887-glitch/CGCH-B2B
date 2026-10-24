@@ -42,7 +42,7 @@ const GRADES = [
 ];
 const grade = ref('');
 
-const PLATFORM: Record<string, string> = { whatsapp: 'WhatsApp', messenger: 'Facebook', instagram: 'Instagram' };
+const PLATFORM: Record<string, string> = { whatsapp: 'WhatsApp', messenger: 'Facebook', instagram: 'Instagram', web: '官网IM' };
 const imLabel = (a: ChannelWaApi.Account) => `${PLATFORM[a.platform || 'whatsapp']} · ${a.displayPhone || a.name || a.phoneNumberId}`;
 const hasAny = computed(() => waAccounts.value.length + mailAccounts.value.length > 0);
 const viewKey = computed(() => `${selected.value.kind}-${selected.value.id ?? 'all'}`);

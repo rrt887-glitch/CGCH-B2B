@@ -43,16 +43,24 @@ import java.util.regex.Pattern;
 @Slf4j
 public class ChannelLeadService {
 
+    @jakarta.annotation.Resource
+    private cn.iocoder.yudao.module.channel.service.routing.ChannelRoutingService channelRoutingService;
+
     /** crm_customer_source 字典：邮件咨询 10，WhatsApp 11（在 03-channel-seed.sql 中补充） */
     public static final int SOURCE_MAIL = 10;
     public static final int SOURCE_WHATSAPP = 11;
     /** Facebook 主页私信、Instagram 私信 */
     public static final int SOURCE_FACEBOOK = 15;
     public static final int SOURCE_INSTAGRAM = 16;
+    /** 官网 IM 在线聊天 */
+    public static final int SOURCE_WEB = 17;
 
     private static int sourceOf(ChannelWaConversationDO c) {
         if (c.isWhatsApp()) {
             return SOURCE_WHATSAPP;
+        }
+        if (c.isWeb()) {
+            return SOURCE_WEB;
         }
         return ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(c.getPlatform()) ? SOURCE_INSTAGRAM : SOURCE_FACEBOOK;
     }
@@ -65,6 +73,7 @@ public class ChannelLeadService {
             case SOURCE_WHATSAPP -> "WhatsApp";
             case SOURCE_FACEBOOK -> "Facebook";
             case SOURCE_INSTAGRAM -> "Instagram";
+            case SOURCE_WEB -> "官网IM";
             default -> "邮件";
         };
     }
@@ -189,6 +198,17 @@ public class ChannelLeadService {
     // ==================== 内部 ====================
 
     private void createClue(CrmClueDO clue) {
+        String key = clue.getSource() == null ? "mail" : switch (clue.getSource()) {
+            case SOURCE_WHATSAPP -> "whatsapp";
+            case SOURCE_FACEBOOK -> "messenger";
+            case SOURCE_INSTAGRAM -> "instagram";
+            case SOURCE_WEB -> "web";
+            default -> "mail";
+        };
+        Long routed = channelRoutingService.pickOwner(key, clue.getCountryCode());
+        if (routed != null) {
+            clue.setOwnerUserId(routed); // 命中「消息分流设置」的规则
+        }
         clue.setFollowUpStatus(false);
         clue.setTransformStatus(false);
         clue.setAiHosted(true); // 新询盘默认由 AI 接待

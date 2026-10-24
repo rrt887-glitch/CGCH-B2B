@@ -7,7 +7,7 @@ import { TabPane, Tabs } from 'ant-design-vue';
 import TreeManager from '#/views/cgch/crm/settings/tree-manager.vue';
 
 const PoolConfig = defineAsyncComponent(() => import('#/views/crm/customer/poolConfig/index.vue'));
-const ComingSoon = defineAsyncComponent(() => import('../components/coming-soon.vue'));
+const LeadFlow = defineAsyncComponent(() => import('./lead-flow.vue'));
 
 const active = ref('tag');
 </script>
@@ -20,7 +20,7 @@ const active = ref('tag');
       <TabPane key="tag" tab="标签管理"><TreeManager kind="tag" label="标签" with-color /></TabPane>
       <TabPane key="group" tab="客户分组"><TreeManager kind="customer-group" label="分组" /></TabPane>
       <TabPane key="pool" tab="客户公海规则"><PoolConfig /></TabPane>
-      <TabPane key="lead" tab="线索流转规则"><ComingSoon /></TabPane>
+      <TabPane key="lead" tab="线索流转规则"><LeadFlow /></TabPane>
     </Tabs>
   </div>
 </template>
