@@ -383,6 +383,37 @@ public class ChannelAiService {
                 .collect(java.util.stream.Collectors.joining("、")) + "）";
     }
 
+    /**
+     * 允许联网报价：客户在问价格、企业资料里又没有价格时，联网检索公开市场参考价附在提示里。
+     * AI 只能把它当作市场参考区间说明，并注明以正式报价为准。
+     */
+    private String webQuoteBlock(ChannelAiConfigDO cfg, String customerText, String system) {
+        ChannelAgentSettings.Skills skills = ChannelAgentSettings.skills(cfg);
+        if (!skills.isQuote() || !skills.isWebQuote() || StrUtil.isBlank(cfg.getSearchApiKey())
+                || !WebSearchClient.asksPrice(customerText)) {
+            return "";
+        }
+        int i = system.lastIndexOf("## 企业资料");
+        if (WebSearchClient.hasPrice(i < 0 ? system : system.substring(i))) {
+            return ""; // 企业资料里有价格，以资料为准
+        }
+        String company = ChannelAgentSettings.company(cfg).getIndustry();
+        String query = StrUtil.maxLength(StrUtil.trim(customerText).replaceAll("\\s+", " "), 300) + " wholesale price per unit"
+                + (StrUtil.isBlank(company) ? "" : " " + company);
+        List<WebSearchClient.Hit> hits = WebSearchClient.search(cfg.getSearchBaseUrl(), cfg.getSearchApiKey(), query);
+        if (hits.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("\n\n## 公开市场参考价（联网检索，仅供参考）\n")
+                .append("企业资料里没有这次询问的价格。可以参考下列公开信息，给客户一个大致的市场价格区间，")
+                .append("必须说明这是市场参考价、最终价格以我们的正式报价为准，并询问数量、规格等信息以便正式报价；")
+                .append("不要编造下列信息里没有的数字，不要提及信息来源网站。\n");
+        for (WebSearchClient.Hit h : hits) {
+            sb.append("- ").append(h.title()).append("：").append(h.content()).append("\n");
+        }
+        return sb.toString();
+    }
+
     /** 配技能「AI 发送文件」开启时，列出可以发送的文件，告诉 AI 怎么标记 */
     private String fileBlock(ChannelAiConfigDO cfg, List<ChannelCloudFileDO> files) {
         if (files.isEmpty()) {
@@ -406,7 +437,8 @@ public class ChannelAiService {
         List<ChannelAiKnowledgeDO> knowledge = channelAiKnowledgeMapper.selectEnabled();
         Semantic sem = semanticScores(cfg, knowledge, customerText);
         List<ChannelCloudFileDO> sendable = ChannelAgentSettings.skills(cfg).isSendFiles() ? channelCloudFileService.aiSendable() : List.of();
-        String system = AiPromptBuilder.systemPrompt(cfg, knowledge, customerText, channel, sem == null ? null : sem.scores())
+        String system = AiPromptBuilder.systemPrompt(cfg, knowledge, customerText, channel, sem == null ? null : sem.scores());
+        system = system + webQuoteBlock(cfg, customerText, system)
                 + channelAiCaseService.promptBlock(customerText, sem == null ? null : sem.query()) + fileBlock(cfg, sendable);
         List<LlmClient.Message> messages = new ArrayList<>();
         messages.add(LlmClient.Message.system(system));

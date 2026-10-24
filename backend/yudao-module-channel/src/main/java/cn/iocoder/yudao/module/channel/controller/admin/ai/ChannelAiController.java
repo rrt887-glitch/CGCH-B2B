@@ -60,6 +60,22 @@ public class ChannelAiController {
         return success(true);
     }
 
+    @GetMapping("/agent-settings/learn-scope")
+    @Operation(summary = "学习范围可选的账号（成员）与渠道")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<List<Map<String, Object>>> learnScope() {
+        return success(agentSettingsService.learnScopeOptions());
+    }
+
+    @GetMapping("/agent-settings/learn-conversations")
+    @Operation(summary = "所选渠道最近 N 天有人工回复的会话")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
+    public CommonResult<List<Map<String, Object>>> learnConversations(@RequestParam(value = "wa", required = false) List<Long> wa,
+                                                                      @RequestParam(value = "mail", required = false) List<Long> mail,
+                                                                      @RequestParam(value = "days", defaultValue = "30") Integer days) {
+        return success(agentSettingsService.learnConversations(wa, mail, days));
+    }
+
     @PostMapping("/agent-settings/learn")
     @Operation(summary = "立即学习真人销售的对话，生成话术要点")
     @PreAuthorize("@ss.hasPermission('channel:ai:config')")

@@ -101,6 +101,8 @@ public final class ChannelAgentSettings {
         private boolean autoResearch = false;
         /** 预估报价：允许基于知识库回答价格与起订量；关闭时询价一律转人工 */
         private boolean quote = true;
+        /** 允许联网报价：企业资料里没有价格时，联网检索公开市场参考价（需在智能体里配置联网搜索） */
+        private boolean webQuote = false;
         /** 智能跟进：AI 发出的邮件客户迟迟未回复时，自动多轮跟进 */
         private boolean followUp = false;
         /** 每隔多少小时跟进一次 */
@@ -157,6 +159,13 @@ public final class ChannelAgentSettings {
         private List<String> goals = new ArrayList<>(List.of("needs", "style"));
         /** 只学习有客户回复的对话 */
         private boolean repliedOnly = true;
+        /** 学习范围：all 全部账号全部渠道（默认）、some 指定账号的指定渠道 */
+        private String scope = "all";
+        /** scope = some 时：选中的 WhatsApp / Facebook / Instagram / 官网IM 账号、邮箱账号 */
+        private List<Long> waAccountIds = new ArrayList<>();
+        private List<Long> mailAccountIds = new ArrayList<>();
+        /** scope = some 时可再指定会话（wa:会话编号、mail:邮件往来编号）；为空表示选中渠道下的全部会话 */
+        private List<String> conversations = new ArrayList<>();
         /** 最近一次学习时间、样本数 */
         private String lastLearnTime;
         private int lastSamples;

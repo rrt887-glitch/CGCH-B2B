@@ -1647,6 +1647,45 @@ jobs:
           assert pub('GET', f"/messages?k={K}&v=vtestvisitor01")['data'][0]['text'] == 'Hello, I need 500 pcs hair dryer', '访客看到的消息不带页面地址'
           assert sql(f"SELECT status FROM channel_wa_message WHERE id = {sent['id']}") == 'read'
           assert pub('GET', f"/messages?k={K}&v=vnobody00000")['data'] == []
+          # 学习真人销售：指定账号 · 指定渠道 · 指定会话
+          scope = call('GET', '/channel/ai/agent-settings/learn-scope')
+          me = next(m for m in scope if m['userId'] == 1)
+          assert any(c['type'] == 'wa' and c['id'] == site and c['platform'] == 'web' for c in me['channels']), me
+          lc = call('GET', f'/channel/ai/agent-settings/learn-conversations?wa={site}&days=30')
+          assert [c['key'] for c in lc] == [f"wa:{c1['id']}"] and lc[0]['channel'] == '官网IM', lc
+          base_learn = call('GET', '/channel/ai/agent-settings')['learn']
+          call('PUT', '/channel/ai/agent-settings', {'learn': dict(base_learn, scope='some', waAccountIds=[], mailAccountIds=[], conversations=[])})
+          assert call('POST', '/channel/ai/agent-settings/learn', ok=False)['code'] != 0, '指定范围但没选渠道时提示'
+          call('PUT', '/channel/ai/agent-settings', {'learn': dict(base_learn, scope='some', waAccountIds=[site], mailAccountIds=[], conversations=[f"wa:{c1['id']}"])})
+          ln = call('POST', '/channel/ai/agent-settings/learn')
+          assert ln['samples'] == 1, ln
+          learned = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))[-1]['messages'][-1]['content']
+          assert 'MOQ is 300 pcs' in learned and 'Hans' not in learned, '只学习指定的会话'
+          s5 = call('GET', '/channel/ai/agent-settings')['learn']
+          assert s5['scope'] == 'some' and s5['waAccountIds'] == [site] and s5['lastSamples'] == 1, s5
+          call('PUT', '/channel/ai/agent-settings', {'learn': dict(base_learn, scope='all')})
+          print('学习真人销售：按指定账号、渠道、会话选择学习样本')
+          # 允许联网报价：客户问价、企业资料没有价格时联网检索市场参考价
+          sk = call('GET', '/channel/ai/agent-settings')
+          assert sk['skills']['webQuote'] is False and sk['webSearch'] == {'baseUrl': '', 'hasKey': False}, sk['webSearch']
+          n_search = len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_search')))
+          ask = {'channel': 'whatsapp', 'messages': [{'role': 'user', 'content': 'What is the price of your hair dryer?'}]}
+          assert 'US$' not in call('POST', '/channel/ai/test-reply', ask)['content'], '未开启时不检索'
+          call('PUT', '/channel/ai/agent-settings', {'skills': dict(sk['skills'], webQuote=True), 'webSearch': {'baseUrl': 'http://127.0.0.1:18080', 'apiKey': 'search-key'}})
+          sk2 = call('GET', '/channel/ai/agent-settings')
+          assert sk2['skills']['webQuote'] is True and sk2['webSearch'] == {'baseUrl': 'http://127.0.0.1:18080', 'hasKey': True}, sk2['webSearch']
+          assert 'search-key' not in json.dumps(sk2), '不返回搜索密钥'
+          wq = call('POST', '/channel/ai/test-reply', ask)
+          assert 'US$ 6.20 - 9.80' in wq['content'] and 'formal quotation' in wq['content'], wq
+          searches = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_search'))
+          assert len(searches) == n_search + 1 and 'price' in searches[-1]['query'], searches[-1:]
+          call('POST', '/channel/ai/test-reply', {'channel': 'whatsapp', 'messages': [{'role': 'user', 'content': 'what is the MOQ?'}]})
+          assert len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_search'))) == n_search + 1, '不是问价时不检索'
+          call('POST', '/channel/ai/knowledge/save', {'type': 'faq', 'title': 'Hair dryer price', 'content': 'HD-200 hair dryer price: USD 8.5 per unit FOB.'})
+          call('POST', '/channel/ai/test-reply', ask)
+          assert len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_search'))) == n_search + 1, '企业资料有价格时不检索'
+          call('PUT', '/channel/ai/agent-settings', {'skills': dict(sk['skills'], webQuote=False)})
+          print('允许联网报价：只在问价且资料没有价格时检索，AI 给出市场参考价区间')
           call('PUT', '/channel/wa-account/update', dict(sa, enabled=False))
           assert pub('GET', '/config?k=' + K)['code'] != 0, '停用后聊天窗口不再显示'
           call('DELETE', f'/channel/wa-account/delete?id={site}')
