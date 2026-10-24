@@ -60,7 +60,7 @@ async function load() {
 watch(accountId, load);
 
 onMounted(async () => {
-  accounts.value = await getWaAccountList();
+  accounts.value = (await getWaAccountList()).filter((a) => !a.platform || a.platform === 'whatsapp');
   accountId.value = accounts.value[0]?.id;
 });
 </script>

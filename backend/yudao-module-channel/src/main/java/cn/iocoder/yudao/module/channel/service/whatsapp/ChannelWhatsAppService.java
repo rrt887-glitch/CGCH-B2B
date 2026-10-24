@@ -115,6 +115,10 @@ public class ChannelWhatsAppService {
 
     public void updateAccount(Long userId, ChannelWaAccountSaveReqVO req) {
         ChannelWaAccountDO old = validateAccount(userId, req.getId());
+        if (old.isWeb()) { // 官网 IM 在这里只能启用 / 停用；域名和名称在「官网IM」弹窗里改
+            accountMapper.updateById(new ChannelWaAccountDO().setId(old.getId()).setEnabled(req.getEnabled()));
+            return;
+        }
         ChannelWaAccountDO same = TenantUtils.executeIgnore(() -> accountMapper.selectByPhoneNumberId(req.getPhoneNumberId().trim()));
         if (same != null && !same.getId().equals(old.getId())) {
             throw exception(WA_ACCOUNT_EXISTS);
@@ -739,13 +743,13 @@ public class ChannelWhatsAppService {
         if (!template && StrUtil.isBlank(req.getText())) {
             throw exception(WA_CONTENT_EMPTY);
         }
-        if (!template && !windowOpen(conv)) {
+        if (!template && !a.isWeb() && !windowOpen(conv)) { // 官网 IM 没有 24 小时窗口，访客下次打开聊天窗口就能看到
             throw exception(WA_WINDOW_CLOSED);
         }
         channelSendPolicyService.checkWhatsApp(a.getId(), conv.getWaId(), ai); // 退订 / 黑名单、发送频率
         String wamid;
         try {
-            wamid = template
+            wamid = a.isWeb() ? "webout_" + cn.hutool.core.util.IdUtil.fastSimpleUUID() : template
                     ? WaGraphClient.sendTemplate(a, conv.getWaId(), req.getTemplateName(),
                             StrUtil.blankToDefault(req.getTemplateLanguage(), "en_US"), req.getTemplateParams())
                     : a.isWhatsApp() ? WaGraphClient.sendText(a, conv.getWaId(), req.getText())
@@ -805,11 +809,14 @@ public class ChannelWhatsAppService {
     public ChannelWaMessageRespVO sendMedia(Long userId, Long conversationId, MultipartFile file, String caption) throws Exception {
         ChannelWaConversationDO conv = validateConversation(userId, conversationId);
         ChannelWaAccountDO a = accountMapper.selectById(conv.getAccountId());
-        if (!windowOpen(conv)) {
+        if (!a.isWeb() && !windowOpen(conv)) {
             throw exception(WA_WINDOW_CLOSED);
         }
         if (file == null || file.isEmpty()) {
             throw exception(WA_CONTENT_EMPTY);
+        }
+        if (a.isWeb()) {
+            return sendWebMedia(userId, a, conv, file, caption);
         }
         if (!a.isWhatsApp()) {
             return sendMessagingMedia(userId, a, conv, file, caption);
@@ -878,6 +885,29 @@ public class ChannelWhatsAppService {
         if (StrUtil.isNotBlank(caption)) {
             send(userId, new ChannelWaSendReqVO().setConversationId(conv.getId()).setText(caption));
         }
+        return BeanUtils.toBean(msg, ChannelWaMessageRespVO.class);
+    }
+
+    /** 官网 IM：文件存到本系统，访客聊天窗口里显示下载链接 */
+    private ChannelWaMessageRespVO sendWebMedia(Long userId, ChannelWaAccountDO a, ChannelWaConversationDO conv,
+                                                MultipartFile file, String caption) throws Exception {
+        if (file.getSize() > MESSENGER_LIMIT) {
+            throw exception(WA_FILE_TOO_LARGE);
+        }
+        String mime = StrUtil.blankToDefault(file.getContentType(), "application/octet-stream");
+        byte[] bytes = file.getBytes();
+        String name = StrUtil.blankToDefault(file.getOriginalFilename(), "file" + extension(mime));
+        String url = fileHelper.save(bytes, name, "webim", file.getContentType());
+        LocalDateTime now = LocalDateTime.now();
+        ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
+                .accountId(a.getId()).conversationId(conv.getId()).direction(ChannelWaMessageDO.DIRECTION_OUT)
+                .waMessageId("webout_" + cn.hutool.core.util.IdUtil.fastSimpleUUID())
+                .type(mime.startsWith("image/") ? "image" : "document").textBody(StrUtil.emptyToNull(caption))
+                .mimeType(file.getContentType()).fileName(name).fileUrl(url).fileSize((long) bytes.length)
+                .status(ChannelWaMessageDO.STATUS_SENT).messageTime(now).build();
+        messageMapper.insert(msg);
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
+                .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
         return BeanUtils.toBean(msg, ChannelWaMessageRespVO.class);
     }
 
@@ -956,7 +986,7 @@ public class ChannelWhatsAppService {
             vo.setCustomerName(cu == null ? null : cu.getName());
             vo.setClueName(c.getClueId() == null ? null : clueNames.get(c.getClueId()));
             vo.setWindowOpen(windowOpen(c));
-            vo.setWindowExpireTime(c.getLastInboundTime() == null ? null : c.getLastInboundTime().plusHours(WINDOW_HOURS));
+            vo.setWindowExpireTime(c.getLastInboundTime() == null || c.isWeb() ? null : c.getLastInboundTime().plusHours(WINDOW_HOURS));
             return vo;
         }).toList();
     }
@@ -986,6 +1016,9 @@ public class ChannelWhatsAppService {
     // ==================== 工具 ====================
 
     private static boolean windowOpen(ChannelWaConversationDO c) {
+        if (c.isWeb()) {
+            return true; // 官网 IM 没有客服窗口限制
+        }
         return c.getLastInboundTime() != null
                 && c.getLastInboundTime().plusHours(WINDOW_HOURS).isAfter(LocalDateTime.now());
     }

@@ -71,6 +71,10 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      */
     private String intent;
 
+    public boolean isWeb() {
+        return ChannelWaAccountDO.PLATFORM_WEB.equals(platform);
+    }
+
     public boolean isWhatsApp() {
         return platform == null || ChannelWaAccountDO.PLATFORM_WHATSAPP.equals(platform);
     }
@@ -83,6 +87,9 @@ public class ChannelWaConversationDO extends TenantBaseDO {
         if (isWhatsApp()) {
             return "+" + waId;
         }
+        if (isWeb()) {
+            return "官网访客 " + (waId == null ? "" : waId.substring(Math.max(0, waId.length() - 4)).toUpperCase());
+        }
         return (ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(platform) ? "Instagram 用户 " : "Facebook 用户 ")
                 + (waId == null ? "" : waId.substring(Math.max(0, waId.length() - 4)));
     }
@@ -91,6 +98,9 @@ public class ChannelWaConversationDO extends TenantBaseDO {
     public String platformLabel() {
         if (isWhatsApp()) {
             return "WhatsApp";
+        }
+        if (isWeb()) {
+            return "官网IM";
         }
         return ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(platform) ? "Instagram" : "Facebook Messenger";
     }

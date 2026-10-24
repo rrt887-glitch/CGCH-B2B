@@ -24,8 +24,8 @@ import java.util.List;
 @AllArgsConstructor
 public class ChannelRoutingRuleDO extends TenantBaseDO {
 
-    /** 渠道：WhatsApp、Facebook 主页、Instagram、邮箱、留资邮箱（阿里国际站、中国制造网等平台询盘） */
-    public static final List<String> SOURCES = List.of("whatsapp", "messenger", "instagram", "mail", "platform");
+    /** 渠道：WhatsApp、Facebook 主页、Instagram、官网IM、邮箱、留资邮箱（阿里国际站、中国制造网等平台询盘） */
+    public static final List<String> SOURCES = List.of("whatsapp", "messenger", "instagram", "web", "mail", "platform");
 
     /**
      * 编号

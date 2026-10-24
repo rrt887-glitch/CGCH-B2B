@@ -3,7 +3,7 @@
  * 渠道账号：一张总表列出所有可接入的渠道（顺序与原网站一致），每个渠道下面列出已连接的账号。
  * 邮箱用「邮箱地址 + 授权码」绑定（高级配置里可改收发信服务器），Gmail / Outlook 配置了授权应用时走一键授权；
  * WhatsApp 走 Meta 官方共存模式扫码连接；Facebook 主页、Instagram 走 Facebook 登录授权；
- * 阿里国际站、中国制造网通过留资邮箱接入；TikTok、YouTube、官网 IM 暂未开放。
+ * 阿里国际站、中国制造网通过留资邮箱接入；官网 IM 绑定域名后把嵌入代码放到网站上；TikTok、YouTube 暂未开放。
  */
 import type { ChannelMailApi } from '#/api/channel/mail';
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
@@ -38,6 +38,7 @@ import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
 
 import LeadRules from './lead-rules.vue';
 import WaAccounts from './wa-accounts.vue';
+import WebImModal from './web-im-modal.vue';
 
 defineOptions({ name: 'CgchConfigChannels' });
 
@@ -61,7 +62,7 @@ const MAIL: Record<string, MailProvider> = {
   qq: { imap: ['imap.qq.com', 993, true], smtp: ['smtp.qq.com', 465, true], secret: '授权码', guide: '登录网页版 QQ 邮箱 → 设置 → 账号，开启 IMAP/SMTP 服务，按提示获取授权码。' },
 };
 
-type Kind = 'lead' | 'mail' | 'meta' | 'soon' | 'wa' | 'wa-official';
+type Kind = 'im' | 'lead' | 'mail' | 'meta' | 'soon' | 'wa' | 'wa-official';
 interface Channel {
   key: string;
   name: string;
@@ -87,7 +88,7 @@ const CHANNELS: Channel[] = [
   { key: '126', name: '126 邮箱', abbr: '126', color: '#1a7f37', kind: 'mail', provider: '126' },
   { key: 'outlook', name: 'Outlook邮箱', abbr: 'O', color: '#0f6cbd', kind: 'mail', provider: 'outlook', oauth: 'microsoft' },
   { key: 'wa-official', name: 'WhatsApp Business Official API', abbr: 'B', color: '#25d366', kind: 'wa-official' },
-  { key: 'im', name: '官网IM', abbr: 'Ai', color: '#1d4ed8', kind: 'soon' },
+  { key: 'im', name: '官网IM', abbr: 'Ai', color: '#1d4ed8', kind: 'im' },
   { key: 'alibaba', name: '阿里国际', abbr: '阿', color: '#ff6a00', kind: 'lead' },
   { key: 'mic', name: '中国制造网', abbr: 'M', color: '#c8102e', kind: 'lead' },
   { key: '263', name: '263邮箱', abbr: '263', color: '#c8102e', kind: 'mail', provider: '263' },
@@ -104,6 +105,9 @@ const waRef = ref<InstanceType<typeof WaAccounts>>();
 const waAccounts = ref<ChannelWaApi.Account[]>([]);
 const oauthProviders = ref<string[]>([]);
 const leadOpen = ref(false);
+const imOpen = ref(false);
+const imRef = ref<InstanceType<typeof WebImModal>>();
+const webSites = computed(() => waAccounts.value.filter((a) => a.platform === 'web'));
 const mailboxes = computed(() => mailAccounts.value.map((a) => a.email));
 
 async function loadMail() {
@@ -150,6 +154,8 @@ function accountsOf(c: Channel): AccountRow[] {
       return waAccounts.value.filter((a) => wa(a) && a.authType === 'oauth').map(waRow);
     case 'wa-official':
       return waAccounts.value.filter((a) => wa(a) && a.authType !== 'oauth').map(waRow);
+    case 'im':
+      return webSites.value.map((a) => ({ ...waRow(a), label: a.displayPhone || '', sub: a.name }));
     default:
       return [];
   }
@@ -175,6 +181,10 @@ function connect(c: Channel) {
       break;
     case 'lead':
       leadOpen.value = true;
+      break;
+    case 'im':
+      imOpen.value = true;
+      if (!webSites.value.length) imRef.value?.add();
       break;
   }
 }
@@ -320,6 +330,9 @@ function edit(c: Channel, r: AccountRow) {
   if (r.mail) {
     if (r.mail.authType === 'oauth2' && c.oauth) startOAuth(c.oauth);
     else openMail(c, r.mail);
+  } else if (r.wa?.platform === 'web') {
+    imOpen.value = true;
+    imRef.value?.edit(r.wa);
   } else if (r.wa) {
     waRef.value?.openForm(r.wa, (r.wa.platform as any) || 'whatsapp');
   }
@@ -392,7 +405,8 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
               </div>
               <div class="ch-col-op ch-ops">
                 <a v-if="r.mail" :class="{ 'opacity-50': busy === `sync-${r.id}` }" @click="syncNow(r.mail)">立即收信</a>
-                <a v-if="r.wa && r.wa.authType !== 'oauth'" @click="waRef?.showGuide(r.wa)">回调配置</a>
+                <a v-if="r.wa?.platform === 'web'" @click="imOpen = true">嵌入代码</a>
+                <a v-else-if="r.wa && r.wa.authType !== 'oauth'" @click="waRef?.showGuide(r.wa)">回调配置</a>
                 <a v-if="r.mail || (r.wa && r.wa.authType !== 'oauth')" @click="edit(c, r)">{{ r.mail?.authType === 'oauth2' ? '重新授权' : '修改' }}</a>
                 <a @click="toggle(r)">{{ (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停' : '停用') : '启用' }}</a>
                 <Popconfirm
@@ -410,6 +424,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 
     <WaAccounts ref="waRef" headless :meta-o-auth="oauthProviders.includes('meta')" @changed="onWaChanged" />
     <LeadRules v-model:open="leadOpen" :mailboxes="mailboxes" />
+    <WebImModal ref="imRef" v-model:open="imOpen" :sites="webSites" @changed="waRef?.load()" />
 
     <Modal v-model:open="mailOpen" :footer="null" :width="476" centered :closable="false">
       <div class="mb-5 flex items-center gap-3">

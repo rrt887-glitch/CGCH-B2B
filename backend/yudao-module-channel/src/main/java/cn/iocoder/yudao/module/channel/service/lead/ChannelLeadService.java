@@ -52,10 +52,15 @@ public class ChannelLeadService {
     /** Facebook 主页私信、Instagram 私信 */
     public static final int SOURCE_FACEBOOK = 15;
     public static final int SOURCE_INSTAGRAM = 16;
+    /** 官网 IM 在线聊天 */
+    public static final int SOURCE_WEB = 17;
 
     private static int sourceOf(ChannelWaConversationDO c) {
         if (c.isWhatsApp()) {
             return SOURCE_WHATSAPP;
+        }
+        if (c.isWeb()) {
+            return SOURCE_WEB;
         }
         return ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(c.getPlatform()) ? SOURCE_INSTAGRAM : SOURCE_FACEBOOK;
     }
@@ -68,6 +73,7 @@ public class ChannelLeadService {
             case SOURCE_WHATSAPP -> "WhatsApp";
             case SOURCE_FACEBOOK -> "Facebook";
             case SOURCE_INSTAGRAM -> "Instagram";
+            case SOURCE_WEB -> "官网IM";
             default -> "邮件";
         };
     }
@@ -196,6 +202,7 @@ public class ChannelLeadService {
             case SOURCE_WHATSAPP -> "whatsapp";
             case SOURCE_FACEBOOK -> "messenger";
             case SOURCE_INSTAGRAM -> "instagram";
+            case SOURCE_WEB -> "web";
             default -> "mail";
         };
         Long routed = channelRoutingService.pickOwner(key, clue.getCountryCode());

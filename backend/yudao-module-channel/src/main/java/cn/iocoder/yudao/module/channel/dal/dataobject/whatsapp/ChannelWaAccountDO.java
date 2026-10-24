@@ -27,6 +27,8 @@ public class ChannelWaAccountDO extends TenantBaseDO {
     public static final String PLATFORM_WHATSAPP = "whatsapp";
     public static final String PLATFORM_MESSENGER = "messenger";
     public static final String PLATFORM_INSTAGRAM = "instagram";
+    /** 官网 IM：网站上嵌入的在线聊天窗口。phoneNumberId 存站点密钥（嵌入代码里的 k），displayPhone 存绑定域名 */
+    public static final String PLATFORM_WEB = "web";
     /** 接入方式：手动填写令牌，或通过 Facebook 登录授权 */
     public static final String AUTH_MANUAL = "manual";
     public static final String AUTH_OAUTH = "oauth";
@@ -99,6 +101,10 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      * 最近一次收到 Webhook 的时间
      */
     private LocalDateTime lastWebhookTime;
+
+    public boolean isWeb() {
+        return PLATFORM_WEB.equals(platform);
+    }
 
     public boolean isWhatsApp() {
         return platform == null || PLATFORM_WHATSAPP.equals(platform);

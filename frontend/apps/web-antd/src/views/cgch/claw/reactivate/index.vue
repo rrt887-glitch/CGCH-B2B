@@ -107,7 +107,7 @@ async function openCreate() {
   createOpen.value = true;
   await searchCandidates();
   try {
-    const accounts = await getWaAccountList();
+    const accounts = (await getWaAccountList()).filter((a) => !a.platform || a.platform === 'whatsapp');
     templates.value = accounts[0]?.id ? (await getWaTemplates(accounts[0].id)).filter((t) => t.status === 'APPROVED') : [];
   } catch {
     templates.value = [];

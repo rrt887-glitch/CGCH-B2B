@@ -7,7 +7,7 @@ export namespace ChannelWaApi {
     id?: number;
     name?: string;
     /** whatsapp（默认）、messenger（Facebook 主页私信）、instagram */
-    platform?: 'instagram' | 'messenger' | 'whatsapp';
+    platform?: 'instagram' | 'messenger' | 'web' | 'whatsapp';
     /** manual 手动填写令牌、oauth Facebook 登录授权 */
     authType?: string;
     phoneNumberId: string;
@@ -27,7 +27,7 @@ export namespace ChannelWaApi {
 
   export interface Conversation {
     id: number;
-    platform?: 'instagram' | 'messenger' | 'whatsapp';
+    platform?: 'instagram' | 'messenger' | 'web' | 'whatsapp';
     accountId: number;
     waId: string;
     profileName?: string;

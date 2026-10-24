@@ -71,6 +71,7 @@ const PLATFORM_META: Record<string, { avatar: string; color: string; label: stri
   whatsapp: { label: 'WhatsApp', color: 'green', avatar: '!bg-green-600' },
   messenger: { label: 'Facebook', color: 'blue', avatar: '!bg-blue-600' },
   instagram: { label: 'Instagram', color: 'magenta', avatar: '!bg-pink-600' },
+  web: { label: '官网IM', color: 'geekblue', avatar: '!bg-indigo-600' },
 };
 const plat = (c?: { platform?: string }) => PLATFORM_META[c?.platform || 'whatsapp'] ?? PLATFORM_META.whatsapp!;
 const isWa = (c?: { platform?: string }) => !c?.platform || c.platform === 'whatsapp';
@@ -371,7 +372,9 @@ const MEDIA_LABEL: Record<string, string> = {
   sticker: '表情',
 };
 const initials = (c: ChannelWaApi.Conversation) => (c.profileName || c.waId).slice(0, 1).toUpperCase();
-const contact = (c: ChannelWaApi.Conversation) => c.profileName || (isWa(c) ? `+${c.waId}` : `${plat(c).label} 用户`);
+const contact = (c: ChannelWaApi.Conversation) =>
+  c.profileName ||
+  (isWa(c) ? `+${c.waId}` : c.platform === 'web' ? `官网访客 ${c.waId.slice(-4).toUpperCase()}` : `${plat(c).label} 用户`);
 const hm = (t?: string) => t?.slice(11, 16) ?? '';
 const md = (t?: string) => t?.slice(5, 10) ?? '';
 </script>
