@@ -43,6 +43,9 @@ import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.LEAD_RULE
 @Slf4j
 public class ChannelPlatformLeadService {
 
+    @jakarta.annotation.Resource
+    private cn.iocoder.yudao.module.channel.service.routing.ChannelRoutingService channelRoutingService;
+
     public static final int SOURCE_ALIBABA = 12;
     public static final int SOURCE_MADE_IN_CHINA = 13;
     public static final int SOURCE_WEBSITE_FORM = 14;
@@ -284,6 +287,10 @@ public class ChannelPlatformLeadService {
                 remark.append("\n（平台未提供买家联系方式，请在平台后台回复）");
             }
             Long owner = account == null ? null : account.getUserId();
+            Long routed = channelRoutingService.pickOwner("platform", lead.countryCode());
+            if (routed != null) {
+                owner = routed; // 命中「消息分流设置」的规则
+            }
             CrmClueDO clue = CrmClueDO.builder()
                     .name(StrUtil.maxLength(StrUtil.blankToDefault(pick(lead.name(), lead.company()), rule.getName() + "询盘"), 100))
                     .companyName(lead.company()).countryCode(lead.countryCode()).email(lead.email()).whatsapp(lead.phone())

@@ -43,6 +43,9 @@ import java.util.regex.Pattern;
 @Slf4j
 public class ChannelLeadService {
 
+    @jakarta.annotation.Resource
+    private cn.iocoder.yudao.module.channel.service.routing.ChannelRoutingService channelRoutingService;
+
     /** crm_customer_source 字典：邮件咨询 10，WhatsApp 11（在 03-channel-seed.sql 中补充） */
     public static final int SOURCE_MAIL = 10;
     public static final int SOURCE_WHATSAPP = 11;
@@ -189,6 +192,16 @@ public class ChannelLeadService {
     // ==================== 内部 ====================
 
     private void createClue(CrmClueDO clue) {
+        String key = clue.getSource() == null ? "mail" : switch (clue.getSource()) {
+            case SOURCE_WHATSAPP -> "whatsapp";
+            case SOURCE_FACEBOOK -> "messenger";
+            case SOURCE_INSTAGRAM -> "instagram";
+            default -> "mail";
+        };
+        Long routed = channelRoutingService.pickOwner(key, clue.getCountryCode());
+        if (routed != null) {
+            clue.setOwnerUserId(routed); // 命中「消息分流设置」的规则
+        }
         clue.setFollowUpStatus(false);
         clue.setTransformStatus(false);
         clue.setAiHosted(true); // 新询盘默认由 AI 接待

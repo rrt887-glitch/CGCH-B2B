@@ -1581,6 +1581,27 @@ jobs:
           tr2 = call('POST', '/channel/translate', {'texts': ['你好'], 'sample': 'Hola amigo'})
           assert tr2 == ['[XX] 你好'], tr2
           print('邮件模板、通知规则、翻译')
+          # 消息分流：第一条命中的启用规则；多位负责人轮流分配；国家条件；停用的规则不生效
+          assert call('POST', '/channel/routing-rule/save', {'name': 'x', 'sources': 'whatsapp', 'assigneeIds': []}, ok=False)['code'] != 0
+          assert call('POST', '/channel/routing-rule/save', {'name': 'x', 'countryOp': 'in', 'countries': '', 'assigneeIds': [1]}, ok=False)['code'] != 0
+          call('PUT', '/channel/ai/config/save', dict(cfg, llmApiKey='', waMode='off', leadAutoCreate=True))
+          r0 = call('POST', '/channel/routing-rule/save', {'name': '停用的', 'enabled': False, 'sort': 0, 'sources': 'whatsapp', 'assigneeIds': [1]})
+          r1 = call('POST', '/channel/routing-rule/save', {'name': '西班牙', 'sort': 1, 'sources': 'whatsapp,mail', 'countryOp': 'in', 'countries': 'es', 'assigneeIds': [uid, 1]})
+          r2 = call('POST', '/channel/routing-rule/save', {'name': '其他', 'sort': 2, 'sources': 'mail', 'countryOp': 'not_in', 'countries': 'ES', 'assigneeIds': [uid]})
+          rl = call('GET', '/channel/routing-rule/list')
+          assert [r['id'] for r in rl] == [r0, r1, r2] and rl[1]['countries'] == 'ES' and rl[1]['assigneeIds'] == [uid, 1], rl
+          push('34600000771', 'Hola, precio por favor')
+          assert wait(lambda: clues('Buyer 771'), '分流询盘 1')[0]['ownerUserId'] == uid, '命中西班牙规则，轮到第一位'
+          push('34600000772', 'Hola, catálogo?')
+          assert wait(lambda: clues('Buyer 772'), '分流询盘 2')[0]['ownerUserId'] == 1, '轮流分配给第二位'
+          push('44790000773', 'Hi, price?')
+          assert wait(lambda: clues('Buyer 773'), '分流询盘 3')[0]['ownerUserId'] == 1, '不命中任何启用规则时，沿用渠道账号所属成员'
+          call('PUT', f'/channel/routing-rule/enabled?id={r1}&enabled=false')
+          assert [r['enabled'] for r in call('GET', '/channel/routing-rule/list')] == [False, False, True]
+          for r in (r0, r1, r2):
+              call('DELETE', f'/channel/routing-rule/delete?id={r}')
+          call('PUT', '/channel/ai/config/save', dict(cfg, llmApiKey=''))
+          print('消息分流：按渠道与客户国家命中规则，多位负责人轮流分配，停用与未命中时沿用默认')
           PY
 
       - name: 后端日志
