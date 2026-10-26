@@ -151,9 +151,9 @@ function accountsOf(c: Channel): AccountRow[] {
     case 'meta':
       return waAccounts.value.filter((a) => a.platform === c.platform).map(waRow);
     case 'wa':
-      return waAccounts.value.filter((a) => wa(a) && a.authType === 'oauth').map(waRow);
+      return waAccounts.value.filter((a) => wa(a) && (a.authType === 'oauth' || a.authType === 'ycloud')).map(waRow);
     case 'wa-official':
-      return waAccounts.value.filter((a) => wa(a) && a.authType !== 'oauth').map(waRow);
+      return waAccounts.value.filter((a) => wa(a) && a.authType !== 'oauth' && a.authType !== 'ycloud').map(waRow);
     case 'im':
       return webSites.value.map((a) => ({ ...waRow(a), label: a.displayPhone || '', sub: a.name }));
     default:
@@ -406,8 +406,8 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
               <div class="ch-col-op ch-ops">
                 <a v-if="r.mail" :class="{ 'opacity-50': busy === `sync-${r.id}` }" @click="syncNow(r.mail)">立即收信</a>
                 <a v-if="r.wa?.platform === 'web'" @click="imOpen = true">嵌入代码</a>
-                <a v-else-if="r.wa && r.wa.authType !== 'oauth'" @click="waRef?.showGuide(r.wa)">回调配置</a>
-                <a v-if="r.mail || (r.wa && r.wa.authType !== 'oauth')" @click="edit(c, r)">{{ r.mail?.authType === 'oauth2' ? '重新授权' : '修改' }}</a>
+                <a v-else-if="r.wa && r.wa.authType !== 'oauth' && r.wa.authType !== 'ycloud'" @click="waRef?.showGuide(r.wa)">回调配置</a>
+                <a v-if="r.mail || (r.wa && r.wa.authType !== 'oauth' && r.wa.authType !== 'ycloud')" @click="edit(c, r)">{{ r.mail?.authType === 'oauth2' ? '重新授权' : '修改' }}</a>
                 <a @click="toggle(r)">{{ (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停' : '停用') : '启用' }}</a>
                 <Popconfirm
                   :title="r.mail ? '解绑后已同步的邮件也会删除，确定吗？' : '解绑后会话与消息记录也会删除，确定吗？'"

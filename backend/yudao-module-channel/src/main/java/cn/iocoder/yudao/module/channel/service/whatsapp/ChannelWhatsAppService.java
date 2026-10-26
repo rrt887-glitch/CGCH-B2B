@@ -72,6 +72,10 @@ public class ChannelWhatsAppService {
     @Resource
     private cn.iocoder.yudao.module.channel.framework.oauth.ChannelOAuthProperties channelOAuthProperties;
 
+    private cn.iocoder.yudao.module.channel.framework.oauth.ChannelOAuthProperties.Ycloud ycloud() {
+        return channelOAuthProperties.getYcloud();
+    }
+
     private static final Set<String> PLATFORMS = Set.of(ChannelWaAccountDO.PLATFORM_WHATSAPP,
             ChannelWaAccountDO.PLATFORM_MESSENGER, ChannelWaAccountDO.PLATFORM_INSTAGRAM);
 
@@ -115,7 +119,7 @@ public class ChannelWhatsAppService {
 
     public void updateAccount(Long userId, ChannelWaAccountSaveReqVO req) {
         ChannelWaAccountDO old = validateAccount(userId, req.getId());
-        if (old.isWeb()) { // 官网 IM 在这里只能启用 / 停用；域名和名称在「官网IM」弹窗里改
+        if (old.isWeb() || old.isYcloud()) { // 官网 IM、YCloud 接入的号码在这里只能启用 / 停用
             accountMapper.updateById(new ChannelWaAccountDO().setId(old.getId()).setEnabled(req.getEnabled()));
             return;
         }
@@ -212,6 +216,9 @@ public class ChannelWhatsAppService {
             throw exception(META_TEMPLATE_UNSUPPORTED, platformLabel(a));
         }
         try {
+            if (a.isYcloud()) {
+                return cn.iocoder.yudao.module.channel.service.ycloud.YcloudClient.listTemplates(ycloud(), a.getWabaId());
+            }
             return WaGraphClient.listTemplates(a);
         } catch (WaGraphClient.WaApiException e) {
             throw exception(WA_API_FAIL, e.getMessage());
@@ -707,6 +714,39 @@ public class ChannelWhatsAppService {
         messageMapper.updateById(upd);
     }
 
+    // ==================== YCloud 推送（已转换成 Meta 消息结构） ====================
+
+    /** 客户发来的消息 */
+    public void ycloudInbound(ChannelWaAccountDO a, JsonNode metaMessage, String profileName) {
+        saveInbound(a, metaMessage, profileName);
+        accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setLastWebhookTime(LocalDateTime.now()));
+    }
+
+    /** 共存模式下手机 WhatsApp Business App 发出的消息 */
+    public void ycloudEcho(ChannelWaAccountDO a, JsonNode metaMessage, String customer) {
+        saveSynced(a, metaMessage, customer, true, null);
+    }
+
+    /** 发出消息的状态；YCloud 同时给出 wamid 和自己的消息编号，发送时记录的是其中之一 */
+    public void ycloudStatus(ChannelWaAccountDO a, String wamid, String ycloudId, String status, String error) {
+        for (String id : new String[]{wamid, ycloudId}) {
+            if (StrUtil.isBlank(id) || messageMapper.selectByWaMessageId(a.getId(), id) == null) {
+                continue;
+            }
+            com.fasterxml.jackson.databind.node.ObjectNode s = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+                    .put("id", id).put("status", status);
+            if (StrUtil.isNotBlank(error)) {
+                s.putArray("errors").addObject().put("title", error);
+            }
+            applyStatus(a, s);
+            return;
+        }
+    }
+
+    public ChannelWaAccountMapper accountMapperInternal() {
+        return accountMapper;
+    }
+
     // ==================== 发送 ====================
 
     public ChannelWaMessageRespVO send(Long userId, ChannelWaSendReqVO req) {
@@ -749,7 +789,12 @@ public class ChannelWhatsAppService {
         channelSendPolicyService.checkWhatsApp(a.getId(), conv.getWaId(), ai); // 退订 / 黑名单、发送频率
         String wamid;
         try {
-            wamid = a.isWeb() ? "webout_" + cn.hutool.core.util.IdUtil.fastSimpleUUID() : template
+            wamid = a.isWeb() ? "webout_" + cn.hutool.core.util.IdUtil.fastSimpleUUID()
+                    : a.isYcloud() ? (template
+                    ? cn.iocoder.yudao.module.channel.service.ycloud.YcloudClient.sendTemplate(ycloud(), a.getDisplayPhone(), conv.getWaId(),
+                            req.getTemplateName(), StrUtil.blankToDefault(req.getTemplateLanguage(), "en_US"), req.getTemplateParams())
+                    : cn.iocoder.yudao.module.channel.service.ycloud.YcloudClient.sendText(ycloud(), a.getDisplayPhone(), conv.getWaId(), req.getText()))
+                    : template
                     ? WaGraphClient.sendTemplate(a, conv.getWaId(), req.getTemplateName(),
                             StrUtil.blankToDefault(req.getTemplateLanguage(), "en_US"), req.getTemplateParams())
                     : a.isWhatsApp() ? WaGraphClient.sendText(a, conv.getWaId(), req.getText())
@@ -789,9 +834,11 @@ public class ChannelWhatsAppService {
             }
             try {
                 // Messenger / Instagram 推送里直接带文件地址；WhatsApp 需要先按媒体编号查地址
-                WaGraphClient.MediaInfo info = m.getMediaId().startsWith("http")
+                WaGraphClient.MediaInfo info = m.getMediaId().startsWith("http") // YCloud 推送里也直接带下载地址
                         ? new WaGraphClient.MediaInfo(m.getMediaId(), null) : WaGraphClient.getMedia(a, m.getMediaId());
-                byte[] bytes = WaGraphClient.download(a, info.url(), ChannelFileHelper.MAX_BYTES);
+                byte[] bytes = a.isYcloud()
+                        ? cn.iocoder.yudao.module.channel.service.ycloud.YcloudClient.download(ycloud(), info.url(), ChannelFileHelper.MAX_BYTES)
+                        : WaGraphClient.download(a, info.url(), ChannelFileHelper.MAX_BYTES);
                 String mime = StrUtil.blankToDefault(StrUtil.blankToDefault(m.getMimeType(), info.mimeType()), guessMime(m.getType()));
                 String name = StrUtil.blankToDefault(m.getFileName(), m.getType() + "-" + m.getId() + extension(mime));
                 String url = fileHelper.save(bytes, name, "whatsapp", mime);
@@ -835,8 +882,14 @@ public class ChannelWhatsAppService {
         String url = fileHelper.save(bytes, name, "whatsapp", file.getContentType());
         String wamid;
         try {
-            String mediaId = WaGraphClient.upload(a, bytes, name, mime);
-            wamid = WaGraphClient.sendMedia(a, conv.getWaId(), kind, mediaId, caption, name);
+            if (a.isYcloud()) {
+                String mediaId = cn.iocoder.yudao.module.channel.service.ycloud.YcloudClient.upload(ycloud(), a.getDisplayPhone(), bytes, name, mime);
+                wamid = cn.iocoder.yudao.module.channel.service.ycloud.YcloudClient.sendMedia(ycloud(), a.getDisplayPhone(), conv.getWaId(),
+                        kind, mediaId, caption, name);
+            } else {
+                String mediaId = WaGraphClient.upload(a, bytes, name, mime);
+                wamid = WaGraphClient.sendMedia(a, conv.getWaId(), kind, mediaId, caption, name);
+            }
         } catch (WaGraphClient.WaApiException e) {
             throw exception(WA_API_FAIL, e.getMessage());
         }
