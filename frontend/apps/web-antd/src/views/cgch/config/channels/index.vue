@@ -190,7 +190,7 @@ function connect(c: Channel) {
       waRef.value?.connectOfficial();
       break;
     case 'meta':
-      waRef.value?.connect(c.platform!);
+      waRef.value?.connect(c.platform as 'instagram' | 'messenger');
       break;
     case 'lead':
       leadOpen.value = true;
