@@ -54,6 +54,9 @@ public class ChannelLeadService {
     public static final int SOURCE_INSTAGRAM = 16;
     /** 官网 IM 在线聊天 */
     public static final int SOURCE_WEB = 17;
+    /** YouTube、TikTok 视频评论 */
+    public static final int SOURCE_YOUTUBE = 18;
+    public static final int SOURCE_TIKTOK = 19;
 
     private static int sourceOf(ChannelWaConversationDO c) {
         if (c.isWhatsApp()) {
@@ -61,6 +64,12 @@ public class ChannelLeadService {
         }
         if (c.isWeb()) {
             return SOURCE_WEB;
+        }
+        if ("youtube".equals(c.getPlatform())) {
+            return SOURCE_YOUTUBE;
+        }
+        if ("tiktok".equals(c.getPlatform())) {
+            return SOURCE_TIKTOK;
         }
         return ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(c.getPlatform()) ? SOURCE_INSTAGRAM : SOURCE_FACEBOOK;
     }
@@ -74,6 +83,8 @@ public class ChannelLeadService {
             case SOURCE_FACEBOOK -> "Facebook";
             case SOURCE_INSTAGRAM -> "Instagram";
             case SOURCE_WEB -> "官网IM";
+            case SOURCE_YOUTUBE -> "YouTube";
+            case SOURCE_TIKTOK -> "TikTok";
             default -> "邮件";
         };
     }
@@ -203,6 +214,8 @@ public class ChannelLeadService {
             case SOURCE_FACEBOOK -> "messenger";
             case SOURCE_INSTAGRAM -> "instagram";
             case SOURCE_WEB -> "web";
+            case SOURCE_YOUTUBE -> "youtube";
+            case SOURCE_TIKTOK -> "tiktok";
             default -> "mail";
         };
         Long routed = channelRoutingService.pickOwner(key, clue.getCountryCode());

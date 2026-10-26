@@ -110,7 +110,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.wa-config-id=cfg123 --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 --cgch.oauth.ycloud.api-base=http://127.0.0.1:18080/ycloud/v2 --cgch.oauth.ycloud.api-key=yc-key --cgch.oauth.ycloud.webhook-secret=yc-secret --cgch.site.company-name=测试科技有限公司 '--cgch.site.company-name-en=CGCH Test Co., Ltd.' --cgch.site.contact-email=privacy@cgch.test > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.wa-config-id=cfg123 --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 --cgch.oauth.ycloud.api-base=http://127.0.0.1:18080/ycloud/v2 --cgch.social.poll-ms=86400000 --cgch.oauth.youtube.client-id=ytid --cgch.oauth.youtube.client-secret=ytsec --cgch.oauth.youtube.auth-url=http://127.0.0.1:18080/yt/auth --cgch.oauth.youtube.token-url=http://127.0.0.1:18080/yt/token --cgch.oauth.youtube.api-base=http://127.0.0.1:18080/yt/v3 --cgch.oauth.tiktok.client-id=ttid --cgch.oauth.tiktok.client-secret=ttsec --cgch.oauth.tiktok.auth-url=http://127.0.0.1:18080/tt/auth?client_key=ttid --cgch.oauth.tiktok.api-base=http://127.0.0.1:18080/tt/v1.3 --cgch.oauth.ycloud.api-key=yc-key --cgch.oauth.ycloud.webhook-secret=yc-secret --cgch.site.company-name=测试科技有限公司 '--cgch.site.company-name-en=CGCH Test Co., Ltd.' --cgch.site.contact-email=privacy@cgch.test > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -1750,6 +1750,63 @@ jobs:
           call('DELETE', f"/channel/wa-account/delete?id={yr['id']}")
           call('PUT', '/channel/ai/config/save', dict(cfg_y, llmApiKey=''))
           print('WhatsApp 经 YCloud：扫码绑定、收发消息、发送状态、手机端回显、媒体下载、模板、停用')
+          # ---- YouTube / TikTok 视频评论：授权绑定 → 拉取评论进会话（首次只导入历史）→ 回复评论 ----
+          def mock_post(path, body):
+              urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18080' + path, data=json.dumps(body).encode(), method='POST',
+                                                            headers={'Content-Type': 'application/json'}))
+          def oauth_state(u):
+              return urllib.parse.parse_qs(urllib.parse.urlparse(u).query)['state'][0]
+          assert call('GET', '/channel/social/platforms') == ['youtube', 'tiktok']
+          call('PUT', '/channel/ai/config/save', dict(cfg_y, llmApiKey='', waMode='off'))
+          yu = call('GET', '/channel/social/youtube/authorize-url')
+          assert yu.startswith('http://127.0.0.1:18080/yt/auth?client_id=ytid') and 'youtube.force-ssl' in urllib.parse.unquote(yu) and 'access_type=offline' in yu, yu
+          page = urllib.request.urlopen(BASE + f'/channel/social/youtube/callback?code=bad&state={oauth_state(yu)}').read().decode()
+          assert '授权失败' in page, page
+          yu = call('GET', '/channel/social/youtube/authorize-url')
+          page = urllib.request.urlopen(BASE + f'/channel/social/youtube/callback?code=yt-code&state={oauth_state(yu)}').read().decode()
+          assert 'YouTube 授权成功' in page and 'CGCH Channel' in page, page
+          yt = next(a for a in call('GET', '/channel/wa-account/list') if a.get('platform') == 'youtube')
+          assert yt['displayPhone'] == 'CGCH Channel' and yt['phoneNumberId'] == 'UCCGCH' and yt['enabled'], yt
+          def yth(tid, author, text):
+              return {'id': tid, 'snippet': {'videoId': 'vid1', 'topLevelComment': {'id': tid, 'snippet': {
+                  'authorChannelId': {'value': 'UC' + author}, 'authorDisplayName': author, 'textOriginal': text,
+                  'publishedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}}}}
+          mock_post('/_yt/add', yth('th0', 'OldFan', 'Nice video'))
+          assert call('POST', f"/channel/social/poll?id={yt['id']}") == 0, '首次只导入历史评论'
+          mock_post('/_yt/add', yth('th1', 'BuyerBob', 'Do you sell wholesale? I need 500 units'))
+          assert call('POST', f"/channel/social/poll?id={yt['id']}") == 1
+          assert call('POST', f"/channel/social/poll?id={yt['id']}") == 0, '已入库的评论不重复'
+          convs = {c['waId']: c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=100')['list'] if c['platform'] == 'youtube'}
+          assert set(convs) == {'th0', 'th1'} and convs['th1']['profileName'] == 'BuyerBob' and convs['th0']['unreadCount'] == 0, convs
+          tm = call('GET', f"/channel/wa/message/list?conversationId={convs['th1']['id']}")
+          assert tm[0]['direction'] == 1 and tm[0]['textBody'] == '（评论视频《Hair dryer demo》）Do you sell wholesale? I need 500 units', tm
+          call('POST', '/channel/wa/message/send', {'conversationId': convs['th1']['id'], 'text': 'Yes! Please email sales@cgch.test'})
+          assert json.load(urllib.request.urlopen('http://127.0.0.1:18080/_social'))['yt'][-1] == {'parentId': 'th1', 'textOriginal': 'Yes! Please email sales@cgch.test'}
+          assert call('POST', f"/channel/social/poll?id={yt['id']}") == 0
+          assert len(call('GET', f"/channel/wa/message/list?conversationId={convs['th1']['id']}")) == 2, '自己的回复不重复入库'
+          tu = call('GET', '/channel/social/tiktok/authorize-url?hint=@cgch_shop')
+          assert tu.startswith('http://127.0.0.1:18080/tt/auth?client_key=ttid&state=') and tu.endswith('&disable_auto_auth=1'), tu
+          page = urllib.request.urlopen(BASE + f'/channel/social/tiktok/callback/?auth_code=tt-code&state={oauth_state(tu)}').read().decode()
+          assert 'TikTok 授权成功' in page and '@cgch_shop' in page, page
+          tt = next(a for a in call('GET', '/channel/wa-account/list') if a.get('platform') == 'tiktok')
+          assert tt['displayPhone'] == '@cgch_shop' and tt['phoneNumberId'] == 'OPEN1', tt
+          def ttc(cid, author, text):
+              return {'comment_id': cid, 'video_id': 'TV1', 'text': text, 'display_name': author, 'username': author.lower(),
+                      'unique_identifier': 'U' + cid, 'owner': False, 'create_time': str(int(time.time()))}
+          mock_post('/_tt/add', ttc('TC1', 'Old', 'cool'))
+          assert call('POST', f"/channel/social/poll?id={tt['id']}") == 0
+          mock_post('/_tt/add', ttc('TC2', 'Tina', 'How much for 200 pcs?'))
+          assert call('POST', f"/channel/social/poll?id={tt['id']}") == 1
+          tc = next(c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=100')['list'] if c['waId'] == 'TV1:TC2')
+          assert tc['platform'] == 'tiktok' and tc['profileName'] == 'Tina' and tc['windowOpen'], tc
+          call('POST', '/channel/wa/message/send', {'conversationId': tc['id'], 'text': 'Hi Tina, around $8 per piece.'})
+          assert json.load(urllib.request.urlopen('http://127.0.0.1:18080/_social'))['tt'][-1] == {
+              'business_id': 'OPEN1', 'video_id': 'TV1', 'comment_id': 'TC2', 'text': 'Hi Tina, around $8 per piece.'}
+          assert call('POST', f"/channel/social/poll?id={tt['id']}") == 0
+          for a in (yt, tt):
+              call('DELETE', f"/channel/wa-account/delete?id={a['id']}")
+          call('PUT', '/channel/ai/config/save', dict(cfg_y, llmApiKey=''))
+          print('YouTube / TikTok 评论：授权绑定、首次导入历史、新评论进会话、回复评论、不重复入库')
           call('PUT', '/channel/wa-account/update', dict(sa, enabled=False))
           assert pub('GET', '/config?k=' + K)['code'] != 0, '停用后聊天窗口不再显示'
           call('DELETE', f'/channel/wa-account/delete?id={site}')

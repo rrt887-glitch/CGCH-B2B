@@ -21,6 +21,48 @@ public class ChannelOAuthProperties {
     private Provider microsoft = Provider.microsoft();
     private Meta meta = new Meta();
     private Ycloud ycloud = new Ycloud();
+    private Social youtube = Social.youtube();
+    private Social tiktok = Social.tiktok();
+
+    /**
+     * 评论渠道：YouTube（Google Cloud 项目启用 YouTube Data API v3，回调 {redirectBase}/admin-api/channel/social/youtube/callback）、
+     * TikTok（TikTok API for Business 开发者应用，开通 TikTok Accounts 权限，回调 {redirectBase}/admin-api/channel/social/tiktok/callback/）。
+     * 系统定时拉取视频下的评论进「会话」，AI 或业务员回复评论。
+     */
+    @Data
+    public static class Social {
+        private String clientId = "";
+        private String clientSecret = "";
+        /** 授权地址；TikTok 填开发者后台 App Detail 里的「TikTok account holder authorization URL」 */
+        private String authUrl = "";
+        private String tokenUrl = "";
+        private String apiBase = "";
+        private String scope = "";
+        /** 回调路径（TikTok 要求以 / 结尾） */
+        private String callbackPath = "";
+
+        public boolean configured() {
+            return clientId != null && !clientId.isBlank() && clientSecret != null && !clientSecret.isBlank()
+                    && authUrl != null && !authUrl.isBlank();
+        }
+
+        static Social youtube() {
+            Social s = new Social();
+            s.authUrl = "https://accounts.google.com/o/oauth2/v2/auth";
+            s.tokenUrl = "https://oauth2.googleapis.com/token";
+            s.apiBase = "https://www.googleapis.com/youtube/v3";
+            s.scope = "https://www.googleapis.com/auth/youtube.force-ssl";
+            s.callbackPath = "/admin-api/channel/social/youtube/callback";
+            return s;
+        }
+
+        static Social tiktok() {
+            Social s = new Social();
+            s.apiBase = "https://business-api.tiktok.com/open_api/v1.3";
+            s.callbackPath = "/admin-api/channel/social/tiktok/callback/";
+            return s;
+        }
+    }
 
     /**
      * YCloud（Meta 官方 WhatsApp 服务商）：客户通过 YCloud 的托管页面扫码绑定 WhatsApp（Partner Direct Link），

@@ -401,3 +401,10 @@ cgch:
       api-base: ${CGCH_YCLOUD_API_BASE:https://api.ycloud.com/v2}
       api-key: ${CGCH_YCLOUD_API_KEY:}
       webhook-secret: ${CGCH_YCLOUD_WEBHOOK_SECRET:}
+    youtube: # YouTube 评论（Google Cloud 项目启用 YouTube Data API v3 的 OAuth 客户端）
+      client-id: ${CGCH_YOUTUBE_CLIENT_ID:}
+      client-secret: ${CGCH_YOUTUBE_CLIENT_SECRET:}
+    tiktok: # TikTok 评论（TikTok API for Business 开发者应用，需 TikTok Accounts 权限）
+      client-id: ${CGCH_TIKTOK_APP_ID:}
+      client-secret: ${CGCH_TIKTOK_APP_SECRET:}
+      auth-url: ${CGCH_TIKTOK_AUTH_URL:} # 开发者后台的 TikTok account holder authorization URL

@@ -21,6 +21,8 @@ export const ROUTING_SOURCES = [
   { value: 'messenger', label: 'Facebook 主页' },
   { value: 'instagram', label: 'Instagram' },
   { value: 'web', label: '官网IM' },
+  { value: 'youtube', label: 'YouTube 评论' },
+  { value: 'tiktok', label: 'TikTok 评论' },
   { value: 'mail', label: '邮箱' },
   { value: 'platform', label: '留资邮箱（B2B 平台询盘）' },
 ];

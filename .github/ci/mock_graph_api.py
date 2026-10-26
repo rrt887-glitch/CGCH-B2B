@@ -15,6 +15,7 @@
 - POST /{ver}/me/messages                  Messenger / Instagram 发消息（JSON 或带附件的 multipart）
 - GET  /_fbsent、/_subs                     查看 Messenger 发送记录与主页订阅
 - /ycloud/v2/...                            模拟 YCloud（绑定链接、号码、发消息、上传 / 下载媒体、模板），GET /_ycsent 查看
+- /yt/...、/tt/...                         模拟 YouTube Data API 与 TikTok Accounts API；POST /_yt/add、/_tt/add 加评论，GET /_social 看回复
 - POST /search                             模拟联网搜索（Tavily 兼容），GET /_search 查看搜索记录
 """
 import base64
@@ -30,6 +31,10 @@ UPLOADS = []
 LLM = []
 SEARCH = []
 YC_SENT = []
+YT_THREADS = []
+YT_REPLIES = []
+TT_COMMENTS = []
+TT_REPLIES = []
 YC_LINKS = []
 SITE_HITS = []
 OAUTH = []
@@ -140,10 +145,78 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._json(404, {'error': {'message': 'Unknown YCloud path ' + p}})
 
+    def _social(self, method, path, raw):
+        """模拟 YouTube Data API v3（/yt）与 TikTok API for Business（/tt）"""
+        from urllib.parse import parse_qs, urlparse
+        q = parse_qs(urlparse(self.path).query)
+        p = '/'.join(path)
+        if p == 'yt/token':
+            form = parse_qs(raw.decode())
+            if form.get('grant_type') == ['authorization_code'] and form.get('code') != ['yt-code']:
+                return self._json(400, {'error': 'invalid_grant', 'error_description': 'Bad code'})
+            return self._json(200, {'access_token': 'yt-access', 'refresh_token': 'yt-refresh', 'expires_in': 3600})
+        if p.startswith('yt/v3/'):
+            if self.headers.get('Authorization') != 'Bearer yt-access':
+                return self._json(401, {'error': {'message': 'Invalid Credentials'}})
+            r = p[len('yt/v3/'):]
+            if r == 'channels':
+                return self._json(200, {'items': [{'id': 'UCCGCH', 'snippet': {'title': 'CGCH Channel'}}]})
+            if r == 'commentThreads':
+                return self._json(200, {'items': YT_THREADS})
+            if r == 'videos':
+                return self._json(200, {'items': [{'id': 'vid1', 'snippet': {'title': 'Hair dryer demo'}}]})
+            if r == 'comments' and method == 'POST':
+                b = json.loads(raw or b'{}')['snippet']
+                YT_REPLIES.append(b)
+                rid = f'ytr{len(YT_REPLIES)}'
+                for t in YT_THREADS:
+                    if t['id'] == b['parentId']:
+                        t.setdefault('replies', {'comments': []})['comments'].append({'id': rid, 'snippet': {
+                            'authorChannelId': {'value': 'UCCGCH'}, 'authorDisplayName': 'CGCH Channel',
+                            'textOriginal': b['textOriginal'], 'publishedAt': '2026-10-26T10:00:00Z'}})
+                return self._json(200, {'id': rid})
+        if p in ('tt/v1.3/tt_user/oauth2/token', 'tt/v1.3/tt_user/oauth2/refresh_token'):
+            b = json.loads(raw or b'{}')
+            if p.endswith('/token') and b.get('auth_code') != 'tt-code':
+                return self._json(200, {'code': 40001, 'message': 'auth_code invalid'})
+            return self._json(200, {'code': 0, 'message': 'OK', 'data': {'access_token': 'tt-access', 'refresh_token': 'tt-refresh',
+                                                                       'expires_in': 86400, 'open_id': 'OPEN1'}})
+        if p.startswith('tt/v1.3/'):
+            if self.headers.get('Access-Token') != 'tt-access':
+                return self._json(200, {'code': 40105, 'message': 'Access token is invalid'})
+            r = p[len('tt/v1.3/'):]
+            if r == 'business/get':
+                return self._json(200, {'code': 0, 'data': {'username': 'cgch_shop', 'display_name': 'CGCH Shop'}})
+            if r == 'business/video/list':
+                return self._json(200, {'code': 0, 'data': {'videos': [{'item_id': 'TV1', 'caption': 'New dryer'}], 'has_more': False}})
+            if r == 'business/comment/list':
+                return self._json(200, {'code': 0, 'data': {'comments': [c for c in TT_COMMENTS if c['video_id'] == q.get('video_id', [''])[0]],
+                                                             'has_more': False}})
+            if r == 'business/comment/reply/create' and method == 'POST':
+                b = json.loads(raw or b'{}')
+                TT_REPLIES.append(b)
+                cid = f'TR{len(TT_REPLIES)}'
+                for c in TT_COMMENTS:
+                    if c['comment_id'] == b['comment_id']:
+                        c.setdefault('reply_list', []).append({'comment_id': cid, 'text': b['text'], 'owner': True,
+                                                               'display_name': 'CGCH Shop', 'create_time': '1793000000'})
+                return self._json(200, {'code': 0, 'data': {'comment_id': cid, 'parent_comment_id': b['comment_id']}})
+        if p == '_yt/add':
+            YT_THREADS.append(json.loads(raw))
+            return self._json(200, {})
+        if p == '_tt/add':
+            TT_COMMENTS.append(json.loads(raw))
+            return self._json(200, {})
+        if p == '_social':
+            return self._json(200, {'yt': YT_REPLIES, 'tt': TT_REPLIES})
+        return self._json(404, {'error': {'message': 'Unknown social path ' + p}})
+
     def do_GET(self):
         path = self.path.split('?')[0].strip('/').split('/')
         if path[:2] == ['ycloud', 'v2']:
             return self._ycloud('GET', path[2:], b'')
+        if path and path[0] in ('yt', 'tt', '_social'):
+            return self._social('GET', path, b'')
         if path == ['_ycsent']:
             return self._json(200, YC_SENT)
         if path == ['_yclinks']:
@@ -212,6 +285,8 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
         if path[:2] == ['ycloud', 'v2']:
             return self._ycloud('POST', path[2:], raw)
+        if path and path[0] in ('yt', 'tt', '_yt', '_tt'):
+            return self._social('POST', path, raw)
         if path == ['v1', 'chat', 'completions']:
             return self._llm(json.loads(raw or b'{}'))
         if path == ['v1', 'embeddings']:

@@ -87,6 +87,9 @@ public class ChannelWaConversationDO extends TenantBaseDO {
         if (isWhatsApp()) {
             return "+" + waId;
         }
+        if ("youtube".equals(platform) || "tiktok".equals(platform)) {
+            return ("youtube".equals(platform) ? "YouTube" : "TikTok") + " 用户";
+        }
         if (isWeb()) {
             return "官网访客 " + (waId == null ? "" : waId.substring(Math.max(0, waId.length() - 4)).toUpperCase());
         }
@@ -101,6 +104,12 @@ public class ChannelWaConversationDO extends TenantBaseDO {
         }
         if (isWeb()) {
             return "官网IM";
+        }
+        if ("youtube".equals(platform)) {
+            return "YouTube 评论";
+        }
+        if ("tiktok".equals(platform)) {
+            return "TikTok 评论";
         }
         return ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(platform) ? "Instagram" : "Facebook Messenger";
     }

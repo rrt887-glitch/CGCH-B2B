@@ -72,6 +72,8 @@ const PLATFORM_META: Record<string, { avatar: string; color: string; label: stri
   messenger: { label: 'Facebook', color: 'blue', avatar: '!bg-blue-600' },
   instagram: { label: 'Instagram', color: 'magenta', avatar: '!bg-pink-600' },
   web: { label: '官网IM', color: 'geekblue', avatar: '!bg-indigo-600' },
+  youtube: { label: 'YouTube 评论', color: 'red', avatar: '!bg-red-600' },
+  tiktok: { label: 'TikTok 评论', color: 'default', avatar: '!bg-gray-900' },
 };
 const plat = (c?: { platform?: string }) => PLATFORM_META[c?.platform || 'whatsapp'] ?? PLATFORM_META.whatsapp!;
 const isWa = (c?: { platform?: string }) => !c?.platform || c.platform === 'whatsapp';
