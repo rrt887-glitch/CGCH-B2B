@@ -14,7 +14,8 @@
 - POST /{ver}/{page_id}/subscribed_apps    订阅主页消息推送
 - POST /{ver}/me/messages                  Messenger / Instagram 发消息（JSON 或带附件的 multipart）
 - GET  /_fbsent、/_subs                     查看 Messenger 发送记录与主页订阅
-- /ycloud/v2/...                            模拟 YCloud（绑定链接、号码、发消息、上传 / 下载媒体、模板），GET /_ycsent 查看
+- /kapso/platform/v1/...                    模拟 Kapso 平台接口（客户、绑定链接、号码、号码推送地址）；POST /_kapso/connect 模拟客户完成绑定，GET /_kapso 查看
+- /kapso/meta/whatsapp/...                  模拟 Kapso 的 Meta 代理（X-API-Key 鉴权，其余同 Graph API；媒体返回免鉴权的 download_url）
 - /yt/...、/tt/...                         模拟 YouTube Data API 与 TikTok Accounts API；POST /_yt/add、/_tt/add 加评论，GET /_social 看回复
 - POST /search                             模拟联网搜索（Tavily 兼容），GET /_search 查看搜索记录
 """
@@ -30,12 +31,14 @@ SENT = []
 UPLOADS = []
 LLM = []
 SEARCH = []
-YC_SENT = []
+KP_CUSTOMERS = {}
+KP_LINKS = []
+KP_PHONES = {}
+KP_HOOKS = []
 YT_THREADS = []
 YT_REPLIES = []
 TT_COMMENTS = []
 TT_REPLIES = []
-YC_LINKS = []
 SITE_HITS = []
 OAUTH = []
 EMBEDS = []
@@ -66,6 +69,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _auth_ok(self):
+        if getattr(self, 'kapso_meta', False):  # Kapso 代理已校验 X-API-Key
+            return True
         if self.headers.get('Authorization') not in TOKENS:
             self._json(401, {'error': {'message': 'Invalid OAuth access token.', 'type': 'OAuthException', 'code': 190}})
             return False
@@ -105,45 +110,57 @@ class Handler(BaseHTTPRequestHandler):
         return False
 
 
-    def _ycloud(self, method, path, raw):
-        """模拟 YCloud v2 接口；X-API-Key 必须是 yc-key"""
-        if self.headers.get('X-API-Key') != 'yc-key':
-            return self._json(401, {'error': {'message': 'Invalid API key'}})
+    def _kapso(self, method, path, raw):
+        """模拟 Kapso 平台接口 /kapso/platform/v1/...；X-API-Key 必须是 kp-key"""
+        if self.headers.get('X-API-Key') != 'kp-key':
+            return self._json(401, {'error': 'Invalid API key'})
         p = '/'.join(path)
+        body = json.loads(raw or b'{}') if raw else {}
+        if method == 'POST' and p == 'customers':
+            cid = f'cust-{len(KP_CUSTOMERS) + 1}'
+            KP_CUSTOMERS[cid] = dict(body.get('customer', {}), id=cid)
+            return self._json(201, {'data': KP_CUSTOMERS[cid]})
+        if method == 'GET' and len(path) == 2 and path[0] == 'customers':
+            if path[1] not in KP_CUSTOMERS:
+                return self._json(404, {'error': 'Customer not found'})
+            return self._json(200, {'data': KP_CUSTOMERS[path[1]]})
+        if method == 'POST' and len(path) == 3 and path[0] == 'customers' and path[2] == 'setup_links':
+            if path[1] not in KP_CUSTOMERS:
+                return self._json(404, {'error': 'Customer not found'})
+            KP_LINKS.append({'customer': path[1], 'body': body})
+            return self._json(201, {'data': {'id': f'link-{len(KP_LINKS)}', 'url': f'https://setup.kapso.example/s/L{len(KP_LINKS)}',
+                                             'status': 'active', 'expires_at': '2026-12-01T00:00:00Z'}})
+        if method == 'GET' and len(path) == 3 and path[:2] == ['whatsapp', 'phone_numbers']:
+            if path[2] not in KP_PHONES:
+                return self._json(404, {'error': 'Phone number not found'})
+            return self._json(200, {'data': KP_PHONES[path[2]]})
+        if method == 'POST' and len(path) == 4 and path[:2] == ['whatsapp', 'phone_numbers'] and path[3] == 'webhooks':
+            w = body.get('whatsapp_webhook', {})
+            if any(h['phone_number_id'] == path[2] and h.get('kind') == 'meta' for h in KP_HOOKS):
+                return self._json(422, {'error': 'Only one Meta webhook is allowed per phone number'})
+            KP_HOOKS.append(dict(w, phone_number_id=path[2]))
+            return self._json(201, {'data': dict(w, id=f'hook-{len(KP_HOOKS)}', phone_number_id=path[2])})
+        self._json(404, {'error': 'Unknown Kapso path ' + p})
+
+    def _kapso_media(self, path):
+        """Kapso 代理的媒体：查询需要 phone_number_id，download_url 免鉴权"""
         from urllib.parse import parse_qs, urlparse
-        q = parse_qs(urlparse(self.path).query)
-        if method == 'POST' and p == 'partner/embeddedSignup/links':
-            body = json.loads(raw or b'{}')
-            YC_LINKS.append(body)
-            return self._json(200, {'onboardingUrl': 'https://connect.ycloud.example/open/whatsapp/onboard#token=T' + str(len(YC_LINKS)),
-                                    'expiresAt': 1893456000000})
-        if method == 'GET' and p == 'whatsapp/phoneNumbers':
-            waba = q.get('filter.wabaId', [''])[0]
-            if waba == 'YCWABA1':
-                return self._json(200, {'offset': 0, 'limit': 100, 'length': 1, 'items': [
-                    {'id': 'YCPN1', 'phoneNumber': '+8613800001111', 'displayPhoneNumber': '+86 138 0000 1111',
-                     'verifiedName': 'CGCH YC', 'wabaId': waba}]})
-            return self._json(200, {'offset': 0, 'limit': 100, 'length': 0, 'items': []})
-        if method == 'POST' and p == 'whatsapp/messages/sendDirectly':
-            body = json.loads(raw or b'{}')
-            YC_SENT.append(body)
-            n = len(YC_SENT)
-            if body.get('to') == '+10000000000':
-                return self._json(200, {'id': f'ycmsg_{n}', 'status': 'failed', 'errorMessage': 'Recipient not on WhatsApp'})
-            return self._json(200, {'id': f'ycmsg_{n}', 'wamid': f'wamid.YC{n}', 'status': 'accepted',
-                                    'from': body.get('from'), 'to': body.get('to'), 'type': body.get('type')})
-        if method == 'POST' and len(path) == 4 and path[:2] == ['whatsapp', 'media'] and path[3] == 'upload':
-            YC_SENT.append({'upload': path[2], 'size': len(raw)})
-            return self._json(200, {'id': 'YCMEDIA1'})
-        if method == 'GET' and p == 'whatsapp/templates':
-            return self._json(200, {'items': [{'name': 'hello_yc', 'language': 'en_US', 'status': 'APPROVED', 'category': 'MARKETING',
-                                               'components': [{'type': 'BODY', 'text': 'Hello {{1}}'}]}]})
-        if method == 'GET' and p.startswith('whatsapp/media/download/'):
-            body = b'\xff\xd8\xff\xe0YCIMG'
-            self.send_response(200); self.send_header('Content-Type', 'image/jpeg'); self.send_header('Content-Length', str(len(body)))
-            self.end_headers(); self.wfile.write(body)
-            return
-        self._json(404, {'error': {'message': 'Unknown YCloud path ' + p}})
+        host = self.headers.get('Host')
+        if path == ['media_download']:
+            token = parse_qs(urlparse(self.path).query).get('token', [''])[0]
+            data = bytes.fromhex('ffd8ffe000104a46494600010100000100010000') + f'KAPSO-{token}'.encode() + b'\xff\xd9'
+            self.send_response(200); self.send_header('Content-Type', 'image/jpeg'); self.send_header('Content-Length', str(len(data)))
+            self.end_headers(); self.wfile.write(data)
+            return True
+        if len(path) == 2 and path[1].startswith('MEDIA'):
+            if not parse_qs(urlparse(self.path).query).get('phone_number_id'):
+                self._json(400, {'error': {'message': 'phone_number_id is required', 'code': 100}})
+                return True
+            self._json(200, {'messaging_product': 'whatsapp', 'id': path[1], 'mime_type': 'image/jpeg',
+                             'url': f'http://{host}/_media/{path[1]}',
+                             'download_url': f'http://{host}/kapso/meta/whatsapp/media_download?token={path[1]}'})
+            return True
+        return False
 
     def _social(self, method, path, raw):
         """模拟 YouTube Data API v3（/yt）与 TikTok API for Business（/tt）"""
@@ -213,14 +230,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split('?')[0].strip('/').split('/')
-        if path[:2] == ['ycloud', 'v2']:
-            return self._ycloud('GET', path[2:], b'')
+        self.kapso_meta = False
+        if path[:3] == ['kapso', 'platform', 'v1']:
+            return self._kapso('GET', path[3:], b'')
+        if path[:3] == ['kapso', 'meta', 'whatsapp']:
+            path = path[3:]
+            if path == ['media_download']:
+                return self._kapso_media(path)
+            if self.headers.get('X-API-Key') != 'kp-key':
+                return self._json(401, {'error': {'message': 'Invalid API key', 'code': 190}})
+            self.kapso_meta = True
+            if self._kapso_media(path):
+                return
         if path and path[0] in ('yt', 'tt', '_social'):
             return self._social('GET', path, b'')
-        if path == ['_ycsent']:
-            return self._json(200, YC_SENT)
-        if path == ['_yclinks']:
-            return self._json(200, YC_LINKS)
+        if path == ['_kapso']:
+            return self._json(200, {'customers': KP_CUSTOMERS, 'links': KP_LINKS, 'phones': KP_PHONES, 'hooks': KP_HOOKS})
         if path == ['_site_hits']:
             return self._json(200, SITE_HITS)
         if path == ['_oauth']:
@@ -283,8 +308,23 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0].strip('/').split('/')
         length = int(self.headers.get('Content-Length') or 0)
         raw = self.rfile.read(length)
-        if path[:2] == ['ycloud', 'v2']:
-            return self._ycloud('POST', path[2:], raw)
+        self.kapso_meta = False
+        if path[:3] == ['kapso', 'platform', 'v1']:
+            return self._kapso('POST', path[3:], raw)
+        if path == ['_kapso', 'connect']:  # 模拟客户在 Kapso 绑定页完成绑定
+            b = json.loads(raw or b'{}')
+            KP_PHONES[b['phone_number_id']] = {
+                'id': b['phone_number_id'], 'phone_number_id': b['phone_number_id'], 'internal_id': 'cfg-' + b['phone_number_id'],
+                'name': 'WhatsApp', 'business_account_id': b.get('business_account_id', 'KWABA1'),
+                'display_phone_number': b.get('display_phone_number', '+86 138 0000 1111'),
+                'display_phone_number_normalized': b.get('display_phone_number', '+86 138 0000 1111').replace(' ', '').replace('+', ''),
+                'verified_name': 'CGCH KP', 'customer_id': b.get('customer_id'), 'is_coexistence': True, 'status': 'CONNECTED'}
+            return self._json(200, {'ok': True})
+        if path[:3] == ['kapso', 'meta', 'whatsapp']:
+            if self.headers.get('X-API-Key') != 'kp-key':
+                return self._json(401, {'error': {'message': 'Invalid API key', 'code': 190}})
+            path = path[3:]
+            self.kapso_meta = True
         if path and path[0] in ('yt', 'tt', '_yt', '_tt'):
             return self._social('POST', path, raw)
         if path == ['v1', 'chat', 'completions']:

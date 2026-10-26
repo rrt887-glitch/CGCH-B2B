@@ -33,7 +33,26 @@ public final class WaGraphClient {
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15)).build();
 
+    /** Kapso 项目 API Key：经 Kapso 接入的号码调用 Kapso 的 Meta 代理接口时用 X-API-Key 鉴权（启动时由 ChannelKapsoService 设置） */
+    private static volatile String kapsoApiKey = "";
+
     private WaGraphClient() {
+    }
+
+    public static void setKapsoApiKey(String key) {
+        kapsoApiKey = StrUtil.nullToEmpty(key);
+    }
+
+    /** 鉴权：经 Kapso 接入的号码用 X-API-Key，其余用访问令牌 */
+    private static HttpRequest.Builder auth(HttpRequest.Builder b, ChannelWaAccountDO a) {
+        if (a.isKapso()) {
+            if (StrUtil.isNotBlank(kapsoApiKey)) {
+                b.header("X-API-Key", kapsoApiKey);
+            }
+        } else if (StrUtil.isNotBlank(a.getAccessToken())) {
+            b.header("Authorization", "Bearer " + a.getAccessToken());
+        }
+        return b;
     }
 
     /** Graph API 调用失败，message 为 Meta 返回的错误说明 */
@@ -51,11 +70,8 @@ public final class WaGraphClient {
 
     static JsonNode call(ChannelWaAccountDO a, String method, String path, JsonNode body) {
         try {
-            HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url(a, path)))
-                    .timeout(Duration.ofSeconds(30));
-            if (StrUtil.isNotBlank(a.getAccessToken())) {
-                b.header("Authorization", "Bearer " + a.getAccessToken());
-            }
+            HttpRequest.Builder b = auth(HttpRequest.newBuilder(URI.create(url(a, path)))
+                    .timeout(Duration.ofSeconds(30)), a);
             if (body != null) {
                 b.header("Content-Type", "application/json")
                         .method(method, HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)));
@@ -135,8 +151,9 @@ public final class WaGraphClient {
     }
 
     public static MediaInfo getMedia(ChannelWaAccountDO a, String mediaId) {
-        JsonNode json = call(a, "GET", mediaId, null);
-        String url = json.path("url").asText(null);
+        // Kapso 代理按号码找配置，需要带 phone_number_id；返回的 download_url 不用鉴权即可下载
+        JsonNode json = call(a, "GET", a.isKapso() ? mediaId + "?phone_number_id=" + a.getPhoneNumberId() : mediaId, null);
+        String url = StrUtil.blankToDefault(a.isKapso() ? json.path("download_url").asText(null) : null, json.path("url").asText(null));
         if (StrUtil.isBlank(url)) {
             throw new WaApiException("媒体文件不存在或已过期（Meta 只保留 30 天）");
         }
@@ -146,8 +163,8 @@ public final class WaGraphClient {
     /** 下载媒体内容；地址需要带同一个访问令牌 */
     public static byte[] download(ChannelWaAccountDO a, String url, int maxBytes) {
         try {
-            HttpResponse<byte[]> resp = HTTP.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60))
-                    .header("Authorization", "Bearer " + a.getAccessToken()).GET().build(),
+            HttpResponse<byte[]> resp = HTTP.send(auth(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)), a)
+                    .GET().build(),
                     HttpResponse.BodyHandlers.ofByteArray());
             if (resp.statusCode() >= 300) {
                 throw new WaApiException("下载媒体失败：HTTP " + resp.statusCode());
@@ -180,9 +197,8 @@ public final class WaGraphClient {
                     + "\"\r\nContent-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
             out.write(content);
             out.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
-            HttpResponse<String> resp = HTTP.send(HttpRequest.newBuilder(URI.create(url(a, a.getPhoneNumberId() + "/media")))
-                    .timeout(Duration.ofSeconds(120))
-                    .header("Authorization", "Bearer " + a.getAccessToken())
+            HttpResponse<String> resp = HTTP.send(auth(HttpRequest.newBuilder(URI.create(url(a, a.getPhoneNumberId() + "/media")))
+                    .timeout(Duration.ofSeconds(120)), a)
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                     .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray())).build(),
                     HttpResponse.BodyHandlers.ofString());

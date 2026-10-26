@@ -20,7 +20,7 @@ public class ChannelOAuthProperties {
     private Provider google = Provider.google();
     private Provider microsoft = Provider.microsoft();
     private Meta meta = new Meta();
-    private Ycloud ycloud = new Ycloud();
+    private Kapso kapso = new Kapso();
     private Social youtube = Social.youtube();
     private Social tiktok = Social.tiktok();
 
@@ -65,20 +65,39 @@ public class ChannelOAuthProperties {
     }
 
     /**
-     * YCloud（Meta 官方 WhatsApp 服务商）：客户通过 YCloud 的托管页面扫码绑定 WhatsApp（Partner Direct Link），
-     * 消息经 YCloud 接口收发。Webhook 为 {redirectBase}/admin-api/channel/ycloud/webhook。
+     * Kapso（WhatsApp API 平台）：客户打开 Kapso 托管的绑定链接，用 Kapso 的 Meta 应用完成 Meta 官方授权（可选共存模式），
+     * 我们自己不需要成为 Meta 技术服务商。消息经 Kapso 的 Meta 代理接口收发（与 Graph API 一致）。
+     * 推送地址为 {redirectBase}/admin-api/channel/kapso/webhook：号码绑定后系统自动给号码配置；
+     * 另在 Kapso 控制台 → Integrations → Webhooks → Platform webhooks 添加同一地址，订阅 whatsapp.phone_number.* 事件。
      */
     @Data
-    public static class Ycloud {
+    public static class Kapso {
         /** 接口地址 */
-        private String apiBase = "https://api.ycloud.com/v2";
-        /** API Key（YCloud 控制台 → Developers → API Key） */
+        private String apiBase = "https://api.kapso.ai";
+        /** 项目 API Key（Kapso 控制台 → API Keys） */
         private String apiKey = "";
-        /** Webhook 签名密钥（YCloud 控制台 → Developers → Webhook，创建接收地址时返回） */
+        /** 推送签名密钥：自行生成的随机串，同时填到 Kapso 控制台的 Platform webhook 里 */
         private String webhookSecret = "";
+        /** Meta 消息费的结算方式：留空用 Kapso 默认；partner_managed 由我们在 Kapso 预充值代付，customer_managed 由客户自己付给 Meta */
+        private String billingMode = "";
+        /** 绑定页面语言，留空用 Kapso 默认 */
+        private String language = "";
 
         public boolean configured() {
             return apiKey != null && !apiKey.isBlank();
+        }
+
+        public String platformBase() {
+            return trim() + "/platform/v1";
+        }
+
+        public String metaBase() {
+            return trim() + "/meta/whatsapp";
+        }
+
+        private String trim() {
+            String b = apiBase == null || apiBase.isBlank() ? "https://api.kapso.ai" : apiBase.trim();
+            return b.endsWith("/") ? b.substring(0, b.length() - 1) : b;
         }
     }
 

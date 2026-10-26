@@ -73,19 +73,21 @@ Gmail 暂用「应用专用密码」绑定，不申请 Google 受限权限（需
 
 还要提供一个测试账号（网站的用户名和密码）给审核员。一般 3～10 个工作日，被拒绝会写明原因，修改后可重新提交。
 
-## 一（补充）、WhatsApp 经 YCloud 接入（推荐）
+## 一（补充）、WhatsApp 经 Kapso 接入（推荐）
 
-Meta 开发者后台暂时不给我们的账号开放 WhatsApp，所以 WhatsApp 改为经 Meta 官方服务商 YCloud 接入。
-客户在「渠道 → WhatsApp → 连接新账号」点「开始连接」，在 YCloud 托管的页面里用 Facebook 授权并扫码绑定号码
-（支持共存模式：手机 WhatsApp Business App 照常使用），不需要我们自己成为 Meta 技术服务商。
+Meta 开发者后台暂时不给我们的账号开放 WhatsApp，所以 WhatsApp 改为经 Kapso（kapso.com）接入：
+用 Kapso 自己的 Meta 应用完成 Meta 官方授权，我们不需要自己建 WhatsApp 应用，也不需要成为 Meta 技术服务商。
+客户在「渠道 → WhatsApp → 连接新账号」点「开始连接」，在 Kapso 托管的绑定页里用 Facebook 授权并扫码绑定号码
+（支持共存模式：手机 WhatsApp Business App 照常使用）。
 
-1. 在 YCloud 申请 Tech Partner，并请 YCloud 开通 **Partner Direct Link（TP Lite）**。
-2. YCloud 控制台 → Developers → API Key：创建 API Key，填到 `.env` 的 `CGCH_YCLOUD_API_KEY`。
-3. YCloud 控制台 → Developers → Webhook：添加接收地址 `https://你的域名/admin-api/channel/ycloud/webhook`，
-   订阅 `whatsapp.inbound_message.received`、`whatsapp.message.updated`、`whatsapp.smb.message.echoes`、
-   `whatsapp.business_account.updated`，把返回的签名密钥填到 `CGCH_YCLOUD_WEBHOOK_SECRET`。
-4. YCloud 控制台 → Developers → Partner Direct Link：填写显示名称、Logo。
-5. 重启服务。消息费用按 Meta 官方价从 YCloud 账户余额实时扣除，余额不足时客户无法收发 WhatsApp，请保持余额充足。
+1. 注册 kapso.com，建一个项目；Kapso 控制台 → API Keys：创建 API Key，填到 `.env` 的 `CGCH_KAPSO_API_KEY`。
+2. 自己生成一个随机串填到 `CGCH_KAPSO_WEBHOOK_SECRET`（`deploy/install.sh` 已自动生成）。
+3. Kapso 控制台 → Integrations → Webhooks → Platform webhooks：添加地址 `https://你的域名/admin-api/channel/kapso/webhook`，
+   密钥填同一个随机串，订阅 `whatsapp.phone_number.created`、`whatsapp.phone_number.deleted`、`whatsapp.phone_number.offboarded`。
+   号码绑定后系统会自动给该号码配置消息推送（Meta 原始格式），不用手动加。
+4. Meta 消息费结算方式 `CGCH_KAPSO_BILLING_MODE`：留空用 Kapso 默认；`partner_managed` 由我们在 Kapso 预充值代付；
+   `customer_managed` 由客户在 Meta 自己绑定付款方式。
+5. 重启服务。免费版只能绑 1 个号码，正式使用请升级 Pro（$25/月含 3 个号码）或 Platform（$299/月含 50 个号码）。
 
 配置了 `CGCH_META_WA_CONFIG_ID`（自己成为 Meta 技术服务商）时，优先走 Meta 嵌入式注册。
 
