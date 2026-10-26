@@ -89,6 +89,21 @@ Meta 开发者后台暂时不给我们的账号开放 WhatsApp，所以 WhatsApp
 
 配置了 `CGCH_META_WA_CONFIG_ID`（自己成为 Meta 技术服务商）时，优先走 Meta 嵌入式注册。
 
+## 一（补充二）、YouTube、TikTok 视频评论
+
+客户在「渠道 → YouTube / TikTok → 连接新账号」授权后，系统每 3 分钟拉取一次视频下的新评论，每条评论是「会话」里的一个对话，
+AI 按智能体设置自动回复评论、给评论的人建线索；业务员也可以在会话里直接回复。首次授权只导入历史评论，不会对历史评论自动回复。
+
+**YouTube**：Google Cloud Console → 新建（或沿用）项目 → 启用 YouTube Data API v3 → OAuth 同意屏幕加入
+`https://www.googleapis.com/auth/youtube.force-ssl` 范围（敏感范围，正式上线前需要 Google 审核）→ 创建「Web 应用」OAuth 客户端，
+授权回调填 `https://你的域名/admin-api/channel/social/youtube/callback`，把客户端编号和密钥填到 `CGCH_YOUTUBE_CLIENT_ID`、`CGCH_YOUTUBE_CLIENT_SECRET`。
+每天默认 1 万配额，每个频道每次拉取约用 2 个单位，回复一条评论用 50 个单位。
+
+**TikTok**：TikTok API for Business（business-api.tiktok.com）→ 注册开发者 → 先填写 Accounts API Access Application Form →
+创建开发者应用并勾选「TikTok Accounts」权限（需要审核）→ 在 App Detail 里添加 TikTok account holder redirect URL
+`https://你的域名/admin-api/channel/social/tiktok/callback/`（必须以 / 结尾），把 App ID、Secret 和生成的 TikTok account holder authorization URL
+填到 `CGCH_TIKTOK_APP_ID`、`CGCH_TIKTOK_APP_SECRET`、`CGCH_TIKTOK_AUTH_URL`。只支持 TikTok 企业号，欧盟、英国、瑞士的账号暂不支持评论接口。
+
 ## 二、微软（Outlook / Microsoft 365）
 
 1. portal.azure.com → Microsoft Entra ID → 应用注册 → 新注册：

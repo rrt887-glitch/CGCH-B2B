@@ -72,6 +72,10 @@ public class ChannelWhatsAppService {
     @Resource
     private cn.iocoder.yudao.module.channel.framework.oauth.ChannelOAuthProperties channelOAuthProperties;
 
+    @Resource
+    @org.springframework.context.annotation.Lazy
+    private cn.iocoder.yudao.module.channel.service.social.ChannelSocialService channelSocialService;
+
     private cn.iocoder.yudao.module.channel.framework.oauth.ChannelOAuthProperties.Ycloud ycloud() {
         return channelOAuthProperties.getYcloud();
     }
@@ -119,7 +123,7 @@ public class ChannelWhatsAppService {
 
     public void updateAccount(Long userId, ChannelWaAccountSaveReqVO req) {
         ChannelWaAccountDO old = validateAccount(userId, req.getId());
-        if (old.isWeb() || old.isYcloud()) { // 官网 IM、YCloud 接入的号码在这里只能启用 / 停用
+        if (old.isWeb() || old.isYcloud() || cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(old.getPlatform())) { // 官网 IM、YCloud 接入的号码在这里只能启用 / 停用
             accountMapper.updateById(new ChannelWaAccountDO().setId(old.getId()).setEnabled(req.getEnabled()));
             return;
         }
@@ -790,6 +794,8 @@ public class ChannelWhatsAppService {
         String wamid;
         try {
             wamid = a.isWeb() ? "webout_" + cn.hutool.core.util.IdUtil.fastSimpleUUID()
+                    : cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(a.getPlatform())
+                    ? channelSocialService.reply(a, conv, req.getText())
                     : a.isYcloud() ? (template
                     ? cn.iocoder.yudao.module.channel.service.ycloud.YcloudClient.sendTemplate(ycloud(), a.getDisplayPhone(), conv.getWaId(),
                             req.getTemplateName(), StrUtil.blankToDefault(req.getTemplateLanguage(), "en_US"), req.getTemplateParams())
@@ -864,6 +870,9 @@ public class ChannelWhatsAppService {
         }
         if (a.isWeb()) {
             return sendWebMedia(userId, a, conv, file, caption);
+        }
+        if (cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(a.getPlatform())) {
+            throw exception(AI_LLM_FAIL, "视频评论只能回复文字"); // 评论回复只能发文字
         }
         if (!a.isWhatsApp()) {
             return sendMessagingMedia(userId, a, conv, file, caption);
@@ -1069,8 +1078,8 @@ public class ChannelWhatsAppService {
     // ==================== 工具 ====================
 
     private static boolean windowOpen(ChannelWaConversationDO c) {
-        if (c.isWeb()) {
-            return true; // 官网 IM 没有客服窗口限制
+        if (c.isWeb() || cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(c.getPlatform())) {
+            return true; // 官网 IM、视频评论没有客服窗口限制
         }
         return c.getLastInboundTime() != null
                 && c.getLastInboundTime().plusHours(WINDOW_HOURS).isAfter(LocalDateTime.now());
