@@ -17,6 +17,8 @@ export function getMetaAuthorizeUrl() {
 
 export interface WaSignupConfig {
   enabled: boolean;
+  /** ycloud：经 YCloud 托管页面扫码绑定；meta：Meta 嵌入式注册（需要自己是技术服务商） */
+  provider?: 'meta' | 'ycloud';
   appId?: string;
   configId?: string;
   apiVersion?: string;
@@ -34,4 +36,14 @@ export function completeWaSignup(data: { code: string; mode?: 'coexist' | 'new';
     '/channel/meta/wa-signup/complete',
     data,
   );
+}
+
+/** 经 YCloud 扫码绑定：创建绑定链接（有效 2 小时） */
+export function createYcloudLink(mode: 'coexist' | 'new') {
+  return requestClient.post<{ expiresAt: number; ref: string; url: string }>('/channel/ycloud/onboarding-link', { mode });
+}
+
+/** 绑定结果：完成前返回 null */
+export function getYcloudResult(ref: string) {
+  return requestClient.get<null | { displayPhone?: string; id: number }>(`/channel/ycloud/onboarding-result?ref=${encodeURIComponent(ref)}`);
 }

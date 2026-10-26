@@ -13,7 +13,7 @@ import { IconifyIcon } from '@vben/icons';
 
 import { message, Modal } from 'ant-design-vue';
 
-import { completeWaSignup } from '#/api/channel/oauth';
+import { completeWaSignup, createYcloudLink, getYcloudResult } from '#/api/channel/oauth';
 
 import { runWaSignup } from './wa-signup';
 
@@ -29,13 +29,13 @@ const error = ref('');
 const STEPS: Record<WaSignupMode, string[]> = {
   coexist: [
     '在手机上打开 WhatsApp Business App',
-    '点击左侧「开始连接」，在弹出的 Meta 窗口中登录 Facebook 并选择你的企业',
+    '点击左侧「开始连接」，在弹出的窗口中点「Continue with Meta」，登录 Facebook 并选择你的企业',
     '输入手机上正在使用的 WhatsApp 号码',
     '按窗口提示用 WhatsApp Business App 扫描二维码，选择同步聊天记录后完成',
   ],
   new: [
     '准备一个没有在 WhatsApp App 上使用的手机号，能接收短信或电话',
-    '点击左侧「开始连接」，在弹出的 Meta 窗口中登录 Facebook 并选择你的企业',
+    '点击左侧「开始连接」，在弹出的窗口中点「Continue with Meta」，登录 Facebook 并选择你的企业',
     '填写对外显示的企业名称，输入号码',
     '输入收到的验证码完成验证',
   ],
@@ -51,11 +51,53 @@ const tip = computed(() => {
     : { type: 'info', text: '新号码接入后只能在本系统中收发消息' };
 });
 
+/** 经 YCloud：打开托管的 Meta 授权页，轮询绑定结果（最多 15 分钟） */
+async function startYcloud() {
+  const win = window.open('about:blank', 'cgch-wa-connect', 'width=720,height=820');
+  try {
+    const link = await createYcloudLink(mode.value);
+    if (win) win.location.href = link.url;
+    else window.open(link.url, '_blank');
+    const end = Date.now() + 15 * 60 * 1000;
+    let closedAt = 0;
+    while (Date.now() < end && open.value) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const r = await getYcloudResult(link.ref).catch(() => null);
+      if (r) {
+        win?.close();
+        open.value = false;
+        emit('done');
+        Modal.success({
+          title: `已连接 WhatsApp ${r.displayPhone || ''}`,
+          content:
+            mode.value === 'coexist'
+              ? '手机上的 WhatsApp Business App 可以继续使用，消息两边同步；客户发来的消息会出现在「会话」中。'
+              : '号码已接入，客户发来的消息会出现在「会话」中。',
+        });
+        return;
+      }
+      // 授权窗口关闭后再等一会儿：绑定结果由 YCloud 推送过来，可能晚几秒
+      if (win?.closed) {
+        closedAt ||= Date.now();
+        if (Date.now() - closedAt > 45_000) break;
+      }
+    }
+    error.value = '没有完成连接，请重新点击「开始连接」';
+  } catch (error_: any) {
+    win?.close();
+    throw error_;
+  }
+}
+
 async function start() {
   if (!props.config.enabled || state.value !== 'idle') return;
   error.value = '';
   state.value = 'waiting';
   try {
+    if (props.config.provider === 'ycloud') {
+      await startYcloud();
+      return;
+    }
     const session = await runWaSignup(props.config, mode.value);
     if (!session) {
       error.value = '没有完成连接，请重新点击「开始连接」';

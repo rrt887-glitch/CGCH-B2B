@@ -110,7 +110,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.wa-config-id=cfg123 --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 --cgch.site.company-name=测试科技有限公司 '--cgch.site.company-name-en=CGCH Test Co., Ltd.' --cgch.site.contact-email=privacy@cgch.test > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.wa-config-id=cfg123 --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 --cgch.oauth.ycloud.api-base=http://127.0.0.1:18080/ycloud/v2 --cgch.oauth.ycloud.api-key=yc-key --cgch.oauth.ycloud.webhook-secret=yc-secret --cgch.site.company-name=测试科技有限公司 '--cgch.site.company-name-en=CGCH Test Co., Ltd.' --cgch.site.contact-email=privacy@cgch.test > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -1686,6 +1686,70 @@ jobs:
           assert len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_search'))) == n_search + 1, '企业资料有价格时不检索'
           call('PUT', '/channel/ai/agent-settings', {'skills': dict(sk['skills'], webQuote=False)})
           print('允许联网报价：只在问价且资料没有价格时检索，AI 给出市场参考价区间')
+          # ---- WhatsApp 经 YCloud 接入：扫码绑定链接 → 绑定推送建账号 → 收发消息、状态、手机端回显、媒体、模板 ----
+          import hmac as _hmac, hashlib as _hashlib, urllib.error
+          def ycpush(event, secret='yc-secret'):
+              body = json.dumps(event).encode()
+              t = str(int(time.time()))
+              sig = _hmac.new(secret.encode(), (t + '.').encode() + body, _hashlib.sha256).hexdigest()
+              req = urllib.request.Request(BASE + '/channel/ycloud/webhook', data=body, method='POST',
+                                           headers={'Content-Type': 'application/json', 'YCloud-Signature': f't={t},s={sig}'})
+              try:
+                  return urllib.request.urlopen(req).status
+              except urllib.error.HTTPError as e:
+                  return e.code
+          cfg_y = call('GET', '/channel/ai/config/get')
+          call('PUT', '/channel/ai/config/save', dict(cfg_y, llmApiKey='', waMode='off'))
+          yl = call('POST', '/channel/ycloud/onboarding-link', {'mode': 'coexist'})
+          assert yl['url'].startswith('https://connect.ycloud.example/') and yl['ref'].startswith('cgch_1_1_'), yl
+          sent_link = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_yclinks'))[-1]
+          assert sent_link == {'partnerCustomerId': yl['ref'], 'onboardingType': 'WHATSAPP_BUSINESS_APP', 'locale': 'zh_CN'}, sent_link
+          assert call('GET', f"/channel/ycloud/onboarding-result?ref={yl['ref']}") is None
+          assert ycpush({'id': 'evt_bad', 'type': 'whatsapp.business_account.updated'}, secret='wrong') == 401, '签名不对应拒绝'
+          assert ycpush({'id': 'evt_bind1', 'type': 'whatsapp.business_account.updated', 'whatsappBusinessAccount': {
+              'id': 'YCWABA1', 'updateEvent': 'PARTNER_ADDED', 'paymentMethodAttached': True, 'partnerCustomerId': yl['ref']}}) == 200
+          yr = call('GET', f"/channel/ycloud/onboarding-result?ref={yl['ref']}")
+          assert yr and yr['displayPhone'] == '+8613800001111', yr
+          ya = next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == yr['id'])
+          assert ya['authType'] == 'ycloud' and ya['wabaId'] == 'YCWABA1' and ya['phoneNumberId'] == 'YCPN1' and ya['enabled'], ya
+          def ycin(eid, wamid, body):
+              return ycpush({'id': eid, 'type': 'whatsapp.inbound_message.received', 'whatsappInboundMessage': dict({
+                  'id': 'yc' + wamid, 'wamid': wamid, 'wabaId': 'YCWABA1', 'from': '+8615900002222', 'to': '+8613800001111',
+                  'customerProfile': {'name': 'YC Buyer'}, 'sendTime': time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())}, **body)})
+          assert ycin('evt_in1', 'wamid.IN1', {'type': 'text', 'text': {'body': 'Hi, price for 1000 pcs?'}}) == 200
+          assert ycin('evt_in1', 'wamid.IN1', {'type': 'text', 'text': {'body': 'Hi, price for 1000 pcs?'}}) == 200, '重复推送也返回成功'
+          ycv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
+                                   if c['waId'] == '8615900002222'), None), 'YCloud 来信建会话')
+          assert ycv['accountId'] == yr['id'] and ycv['profileName'] == 'YC Buyer' and ycv['windowOpen'], ycv
+          ym = call('GET', f"/channel/wa/message/list?conversationId={ycv['id']}")
+          assert [(m['direction'], m['textBody']) for m in ym] == [(1, 'Hi, price for 1000 pcs?')], ym
+          ys = call('POST', '/channel/wa/message/send', {'conversationId': ycv['id'], 'text': 'Hello from CGCH'})
+          last = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_ycsent'))[-1]
+          assert last == {'from': '+8613800001111', 'to': '+8615900002222', 'type': 'text', 'text': {'body': 'Hello from CGCH'}}, last
+          wamid = sql(f"SELECT wa_message_id FROM channel_wa_message WHERE id = {ys['id']}")
+          assert wamid.startswith('wamid.YC'), wamid
+          assert ycpush({'id': 'evt_st1', 'type': 'whatsapp.message.updated', 'whatsappMessage': {
+              'id': 'ycmsg_x', 'wamid': wamid, 'from': '+8613800001111', 'to': '+8615900002222', 'status': 'delivered'}}) == 200
+          assert sql(f"SELECT status FROM channel_wa_message WHERE id = {ys['id']}") == 'delivered'
+          assert ycpush({'id': 'evt_echo1', 'type': 'whatsapp.smb.message.echoes', 'whatsappMessage': {
+              'id': 'ycecho1', 'wamid': 'wamid.ECHO1', 'from': '+8613800001111', 'to': '+8615900002222', 'type': 'text',
+              'text': {'body': 'Sent from my phone'}, 'status': 'sent', 'sendTime': '2026-10-26T08:00:00.000Z'}}) == 200
+          ym = call('GET', f"/channel/wa/message/list?conversationId={ycv['id']}")
+          assert any(m['direction'] == 2 and m['textBody'] == 'Sent from my phone' for m in ym), '手机端发出的消息同步进会话'
+          assert ycin('evt_in2', 'wamid.IN2', {'type': 'image', 'image': {'link': 'http://127.0.0.1:18080/ycloud/v2/whatsapp/media/download/9?sig=x',
+                                                                           'id': '9', 'mime_type': 'image/jpeg', 'caption': 'our logo'}}) == 200
+          img = next(m for m in call('GET', f"/channel/wa/message/list?conversationId={ycv['id']}") if m['type'] == 'image')
+          assert img['textBody'] == 'our logo', img
+          med = call('GET', f"/channel/wa/message/media?id={img['id']}")
+          assert med['fileUrl'] and med['mimeType'] == 'image/jpeg', med
+          tpl = call('GET', f"/channel/wa-account/templates?id={yr['id']}")
+          assert [t['name'] for t in tpl['data']] == ['hello_yc'], tpl
+          call('PUT', '/channel/wa-account/update', dict(ya, enabled=False))
+          assert ycin('evt_in3', 'wamid.IN3', {'type': 'text', 'text': {'body': 'still there?'}}) == 200
+          assert len(call('GET', f"/channel/wa/message/list?conversationId={ycv['id']}")) == len(ym) + 1, '停用后不再收消息'
+          call('DELETE', f"/channel/wa-account/delete?id={yr['id']}")
+          call('PUT', '/channel/ai/config/save', dict(cfg_y, llmApiKey=''))
+          print('WhatsApp 经 YCloud：扫码绑定、收发消息、发送状态、手机端回显、媒体下载、模板、停用')
           call('PUT', '/channel/wa-account/update', dict(sa, enabled=False))
           assert pub('GET', '/config?k=' + K)['code'] != 0, '停用后聊天窗口不再显示'
           call('DELETE', f'/channel/wa-account/delete?id={site}')

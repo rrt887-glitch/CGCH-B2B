@@ -32,6 +32,8 @@ public class ChannelWaAccountDO extends TenantBaseDO {
     /** 接入方式：手动填写令牌，或通过 Facebook 登录授权 */
     public static final String AUTH_MANUAL = "manual";
     public static final String AUTH_OAUTH = "oauth";
+    /** 经 YCloud（Meta 官方服务商）扫码绑定：消息通过 YCloud 接口收发，displayPhone 存 E.164 号码，verifyToken 存绑定时的客户编号 */
+    public static final String AUTH_YCLOUD = "ycloud";
 
     /**
      * 编号
@@ -101,6 +103,10 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      * 最近一次收到 Webhook 的时间
      */
     private LocalDateTime lastWebhookTime;
+
+    public boolean isYcloud() {
+        return AUTH_YCLOUD.equals(authType);
+    }
 
     public boolean isWeb() {
         return PLATFORM_WEB.equals(platform);

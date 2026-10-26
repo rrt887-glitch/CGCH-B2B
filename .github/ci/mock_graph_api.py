@@ -14,6 +14,7 @@
 - POST /{ver}/{page_id}/subscribed_apps    订阅主页消息推送
 - POST /{ver}/me/messages                  Messenger / Instagram 发消息（JSON 或带附件的 multipart）
 - GET  /_fbsent、/_subs                     查看 Messenger 发送记录与主页订阅
+- /ycloud/v2/...                            模拟 YCloud（绑定链接、号码、发消息、上传 / 下载媒体、模板），GET /_ycsent 查看
 - POST /search                             模拟联网搜索（Tavily 兼容），GET /_search 查看搜索记录
 """
 import base64
@@ -28,6 +29,8 @@ SENT = []
 UPLOADS = []
 LLM = []
 SEARCH = []
+YC_SENT = []
+YC_LINKS = []
 SITE_HITS = []
 OAUTH = []
 EMBEDS = []
@@ -96,8 +99,55 @@ class Handler(BaseHTTPRequestHandler):
             return True
         return False
 
+
+    def _ycloud(self, method, path, raw):
+        """模拟 YCloud v2 接口；X-API-Key 必须是 yc-key"""
+        if self.headers.get('X-API-Key') != 'yc-key':
+            return self._json(401, {'error': {'message': 'Invalid API key'}})
+        p = '/'.join(path)
+        from urllib.parse import parse_qs, urlparse
+        q = parse_qs(urlparse(self.path).query)
+        if method == 'POST' and p == 'partner/embeddedSignup/links':
+            body = json.loads(raw or b'{}')
+            YC_LINKS.append(body)
+            return self._json(200, {'onboardingUrl': 'https://connect.ycloud.example/open/whatsapp/onboard#token=T' + str(len(YC_LINKS)),
+                                    'expiresAt': 1893456000000})
+        if method == 'GET' and p == 'whatsapp/phoneNumbers':
+            waba = q.get('filter.wabaId', [''])[0]
+            if waba == 'YCWABA1':
+                return self._json(200, {'offset': 0, 'limit': 100, 'length': 1, 'items': [
+                    {'id': 'YCPN1', 'phoneNumber': '+8613800001111', 'displayPhoneNumber': '+86 138 0000 1111',
+                     'verifiedName': 'CGCH YC', 'wabaId': waba}]})
+            return self._json(200, {'offset': 0, 'limit': 100, 'length': 0, 'items': []})
+        if method == 'POST' and p == 'whatsapp/messages/sendDirectly':
+            body = json.loads(raw or b'{}')
+            YC_SENT.append(body)
+            n = len(YC_SENT)
+            if body.get('to') == '+10000000000':
+                return self._json(200, {'id': f'ycmsg_{n}', 'status': 'failed', 'errorMessage': 'Recipient not on WhatsApp'})
+            return self._json(200, {'id': f'ycmsg_{n}', 'wamid': f'wamid.YC{n}', 'status': 'accepted',
+                                    'from': body.get('from'), 'to': body.get('to'), 'type': body.get('type')})
+        if method == 'POST' and len(path) == 4 and path[:2] == ['whatsapp', 'media'] and path[3] == 'upload':
+            YC_SENT.append({'upload': path[2], 'size': len(raw)})
+            return self._json(200, {'id': 'YCMEDIA1'})
+        if method == 'GET' and p == 'whatsapp/templates':
+            return self._json(200, {'items': [{'name': 'hello_yc', 'language': 'en_US', 'status': 'APPROVED', 'category': 'MARKETING',
+                                               'components': [{'type': 'BODY', 'text': 'Hello {{1}}'}]}]})
+        if method == 'GET' and p.startswith('whatsapp/media/download/'):
+            body = b'\xff\xd8\xff\xe0YCIMG'
+            self.send_response(200); self.send_header('Content-Type', 'image/jpeg'); self.send_header('Content-Length', str(len(body)))
+            self.end_headers(); self.wfile.write(body)
+            return
+        self._json(404, {'error': {'message': 'Unknown YCloud path ' + p}})
+
     def do_GET(self):
         path = self.path.split('?')[0].strip('/').split('/')
+        if path[:2] == ['ycloud', 'v2']:
+            return self._ycloud('GET', path[2:], b'')
+        if path == ['_ycsent']:
+            return self._json(200, YC_SENT)
+        if path == ['_yclinks']:
+            return self._json(200, YC_LINKS)
         if path == ['_site_hits']:
             return self._json(200, SITE_HITS)
         if path == ['_oauth']:
@@ -160,6 +210,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0].strip('/').split('/')
         length = int(self.headers.get('Content-Length') or 0)
         raw = self.rfile.read(length)
+        if path[:2] == ['ycloud', 'v2']:
+            return self._ycloud('POST', path[2:], raw)
         if path == ['v1', 'chat', 'completions']:
             return self._llm(json.loads(raw or b'{}'))
         if path == ['v1', 'embeddings']:

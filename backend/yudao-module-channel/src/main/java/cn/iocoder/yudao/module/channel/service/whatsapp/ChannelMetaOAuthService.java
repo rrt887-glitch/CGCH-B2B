@@ -175,8 +175,14 @@ public class ChannelMetaOAuthService {
         ChannelOAuthProperties.Meta m = channelOAuthProperties.getMeta();
         boolean on = m.configured() && StrUtil.isNotBlank(m.getWaConfigId());
         Map<String, Object> r = new LinkedHashMap<>();
+        if (!on && channelOAuthProperties.getYcloud().configured()) { // 自己不是 Meta 技术服务商时，经 YCloud 扫码绑定
+            r.put("enabled", true);
+            r.put("provider", "ycloud");
+            return r;
+        }
         r.put("enabled", on);
         if (on) {
+            r.put("provider", "meta");
             r.put("appId", m.getClientId());
             r.put("configId", m.getWaConfigId());
             r.put("apiVersion", m.getApiVersion());

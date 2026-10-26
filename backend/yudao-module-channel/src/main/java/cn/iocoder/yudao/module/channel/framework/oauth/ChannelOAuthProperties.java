@@ -20,6 +20,25 @@ public class ChannelOAuthProperties {
     private Provider google = Provider.google();
     private Provider microsoft = Provider.microsoft();
     private Meta meta = new Meta();
+    private Ycloud ycloud = new Ycloud();
+
+    /**
+     * YCloud（Meta 官方 WhatsApp 服务商）：客户通过 YCloud 的托管页面扫码绑定 WhatsApp（Partner Direct Link），
+     * 消息经 YCloud 接口收发。Webhook 为 {redirectBase}/admin-api/channel/ycloud/webhook。
+     */
+    @Data
+    public static class Ycloud {
+        /** 接口地址 */
+        private String apiBase = "https://api.ycloud.com/v2";
+        /** API Key（YCloud 控制台 → Developers → API Key） */
+        private String apiKey = "";
+        /** Webhook 签名密钥（YCloud 控制台 → Developers → Webhook，创建接收地址时返回） */
+        private String webhookSecret = "";
+
+        public boolean configured() {
+            return apiKey != null && !apiKey.isBlank();
+        }
+    }
 
     /**
      * Meta 应用（developers.facebook.com）：Facebook 登录授权主页与 Instagram，并接收应用级 Webhook。
