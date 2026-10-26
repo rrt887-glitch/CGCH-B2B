@@ -1461,6 +1461,11 @@ jobs:
           assert s2['company']['name'] == 'CGCH Test' and s2['skills']['askMore'] is True and s2['humanPauseHours'] == 6, s2
           assert s2['handoff'] == s['handoff'], '只保存传入的部分'
           print('智能体配置：读取默认值、按部分保存')
+          prof = call('GET', '/system/user/profile/get')
+          assert prof['nickname'] == '管理员' and '芋道' not in json.dumps(prof, ensure_ascii=False) and 'iocoder' not in json.dumps(prof), prof
+          assert not [d for d in call('GET', '/system/dept/simple-list') if '芋道' in d['name']], '部门里不应再有演示名称'
+          assert not [n for n in call('GET', '/system/notice/page?pageNo=1&pageSize=50')['list'] if '芋道' in n['title']], '演示通知应删除'
+          print('框架演示数据里的品牌信息已清理')
           # 资料文件：上传 TXT，解析成知识条目
           boundary = uuid.uuid4().hex
           text = ('Product catalog\n\n' + 'The HD-200 hair dryer has 1800W power and a 2-year warranty. ' * 40 + '\n\nMOQ is 300 units.').encode()

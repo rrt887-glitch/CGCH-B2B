@@ -143,3 +143,19 @@ UPDATE `system_tenant` SET `name` = '草根出海', `contact_name` = '草根出�
 -- 安全：开源框架自带的演示账号和演示租户密码是公开的，一律停用（只保留 admin，上线后请立即修改其密码）
 UPDATE `system_users` SET `status` = 1 WHERE `id` <> 1 AND `id` <= 240;
 UPDATE `system_tenant` SET `status` = 1 WHERE `id` <> 1;
+
+-- 去掉开源框架（芋道 ruoyi-vue-pro）自带的演示数据：管理员昵称与头像、部门、通知、OAuth2 客户端名称等
+-- 只改仍是演示值的记录，已经修改过的不动；可重复执行
+UPDATE `system_users` SET `nickname` = '管理员' WHERE `id` = 1 AND `nickname` = '芋道源码';
+UPDATE `system_users` SET `email` = '' WHERE `id` = 1 AND `email` = '13aoteman@126.com';
+UPDATE `system_users` SET `mobile` = '' WHERE `id` = 1 AND `mobile` = '18818260272';
+UPDATE `system_users` SET `avatar` = '' WHERE `avatar` LIKE '%iocoder.cn%';
+UPDATE `system_users` SET `nickname` = '演示用户' WHERE `id` <> 1 AND `nickname` LIKE '芋道%';
+UPDATE `system_users` SET `email` = '' WHERE `email` LIKE '%iocoder.cn';
+UPDATE `system_dept` SET `name` = '草根出海', `phone` = '', `email` = '' WHERE `id` = 100 AND `name` = '芋道源码';
+UPDATE `system_tenant` SET `contact_name` = '演示' WHERE `id` <> 1 AND `contact_name` LIKE '芋道%';
+UPDATE `system_tenant` SET `websites` = '' WHERE `id` <> 1 AND `websites` LIKE '%iocoder.cn%';
+UPDATE `system_oauth2_client` SET `name` = '草根出海', `logo` = '', `description` = '' WHERE `client_id` = 'default' AND `name` = '芋道源码';
+UPDATE `system_oauth2_client` SET `logo` = '' WHERE `logo` LIKE '%iocoder.cn%';
+DELETE FROM `system_notice` WHERE `title` LIKE '%芋道%' OR `content` LIKE '%iocoder.cn%';
+DELETE FROM `system_notify_message` WHERE `template_params` LIKE '%芋道%';
