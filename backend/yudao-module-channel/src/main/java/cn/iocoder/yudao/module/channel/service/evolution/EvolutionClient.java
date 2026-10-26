@@ -161,13 +161,8 @@ public final class EvolutionClient {
                 StrUtil.emptyToNull(StrUtil.blankToDefault(i.path("connectionStatus").asText(null), i.path("status").asText(null))));
     }
 
-    /** 退出登录并删除实例；实例不存在时忽略 */
+    /** 删除实例（连接中或已连接时 Evolution 会先退出手机上的关联设备）；实例不存在时忽略 */
     public static void deleteInstance(ChannelOAuthProperties.Evolution c, String name) {
-        try {
-            call(c, "DELETE", "/instance/logout/" + enc(name), null, 30);
-        } catch (WaApiException ignored) {
-            // 没有登录或已经退出
-        }
         try {
             call(c, "DELETE", "/instance/delete/" + enc(name), null, 30);
         } catch (WaApiException e) {

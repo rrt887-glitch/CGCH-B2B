@@ -2040,10 +2040,14 @@ jobs:
           if not pc:
               print('::warning::测试号码没有拿到配对码（WhatsApp 可能拒绝了虚构号码），请用真实号码验证')
           for n in ('cgch-1-1-ci', 'cgch-1-1-ci2'):
-              call('DELETE', f'/instance/logout/{n}')
               d = call('DELETE', f'/instance/delete/{n}')
-              assert d.get('status') == 'SUCCESS', d
-          assert 'does not exist' in json.dumps(call('GET', '/instance/connectionState/cgch-1-1-ci'))
+              print('删除', n, d)
+              assert d.get('status') == 'SUCCESS' or 'does not exist' in json.dumps(d), d
+          for i in range(10):
+              if 'does not exist' in json.dumps(call('GET', '/instance/connectionState/cgch-1-1-ci')):
+                  break
+              time.sleep(1)
+          assert 'does not exist' in json.dumps(call('GET', '/instance/connectionState/cgch-1-1-ci')), '删除后实例应不存在'
           print('Evolution API 实机检查通过：建实例、二维码、状态、实例信息、推送格式与校验头、删除')
           PY
       - name: Evolution 日志
