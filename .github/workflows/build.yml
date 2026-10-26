@@ -1741,7 +1741,7 @@ jobs:
           b1 = evo()['instances'][s1['session']]['body']
           assert b1['integration'] == 'WHATSAPP-BAILEYS' and b1['number'] == '8613800002222' and b1['qrcode'] is True and b1['groupsIgnore'] is True, b1
           assert b1['webhook']['url'] == 'http://127.0.0.1:48080/admin-api/channel/evolution/webhook' and b1['webhook']['enabled'] \
-              and set(b1['webhook']['events']) == {'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE'} and b1['webhook']['headers']['x-cgch-token'], b1
+              and set(b1['webhook']['events']) == {'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'MESSAGES_SET'} and b1['webhook']['headers']['x-cgch-token'], b1
           p1 = call('GET', f"/channel/evolution/session?session={s1['session']}")
           assert p1['status'] == 'connecting' and p1['pairingCode'] == 'ABCD1234' and p1['qr'].startswith('data:image/png;base64,QR'), p1
           assert call('GET', '/channel/evolution/session?session=cgch-1-999-x')['status'] == 'expired', '别人的连接看不到'
@@ -2040,7 +2040,7 @@ jobs:
               b = {'instanceName': name, 'integration': 'WHATSAPP-BAILEYS', 'qrcode': True, 'groupsIgnore': True, 'rejectCall': False,
                    'alwaysOnline': False, 'readMessages': False, 'readStatus': False, 'syncFullHistory': False,
                    'webhook': {'enabled': True, 'url': 'http://127.0.0.1:18999/hook', 'byEvents': False, 'base64': False,
-                               'headers': {'x-cgch-token': 'tok-' + name}, 'events': ['CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE']}}
+                               'headers': {'x-cgch-token': 'tok-' + name}, 'events': ['CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'MESSAGES_SET']}}
               if number:
                   b['number'] = number
               return call('POST', '/instance/create', b)
