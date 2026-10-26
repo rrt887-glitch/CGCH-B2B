@@ -32,8 +32,6 @@ public class ChannelWaAccountDO extends TenantBaseDO {
     /** 接入方式：手动填写令牌，或通过 Facebook 登录授权 */
     public static final String AUTH_MANUAL = "manual";
     public static final String AUTH_OAUTH = "oauth";
-    /** 经 Kapso 绑定链接接入：消息通过 Kapso 的 Meta 代理接口收发（apiBase 指向代理地址），verifyToken 存绑定编号 */
-    public static final String AUTH_KAPSO = "kapso";
 
     /**
      * 编号
@@ -103,10 +101,6 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      * 最近一次收到 Webhook 的时间
      */
     private LocalDateTime lastWebhookTime;
-
-    public boolean isKapso() {
-        return AUTH_KAPSO.equals(authType);
-    }
 
     public boolean isWeb() {
         return PLATFORM_WEB.equals(platform);

@@ -73,25 +73,7 @@ Gmail 暂用「应用专用密码」绑定，不申请 Google 受限权限（需
 
 还要提供一个测试账号（网站的用户名和密码）给审核员。一般 3～10 个工作日，被拒绝会写明原因，修改后可重新提交。
 
-## 一（补充）、WhatsApp 经 Kapso 接入（推荐）
-
-Meta 开发者后台暂时不给我们的账号开放 WhatsApp，所以 WhatsApp 改为经 Kapso（kapso.com）接入：
-用 Kapso 自己的 Meta 应用完成 Meta 官方授权，我们不需要自己建 WhatsApp 应用，也不需要成为 Meta 技术服务商。
-客户在「渠道 → WhatsApp → 连接新账号」点「开始连接」，在 Kapso 托管的绑定页里用 Facebook 授权并扫码绑定号码
-（支持共存模式：手机 WhatsApp Business App 照常使用）。
-
-1. 注册 kapso.com，建一个项目；Kapso 控制台 → API Keys：创建 API Key，填到 `.env` 的 `CGCH_KAPSO_API_KEY`。
-2. 自己生成一个随机串填到 `CGCH_KAPSO_WEBHOOK_SECRET`（`deploy/install.sh` 已自动生成）。
-3. Kapso 控制台 → Integrations → Webhooks → Platform webhooks：添加地址 `https://你的域名/admin-api/channel/kapso/webhook`，
-   密钥填同一个随机串，订阅 `whatsapp.phone_number.created`、`whatsapp.phone_number.deleted`、`whatsapp.phone_number.offboarded`。
-   号码绑定后系统会自动给该号码配置消息推送（Meta 原始格式），不用手动加。
-4. Meta 消息费结算方式 `CGCH_KAPSO_BILLING_MODE`：留空用 Kapso 默认；`partner_managed` 由我们在 Kapso 预充值代付；
-   `customer_managed` 由客户在 Meta 自己绑定付款方式。
-5. 重启服务。免费版只能绑 1 个号码，正式使用请升级 Pro（$25/月含 3 个号码）或 Platform（$299/月含 50 个号码）。
-
-配置了 `CGCH_META_WA_CONFIG_ID`（自己成为 Meta 技术服务商）时，优先走 Meta 嵌入式注册。
-
-## 一（补充二）、YouTube、TikTok 视频评论
+## 一（补充）、YouTube、TikTok 视频评论
 
 客户在「渠道 → YouTube / TikTok → 连接新账号」授权后，系统每 3 分钟拉取一次视频下的新评论，每条评论是「会话」里的一个对话，
 AI 按智能体设置自动回复评论、给评论的人建线索；业务员也可以在会话里直接回复。首次授权只导入历史评论，不会对历史评论自动回复。

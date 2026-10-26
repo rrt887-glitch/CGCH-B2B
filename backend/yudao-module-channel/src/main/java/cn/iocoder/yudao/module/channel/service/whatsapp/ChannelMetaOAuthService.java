@@ -175,11 +175,6 @@ public class ChannelMetaOAuthService {
         ChannelOAuthProperties.Meta m = channelOAuthProperties.getMeta();
         boolean on = m.configured() && StrUtil.isNotBlank(m.getWaConfigId());
         Map<String, Object> r = new LinkedHashMap<>();
-        if (!on && channelOAuthProperties.getKapso().configured()) { // 自己不是 Meta 技术服务商时，经 Kapso 绑定链接接入
-            r.put("enabled", true);
-            r.put("provider", "kapso");
-            return r;
-        }
         r.put("enabled", on);
         if (on) {
             r.put("provider", "meta");
