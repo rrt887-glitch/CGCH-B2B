@@ -97,6 +97,8 @@ export const createWaAccount = (data: ChannelWaApi.Account) =>
 export const updateWaAccount = (data: ChannelWaApi.Account) =>
   requestClient.put('/channel/wa-account/update', data);
 export const deleteWaAccount = (id: number) => requestClient.delete(`/channel/wa-account/delete?id=${id}`);
+/** 同步 Facebook 主页 / Instagram 最近的聊天记录，返回新导入的消息数 */
+export const syncWaHistory = (id: number) => requestClient.post<number>(`/channel/wa-account/sync-history?id=${id}`);
 export const getWaTemplates = (id: number) =>
   requestClient.get<ChannelWaApi.Template[]>(`/channel/wa-account/templates?id=${id}`);
 

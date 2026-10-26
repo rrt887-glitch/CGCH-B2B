@@ -193,7 +193,7 @@ async function loadApplicationPlugins(
         const compressPlugins: PluginOption[] = [];
         if (compressTypes?.includes('brotli')) {
           compressPlugins.push(
-            viteCompressPlugin({ deleteOriginFile: false, ext: '.br' }),
+            viteCompressPlugin({ algorithm: 'brotliCompress', deleteOriginFile: false, ext: '.br' }),
           );
         }
         if (compressTypes?.includes('gzip')) {

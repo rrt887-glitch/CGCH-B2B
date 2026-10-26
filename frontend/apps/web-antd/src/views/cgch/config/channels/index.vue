@@ -37,12 +37,14 @@ import {
 import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
 import type { SocialPlatform } from '#/api/channel/social';
 import { getSocialPlatforms, pollSocial } from '#/api/channel/social';
+import { syncWaHistory } from '#/api/channel/whatsapp';
 
 import LeadRules from './lead-rules.vue';
 import WaAccounts from './wa-accounts.vue';
 import WebImModal from './web-im-modal.vue';
 import SocialConnectModal from './social-connect-modal.vue';
 import EvoConnectModal from './evo-connect-modal.vue';
+import { CHANNEL_ICONS } from '#/assets/channel-icons';
 
 defineOptions({ name: 'CgchConfigChannels' });
 
@@ -332,6 +334,16 @@ async function saveMail() {
 // ===== 账号操作 =====
 const busy = ref<string>();
 
+async function syncHistory(a: ChannelWaApi.Account) {
+  busy.value = `hist-${a.id}`;
+  try {
+    const n = await syncWaHistory(a.id!);
+    message.success(n > 0 ? `同步了 ${n} 条聊天记录，可在「会话」中查看` : '没有新的聊天记录');
+  } finally {
+    busy.value = undefined;
+  }
+}
+
 async function pollNow(a: ChannelWaApi.Account) {
   busy.value = `poll-${a.id}`;
   try {
@@ -425,7 +437,8 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
           <template v-for="c in CHANNELS" :key="c.key">
             <div class="ch-row">
               <div class="ch-col-name">
-                <span class="ch-badge" :style="{ background: c.color }" :class="{ 'is-long': c.abbr.length > 2 }">{{ c.abbr }}</span>
+                <img v-if="CHANNEL_ICONS[c.key]" :src="CHANNEL_ICONS[c.key]" :alt="c.name" class="ch-icon" />
+                <span v-else class="ch-badge" :style="{ background: c.color }" :class="{ 'is-long': c.abbr.length > 2 }">{{ c.abbr }}</span>
                 <span class="truncate">{{ c.name }}</span>
               </div>
               <div class="ch-col-status">
@@ -458,6 +471,11 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
                 <a v-if="r.wa?.platform === 'web'" @click="imOpen = true">嵌入代码</a>
                 <a v-else-if="r.wa?.platform === 'youtube' || r.wa?.platform === 'tiktok'" :class="{ 'opacity-50': busy === `poll-${r.id}` }" @click="pollNow(r.wa)">立即同步</a>
                 <a v-else-if="r.wa?.authType === 'evolution'" @click="rescan(r.wa)">重新扫码</a>
+                <a
+                  v-else-if="r.wa?.authType === 'oauth' && (r.wa.platform === 'messenger' || r.wa.platform === 'instagram')"
+                  :class="{ 'opacity-50': busy === `hist-${r.id}` }"
+                  @click="syncHistory(r.wa)"
+                >同步聊天记录</a>
                 <a v-else-if="r.wa && r.wa.authType !== 'oauth'" @click="waRef?.showGuide(r.wa)">回调配置</a>
                 <a v-if="r.mail || (r.wa && r.wa.authType !== 'oauth' && r.wa.authType !== 'evolution')" @click="edit(c, r)">{{ r.mail?.authType === 'oauth2' ? '重新授权' : '修改' }}</a>
                 <a @click="toggle(r)">{{ (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停' : '停用') : '启用' }}</a>
@@ -658,6 +676,14 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 .ch-ops {
   display: flex;
   gap: 14px;
+}
+
+.ch-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  border-radius: 6px;
 }
 
 .ch-badge {

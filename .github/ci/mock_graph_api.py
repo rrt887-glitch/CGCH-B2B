@@ -46,6 +46,7 @@ FB_SENT = []
 SUBS = []
 TOKENS = {GOOD, 'Bearer page-token-PAGE1', 'Bearer user-long', 'Bearer biz-token'}
 REG = []
+HIST = {'on': False}  # POST /_hist 打开后，/{page}/conversations 返回历史会话
 # Graph 对象：主页、Instagram 账号、Messenger / Instagram 用户
 PROFILES = {
     'me': {'id': 'FBU1', 'name': 'Page Owner'},
@@ -304,6 +305,26 @@ class Handler(BaseHTTPRequestHandler):
                 {'id': 'PAGE1', 'name': 'CGCH Fan Page', 'access_token': 'page-token-PAGE1',
                  'instagram_business_account': {'id': 'IG1', 'username': 'cgch_ig'}},
                 {'id': 'PAGE2', 'name': 'No Token Page'}]})
+        if len(path) == 2 and path[1] == 'me' and self.headers.get('Authorization') == 'Bearer page-token-PAGE1':
+            return self._json(200, {'id': 'PAGE1', 'name': 'CGCH Fan Page'})
+        if len(path) == 3 and path[2] == 'conversations':
+            from urllib.parse import parse_qs, urlparse
+            if self.headers.get('Authorization') != 'Bearer page-token-PAGE1' or path[1] != 'PAGE1':
+                return self._json(400, {'error': {'message': 'Invalid page', 'code': 100}})
+            if not HIST['on']:
+                return self._json(200, {'data': []})
+            host = self.headers.get('Host')
+            if parse_qs(urlparse(self.path).query).get('platform', [''])[0] == 'instagram':
+                return self._json(200, {'data': [{'id': 't_ig1', 'participants': {'data': [{'id': 'IG1', 'username': 'cgch_ig'}, {'id': 'IGU9', 'username': 'ig_old_buyer'}]},
+                    'messages': {'data': [
+                        {'id': 'aWdfHIST2', 'created_time': '2026-10-20T09:05:00+0000', 'from': {'id': 'IG1'}, 'message': 'Sure, 500 pcs MOQ.'},
+                        {'id': 'aWdfHIST1', 'created_time': '2026-10-20T09:00:00+0000', 'from': {'id': 'IGU9'}, 'message': 'MOQ?'}]}}]})
+            return self._json(200, {'data': [{'id': 't_fb1', 'participants': {'data': [{'id': '7002', 'name': 'Old Buyer'}, {'id': 'PAGE1', 'name': 'CGCH Fan Page'}]},
+                'messages': {'data': [
+                    {'id': 'm_HIST3', 'created_time': '2026-10-20T08:10:00+0000', 'from': {'id': '7002'},
+                     'attachments': {'data': [{'mime_type': 'image/jpeg', 'name': 'photo.jpg', 'image_data': {'url': f'http://{host}/_media/MEDIAH1'}}]}},
+                    {'id': 'm_HIST2', 'created_time': '2026-10-20T08:05:00+0000', 'from': {'id': 'PAGE1'}, 'message': 'Yes, we ship to Spain.'},
+                    {'id': 'm_HIST1', 'created_time': '2026-10-20T08:00:00+0000', 'from': {'id': '7002'}, 'message': 'Do you ship to Spain?'}]}}]})
         if len(path) == 2 and path[1] in PROFILES:
             return self._json(200, PROFILES[path[1]])
         if len(path) == 2:
@@ -322,6 +343,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == ['_evo', 'state']:  # 模拟手机确认 / 退出关联设备
             b = json.loads(raw or b'{}')
             EVO[b['instance']].update({k: v for k, v in b.items() if k != 'instance'})
+            return self._json(200, {'ok': True})
+        if path == ['_hist']:
+            HIST['on'] = True
             return self._json(200, {'ok': True})
         if path == ['v1', 'chat', 'completions']:
             return self._llm(json.loads(raw or b'{}'))
