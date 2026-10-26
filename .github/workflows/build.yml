@@ -110,7 +110,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.wa-config-id=cfg123 --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 --cgch.social.poll-ms=86400000 --cgch.oauth.youtube.client-id=ytid --cgch.oauth.youtube.client-secret=ytsec --cgch.oauth.youtube.auth-url=http://127.0.0.1:18080/yt/auth --cgch.oauth.youtube.token-url=http://127.0.0.1:18080/yt/token --cgch.oauth.youtube.api-base=http://127.0.0.1:18080/yt/v3 --cgch.oauth.tiktok.client-id=ttid --cgch.oauth.tiktok.client-secret=ttsec --cgch.oauth.tiktok.auth-url=http://127.0.0.1:18080/tt/auth?client_key=ttid --cgch.oauth.tiktok.api-base=http://127.0.0.1:18080/tt/v1.3 --cgch.site.company-name=测试科技有限公司 '--cgch.site.company-name-en=CGCH Test Co., Ltd.' --cgch.site.contact-email=privacy@cgch.test > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.wa-config-id=cfg123 --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 --cgch.social.poll-ms=86400000 --cgch.oauth.evolution.base-url=http://127.0.0.1:18080/evo --cgch.oauth.evolution.api-key=evo-key --cgch.oauth.evolution.webhook-base=http://127.0.0.1:48080 --cgch.oauth.youtube.client-id=ytid --cgch.oauth.youtube.client-secret=ytsec --cgch.oauth.youtube.auth-url=http://127.0.0.1:18080/yt/auth --cgch.oauth.youtube.token-url=http://127.0.0.1:18080/yt/token --cgch.oauth.youtube.api-base=http://127.0.0.1:18080/yt/v3 --cgch.oauth.tiktok.client-id=ttid --cgch.oauth.tiktok.client-secret=ttsec --cgch.oauth.tiktok.auth-url=http://127.0.0.1:18080/tt/auth?client_key=ttid --cgch.oauth.tiktok.api-base=http://127.0.0.1:18080/tt/v1.3 --cgch.site.company-name=测试科技有限公司 '--cgch.site.company-name-en=CGCH Test Co., Ltd.' --cgch.site.contact-email=privacy@cgch.test > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -1687,6 +1687,119 @@ jobs:
           call('PUT', '/channel/ai/agent-settings', {'skills': dict(sk['skills'], webQuote=False)})
           print('允许联网报价：只在问价且资料没有价格时检索，AI 给出市场参考价区间')
           cfg_k = call('GET', '/channel/ai/config/get')
+          # ---- WhatsApp 扫码接入（Evolution API）：配对码 / 二维码 → 手机确认建账号 → 收发消息、状态、手机端回显、媒体、掉线重扫、删除 ----
+          import urllib.error
+          def evo():
+              return json.load(urllib.request.urlopen('http://127.0.0.1:18080/_evo'))
+          def evo_state(name, **kw):
+              urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18080/_evo/state', method='POST',
+                  data=json.dumps(dict(kw, instance=name)).encode(), headers={'Content-Type': 'application/json'}))
+          def evo_push(name, event, data, token=None):
+              if token is None:
+                  token = evo()['instances'][name]['body']['webhook']['headers']['x-cgch-token']
+              req = urllib.request.Request(BASE + '/channel/evolution/webhook', method='POST',
+                  data=json.dumps({'event': event, 'instance': name, 'data': data, 'apikey': 'HASH-' + name}).encode(),
+                  headers={'Content-Type': 'application/json', 'x-cgch-token': token})
+              try:
+                  return urllib.request.urlopen(req).status
+              except urllib.error.HTTPError as e:
+                  return e.code
+          def evo_msg(name, mid, jid, message, mtype, from_me=False, push='Evo Buyer', **key):
+              return evo_push(name, 'messages.upsert', {'key': dict({'remoteJid': jid, 'fromMe': from_me, 'id': mid}, **key), 'pushName': push,
+                  'message': message, 'messageType': mtype, 'messageTimestamp': int(time.time()), 'instanceId': 'id-' + name, 'source': 'android'})
+          def evo_upload(fields, filename, content, ctype):
+              b = '----cgchevo'
+              parts = b''.join(f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode() for k, v in fields.items())
+              parts += f'--{b}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\nContent-Type: {ctype}\r\n\r\n'.encode() + content + f'\r\n--{b}--\r\n'.encode()
+              hdr = {k: v for k, v in H.items() if k != 'Content-Type'}
+              hdr['Content-Type'] = f'multipart/form-data; boundary={b}'
+              return json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/channel/wa/message/send-media', method='POST', data=parts, headers=hdr)))
+          call('PUT', '/channel/ai/config/save', dict(cfg_k, llmApiKey='', waMode='off'))
+          assert call('GET', '/channel/evolution/config') == {'enabled': True}
+          # 配对码
+          s1 = call('POST', '/channel/evolution/session', {'number': '+86 138-0000-2222'})
+          assert s1['status'] == 'connecting' and s1['pairingCode'] == 'ABCD1234' and s1['session'].startswith('cgch-1-1-'), s1
+          b1 = evo()['instances'][s1['session']]['body']
+          assert b1['integration'] == 'WHATSAPP-BAILEYS' and b1['number'] == '8613800002222' and b1['qrcode'] is True and b1['groupsIgnore'] is True, b1
+          assert b1['webhook']['url'] == 'http://127.0.0.1:48080/admin-api/channel/evolution/webhook' and b1['webhook']['enabled'] \
+              and set(b1['webhook']['events']) == {'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE'} and b1['webhook']['headers']['x-cgch-token'], b1
+          p1 = call('GET', f"/channel/evolution/session?session={s1['session']}")
+          assert p1['status'] == 'connecting' and p1['pairingCode'] == 'ABCD1234' and p1['qr'].startswith('data:image/png;base64,QR'), p1
+          assert call('GET', '/channel/evolution/session?session=cgch-1-999-x')['status'] == 'expired', '别人的连接看不到'
+          assert evo_push(s1['session'], 'connection.update', {'state': 'open'}, token='wrong') == 401, '推送令牌不对应拒绝'
+          # 手机确认：推送 connection.update（state=open）建账号
+          evo_state(s1['session'], state='open', ownerJid='8613800002222@s.whatsapp.net', profileName='Evo Biz')
+          assert evo_push(s1['session'], 'connection.update', {'instance': s1['session'], 'state': 'open', 'statusReason': 200,
+                                                               'wuid': '8613800002222@s.whatsapp.net', 'profileName': 'Evo Biz'}) == 200
+          p1 = call('GET', f"/channel/evolution/session?session={s1['session']}")
+          assert p1['status'] == 'open' and p1['displayPhone'] == '+8613800002222' and p1['accountId'], p1
+          ea = next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == p1['accountId'])
+          assert ea['authType'] == 'evolution' and ea['connState'] == 'open' and ea['name'] == 'Evo Biz' and ea['phoneNumberId'] == s1['session'] \
+              and ea['enabled'] and ea['platform'] == 'whatsapp', ea
+          # 收消息：私聊入库；群消息忽略；@lid 联系人按真实号码归到同一会话
+          assert evo_msg(s1['session'], 'EVOIN1', '8615900003333@s.whatsapp.net', {'conversation': 'Hi, what is the MOQ?'}, 'conversation') == 200
+          assert evo_msg(s1['session'], 'EVOIN1', '8615900003333@s.whatsapp.net', {'conversation': 'Hi, what is the MOQ?'}, 'conversation') == 200
+          assert evo_msg(s1['session'], 'EVOGRP1', '1203630@g.us', {'conversation': 'group chat'}, 'conversation') == 200
+          assert evo_msg(s1['session'], 'EVOIN2', '99887766@lid', {'conversation': 'Also need samples'}, 'conversation',
+                         remoteJidAlt='8615900003333@s.whatsapp.net') == 200
+          ecv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
+                                   if c['accountId'] == ea['id'] and c['waId'] == '8615900003333'), None), '扫码号码来信建会话')
+          assert ecv['profileName'] == 'Evo Buyer' and ecv['windowOpen'], ecv
+          ems = call('GET', f"/channel/wa/message/list?conversationId={ecv['id']}")
+          assert sorted((m['direction'], m['textBody']) for m in ems) == [(1, 'Also need samples'), (1, 'Hi, what is the MOQ?')], ems
+          assert not [c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c['accountId'] == ea['id'] and c['waId'] != '8615900003333'], '群消息不进会话'
+          # 发消息
+          es = call('POST', '/channel/wa/message/send', {'conversationId': ecv['id'], 'text': 'MOQ is 300 units.'})
+          last = evo()['sent'][-1]
+          assert last['kind'] == 'sendText' and last['instance'] == s1['session'] and last['number'] == '8615900003333' and last['text'] == 'MOQ is 300 units.', last
+          ewamid = sql(f"SELECT wa_message_id FROM channel_wa_message WHERE id = {es['id']}")
+          assert ewamid.startswith('EVOOUT'), ewamid
+          assert evo_push(s1['session'], 'messages.update', {'keyId': ewamid, 'remoteJid': '8615900003333@s.whatsapp.net', 'fromMe': True, 'status': 'READ'}) == 200
+          assert sql(f"SELECT status FROM channel_wa_message WHERE id = {es['id']}") == 'read'
+          # 手机端发出的消息同步进会话；系统发出的消息回显不重复
+          assert evo_msg(s1['session'], 'EVOECHO1', '8615900003333@s.whatsapp.net', {'conversation': 'Sent from my phone'}, 'conversation', from_me=True) == 200
+          assert evo_msg(s1['session'], ewamid, '8615900003333@s.whatsapp.net', {'conversation': 'MOQ is 300 units.'}, 'conversation', from_me=True) == 200
+          ems = call('GET', f"/channel/wa/message/list?conversationId={ecv['id']}")
+          assert sorted(m['textBody'] for m in ems if m['direction'] == 2) == ['MOQ is 300 units.', 'Sent from my phone'], ems
+          # 图片：收到后按需从 Evolution 下载；发送图片
+          assert evo_msg(s1['session'], 'EVOIMG1', '8615900003333@s.whatsapp.net', {'imageMessage': {'mimetype': 'image/jpeg', 'caption': 'our logo'}}, 'imageMessage') == 200
+          eimg = next(m for m in call('GET', f"/channel/wa/message/list?conversationId={ecv['id']}") if m['type'] == 'image')
+          assert eimg['textBody'] == 'our logo', eimg
+          emed = call('GET', f"/channel/wa/message/media?id={eimg['id']}")
+          assert emed['fileUrl'] and emed['mimeType'] == 'image/jpeg', emed
+          jpg = bytes.fromhex('ffd8ffe000104a46494600010100000100010000') + b'CGCHPHOTO' + b'\xff\xd9'
+          emr = evo_upload({'conversationId': ecv['id'], 'caption': 'Sample photo'}, 'photo.jpg', jpg, 'image/jpeg')
+          assert emr['code'] == 0 and emr['data']['type'] == 'image', emr
+          last = evo()['sent'][-1]
+          assert last['kind'] == 'sendMedia' and last['mediatype'] == 'image' and last['mediaSize'] == len(jpg) and last['caption'] == 'Sample photo', last
+          # 扫码号码可以主动给新号码发消息；没有消息模板
+          call('POST', '/channel/wa/message/send', {'accountId': ea['id'], 'to': '+1 555 0177', 'text': 'Hello from CGCH'})
+          assert evo()['sent'][-1]['number'] == '15550177', evo()['sent'][-1]
+          assert call('GET', f"/channel/wa-account/templates?id={ea['id']}", ok=False)['code'] != 0
+          # 手机上退出关联设备：显示已断开；重新扫码（二维码）沿用原账号与会话，旧实例删除
+          assert evo_push(s1['session'], 'connection.update', {'instance': s1['session'], 'state': 'close', 'statusReason': 401}) == 200
+          assert next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == ea['id'])['connState'] == 'close'
+          s2 = call('POST', '/channel/evolution/session', {'accountId': ea['id']})
+          assert s2['status'] == 'connecting' and s2['qr'] == 'data:image/png;base64,QR1' and not s2['pairingCode'], s2
+          assert 'number' not in evo()['instances'][s2['session']]['body']
+          evo_state(s2['session'], state='open', ownerJid='8613800002222@s.whatsapp.net', profileName='Evo Biz 2')
+          p2 = call('GET', f"/channel/evolution/session?session={s2['session']}")  # 推送没到时，轮询发现已连接也能完成
+          assert p2['status'] == 'open' and p2['accountId'] == ea['id'], p2
+          ea2 = next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == ea['id'])
+          assert ea2['phoneNumberId'] == s2['session'] and ea2['connState'] == 'open' and ea2['name'] == 'Evo Biz 2', ea2
+          assert wait(lambda: s1['session'] in evo()['deleted'] or None, '旧实例删除')
+          assert len(call('GET', f"/channel/wa/message/list?conversationId={ecv['id']}")) == len(ems) + 2, '重新扫码后会话保留'
+          assert evo_push(s1['session'], 'messages.upsert', {}, token='anything') == 200, '旧实例的推送忽略'
+          # 放弃连接：删除还没绑定的实例
+          s3 = call('POST', '/channel/evolution/session', {})
+          call('DELETE', f"/channel/evolution/session?session={s3['session']}")
+          assert wait(lambda: s3['session'] in evo()['deleted'] or None, '放弃的实例删除')
+          assert call('GET', f"/channel/evolution/session?session={s3['session']}")['status'] == 'expired'
+          # 删除账号：退出关联设备并删除实例
+          call('DELETE', f"/channel/wa-account/delete?id={ea['id']}")
+          assert s2['session'] in evo()['deleted'], evo()['deleted']
+          call('PUT', '/channel/ai/config/save', dict(cfg_k, llmApiKey=''))
+          print('WhatsApp 扫码接入：配对码、二维码、手机确认建账号、收发消息、已读回执、手机端回显、群消息忽略、媒体收发、主动发起、掉线重扫、放弃连接、删除')
           # ---- YouTube / TikTok 视频评论：授权绑定 → 拉取评论进会话（首次只导入历史）→ 回复评论 ----
           def mock_post(path, body):
               urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18080' + path, data=json.dumps(body).encode(), method='POST',
@@ -1843,6 +1956,98 @@ jobs:
           path: frontend/apps/web-antd/dist*
           if-no-files-found: warn
 
+  evolution:
+    name: Evolution API 实机兼容性检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 启动 Evolution API（与一键安装相同的镜像和配置）
+        run: |
+          set -e
+          IMG=$(grep -o 'EVOLUTION_IMAGE:-[^}]*' deploy/install.sh | cut -d- -f2-)
+          echo "镜像：$IMG"
+          docker run -d --name evo-db --network host -e POSTGRES_DB=evolution -e POSTGRES_USER=evolution -e POSTGRES_PASSWORD=pw postgres:16-alpine
+          for i in $(seq 1 30); do docker exec evo-db pg_isready -U evolution -d evolution >/dev/null 2>&1 && break; sleep 2; done
+          docker run -d --name evo --network host \
+            -e SERVER_TYPE=http -e SERVER_PORT=8080 -e SERVER_URL=http://127.0.0.1:8080 -e SERVER_DISABLE_MANAGER=true -e SERVER_DISABLE_DOCS=true \
+            -e AUTHENTICATION_API_KEY=evo-key -e DATABASE_PROVIDER=postgresql \
+            -e 'DATABASE_CONNECTION_URI=postgresql://evolution:pw@127.0.0.1:5432/evolution?schema=public' -e DATABASE_CONNECTION_CLIENT_NAME=cgch \
+            -e DATABASE_SAVE_DATA_INSTANCE=true -e DATABASE_SAVE_DATA_NEW_MESSAGE=true -e CACHE_REDIS_ENABLED=false -e CACHE_LOCAL_ENABLED=true \
+            -e LOG_LEVEL=ERROR,WARN,INFO -e DEL_INSTANCE=false -e LANGUAGE=en -e CONFIG_SESSION_PHONE_CLIENT=CGCH -e TELEMETRY_ENABLED=false \
+            -e WEBSOCKET_ENABLED=false -e RABBITMQ_ENABLED=false -e WEBHOOK_GLOBAL_ENABLED=false "$IMG"
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8080/ >/dev/null 2>&1 && break; sleep 3; done
+          curl -fsS http://127.0.0.1:8080/ && echo
+      - name: 按系统的请求格式调用（建实例、二维码、配对码、状态、推送、删除）
+        run: |
+          python3 - <<'PY'
+          import json, threading, time, urllib.request, urllib.error
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          GOT = []
+          class H(BaseHTTPRequestHandler):
+              def do_POST(self):
+                  body = self.rfile.read(int(self.headers.get('Content-Length') or 0))
+                  GOT.append((self.headers.get('x-cgch-token'), json.loads(body or b'{}')))
+                  self.send_response(200); self.end_headers(); self.wfile.write(b'ok')
+              def log_message(self, *a):
+                  pass
+          threading.Thread(target=HTTPServer(('127.0.0.1', 18999), H).serve_forever, daemon=True).start()
+          B = 'http://127.0.0.1:8080'
+          def call(m, p, body=None):
+              req = urllib.request.Request(B + p, method=m, headers={'apikey': 'evo-key', 'Content-Type': 'application/json'},
+                                           data=json.dumps(body).encode() if body is not None else None)
+              try:
+                  return json.load(urllib.request.urlopen(req, timeout=90))
+              except urllib.error.HTTPError as e:
+                  return {'_status': e.code, **json.loads(e.read() or b'{}')}
+          def create(name, number=None):
+              b = {'instanceName': name, 'integration': 'WHATSAPP-BAILEYS', 'qrcode': True, 'groupsIgnore': True, 'rejectCall': False,
+                   'alwaysOnline': False, 'readMessages': False, 'readStatus': False, 'syncFullHistory': False,
+                   'webhook': {'enabled': True, 'url': 'http://127.0.0.1:18999/hook', 'byEvents': False, 'base64': False,
+                               'headers': {'x-cgch-token': 'tok-' + name}, 'events': ['CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE']}}
+              if number:
+                  b['number'] = number
+              return call('POST', '/instance/create', b)
+          r = create('cgch-1-1-ci')
+          print(json.dumps({k: v for k, v in r.items() if k != 'qrcode'}, ensure_ascii=False)[:600])
+          assert r.get('hash') and r['instance']['instanceName'] == 'cgch-1-1-ci', r
+          qr = (r.get('qrcode') or {}).get('base64') or ''
+          for i in range(10):
+              if qr:
+                  break
+              time.sleep(3)
+              qr = call('GET', '/instance/connect/cgch-1-1-ci').get('base64') or ''
+          assert qr.startswith('data:image/png;base64,'), '没有拿到二维码（Evolution 连不上 WhatsApp 服务器？）'
+          st = call('GET', '/instance/connectionState/cgch-1-1-ci')
+          assert st['instance']['state'] in ('connecting', 'close'), st
+          fi = call('GET', '/instance/fetchInstances?instanceName=cgch-1-1-ci')
+          assert isinstance(fi, list) and fi[0]['name'] == 'cgch-1-1-ci' and 'ownerJid' in fi[0] and 'connectionStatus' in fi[0], fi
+          for i in range(20):
+              if any(t == 'tok-cgch-1-1-ci' and e.get('event') == 'connection.update' and e.get('instance') == 'cgch-1-1-ci' and 'state' in e.get('data', {}) for t, e in GOT):
+                  break
+              time.sleep(1)
+          assert any(t == 'tok-cgch-1-1-ci' and e.get('event') == 'connection.update' for t, e in GOT), GOT[:3]
+          print('推送格式：', json.dumps(GOT[0][1], ensure_ascii=False)[:300])
+          missing = call('GET', '/instance/connectionState/cgch-not-exist')
+          print('实例不存在：', missing)
+          msg = json.dumps(missing)
+          assert 'does not exist' in msg or 'not found' in msg.lower(), missing
+          r2 = create('cgch-1-1-ci2', '8613800002222')
+          pc = (r2.get('qrcode') or {}).get('pairingCode') or call('GET', '/instance/connect/cgch-1-1-ci2').get('pairingCode')
+          print('配对码：', pc)
+          if not pc:
+              print('::warning::测试号码没有拿到配对码（WhatsApp 可能拒绝了虚构号码），请用真实号码验证')
+          for n in ('cgch-1-1-ci', 'cgch-1-1-ci2'):
+              call('DELETE', f'/instance/logout/{n}')
+              d = call('DELETE', f'/instance/delete/{n}')
+              assert d.get('status') == 'SUCCESS', d
+          assert 'does not exist' in json.dumps(call('GET', '/instance/connectionState/cgch-1-1-ci'))
+          print('Evolution API 实机检查通过：建实例、二维码、状态、实例信息、推送格式与校验头、删除')
+          PY
+      - name: Evolution 日志
+        if: always()
+        run: docker logs --tail 120 evo || true
+
   release:
     name: 发布镜像并验证一键安装（main）
     needs: [backend, frontend]
@@ -1925,6 +2130,9 @@ jobs:
           cat /tmp/login.json; echo
           test "$code" = 200 && grep -q '"code"' /tmp/login.json
           sudo grep -q '^CGCH_FIELD_ENCRYPT_KEY=' /opt/cgch/.env
+          sudo grep -q '^CGCH_EVOLUTION_API_KEY=.\+' /opt/cgch/.env && sudo grep -q '^EVOLUTION_DB_PASSWORD=.\+' /opt/cgch/.env
+          ok=; for i in $(seq 1 40); do sudo bash -c 'cd /opt/cgch && docker compose exec -T web wget -q -O - http://evolution:8080/' </dev/null 2>/dev/null | grep -qi 'evolution' && { ok=1; break; }; sleep 3; done
+          [ -n "$ok" ] || { echo "::error::Evolution API 没有启动"; sudo bash -c 'cd /opt/cgch && docker compose logs --tail 80 evolution'; exit 1; }
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT config FROM infra_file_config WHERE id=4\""' | grep -q '"domain": *"http://'
           echo "--- 模拟老数据库：删掉 v3 新增字段并清除升级记录，验证升级脚本 ---"
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD ruoyi-vue-pro -e \"ALTER TABLE channel_wa_conversation DROP COLUMN intent; ALTER TABLE channel_mail_message DROP COLUMN intent; DELETE FROM cgch_migration;\""'

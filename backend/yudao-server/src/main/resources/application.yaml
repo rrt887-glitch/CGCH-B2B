@@ -396,6 +396,10 @@ cgch:
       client-secret: ${CGCH_META_APP_SECRET:}
       verify-token: ${CGCH_META_WEBHOOK_VERIFY_TOKEN:}
       wa-config-id: ${CGCH_META_WA_CONFIG_ID:} # WhatsApp 嵌入式注册的配置编号
+    evolution: # WhatsApp 扫码接入（Evolution API，WhatsApp 网页版协议，一键安装时与系统部署在一起）
+      base-url: ${CGCH_EVOLUTION_BASE_URL:}
+      api-key: ${CGCH_EVOLUTION_API_KEY:}
+      webhook-base: ${CGCH_EVOLUTION_WEBHOOK_BASE:} # Evolution 回调系统的地址（容器网络内），为空时用 PUBLIC_BASE_URL
     youtube: # YouTube 评论（Google Cloud 项目启用 YouTube Data API v3 的 OAuth 客户端）
       client-id: ${CGCH_YOUTUBE_CLIENT_ID:}
       client-secret: ${CGCH_YOUTUBE_CLIENT_SECRET:}

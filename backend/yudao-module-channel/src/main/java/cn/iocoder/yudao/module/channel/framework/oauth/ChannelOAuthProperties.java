@@ -20,6 +20,7 @@ public class ChannelOAuthProperties {
     private Provider google = Provider.google();
     private Provider microsoft = Provider.microsoft();
     private Meta meta = new Meta();
+    private Evolution evolution = new Evolution();
     private Social youtube = Social.youtube();
     private Social tiktok = Social.tiktok();
 
@@ -60,6 +61,25 @@ public class ChannelOAuthProperties {
             s.apiBase = "https://business-api.tiktok.com/open_api/v1.3";
             s.callbackPath = "/admin-api/channel/social/tiktok/callback/";
             return s;
+        }
+    }
+
+    /**
+     * WhatsApp 扫码接入（Evolution API，开源项目，基于 WhatsApp 网页版协议）：客户用手机 WhatsApp「关联设备」扫码或输入配对码，
+     * 和登录电脑版 WhatsApp 一样。Evolution API 与系统部署在一起，推送地址为 {webhookBase}/admin-api/channel/evolution/webhook。
+     * 注意：这不是 Meta 官方接口，号码有被 WhatsApp 限制的风险。
+     */
+    @Data
+    public static class Evolution {
+        /** Evolution API 地址（容器网络内） */
+        private String baseUrl = "";
+        /** Evolution API 全局 API Key（AUTHENTICATION_API_KEY） */
+        private String apiKey = "";
+        /** Evolution API 回调我们的地址前缀（容器网络内），为空时用 redirectBase */
+        private String webhookBase = "";
+
+        public boolean configured() {
+            return baseUrl != null && !baseUrl.isBlank() && apiKey != null && !apiKey.isBlank();
         }
     }
 

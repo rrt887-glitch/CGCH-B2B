@@ -32,6 +32,15 @@ public class ChannelWaAccountDO extends TenantBaseDO {
     /** 接入方式：手动填写令牌，或通过 Facebook 登录授权 */
     public static final String AUTH_MANUAL = "manual";
     public static final String AUTH_OAUTH = "oauth";
+    /**
+     * 扫码接入（Evolution API，WhatsApp 网页版协议）：phoneNumberId 存 Evolution 实例名，accessToken 存实例令牌，
+     * appSecret 存推送校验令牌，displayPhone 存 E.164 号码，connState 存连接状态
+     */
+    public static final String AUTH_EVOLUTION = "evolution";
+    /** 扫码接入的连接状态：已连接、连接中、已断开（手机上退出了关联设备，需要重新扫码） */
+    public static final String CONN_OPEN = "open";
+    public static final String CONN_CONNECTING = "connecting";
+    public static final String CONN_CLOSE = "close";
 
     /**
      * 编号
@@ -101,6 +110,14 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      * 最近一次收到 Webhook 的时间
      */
     private LocalDateTime lastWebhookTime;
+    /**
+     * 扫码接入的连接状态：open、connecting、close；其他接入方式为空
+     */
+    private String connState;
+
+    public boolean isEvolution() {
+        return AUTH_EVOLUTION.equals(authType);
+    }
 
     public boolean isWeb() {
         return PLATFORM_WEB.equals(platform);
