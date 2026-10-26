@@ -17,7 +17,7 @@ defineProps<{ property: UserCardProperty }>();
         <Avatar :size="60" class="flex items-center">
           <IconifyIcon icon="ep:avatar" :size="60" />
         </Avatar>
-        <span class="text-[18px] font-bold">芋道源码</span>
+        <span class="text-[18px] font-bold">用户昵称</span>
       </div>
       <IconifyIcon icon="tdesign:qrcode" :size="20" />
     </div>

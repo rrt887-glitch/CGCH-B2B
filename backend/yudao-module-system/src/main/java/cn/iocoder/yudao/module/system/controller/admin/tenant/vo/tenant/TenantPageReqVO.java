@@ -17,7 +17,7 @@ import static cn.iocoder.yudao.framework.common.util.date.DateUtils.FORMAT_YEAR_
 @ToString(callSuper = true)
 public class TenantPageReqVO extends PageParam {
 
-    @Schema(description = "租户名", example = "芋道")
+    @Schema(description = "租户名", example = "张三")
     private String name;
 
     @Schema(description = "联系人", example = "芋艿")

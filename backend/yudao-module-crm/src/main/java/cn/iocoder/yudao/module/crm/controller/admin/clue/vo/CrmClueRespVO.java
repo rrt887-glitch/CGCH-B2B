@@ -115,7 +115,7 @@ public class CrmClueRespVO {
     @Schema(description = "创建人", example = "1024")
     @ExcelProperty("创建人")
     private String creator;
-    @Schema(description = "创建人名字", example = "芋道源码")
+    @Schema(description = "创建人名字", example = "张三")
     @ExcelProperty("创建人名字")
     private String creatorName;
 
