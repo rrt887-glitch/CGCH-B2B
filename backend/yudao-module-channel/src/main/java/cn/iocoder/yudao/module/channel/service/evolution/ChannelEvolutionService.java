@@ -335,7 +335,10 @@ public class ChannelEvolutionService {
                 }
             }
             case "messages.set" -> { // 关联时同步过来的最近聊天记录：只入库，不计未读、不触发 AI 回复
-                JsonNode list = data.isArray() ? data : data.path("messages");
+                JsonNode raw = data.isArray() ? data : data.path("messages");
+                java.util.List<JsonNode> list = new java.util.ArrayList<>();
+                raw.forEach(list::add);
+                list.sort(java.util.Comparator.comparingLong(d -> d.path("messageTimestamp").asLong(0))); // 按时间先后入库
                 int n = 0;
                 for (JsonNode d : list) {
                     if (history(a, d)) {

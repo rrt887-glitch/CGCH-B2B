@@ -580,7 +580,10 @@ public class ChannelWhatsAppService {
                 if (customer == null) {
                     continue;
                 }
-                for (JsonNode m : c.path("messages").path("data")) {
+                List<JsonNode> msgs = new ArrayList<>();
+                c.path("messages").path("data").forEach(msgs::add);
+                Collections.reverse(msgs); // 接口按时间倒序返回，按时间先后入库，会话里按顺序显示
+                for (JsonNode m : msgs) {
                     if (saveMessagingHistory(a, customer, name, m, self, pageId)) {
                         n++;
                     }
