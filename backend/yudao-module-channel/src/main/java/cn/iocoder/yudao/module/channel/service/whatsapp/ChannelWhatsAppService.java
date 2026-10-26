@@ -547,6 +547,113 @@ public class ChannelWhatsAppService {
                 .setLastMessageTime(max(conv.getLastMessageTime(), time)).setLastMessagePreview(preview(msg)));
     }
 
+    // ==================== Facebook / Instagram 聊天记录 ====================
+
+    /**
+     * 拉取最近 50 个会话、每个会话最近 20 条消息入库：按消息编号去重，不计未读、不触发 AI 回复。授权接入后自动执行一次，
+     * 也可以在渠道页手动同步。返回新导入的消息数。
+     */
+    public int importMessagingHistory(ChannelWaAccountDO a) {
+        boolean ig = ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(a.getPlatform());
+        if (!ig && !ChannelWaAccountDO.PLATFORM_MESSENGER.equals(a.getPlatform())) {
+            throw exception(AI_LLM_FAIL, "这个账号不需要同步聊天记录");
+        }
+        String self = a.getPhoneNumberId();
+        try {
+            // Instagram 的会话挂在关联的 Facebook 主页下：用主页令牌查出主页编号
+            String pageId = ig ? WaGraphClient.call(a, "GET", "me?fields=id", null).path("id").asText("") : self;
+            String fields = java.net.URLEncoder.encode("participants,updated_time,messages.limit(20){id,created_time,from,to,message,"
+                    + "attachments{mime_type,name,file_url,image_data{url},video_data{url}}}", java.nio.charset.StandardCharsets.UTF_8);
+            JsonNode list = WaGraphClient.call(a, "GET", pageId + "/conversations?platform=" + (ig ? "instagram" : "messenger")
+                    + "&limit=50&fields=" + fields, null).path("data");
+            int n = 0;
+            for (JsonNode c : list) {
+                String customer = null;
+                String name = null;
+                for (JsonNode p : c.path("participants").path("data")) {
+                    String id = p.path("id").asText("");
+                    if (!id.isEmpty() && !id.equals(self) && !id.equals(pageId)) {
+                        customer = id;
+                        name = StrUtil.blankToDefault(p.path("name").asText(null), p.path("username").asText(null));
+                    }
+                }
+                if (customer == null) {
+                    continue;
+                }
+                for (JsonNode m : c.path("messages").path("data")) {
+                    if (saveMessagingHistory(a, customer, name, m, self, pageId)) {
+                        n++;
+                    }
+                }
+            }
+            log.info("[importMessagingHistory][账号 {} 导入聊天记录 {} 条]", a.getId(), n);
+            return n;
+        } catch (WaGraphClient.WaApiException e) {
+            throw exception(WA_API_FAIL, e.getMessage());
+        }
+    }
+
+    private boolean saveMessagingHistory(ChannelWaAccountDO a, String customer, String name, JsonNode m, String self, String pageId) {
+        String mid = m.path("id").asText("");
+        if (mid.isEmpty() || messageMapper.selectByWaMessageId(a.getId(), mid) != null) {
+            return false;
+        }
+        String from = m.path("from").path("id").asText("");
+        boolean out = from.equals(self) || from.equals(pageId);
+        String type = "text";
+        String url = null;
+        String fileName = null;
+        String mime = null;
+        JsonNode att = m.path("attachments").path("data").path(0);
+        if (att.isObject()) {
+            mime = StrUtil.emptyToNull(att.path("mime_type").asText(null));
+            url = StrUtil.blankToDefault(att.path("image_data").path("url").asText(null),
+                    StrUtil.blankToDefault(att.path("video_data").path("url").asText(null), att.path("file_url").asText(null)));
+            fileName = StrUtil.emptyToNull(att.path("name").asText(null));
+            String mt = StrUtil.nullToEmpty(mime);
+            type = att.has("image_data") || mt.startsWith("image/") ? "image" : att.has("video_data") || mt.startsWith("video/") ? "video"
+                    : mt.startsWith("audio/") ? "audio" : "document";
+        }
+        String text = StrUtil.emptyToNull(m.path("message").asText(null));
+        if (text == null && url == null) {
+            return false;
+        }
+        LocalDateTime time;
+        try {
+            time = java.time.OffsetDateTime.parse(m.path("created_time").asText(""),
+                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssZ")).atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+        } catch (Exception e) {
+            time = LocalDateTime.now();
+        }
+        ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), customer);
+        if (conv == null) {
+            conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(a.getPlatform()).waId(customer)
+                    .profileName(name).unreadCount(0).build();
+            conversationMapper.insert(conv);
+        }
+        ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
+                .accountId(a.getId()).conversationId(conv.getId()).direction(out ? ChannelWaMessageDO.DIRECTION_OUT : ChannelWaMessageDO.DIRECTION_IN)
+                .waMessageId(mid).type(type).textBody(text).mediaId(url).mimeType(mime).fileName(fileName)
+                .status(out ? ChannelWaMessageDO.STATUS_SENT : ChannelWaMessageDO.STATUS_RECEIVED).messageTime(time).build();
+        if (out) {
+            msg.setAiGenerated(false);
+        }
+        messageMapper.insert(msg);
+        ChannelWaConversationDO upd = new ChannelWaConversationDO().setId(conv.getId()).setLastMessageTime(max(conv.getLastMessageTime(), time));
+        if (conv.getLastMessageTime() == null || !time.isBefore(conv.getLastMessageTime())) {
+            upd.setLastMessagePreview(preview(msg));
+        }
+        if (!out) {
+            upd.setLastInboundTime(max(conv.getLastInboundTime(), time));
+        }
+        if (StrUtil.isNotBlank(name) && StrUtil.isBlank(conv.getProfileName())) {
+            upd.setProfileName(name);
+        }
+        conversationMapper.updateById(upd);
+        conv.setLastMessageTime(upd.getLastMessageTime());
+        return true;
+    }
+
     private static LocalDateTime epochMillis(long ms) {
         return ms <= 0 ? LocalDateTime.now() : LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault());
     }
@@ -745,6 +852,11 @@ public class ChannelWhatsAppService {
     /** 手机上发出的消息（系统发出的消息按消息编号去重） */
     public void evolutionSynced(ChannelWaAccountDO a, JsonNode metaMessage, String customer) {
         saveSynced(a, metaMessage, customer, true, null);
+    }
+
+    /** 关联时同步过来的聊天记录（双方的消息都有）：按消息编号去重，不计未读、不触发 AI 回复 */
+    public void evolutionHistory(ChannelWaAccountDO a, JsonNode metaMessage, String customer, boolean fromMe, String profileName) {
+        saveSynced(a, metaMessage, customer, fromMe, profileName);
     }
 
     /** 发出消息的状态 */

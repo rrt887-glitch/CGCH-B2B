@@ -184,7 +184,7 @@ services:
       DATABASE_SAVE_MESSAGE_UPDATE: "false"
       DATABASE_SAVE_DATA_CONTACTS: "false"
       DATABASE_SAVE_DATA_CHATS: "false"
-      DATABASE_SAVE_DATA_HISTORIC: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "true" # 关联时同步的聊天记录也保存，以便查看其中的图片和文件
       DATABASE_SAVE_DATA_LABELS: "false"
       CACHE_REDIS_ENABLED: "false"
       CACHE_LOCAL_ENABLED: "true"

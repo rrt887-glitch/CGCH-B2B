@@ -52,6 +52,14 @@ public class ChannelWaAccountController {
         return success(true);
     }
 
+    @PostMapping("/sync-history")
+    @Operation(summary = "同步 Facebook 主页 / Instagram 最近的聊天记录，返回新导入的消息数")
+    @Parameter(name = "id", required = true)
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:update')")
+    public CommonResult<Integer> syncHistory(@RequestParam("id") Long id) {
+        return success(whatsAppService.importMessagingHistory(whatsAppService.validateAccount(getLoginUserId(), id)));
+    }
+
     @GetMapping("/list")
     @Operation(summary = "我的 WhatsApp 号码")
     @PreAuthorize("@ss.hasPermission('channel:wa-account:query')")

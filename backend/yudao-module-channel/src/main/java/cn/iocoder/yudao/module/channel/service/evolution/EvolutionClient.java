@@ -125,7 +125,7 @@ public final class EvolutionClient {
         w.put("base64", false);
         w.putObject("headers").put(TOKEN_HEADER, webhookToken);
         ArrayNode ev = w.putArray("events");
-        ev.add("CONNECTION_UPDATE").add("MESSAGES_UPSERT").add("MESSAGES_UPDATE");
+        ev.add("CONNECTION_UPDATE").add("MESSAGES_UPSERT").add("MESSAGES_UPDATE").add("MESSAGES_SET"); // MESSAGES_SET：关联时同步过来的最近聊天记录
         JsonNode r = call(c, "POST", "/instance/create", body, 60);
         return new Created(r.path("hash").asText(null), QrCode.of(r));
     }

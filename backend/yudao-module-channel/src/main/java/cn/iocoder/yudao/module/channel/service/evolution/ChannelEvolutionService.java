@@ -290,6 +290,21 @@ public class ChannelEvolutionService {
         }
         if ("connection.update".equals(event) && "open".equals(data.path("state").asText())) {
             bind(instance, p, data.path("wuid").asText(null), data.path("profileName").asText(null));
+        } else if ("messages.set".equals(event) || "messages.upsert".equals(event)) {
+            // 关联后聊天记录可能比连接成功的推送先到：先查实例信息完成绑定，再入库
+            ChannelWaAccountDO bound = null;
+            try {
+                if ("open".equals(EvolutionClient.connectionState(cfg(), instance))) {
+                    EvolutionClient.Info info = EvolutionClient.fetchInstance(cfg(), instance);
+                    bound = bind(instance, p, info.ownerJid(), info.profileName());
+                }
+            } catch (Exception ex) {
+                log.warn("[handleWebhook][实例 {} 绑定失败] {}", instance, ex.getMessage());
+            }
+            if (bound != null) {
+                ChannelWaAccountDO b = bound;
+                TenantUtils.execute(b.getTenantId(), () -> onAccountEvent(b, event, data));
+            }
         }
         return true;
     }
@@ -318,6 +333,16 @@ public class ChannelEvolutionService {
                 } else {
                     upsert(a, data);
                 }
+            }
+            case "messages.set" -> { // 关联时同步过来的最近聊天记录：只入库，不计未读、不触发 AI 回复
+                JsonNode list = data.isArray() ? data : data.path("messages");
+                int n = 0;
+                for (JsonNode d : list) {
+                    if (history(a, d)) {
+                        n++;
+                    }
+                }
+                log.info("[onAccountEvent][账号 {} 同步聊天记录 {} 条]", a.getId(), n);
             }
             case "messages.update" -> {
                 if (data.isArray()) {
@@ -353,6 +378,32 @@ public class ChannelEvolutionService {
             }
         } catch (Exception e) {
             log.warn("[upsert][账号 {}] 消息处理失败 {}", a.getId(), d, e);
+        }
+    }
+
+    /** 一条历史消息入库；返回是否是可入库的私聊消息 */
+    private boolean history(ChannelWaAccountDO a, JsonNode d) {
+        try {
+            JsonNode key = d.path("key");
+            String jid = key.path("remoteJid").asText("");
+            if (jid.endsWith("@lid")) {
+                jid = StrUtil.blankToDefault(key.path("remoteJidAlt").asText(null), key.path("senderPn").asText(""));
+            }
+            if (!jid.endsWith("@s.whatsapp.net")) {
+                return false;
+            }
+            String customer = EvolutionClient.digits(jid);
+            ObjectNode m = toMeta(d, customer);
+            if (customer.isEmpty() || m == null || "reaction".equals(m.path("type").asText())) {
+                return false;
+            }
+            boolean fromMe = key.path("fromMe").asBoolean(false);
+            whatsAppService.evolutionHistory(a, m, customer, fromMe,
+                    fromMe ? null : StrUtil.emptyToNull(d.path("pushName").asText(null)));
+            return true;
+        } catch (Exception e) {
+            log.warn("[history][账号 {}] 聊天记录处理失败 {}", a.getId(), d, e);
+            return false;
         }
     }
 

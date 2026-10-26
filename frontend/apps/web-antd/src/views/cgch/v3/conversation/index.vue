@@ -18,6 +18,7 @@ import { getMailAccountList } from '#/api/channel/mail';
 import { getWaAccountList } from '#/api/channel/whatsapp';
 import MailWorkbench from '#/views/cgch/channel/mail/index.vue';
 import ImWorkbench from '#/views/cgch/channel/im/index.vue';
+import { CHANNEL_ICONS } from '#/assets/channel-icons';
 
 defineOptions({ name: 'CgchV3Conversation' });
 
@@ -43,7 +44,11 @@ const GRADES = [
 const grade = ref('');
 
 const PLATFORM: Record<string, string> = { whatsapp: 'WhatsApp', messenger: 'Facebook', instagram: 'Instagram', web: '官网IM', youtube: 'YouTube', tiktok: 'TikTok' };
-const imLabel = (a: ChannelWaApi.Account) => `${PLATFORM[a.platform || 'whatsapp']} · ${a.displayPhone || a.name || a.phoneNumberId}`;
+const imLabel = (a: ChannelWaApi.Account) => a.displayPhone || a.name || a.phoneNumberId;
+/** 账号前面的渠道图标（与原网站一致） */
+const IM_ICON: Record<string, string> = { whatsapp: 'whatsapp', messenger: 'messenger', instagram: 'instagram', web: 'im', youtube: 'youtube', tiktok: 'tiktok' };
+const imIcon = (a: ChannelWaApi.Account) => CHANNEL_ICONS[IM_ICON[a.platform || 'whatsapp'] ?? 'whatsapp'];
+const mailIcon = (m: ChannelMailApi.Account) => CHANNEL_ICONS[m.provider || 'custom'] ?? CHANNEL_ICONS.custom;
 const hasAny = computed(() => waAccounts.value.length + mailAccounts.value.length > 0);
 const viewKey = computed(() => `${selected.value.kind}-${selected.value.id ?? 'all'}`);
 
@@ -96,7 +101,8 @@ onMounted(async () => {
               :class="{ on: selected.kind === 'im' && selected.id === a.id }"
               @click="pick('im', a.id)"
             >
-              <span class="truncate">{{ imLabel(a) }}</span>
+              <img :src="imIcon(a)" :alt="PLATFORM[a.platform || 'whatsapp']" class="v3-conv__icon" />
+              <span class="flex-1 truncate" :title="`${PLATFORM[a.platform || 'whatsapp']} · ${imLabel(a)}`">{{ imLabel(a) }}</span>
             </div>
             <div v-if="mailAccounts.length" class="v3-conv__item" :class="{ on: selected.kind === 'mail' && !selected.id }" @click="pick('mail')">
               全部邮件
@@ -108,7 +114,8 @@ onMounted(async () => {
               :class="{ on: selected.kind === 'mail' && selected.id === m.id }"
               @click="pick('mail', m.id)"
             >
-              <span class="truncate">{{ m.email }}</span>
+              <img :src="mailIcon(m)" alt="" class="v3-conv__icon" />
+              <span class="flex-1 truncate" :title="m.email">{{ m.email }}</span>
               <Badge v-if="m.unrepliedCount" :count="m.unrepliedCount" size="small" />
             </div>
           </div>
@@ -162,7 +169,7 @@ onMounted(async () => {
 }
 
 .v3-conv__side {
-  flex: 0 0 148px;
+  flex: 0 0 172px;
   overflow: auto;
   background: #fff;
   border-radius: 12px;
@@ -182,6 +189,14 @@ onMounted(async () => {
   color: #1f2937;
   cursor: pointer;
   border-radius: 6px;
+}
+
+.v3-conv__icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  border-radius: 4px;
 }
 
 .v3-conv__item--sub {

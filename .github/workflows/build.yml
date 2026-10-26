@@ -1354,6 +1354,20 @@ jobs:
           imr = mupload({'conversationId': ic[0]['id']}, 'catalog.pdf', pdf, 'application/pdf')
           assert imr['code'] == 1030002015, imr
           print('Instagram：收发私信、取客户昵称；按 object 区分平台；暂不支持发文件')
+          # 同步聊天记录：拉取主页 / Instagram 最近的会话入库，不计未读、不重复
+          urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18080/_hist', method='POST', data=b'{}'))
+          assert call('POST', f"/channel/wa-account/sync-history?id={fb['id']}") == 3
+          assert call('POST', f"/channel/wa-account/sync-history?id={fb['id']}") == 0, '再次同步不重复导入'
+          hc = next(c for c in call('GET', f"/channel/wa/conversation/page?pageNo=1&pageSize=20&accountId={fb['id']}")['list'] if c['waId'] == '7002')
+          assert hc['profileName'] == 'Old Buyer' and not hc.get('unreadCount'), hc
+          hm = call('GET', f"/channel/wa/message/list?conversationId={hc['id']}")
+          assert [(m['direction'], m['type'], m['textBody']) for m in hm] == [(1, 'text', 'Do you ship to Spain?'), (2, 'text', 'Yes, we ship to Spain.'), (1, 'image', None)], hm
+          assert call('GET', f"/channel/wa/message/media?id={hm[2]['id']}")['fileUrl'], '历史图片可以查看'
+          assert call('POST', f"/channel/wa-account/sync-history?id={ig['id']}") == 2
+          ihc = next(c for c in call('GET', f"/channel/wa/conversation/page?pageNo=1&pageSize=20&accountId={ig['id']}")['list'] if c['waId'] == 'IGU9')
+          assert ihc['profileName'] == 'ig_old_buyer', ihc
+          assert [(m['direction'], m['textBody']) for m in call('GET', f"/channel/wa/message/list?conversationId={ihc['id']}")] == [(1, 'MOQ?'), (2, 'Sure, 500 pcs MOQ.')]
+          print('同步聊天记录：Facebook 主页与 Instagram 最近的会话入库，双方消息、图片，不重复')
 
           import base64
           def signed(user_id, secret='metasec'):
@@ -1761,6 +1775,21 @@ jobs:
           assert ewamid.startswith('EVOOUT'), ewamid
           assert evo_push(s1['session'], 'messages.update', {'keyId': ewamid, 'remoteJid': '8615900003333@s.whatsapp.net', 'fromMe': True, 'status': 'READ'}) == 200
           assert sql(f"SELECT status FROM channel_wa_message WHERE id = {es['id']}") == 'read'
+          # 关联时同步过来的聊天记录（messages.set）：双方消息入库，不计未读、不触发回复
+          assert 'MESSAGES_SET' in b1['webhook']['events']
+          old_ts = int(time.time()) - 86400
+          assert evo_push(s1['session'], 'messages.set', [
+              {'key': {'remoteJid': '8615900004444@s.whatsapp.net', 'fromMe': False, 'id': 'EVOH1'}, 'pushName': 'History Buyer',
+               'message': {'conversation': 'Last week I asked about hair dryers'}, 'messageType': 'conversation', 'messageTimestamp': old_ts},
+              {'key': {'remoteJid': '8615900004444@s.whatsapp.net', 'fromMe': True, 'id': 'EVOH2'}, 'pushName': 'Me',
+               'message': {'conversation': 'Here is our catalog'}, 'messageType': 'conversation', 'messageTimestamp': old_ts + 60},
+              {'key': {'remoteJid': '1203630@g.us', 'fromMe': False, 'id': 'EVOH3'}, 'message': {'conversation': 'group'}, 'messageType': 'conversation', 'messageTimestamp': old_ts},
+          ]) == 200
+          hcv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
+                                   if c['accountId'] == ea['id'] and c['waId'] == '8615900004444'), None), '聊天记录建会话')
+          assert hcv['profileName'] == 'History Buyer' and not hcv.get('unreadCount'), hcv
+          assert [(m['direction'], m['textBody']) for m in call('GET', f"/channel/wa/message/list?conversationId={hcv['id']}")] == \
+              [(1, 'Last week I asked about hair dryers'), (2, 'Here is our catalog')]
           # 手机端发出的消息同步进会话；系统发出的消息回显不重复
           assert evo_msg(s1['session'], 'EVOECHO1', '8615900003333@s.whatsapp.net', {'conversation': 'Sent from my phone'}, 'conversation', from_me=True) == 200
           assert evo_msg(s1['session'], ewamid, '8615900003333@s.whatsapp.net', {'conversation': 'MOQ is 300 units.'}, 'conversation', from_me=True) == 200
@@ -2146,6 +2175,11 @@ jobs:
           sudo grep -q '^CGCH_EVOLUTION_API_KEY=.\+' /opt/cgch/.env && sudo grep -q '^EVOLUTION_DB_PASSWORD=.\+' /opt/cgch/.env
           ok=; for i in $(seq 1 40); do sudo bash -c 'cd /opt/cgch && docker compose exec -T web wget -q -O - http://evolution:8080/' </dev/null 2>/dev/null | grep -qi 'evolution' && { ok=1; break; }; sleep 3; done
           [ -n "$ok" ] || { echo "::error::Evolution API 没有启动"; sudo bash -c 'cd /opt/cgch && docker compose logs --tail 80 evolution'; exit 1; }
+          js=$(curl -fsS http://127.0.0.1/ | grep -o '/jse/[^"]*\.js' | head -1); echo "入口脚本：$js"
+          curl -fsS -o /dev/null -D /tmp/h.txt -H 'Accept-Encoding: br, gzip' "http://127.0.0.1$js"; cat /tmp/h.txt
+          grep -qi '^cache-control: public, max-age=31536000, immutable' /tmp/h.txt || { echo "::error::打包文件没有长期缓存头"; exit 1; }
+          grep -qi '^content-encoding: br' /tmp/h.txt || { echo "::error::打包文件没有使用 brotli 压缩"; exit 1; }
+          curl -fsS -o /dev/null -D /tmp/h2.txt http://127.0.0.1/; grep -qi '^cache-control: no-cache' /tmp/h2.txt || { echo "::error::index.html 不应长期缓存"; cat /tmp/h2.txt; exit 1; }
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT config FROM infra_file_config WHERE id=4\""' | grep -q '"domain": *"http://'
           echo "--- 模拟老数据库：删掉 v3 新增字段并清除升级记录，验证升级脚本 ---"
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD ruoyi-vue-pro -e \"ALTER TABLE channel_wa_conversation DROP COLUMN intent; ALTER TABLE channel_mail_message DROP COLUMN intent; DELETE FROM cgch_migration;\""'

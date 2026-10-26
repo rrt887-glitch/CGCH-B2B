@@ -139,6 +139,18 @@ public class ChannelMetaOAuthService {
             if (done.isEmpty()) {
                 throw exception(META_OAUTH_FAIL, String.join("；", skipped));
             }
+            // 后台导入最近的聊天记录（授权后会话页就能看到以前的对话）
+            List<ChannelWaAccountDO> imported = TenantUtils.execute(tenantId, () -> accountMapper.selectList(
+                    new cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX<ChannelWaAccountDO>()
+                            .eq(ChannelWaAccountDO::getUserId, userId).eq(ChannelWaAccountDO::getAuthType, ChannelWaAccountDO.AUTH_OAUTH)
+                            .in(ChannelWaAccountDO::getPlatform, ChannelWaAccountDO.PLATFORM_MESSENGER, ChannelWaAccountDO.PLATFORM_INSTAGRAM)));
+            java.util.concurrent.CompletableFuture.runAsync(() -> imported.forEach(acc -> TenantUtils.execute(tenantId, () -> {
+                try {
+                    channelWhatsAppService.importMessagingHistory(acc);
+                } catch (Exception ex) {
+                    log.warn("[callback][账号 {} 导入聊天记录失败] {}", acc.getId(), ex.getMessage());
+                }
+            })));
             log.info("[callback][租户 {} 用户 {} 通过 Facebook 授权接入 {}]", tenantId, userId, done);
             return "已接入 " + String.join("、", done) + (skipped.isEmpty() ? "" : "。未接入：" + String.join("；", skipped));
         } catch (WaGraphClient.WaApiException e) {

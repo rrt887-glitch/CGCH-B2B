@@ -1,6 +1,6 @@
 # CGCH_SITE 为域名（如 crm.example.com）时自动启用 HTTPS（Let's Encrypt）；未设置时按 IP 用 HTTP 访问
 {$CGCH_SITE::80} {
-	encode gzip
+	encode zstd gzip
 
 	# 对外公开页面：产品介绍、隐私政策、服务条款、数据删除说明（平台审核要求公开可访问）
 	@public path_regexp pub ^/(about|privacy|terms|data-deletion)/?$
@@ -14,10 +14,19 @@
 		}
 	}
 
+	# 打包出来的 js / css / 图片文件名带内容哈希，内容变了文件名就变：让浏览器缓存一年、不再回源校验，
+	# 再次打开网站时这些文件直接从本地读取（服务器在海外时能省掉几百次往返）。index.html 每次都校验，保证升级后立即生效
+	@hashed path_regexp hashed ^/(js|jse|css|png|jpg|jpeg|gif|svg|webp|ico|woff|woff2|ttf|eot|mp3|json)/[^/]+-[A-Za-z0-9_-]{6,}\.[a-z0-9]+$
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@entry path / /index.html
+	header @entry Cache-Control "no-cache"
+
 	handle {
 		root * /srv
 		try_files {path} /index.html
-		file_server
+		file_server {
+			precompressed br
+		}
 	}
 
 	request_body {
