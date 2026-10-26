@@ -1801,7 +1801,7 @@ jobs:
           def oauth_state(u):
               return urllib.parse.parse_qs(urllib.parse.urlparse(u).query)['state'][0]
           assert call('GET', '/channel/social/platforms') == ['youtube', 'tiktok']
-          call('PUT', '/channel/ai/config/save', dict(cfg_y, llmApiKey='', waMode='off'))
+          call('PUT', '/channel/ai/config/save', dict(cfg_k, llmApiKey='', waMode='off'))
           yu = call('GET', '/channel/social/youtube/authorize-url')
           assert yu.startswith('http://127.0.0.1:18080/yt/auth?client_id=ytid') and 'youtube.force-ssl' in urllib.parse.unquote(yu) and 'access_type=offline' in yu, yu
           page = urllib.request.urlopen(BASE + f'/channel/social/youtube/callback?code=bad&state={oauth_state(yu)}').read().decode()
@@ -1849,7 +1849,7 @@ jobs:
           assert call('POST', f"/channel/social/poll?id={tt['id']}") == 0
           for a in (yt, tt):
               call('DELETE', f"/channel/wa-account/delete?id={a['id']}")
-          call('PUT', '/channel/ai/config/save', dict(cfg_y, llmApiKey=''))
+          call('PUT', '/channel/ai/config/save', dict(cfg_k, llmApiKey=''))
           print('YouTube / TikTok 评论：授权绑定、首次导入历史、新评论进会话、回复评论、不重复入库')
           call('PUT', '/channel/wa-account/update', dict(sa, enabled=False))
           assert pub('GET', '/config?k=' + K)['code'] != 0, '停用后聊天窗口不再显示'
