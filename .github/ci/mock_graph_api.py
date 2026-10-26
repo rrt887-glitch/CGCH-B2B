@@ -15,6 +15,7 @@
 - POST /{ver}/me/messages                  Messenger / Instagram 发消息（JSON 或带附件的 multipart）
 - GET  /_fbsent、/_subs                     查看 Messenger 发送记录与主页订阅
 - /yt/...、/tt/...                         模拟 YouTube Data API 与 TikTok Accounts API；POST /_yt/add、/_tt/add 加评论，GET /_social 看回复
+- /evo/...                                  模拟 Evolution API（建实例、二维码 / 配对码、连接状态、发消息、媒体、删除），POST /_evo/state 改状态，GET /_evo 查看
 - POST /search                             模拟联网搜索（Tavily 兼容），GET /_search 查看搜索记录
 """
 import base64
@@ -34,6 +35,10 @@ YT_REPLIES = []
 TT_COMMENTS = []
 TT_REPLIES = []
 SITE_HITS = []
+EVO = {}
+EVO_SENT = []
+EVO_DELETED = []
+EVO_JPEG = bytes.fromhex('ffd8ffe000104a46494600010100000100010000') + b'EVOIMG' + b'\xff\xd9'
 OAUTH = []
 EMBEDS = []
 GOOD = 'Bearer good-token'
@@ -101,6 +106,78 @@ class Handler(BaseHTTPRequestHandler):
             return True
         return False
 
+
+    def _evo(self, method, path, raw):
+        """模拟 Evolution API v2；apikey 必须是 evo-key"""
+        from urllib.parse import parse_qs, urlparse
+        if self.headers.get('apikey') != 'evo-key':
+            return self._json(401, {'status': 401, 'error': 'Unauthorized', 'response': {'message': 'Unauthorized'}})
+        body = json.loads(raw or b'{}') if raw else {}
+        q = parse_qs(urlparse(self.path).query)
+        def missing(n):
+            return self._json(404, {'status': 404, 'error': 'Not Found', 'response': {'message': [f'The "{n}" instance does not exist']}})
+        if method == 'POST' and path == ['instance', 'create']:
+            n = body['instanceName']
+            if n in EVO:
+                return self._json(403, {'status': 403, 'error': 'Forbidden', 'response': {'message': [f'This name "{n}" is already in use.']}})
+            EVO[n] = {'body': body, 'state': 'connecting', 'count': 1, 'ownerJid': None, 'profileName': None}
+            pc = 'ABCD1234' if body.get('number') else None
+            return self._json(201, {'instance': {'instanceName': n, 'instanceId': 'id-' + n, 'integration': body.get('integration'), 'status': 'connecting'},
+                                    'hash': 'HASH-' + n, 'webhook': {'webhookUrl': body.get('webhook', {}).get('url')},
+                                    'qrcode': {'pairingCode': pc, 'code': '2@abc', 'base64': 'data:image/png;base64,QR1', 'count': 1}})
+        if len(path) == 3 and path[0] == 'instance':
+            n = path[2]
+            if n not in EVO:
+                return missing(n)
+            i = EVO[n]
+            if method == 'GET' and path[1] == 'connectionState':
+                return self._json(200, {'instance': {'instanceName': n, 'state': i['state']}})
+            if method == 'GET' and path[1] == 'connect':
+                i['count'] += 1
+                if i['state'] == 'open':
+                    return self._json(200, {'instance': {'instanceName': n, 'state': 'open'}})
+                return self._json(200, {'pairingCode': 'ABCD1234' if i['body'].get('number') else None, 'code': '2@abc',
+                                        'base64': f"data:image/png;base64,QR{i['count']}", 'count': i['count']})
+            if method == 'DELETE' and path[1] == 'logout':
+                if i['state'] == 'close':
+                    return self._json(400, {'status': 400, 'error': 'Bad Request', 'response': {'message': [f'The "{n}" instance is not connected']}})
+                i['state'] = 'close'
+                return self._json(200, {'status': 'SUCCESS', 'error': False, 'response': {'message': 'Instance logged out'}})
+            if method == 'DELETE' and path[1] == 'delete':
+                EVO_DELETED.append(n)
+                del EVO[n]
+                return self._json(200, {'status': 'SUCCESS', 'error': False, 'response': {'message': 'Instance deleted'}})
+        if method == 'GET' and path == ['instance', 'fetchInstances']:
+            n = q.get('instanceName', [''])[0]
+            if n not in EVO:
+                return missing(n)
+            i = EVO[n]
+            return self._json(200, [{'id': 'id-' + n, 'name': n, 'connectionStatus': i['state'], 'ownerJid': i['ownerJid'],
+                                     'profileName': i['profileName'], 'integration': 'WHATSAPP-BAILEYS', 'token': 'HASH-' + n}])
+        if method == 'POST' and len(path) == 3 and path[0] == 'message' and path[1] in ('sendText', 'sendMedia'):
+            n = path[2]
+            if n not in EVO:
+                return missing(n)
+            rec = dict(body, instance=n, kind=path[1])
+            if 'media' in rec:
+                import base64 as b64
+                rec['mediaSize'] = len(b64.b64decode(rec.pop('media')))
+            EVO_SENT.append(rec)
+            return self._json(201, {'key': {'remoteJid': body.get('number', '') + '@s.whatsapp.net', 'fromMe': True, 'id': f'EVOOUT{len(EVO_SENT)}'},
+                                    'status': 'PENDING', 'messageType': 'conversation'})
+        if method == 'POST' and len(path) == 3 and path[:2] == ['chat', 'getBase64FromMediaMessage']:
+            import base64 as b64
+            if path[2] not in EVO:
+                return missing(path[2])
+            return self._json(201, {'mediaType': 'imageMessage', 'fileName': body['message']['key']['id'] + '.jpeg', 'mimetype': 'image/jpeg',
+                                    'base64': b64.b64encode(EVO_JPEG).decode()})
+        self._json(404, {'status': 404, 'error': 'Not Found', 'response': {'message': ['Unknown Evolution path ' + '/'.join(path)]}})
+
+    def do_DELETE(self):
+        path = self.path.split('?')[0].strip('/').split('/')
+        if path[:1] == ['evo']:
+            return self._evo('DELETE', path[1:], b'')
+        self._json(404, {'error': {'message': 'Unknown path', 'code': 100}})
 
     def _social(self, method, path, raw):
         """模拟 YouTube Data API v3（/yt）与 TikTok API for Business（/tt）"""
@@ -172,6 +249,10 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0].strip('/').split('/')
         if path and path[0] in ('yt', 'tt', '_social'):
             return self._social('GET', path, b'')
+        if path[:1] == ['evo']:
+            return self._evo('GET', path[1:], b'')
+        if path == ['_evo']:
+            return self._json(200, {'instances': EVO, 'sent': EVO_SENT, 'deleted': EVO_DELETED})
         if path == ['_site_hits']:
             return self._json(200, SITE_HITS)
         if path == ['_oauth']:
@@ -236,6 +317,12 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
         if path and path[0] in ('yt', 'tt', '_yt', '_tt'):
             return self._social('POST', path, raw)
+        if path[:1] == ['evo']:
+            return self._evo('POST', path[1:], raw)
+        if path == ['_evo', 'state']:  # 模拟手机确认 / 退出关联设备
+            b = json.loads(raw or b'{}')
+            EVO[b['instance']].update({k: v for k, v in b.items() if k != 'instance'})
+            return self._json(200, {'ok': True})
         if path == ['v1', 'chat', 'completions']:
             return self._llm(json.loads(raw or b'{}'))
         if path == ['v1', 'embeddings']:

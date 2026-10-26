@@ -76,6 +76,23 @@ public class ChannelWhatsAppService {
     @org.springframework.context.annotation.Lazy
     private cn.iocoder.yudao.module.channel.service.social.ChannelSocialService channelSocialService;
 
+    @Resource
+    @org.springframework.context.annotation.Lazy
+    private cn.iocoder.yudao.module.channel.service.evolution.ChannelEvolutionService evolutionService;
+
+    /** 号码是否扫码接入（接入方式创建后不变，缓存起来供客服窗口判断） */
+    private final java.util.Map<Long, Boolean> evolutionAccounts = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private boolean isEvolutionAccount(Long accountId) {
+        if (accountId == null) {
+            return false;
+        }
+        return evolutionAccounts.computeIfAbsent(accountId, id -> {
+            ChannelWaAccountDO a = TenantUtils.executeIgnore(() -> accountMapper.selectById(id));
+            return a != null && a.isEvolution();
+        });
+    }
+
     private static final Set<String> PLATFORMS = Set.of(ChannelWaAccountDO.PLATFORM_WHATSAPP,
             ChannelWaAccountDO.PLATFORM_MESSENGER, ChannelWaAccountDO.PLATFORM_INSTAGRAM);
 
@@ -119,7 +136,7 @@ public class ChannelWhatsAppService {
 
     public void updateAccount(Long userId, ChannelWaAccountSaveReqVO req) {
         ChannelWaAccountDO old = validateAccount(userId, req.getId());
-        if (old.isWeb() || cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(old.getPlatform())) { // 官网 IM、评论渠道在这里只能启用 / 停用
+        if (old.isWeb() || old.isEvolution() || cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(old.getPlatform())) { // 官网 IM、评论渠道在这里只能启用 / 停用
             accountMapper.updateById(new ChannelWaAccountDO().setId(old.getId()).setEnabled(req.getEnabled()));
             return;
         }
@@ -153,7 +170,10 @@ public class ChannelWhatsAppService {
     }
 
     public void deleteAccount(Long userId, Long id) {
-        validateAccount(userId, id);
+        ChannelWaAccountDO del = validateAccount(userId, id);
+        if (del.isEvolution()) {
+            evolutionService.remove(del); // 手机上的关联设备一并退出
+        }
         accountMapper.deleteById(id);
         conversationMapper.delete(new LambdaQueryWrapperX<ChannelWaConversationDO>().eq(ChannelWaConversationDO::getAccountId, id));
         messageMapper.delete(new LambdaQueryWrapperX<ChannelWaMessageDO>().eq(ChannelWaMessageDO::getAccountId, id));
@@ -214,6 +234,9 @@ public class ChannelWhatsAppService {
         ChannelWaAccountDO a = validateAccount(userId, accountId);
         if (!a.isWhatsApp()) {
             throw exception(META_TEMPLATE_UNSUPPORTED, platformLabel(a));
+        }
+        if (a.isEvolution()) {
+            throw exception(AI_LLM_FAIL, "扫码接入的号码没有消息模板，可以直接发送消息");
         }
         try {
             return WaGraphClient.listTemplates(a);
@@ -711,6 +734,24 @@ public class ChannelWhatsAppService {
         messageMapper.updateById(upd);
     }
 
+    // ==================== 扫码接入（Evolution）推送，已转换成 Meta 消息结构 ====================
+
+    /** 客户发来的消息 */
+    public void evolutionInbound(ChannelWaAccountDO a, JsonNode metaMessage, String profileName) {
+        saveInbound(a, metaMessage, profileName);
+        accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setLastWebhookTime(LocalDateTime.now()));
+    }
+
+    /** 手机上发出的消息（系统发出的消息按消息编号去重） */
+    public void evolutionSynced(ChannelWaAccountDO a, JsonNode metaMessage, String customer) {
+        saveSynced(a, metaMessage, customer, true, null);
+    }
+
+    /** 发出消息的状态 */
+    public void evolutionStatus(ChannelWaAccountDO a, String messageId, String status) {
+        applyStatus(a, new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("id", messageId).put("status", status));
+    }
+
     public ChannelWaAccountMapper accountMapperInternal() {
         return accountMapper;
     }
@@ -748,6 +789,9 @@ public class ChannelWhatsAppService {
         if (template && !a.isWhatsApp()) {
             throw exception(META_TEMPLATE_UNSUPPORTED, platformLabel(a));
         }
+        if (template && a.isEvolution()) {
+            throw exception(AI_LLM_FAIL, "扫码接入的号码没有消息模板，可以直接发送消息");
+        }
         if (!template && StrUtil.isBlank(req.getText())) {
             throw exception(WA_CONTENT_EMPTY);
         }
@@ -760,6 +804,7 @@ public class ChannelWhatsAppService {
             wamid = a.isWeb() ? "webout_" + cn.hutool.core.util.IdUtil.fastSimpleUUID()
                     : cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(a.getPlatform())
                     ? channelSocialService.reply(a, conv, req.getText())
+                    : a.isEvolution() ? evolutionService.sendText(a, conv.getWaId(), req.getText())
                     : template
                     ? WaGraphClient.sendTemplate(a, conv.getWaId(), req.getTemplateName(),
                             StrUtil.blankToDefault(req.getTemplateLanguage(), "en_US"), req.getTemplateParams())
@@ -800,10 +845,23 @@ public class ChannelWhatsAppService {
             }
             try {
                 // Messenger / Instagram 推送里直接带文件地址；WhatsApp 需要先按媒体编号查地址
-                WaGraphClient.MediaInfo info = m.getMediaId().startsWith("http")
-                        ? new WaGraphClient.MediaInfo(m.getMediaId(), null) : WaGraphClient.getMedia(a, m.getMediaId());
-                byte[] bytes = WaGraphClient.download(a, info.url(), ChannelFileHelper.MAX_BYTES);
-                String mime = StrUtil.blankToDefault(StrUtil.blankToDefault(m.getMimeType(), info.mimeType()), guessMime(m.getType()));
+                byte[] bytes;
+                String infoMime;
+                if (a.isEvolution() && m.getMediaId().startsWith("evo:")) { // 扫码接入：从 Evolution 下载
+                    cn.iocoder.yudao.module.channel.service.evolution.EvolutionClient.Media em =
+                            evolutionService.download(a, m.getMediaId().substring(4));
+                    if (em.content().length > ChannelFileHelper.MAX_BYTES) {
+                        throw new WaGraphClient.WaApiException("媒体文件过大");
+                    }
+                    bytes = em.content();
+                    infoMime = em.mimeType();
+                } else {
+                    WaGraphClient.MediaInfo info = m.getMediaId().startsWith("http")
+                            ? new WaGraphClient.MediaInfo(m.getMediaId(), null) : WaGraphClient.getMedia(a, m.getMediaId());
+                    bytes = WaGraphClient.download(a, info.url(), ChannelFileHelper.MAX_BYTES);
+                    infoMime = info.mimeType();
+                }
+                String mime = StrUtil.blankToDefault(StrUtil.blankToDefault(m.getMimeType(), infoMime), guessMime(m.getType()));
                 String name = StrUtil.blankToDefault(m.getFileName(), m.getType() + "-" + m.getId() + extension(mime));
                 String url = fileHelper.save(bytes, name, "whatsapp", mime);
                 messageMapper.updateById(new ChannelWaMessageDO().setId(m.getId()).setFileUrl(url)
@@ -849,8 +907,12 @@ public class ChannelWhatsAppService {
         String url = fileHelper.save(bytes, name, "whatsapp", file.getContentType());
         String wamid;
         try {
-            String mediaId = WaGraphClient.upload(a, bytes, name, mime);
-            wamid = WaGraphClient.sendMedia(a, conv.getWaId(), kind, mediaId, caption, name);
+            if (a.isEvolution()) {
+                wamid = evolutionService.sendMedia(a, conv.getWaId(), "sticker".equals(kind) ? "image" : kind, bytes, mime, name, caption);
+            } else {
+                String mediaId = WaGraphClient.upload(a, bytes, name, mime);
+                wamid = WaGraphClient.sendMedia(a, conv.getWaId(), kind, mediaId, caption, name);
+            }
         } catch (WaGraphClient.WaApiException e) {
             throw exception(WA_API_FAIL, e.getMessage());
         }
@@ -1029,9 +1091,10 @@ public class ChannelWhatsAppService {
 
     // ==================== 工具 ====================
 
-    private static boolean windowOpen(ChannelWaConversationDO c) {
-        if (c.isWeb() || cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(c.getPlatform())) {
-            return true; // 官网 IM、视频评论没有客服窗口限制
+    private boolean windowOpen(ChannelWaConversationDO c) {
+        if (c.isWeb() || cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(c.getPlatform())
+                || isEvolutionAccount(c.getAccountId())) {
+            return true; // 官网 IM、视频评论、扫码接入的 WhatsApp 没有客服窗口限制
         }
         return c.getLastInboundTime() != null
                 && c.getLastInboundTime().plusHours(WINDOW_HOURS).isAfter(LocalDateTime.now());

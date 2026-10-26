@@ -10,6 +10,8 @@ export namespace ChannelWaApi {
     platform?: 'instagram' | 'messenger' | 'tiktok' | 'web' | 'whatsapp' | 'youtube';
     /** manual 手动填写令牌、oauth Facebook 登录授权 */
     authType?: string;
+    /** 扫码接入的连接状态：open 已连接、connecting 连接中、close 已断开 */
+    connState?: string;
     phoneNumberId: string;
     wabaId?: string;
     displayPhone?: string;

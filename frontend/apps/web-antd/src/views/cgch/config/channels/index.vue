@@ -2,7 +2,7 @@
 /**
  * 渠道账号：一张总表列出所有可接入的渠道（顺序与原网站一致），每个渠道下面列出已连接的账号。
  * 邮箱用「邮箱地址 + 授权码」绑定（高级配置里可改收发信服务器），Gmail / Outlook 配置了授权应用时走一键授权；
- * WhatsApp 走 Meta 官方共存模式扫码连接；Facebook 主页、Instagram 走 Facebook 登录授权；
+ * WhatsApp 用手机号配对码或二维码扫码接入（Evolution API，与原网站一致），WhatsApp Business Official API 走 Meta 官方接口；Facebook 主页、Instagram 走 Facebook 登录授权；
  * 阿里国际站、中国制造网通过留资邮箱接入；官网 IM 绑定域名后把嵌入代码放到网站上；YouTube、TikTok 授权后拉取视频评论进会话。
  */
 import type { ChannelMailApi } from '#/api/channel/mail';
@@ -42,6 +42,7 @@ import LeadRules from './lead-rules.vue';
 import WaAccounts from './wa-accounts.vue';
 import WebImModal from './web-im-modal.vue';
 import SocialConnectModal from './social-connect-modal.vue';
+import EvoConnectModal from './evo-connect-modal.vue';
 
 defineOptions({ name: 'CgchConfigChannels' });
 
@@ -110,6 +111,9 @@ const oauthProviders = ref<string[]>([]);
 const leadOpen = ref(false);
 const imOpen = ref(false);
 const socialOpen = ref(false);
+const evoOpen = ref(false);
+/** 重新扫码的账号 */
+const evoAccountId = ref<number>();
 const socialPlatform = ref<SocialPlatform>('youtube');
 const socialEnabled = ref<SocialPlatform[]>([]);
 const imRef = ref<InstanceType<typeof WebImModal>>();
@@ -145,6 +149,8 @@ function mailRow(a: ChannelMailApi.Account): AccountRow {
 function waRow(a: ChannelWaApi.Account): AccountRow {
   let status = { color: 'orange', text: '等待消息' } as AccountRow['status'];
   if (!a.enabled) status = { color: 'gray', text: '已停用' };
+  else if (a.authType === 'evolution' && a.connState === 'close') status = { color: 'red', text: '已断开', tip: '手机上退出了关联设备或长时间离线，请点「重新扫码」' };
+  else if (a.authType === 'evolution') status = { color: 'green', text: '已连接', tip: a.lastWebhookTime ? `最近消息 ${a.lastWebhookTime}` : undefined };
   else if (a.lastWebhookTime) status = { color: 'green', text: '正常', tip: `最近消息 ${a.lastWebhookTime}` };
   return { id: a.id!, label: a.displayPhone || a.name || a.phoneNumberId, sub: a.name && a.name !== a.displayPhone ? a.name : undefined, status, wa: a };
 }
@@ -157,9 +163,9 @@ function accountsOf(c: Channel): AccountRow[] {
     case 'meta':
       return waAccounts.value.filter((a) => a.platform === c.platform).map(waRow);
     case 'wa':
-      return waAccounts.value.filter((a) => wa(a) && a.authType === 'oauth').map(waRow);
+      return waAccounts.value.filter((a) => wa(a) && a.authType === 'evolution').map(waRow);
     case 'wa-official':
-      return waAccounts.value.filter((a) => wa(a) && a.authType !== 'oauth').map(waRow);
+      return waAccounts.value.filter((a) => wa(a) && a.authType !== 'evolution').map(waRow);
     case 'social':
       return waAccounts.value.filter((a) => a.platform === c.platform).map((a) => {
         const r = waRow(a);
@@ -184,7 +190,8 @@ function connect(c: Channel) {
       else openMail(c);
       break;
     case 'wa':
-      waRef.value?.connect('whatsapp');
+      evoAccountId.value = undefined;
+      evoOpen.value = true;
       break;
     case 'wa-official':
       waRef.value?.connectOfficial();
@@ -204,6 +211,12 @@ function connect(c: Channel) {
       if (!webSites.value.length) imRef.value?.add();
       break;
   }
+}
+
+/** 扫码接入的号码掉线后重新扫码：连接后沿用原账号与会话 */
+function rescan(a: ChannelWaApi.Account) {
+  evoAccountId.value = a.id;
+  evoOpen.value = true;
 }
 
 async function startOAuth(provider: string) {
@@ -444,8 +457,9 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
                 <a v-if="r.mail" :class="{ 'opacity-50': busy === `sync-${r.id}` }" @click="syncNow(r.mail)">立即收信</a>
                 <a v-if="r.wa?.platform === 'web'" @click="imOpen = true">嵌入代码</a>
                 <a v-else-if="r.wa?.platform === 'youtube' || r.wa?.platform === 'tiktok'" :class="{ 'opacity-50': busy === `poll-${r.id}` }" @click="pollNow(r.wa)">立即同步</a>
+                <a v-else-if="r.wa?.authType === 'evolution'" @click="rescan(r.wa)">重新扫码</a>
                 <a v-else-if="r.wa && r.wa.authType !== 'oauth'" @click="waRef?.showGuide(r.wa)">回调配置</a>
-                <a v-if="r.mail || (r.wa && r.wa.authType !== 'oauth')" @click="edit(c, r)">{{ r.mail?.authType === 'oauth2' ? '重新授权' : '修改' }}</a>
+                <a v-if="r.mail || (r.wa && r.wa.authType !== 'oauth' && r.wa.authType !== 'evolution')" @click="edit(c, r)">{{ r.mail?.authType === 'oauth2' ? '重新授权' : '修改' }}</a>
                 <a @click="toggle(r)">{{ (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停' : '停用') : '启用' }}</a>
                 <Popconfirm
                   :title="r.mail ? '解绑后已同步的邮件也会删除，确定吗？' : '解绑后会话与消息记录也会删除，确定吗？'"
@@ -463,6 +477,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
     <WaAccounts ref="waRef" headless :meta-o-auth="oauthProviders.includes('meta')" @changed="onWaChanged" />
     <LeadRules v-model:open="leadOpen" :mailboxes="mailboxes" />
     <WebImModal ref="imRef" v-model:open="imOpen" :sites="webSites" @changed="waRef?.load()" />
+    <EvoConnectModal v-model:open="evoOpen" :account-id="evoAccountId" @done="waRef?.load()" />
     <SocialConnectModal v-model:open="socialOpen" :platform="socialPlatform" :enabled="socialEnabled.includes(socialPlatform)" />
 
     <Modal v-model:open="mailOpen" :footer="null" :width="476" centered :closable="false">

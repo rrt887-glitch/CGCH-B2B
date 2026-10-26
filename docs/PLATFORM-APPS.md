@@ -73,6 +73,21 @@ Gmail 暂用「应用专用密码」绑定，不申请 Google 受限权限（需
 
 还要提供一个测试账号（网站的用户名和密码）给审核员。一般 3～10 个工作日，被拒绝会写明原因，修改后可重新提交。
 
+## 一（补充）、WhatsApp 扫码接入（Evolution API）
+
+渠道列表里的「WhatsApp」与原网站一致：客户输入手机号拿到 8 位配对码，在手机 WhatsApp「已关联的设备 → 关联新设备 →
+改用电话号码关联」输入；或者切换为二维码，用手机扫码。原理与登录电脑版 WhatsApp 相同，不需要 Meta 开发者应用。
+
+- 一键安装脚本会同时部署开源项目 [Evolution API](https://github.com/evolution-foundation/evolution-api)（Apache-2.0，
+  附加条款要求在系统中注明使用了 Evolution API，连接弹窗底部已注明）和它的 PostgreSQL 数据库，只在容器网络内访问，
+  密钥自动写入 `.env`（`CGCH_EVOLUTION_API_KEY`、`EVOLUTION_DB_PASSWORD`）。
+- 镜像默认 `evoapicloud/evolution-api:v2.3.7`；WhatsApp 更新协议导致连不上时，可在 `.env` 里设置
+  `EVOLUTION_IMAGE=evoapicloud/evolution-api:latest` 后重新执行安装命令。
+- 每连接一个号码约多占 50～150MB 内存。
+- **风险**：这不是 Meta 官方接口，违反 WhatsApp 服务条款，频繁群发、大量自动回复的号码可能被限制或封禁。
+  需要稳定合规的接入请使用「WhatsApp Business Official API」。
+- 手机上退出关联设备或手机长时间离线（约 14 天）后连接会断开，渠道页显示「已断开」，点「重新扫码」即可，原有会话保留。
+
 ## 一（补充）、YouTube、TikTok 视频评论
 
 客户在「渠道 → YouTube / TikTok → 连接新账号」授权后，系统每 3 分钟拉取一次视频下的新评论，每条评论是「会话」里的一个对话，

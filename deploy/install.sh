@@ -88,6 +88,11 @@ CGCH_OAUTH_GOOGLE_CLIENT_SECRET=
 EOF
   umask 022
 fi
+# 后续版本新增的配置：已有 .env 里没有时补上（随机生成，不覆盖已有值）
+if ! grep -q '^CGCH_EVOLUTION_API_KEY=' .env; then
+  printf '\n# WhatsApp 扫码接入（Evolution API，与系统部署在一起；密钥自动生成，不要修改）\nCGCH_EVOLUTION_API_KEY=%s\nEVOLUTION_DB_PASSWORD=%s\n' "$(rand 24)" "$(rand 16)" >> .env
+fi
+grep -q '^EVOLUTION_DB_PASSWORD=' .env || echo "EVOLUTION_DB_PASSWORD=$(rand 16)" >> .env
 if [ -n "${DOMAIN:-}" ]; then
   say "绑定域名 $DOMAIN（启用 HTTPS）"
   SITE="$DOMAIN"
@@ -138,9 +143,64 @@ services:
     environment:
       DB_URL: "jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true"
       REDIS_HOST: redis
+      CGCH_EVOLUTION_BASE_URL: http://evolution:8080
+      CGCH_EVOLUTION_WEBHOOK_BASE: http://backend:48080
     volumes:
       - backend-logs:/root/logs
       - backend-files:/app/files
+
+  # WhatsApp 扫码接入：开源项目 Evolution API（WhatsApp 网页版协议），只在容器网络内访问
+  evolution-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: \${EVOLUTION_DB_PASSWORD}
+    volumes:
+      - evolution-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 10s
+      retries: 30
+
+  evolution:
+    image: \${EVOLUTION_IMAGE:-evoapicloud/evolution-api:v2.3.7}
+    restart: unless-stopped
+    depends_on:
+      evolution-db: { condition: service_healthy }
+    environment:
+      SERVER_TYPE: http
+      SERVER_PORT: "8080"
+      SERVER_URL: http://evolution:8080
+      SERVER_DISABLE_DOCS: "true"
+      SERVER_DISABLE_MANAGER: "true"
+      AUTHENTICATION_API_KEY: \${CGCH_EVOLUTION_API_KEY}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:\${EVOLUTION_DB_PASSWORD}@evolution-db:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: cgch
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "false"
+      DATABASE_SAVE_DATA_LABELS: "false"
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+      LOG_LEVEL: ERROR,WARN,INFO
+      DEL_INSTANCE: "false"
+      LANGUAGE: en
+      CONFIG_SESSION_PHONE_CLIENT: \${CGCH_PRODUCT_NAME:-CGCH}
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      QRCODE_LIMIT: "15"
+      TELEMETRY_ENABLED: "false"
+      WEBSOCKET_ENABLED: "false"
+      RABBITMQ_ENABLED: "false"
+      WEBHOOK_GLOBAL_ENABLED: "false"
+      TZ: Asia/Shanghai
+    volumes:
+      - evolution-instances:/evolution/instances
 
   web:
     image: ${REGISTRY}/cgch-web:${VERSION}
@@ -163,6 +223,8 @@ volumes:
   backend-files:
   caddy-data:
   caddy-config:
+  evolution-db:
+  evolution-instances:
 EOF
 
 # ---------- 4. 拉取并启动 ----------

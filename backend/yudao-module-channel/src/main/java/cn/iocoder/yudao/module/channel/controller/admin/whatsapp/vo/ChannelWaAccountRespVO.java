@@ -25,6 +25,9 @@ public class ChannelWaAccountRespVO {
     private String apiVersion;
     private Boolean enabled;
     private LocalDateTime lastWebhookTime;
+
+    @Schema(description = "扫码接入的连接状态：open 已连接、connecting 连接中、close 已断开")
+    private String connState;
     private LocalDateTime createTime;
 
     @Schema(description = "在 Meta 后台填写的回调地址路径，需拼上你的公网域名")
