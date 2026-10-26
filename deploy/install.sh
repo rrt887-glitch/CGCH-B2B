@@ -71,9 +71,10 @@ CGCH_META_APP_SECRET=
 CGCH_META_WEBHOOK_VERIFY_TOKEN=$(rand 12)
 CGCH_META_WA_CONFIG_ID=
 
-# WhatsApp 经 YCloud 接入（YCloud 控制台 → Developers 里取 API Key 和 Webhook 签名密钥）
-CGCH_YCLOUD_API_KEY=
-CGCH_YCLOUD_WEBHOOK_SECRET=
+# WhatsApp 经 Kapso 接入（Kapso 控制台 → API Keys 取 API Key；推送密钥已随机生成，填到 Kapso 的 Platform webhook 里）
+CGCH_KAPSO_API_KEY=
+CGCH_KAPSO_WEBHOOK_SECRET=$(rand 24)
+CGCH_KAPSO_BILLING_MODE=
 
 # YouTube / TikTok 视频评论（可选）
 CGCH_YOUTUBE_CLIENT_ID=

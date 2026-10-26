@@ -13,7 +13,7 @@ import { IconifyIcon } from '@vben/icons';
 
 import { message, Modal } from 'ant-design-vue';
 
-import { completeWaSignup, createYcloudLink, getYcloudResult } from '#/api/channel/oauth';
+import { completeWaSignup, createKapsoLink, getKapsoResult } from '#/api/channel/oauth';
 
 import { runWaSignup } from './wa-signup';
 
@@ -51,18 +51,18 @@ const tip = computed(() => {
     : { type: 'info', text: '新号码接入后只能在本系统中收发消息' };
 });
 
-/** 经 YCloud：打开托管的 Meta 授权页，轮询绑定结果（最多 15 分钟） */
-async function startYcloud() {
+/** 经 Kapso：打开托管的绑定页（Meta 官方授权），轮询绑定结果（最多 15 分钟） */
+async function startKapso() {
   const win = window.open('about:blank', 'cgch-wa-connect', 'width=720,height=820');
   try {
-    const link = await createYcloudLink(mode.value);
+    const link = await createKapsoLink(mode.value);
     if (win) win.location.href = link.url;
     else window.open(link.url, '_blank');
     const end = Date.now() + 15 * 60 * 1000;
     let closedAt = 0;
     while (Date.now() < end && open.value) {
       await new Promise((r) => setTimeout(r, 3000));
-      const r = await getYcloudResult(link.ref).catch(() => null);
+      const r = await getKapsoResult(link.ref).catch(() => null);
       if (r) {
         win?.close();
         open.value = false;
@@ -76,7 +76,7 @@ async function startYcloud() {
         });
         return;
       }
-      // 授权窗口关闭后再等一会儿：绑定结果由 YCloud 推送过来，可能晚几秒
+      // 授权窗口关闭后再等一会儿：绑定结果由 Kapso 跳回或推送过来，可能晚几秒
       if (win?.closed) {
         closedAt ||= Date.now();
         if (Date.now() - closedAt > 45_000) break;
@@ -94,8 +94,8 @@ async function start() {
   error.value = '';
   state.value = 'waiting';
   try {
-    if (props.config.provider === 'ycloud') {
-      await startYcloud();
+    if (props.config.provider === 'kapso') {
+      await startKapso();
       return;
     }
     const session = await runWaSignup(props.config, mode.value);
