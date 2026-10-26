@@ -119,7 +119,7 @@ public class ChannelWhatsAppService {
 
     public void updateAccount(Long userId, ChannelWaAccountSaveReqVO req) {
         ChannelWaAccountDO old = validateAccount(userId, req.getId());
-        if (old.isWeb() || old.isKapso() || cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(old.getPlatform())) { // 官网 IM、Kapso 接入的号码在这里只能启用 / 停用
+        if (old.isWeb() || cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(old.getPlatform())) { // 官网 IM、评论渠道在这里只能启用 / 停用
             accountMapper.updateById(new ChannelWaAccountDO().setId(old.getId()).setEnabled(req.getEnabled()));
             return;
         }
@@ -709,27 +709,6 @@ public class ChannelWhatsAppService {
             return;
         }
         messageMapper.updateById(upd);
-    }
-
-    // ==================== Kapso 转发的推送（Meta 原始格式） ====================
-
-    /** Kapso 原样转发的 Meta 推送：按 phone_number_id 找到经 Kapso 接入的号码，按 Meta 推送处理 */
-    public void handleKapsoMeta(JsonNode root) {
-        for (JsonNode entry : root.path("entry")) {
-            for (JsonNode change : entry.path("changes")) {
-                JsonNode value = change.path("value");
-                String pnid = value.path("metadata").path("phone_number_id").asText("");
-                ChannelWaAccountDO a = StrUtil.isBlank(pnid) ? null
-                        : TenantUtils.executeIgnore(() -> accountMapper.selectByPhoneNumberId(pnid));
-                if (a == null || !a.isKapso() || !Boolean.TRUE.equals(a.getEnabled())) {
-                    continue;
-                }
-                TenantUtils.execute(a.getTenantId(), () -> {
-                    processWaChange(a, change.path("field").asText("messages"), value);
-                    accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setLastWebhookTime(LocalDateTime.now()));
-                });
-            }
-        }
     }
 
     public ChannelWaAccountMapper accountMapperInternal() {

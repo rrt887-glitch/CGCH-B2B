@@ -33,23 +33,12 @@ public final class WaGraphClient {
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15)).build();
 
-    /** Kapso 项目 API Key：经 Kapso 接入的号码调用 Kapso 的 Meta 代理接口时用 X-API-Key 鉴权（启动时由 ChannelKapsoService 设置） */
-    private static volatile String kapsoApiKey = "";
-
     private WaGraphClient() {
     }
 
-    public static void setKapsoApiKey(String key) {
-        kapsoApiKey = StrUtil.nullToEmpty(key);
-    }
-
-    /** 鉴权：经 Kapso 接入的号码用 X-API-Key，其余用访问令牌 */
+    /** 鉴权：带上访问令牌 */
     private static HttpRequest.Builder auth(HttpRequest.Builder b, ChannelWaAccountDO a) {
-        if (a.isKapso()) {
-            if (StrUtil.isNotBlank(kapsoApiKey)) {
-                b.header("X-API-Key", kapsoApiKey);
-            }
-        } else if (StrUtil.isNotBlank(a.getAccessToken())) {
+        if (StrUtil.isNotBlank(a.getAccessToken())) {
             b.header("Authorization", "Bearer " + a.getAccessToken());
         }
         return b;
@@ -151,9 +140,8 @@ public final class WaGraphClient {
     }
 
     public static MediaInfo getMedia(ChannelWaAccountDO a, String mediaId) {
-        // Kapso 代理按号码找配置，需要带 phone_number_id；返回的 download_url 不用鉴权即可下载
-        JsonNode json = call(a, "GET", a.isKapso() ? mediaId + "?phone_number_id=" + a.getPhoneNumberId() : mediaId, null);
-        String url = StrUtil.blankToDefault(a.isKapso() ? json.path("download_url").asText(null) : null, json.path("url").asText(null));
+        JsonNode json = call(a, "GET", mediaId, null);
+        String url = json.path("url").asText(null);
         if (StrUtil.isBlank(url)) {
             throw new WaApiException("媒体文件不存在或已过期（Meta 只保留 30 天）");
         }
