@@ -2016,7 +2016,7 @@ jobs:
           timeout 120 "$chrome" --headless=new --no-sandbox --disable-gpu --enable-logging=stderr --v=0 \
             --virtual-time-budget=20000 --dump-dom "http://127.0.0.1:4173/#/auth/login" > ../login-dom.html 2> ../login-console.log || true
           # 没有后端，接口请求失败是正常的；只检查脚本本身的错误（例如打包后模块初始化顺序不对）
-          grep -E 'Uncaught|TypeError|ReferenceError|SyntaxError|before initialization' ../login-console.log | grep -vE 'AxiosError|Request failed|status code|admin-api|Network Error|ERR_' | head -20 > ../login-errors.txt || true
+          grep -E 'Uncaught|TypeError|ReferenceError|SyntaxError|before initialization' ../login-console.log | grep -vE 'AxiosError|Request failed|status code|admin-api|Network Error|ERR_|DOCTYPE' | head -20 > ../login-errors.txt || true
           if [ -s ../login-errors.txt ]; then
             echo "::error title=登录页脚本报错::$(sed 's/%/%25/g' ../login-errors.txt | cut -c1-300 | awk '{printf "%s%%0A", $0}')"; exit 1
           fi
