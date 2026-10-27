@@ -166,6 +166,13 @@ class Handler(BaseHTTPRequestHandler):
             EVO_SENT.append(rec)
             return self._json(201, {'key': {'remoteJid': body.get('number', '') + '@s.whatsapp.net', 'fromMe': True, 'id': f'EVOOUT{len(EVO_SENT)}'},
                                     'status': 'PENDING', 'messageType': 'conversation'})
+        if method == 'POST' and len(path) == 3 and path[:2] == ['chat', 'findMessages']:
+            if path[2] not in EVO:
+                return missing(path[2])
+            db = sorted(EVO[path[2]].get('db', []), key=lambda m: -m.get('messageTimestamp', 0))
+            size, page = int(body.get('offset') or 50), int(body.get('page') or 1)
+            recs = db[(page - 1) * size: page * size]
+            return self._json(200, {'messages': {'total': len(db), 'pages': (len(db) + size - 1) // size, 'currentPage': page, 'records': recs}})
         if method == 'POST' and len(path) == 3 and path[:2] == ['chat', 'getBase64FromMediaMessage']:
             import base64 as b64
             if path[2] not in EVO:

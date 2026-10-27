@@ -554,6 +554,10 @@ public class ChannelWhatsAppService {
      * 也可以在渠道页手动同步。返回新导入的消息数。
      */
     public int importMessagingHistory(ChannelWaAccountDO a) {
+        if (a.isEvolution()) { // 扫码接入：从 Evolution 拉取关联时同步的聊天记录，条数可能很多，后台执行，返回 -1
+            evolutionService.syncHistoryAsync(a);
+            return -1;
+        }
         boolean ig = ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(a.getPlatform());
         if (!ig && !ChannelWaAccountDO.PLATFORM_MESSENGER.equals(a.getPlatform())) {
             throw exception(AI_LLM_FAIL, "这个账号不需要同步聊天记录");
@@ -858,8 +862,13 @@ public class ChannelWhatsAppService {
     }
 
     /** 关联时同步过来的聊天记录（双方的消息都有）：按消息编号去重，不计未读、不触发 AI 回复 */
-    public void evolutionHistory(ChannelWaAccountDO a, JsonNode metaMessage, String customer, boolean fromMe, String profileName) {
+    public boolean evolutionHistory(ChannelWaAccountDO a, JsonNode metaMessage, String customer, boolean fromMe, String profileName) {
+        String id = metaMessage.path("id").asText("");
+        if (id.isEmpty() || messageMapper.selectByWaMessageId(a.getId(), id) != null) {
+            return false;
+        }
         saveSynced(a, metaMessage, customer, fromMe, profileName);
+        return true;
     }
 
     /** 发出消息的状态 */

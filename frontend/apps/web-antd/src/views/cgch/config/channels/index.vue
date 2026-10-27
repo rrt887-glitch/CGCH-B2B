@@ -338,7 +338,8 @@ async function syncHistory(a: ChannelWaApi.Account) {
   busy.value = `hist-${a.id}`;
   try {
     const n = await syncWaHistory(a.id!);
-    message.success(n > 0 ? `同步了 ${n} 条聊天记录，可在「会话」中查看` : '没有新的聊天记录');
+    if (n < 0) message.success('正在后台同步聊天记录，聊天记录多时需要几分钟，稍后在「会话」中查看');
+    else message.success(n > 0 ? `同步了 ${n} 条聊天记录，可在「会话」中查看` : '没有新的聊天记录');
   } finally {
     busy.value = undefined;
   }
@@ -470,7 +471,10 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
                 <a v-if="r.mail" :class="{ 'opacity-50': busy === `sync-${r.id}` }" @click="syncNow(r.mail)">立即收信</a>
                 <a v-if="r.wa?.platform === 'web'" @click="imOpen = true">嵌入代码</a>
                 <a v-else-if="r.wa?.platform === 'youtube' || r.wa?.platform === 'tiktok'" :class="{ 'opacity-50': busy === `poll-${r.id}` }" @click="pollNow(r.wa)">立即同步</a>
-                <a v-else-if="r.wa?.authType === 'evolution'" @click="rescan(r.wa)">重新扫码</a>
+                <template v-else-if="r.wa?.authType === 'evolution'">
+                  <a :class="{ 'opacity-50': busy === `hist-${r.id}` }" @click="syncHistory(r.wa)">同步聊天记录</a>
+                  <a @click="rescan(r.wa)">重新扫码</a>
+                </template>
                 <a
                   v-else-if="r.wa?.authType === 'oauth' && (r.wa.platform === 'messenger' || r.wa.platform === 'instagram')"
                   :class="{ 'opacity-50': busy === `hist-${r.id}` }"

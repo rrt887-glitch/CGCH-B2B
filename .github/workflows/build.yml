@@ -1790,6 +1790,25 @@ jobs:
           assert hcv['profileName'] == 'History Buyer' and not hcv.get('unreadCount'), hcv
           assert [(m['direction'], m['textBody']) for m in call('GET', f"/channel/wa/message/list?conversationId={hcv['id']}")] == \
               [(1, 'Last week I asked about hair dryers'), (2, 'Here is our catalog')]
+          # 聊天记录太多推送不过来时：从 Evolution 数据库拉取（手动同步在后台执行），按消息编号去重
+          assert b1['syncFullHistory'] is True, b1
+          evo_state(s1['session'], db=[
+              {'key': {'remoteJid': '8615900004444@s.whatsapp.net', 'fromMe': False, 'id': 'EVOH1'}, 'pushName': 'History Buyer',
+               'message': {'conversation': 'Last week I asked about hair dryers'}, 'messageType': 'conversation', 'messageTimestamp': old_ts},
+              {'key': {'remoteJid': '77665544@lid', 'remoteJidAlt': '8615900005555@s.whatsapp.net', 'fromMe': False, 'id': 'EVOP2'}, 'pushName': 'Pulled Buyer',
+               'message': {'conversation': 'Second message'}, 'messageType': 'conversation', 'messageTimestamp': old_ts + 20},
+              {'key': {'remoteJid': '8615900005555@s.whatsapp.net', 'fromMe': False, 'id': 'EVOP1'}, 'pushName': 'Pulled Buyer',
+               'message': {'conversation': 'First message'}, 'messageType': 'conversation', 'messageTimestamp': old_ts + 10},
+              {'key': {'remoteJid': '8615900005555@s.whatsapp.net', 'fromMe': True, 'id': 'EVOP3'},
+               'message': {'imageMessage': {'mimetype': 'image/jpeg', 'caption': 'price list'}}, 'messageType': 'imageMessage', 'messageTimestamp': old_ts + 30},
+          ])
+          assert call('POST', f"/channel/wa-account/sync-history?id={ea['id']}") == -1, '扫码号码在后台同步'
+          pcv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
+                                   if c['accountId'] == ea['id'] and c['waId'] == '8615900005555'), None), '从 Evolution 拉取聊天记录')
+          assert pcv['profileName'] == 'Pulled Buyer' and not pcv.get('unreadCount'), pcv
+          pm = wait(lambda: (lambda l: l if len(l) == 3 else None)(call('GET', f"/channel/wa/message/list?conversationId={pcv['id']}")), '三条记录入库')
+          assert [(m['direction'], m['type'], m['textBody']) for m in pm] == [(1, 'text', 'First message'), (1, 'text', 'Second message'), (2, 'image', 'price list')], pm
+          assert len(call('GET', f"/channel/wa/message/list?conversationId={hcv['id']}")) == 2, '已有的聊天记录不重复导入'
           # 手机端发出的消息同步进会话；系统发出的消息回显不重复
           assert evo_msg(s1['session'], 'EVOECHO1', '8615900003333@s.whatsapp.net', {'conversation': 'Sent from my phone'}, 'conversation', from_me=True) == 200
           assert evo_msg(s1['session'], ewamid, '8615900003333@s.whatsapp.net', {'conversation': 'MOQ is 300 units.'}, 'conversation', from_me=True) == 200
