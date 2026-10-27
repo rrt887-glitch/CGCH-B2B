@@ -2003,6 +2003,11 @@ jobs:
           fi
           exit $code
 
+      - name: 首次打开要下载的文件
+        run: |
+          node scripts/first-load-report.mjs apps/web-antd/dist | tee ../first-load.txt
+          while IFS= read -r line; do echo "::notice title=首次打开::$line"; done < ../first-load.txt
+
       - uses: actions/upload-artifact@v4
         with:
           name: web-antd-dist

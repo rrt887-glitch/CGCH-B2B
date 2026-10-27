@@ -37,6 +37,21 @@ if [ "$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)" -lt 3800 ] && ! sw
   grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
 fi
 
+# 网络加速：开启 BBR 拥塞控制。服务器在海外、访客在国内时线路丢包多，默认算法（cubic）一丢包就大幅降速，
+# BBR 能明显提高网页下载速度。只改 TCP 参数，可随时删除 /etc/sysctl.d/90-cgch-bbr.conf 恢复；设 CGCH_TCP_BBR=0 跳过
+if [ "${CGCH_TCP_BBR:-1}" != 0 ] && [ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)" != bbr ]; then
+  if modprobe tcp_bbr 2>/dev/null || grep -qw bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+    say "开启 BBR 网络加速"
+    printf 'net.core.default_qdisc=fq\nnet.ipv4.tcp_congestion_control=bbr\nnet.ipv4.tcp_slow_start_after_idle=0\n' > /etc/sysctl.d/90-cgch-bbr.conf
+    sysctl -q -p /etc/sysctl.d/90-cgch-bbr.conf || true
+  fi
+fi
+# QUIC（HTTP/3）需要较大的 UDP 缓冲区（系统默认偏小时调大）
+if [ "$(sysctl -n net.core.rmem_max 2>/dev/null || echo 0)" -lt 7500000 ] 2>/dev/null; then
+  printf 'net.core.rmem_max=7500000\nnet.core.wmem_max=7500000\n' > /etc/sysctl.d/90-cgch-udp.conf
+  sysctl -q -p /etc/sysctl.d/90-cgch-udp.conf >/dev/null 2>&1 || true
+fi
+
 mkdir -p "$DIR"
 cd "$DIR"
 
@@ -279,7 +294,7 @@ cat <<EOF
   配置文件：$DIR/.env   （请备份；修改后执行 cd $DIR && docker compose up -d 生效）
   查看日志：cd $DIR && docker compose logs -f backend
 
-  阿里云轻量服务器请在「防火墙」中放行 80 和 443 端口。
+  阿里云轻量服务器请在「防火墙」中放行 80、443（TCP）和 443（UDP，HTTP/3 加速用）端口。
 EOF
 }
 

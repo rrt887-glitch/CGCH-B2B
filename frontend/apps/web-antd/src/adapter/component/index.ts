@@ -68,8 +68,16 @@ import { isEmpty } from '@vben/utils';
 
 import { message, Modal, notification } from 'ant-design-vue';
 
-import { Tinymce as RichTextarea } from '#/components/tinymce';
-import { FileUpload, ImageUpload } from '#/components/upload';
+// 富文本编辑器、上传组件只在部分表单里用到，按需加载，减小首次打开网站要下载的代码
+const RichTextarea = defineAsyncComponent(() =>
+  import('#/components/tinymce').then((m) => m.Tinymce),
+);
+const FileUpload = defineAsyncComponent(() =>
+  import('#/components/upload').then((m) => m.FileUpload),
+);
+const ImageUpload = defineAsyncComponent(() =>
+  import('#/components/upload').then((m) => m.ImageUpload),
+);
 type AdapterUploadProps = UploadProps & {
   aspectRatio?: string;
   crop?: boolean;

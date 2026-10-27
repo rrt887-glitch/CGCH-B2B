@@ -9,6 +9,7 @@ import { startProgress, stopProgress } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
 import { getSimpleDictDataList } from '#/api/system/dict/data';
+import { ensureFormCreate, needsFormCreate } from '#/plugins/form-create/lazy';
 import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
@@ -22,12 +23,16 @@ function setupCommonGuard(router: Router) {
   // 记录已经加载的页面
   const loadedPaths = new Set<string>();
 
-  router.beforeEach((to) => {
+  router.beforeEach(async (to) => {
     to.meta.loaded = loadedPaths.has(to.path);
 
     // 页面加载进度条
     if (!to.meta.loaded && preferences.transition.progress) {
       startProgress();
+    }
+    // 表单设计器按需加载
+    if (needsFormCreate(to.path)) {
+      await ensureFormCreate();
     }
     return true;
   });

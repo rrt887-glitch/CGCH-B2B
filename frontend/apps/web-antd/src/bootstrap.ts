@@ -11,7 +11,7 @@ import '@vben/styles/antd';
 import { useTitle } from '@vueuse/core';
 
 import { $t, setupI18n } from '#/locales';
-import { setupFormCreate } from '#/plugins/form-create';
+import { bindFormCreateApp } from '#/plugins/form-create/lazy';
 
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
@@ -59,8 +59,8 @@ async function bootstrap(namespace: string) {
   // 配置路由及路由守卫
   app.use(router);
 
-  // formCreate
-  setupFormCreate(app);
+  // formCreate：只在流程审批、表单构建页面用到，进入这些页面前再加载（见 router/guard.ts）
+  bindFormCreateApp(app);
 
   // 配置Motion插件
   const { MotionPlugin } = await import('@vben/plugins/motion');
