@@ -2003,6 +2003,27 @@ jobs:
           fi
           exit $code
 
+      - name: 首次打开要下载的文件
+        run: |
+          node scripts/first-load-report.mjs apps/web-antd/dist | tee ../first-load.txt
+          while IFS= read -r line; do echo "::notice title=首次打开::$line"; done < ../first-load.txt
+
+      - name: 打包结果能在浏览器里正常打开（登录页）
+        run: |
+          (cd apps/web-antd/dist && python3 -m http.server 4173 >/dev/null 2>&1 &)
+          sleep 2
+          chrome=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          timeout 120 "$chrome" --headless=new --no-sandbox --disable-gpu --enable-logging=stderr --v=0 \
+            --virtual-time-budget=20000 --dump-dom "http://127.0.0.1:4173/#/auth/login" > ../login-dom.html 2> ../login-console.log || true
+          # 没有后端，接口请求失败是正常的；只检查脚本本身的错误（例如打包后模块初始化顺序不对）
+          grep -E 'Uncaught|TypeError|ReferenceError|SyntaxError|before initialization' ../login-console.log | grep -vE 'AxiosError|Request failed|status code|admin-api|Network Error|ERR_|DOCTYPE' | head -20 > ../login-errors.txt || true
+          if [ -s ../login-errors.txt ]; then
+            echo "::error title=登录页脚本报错::$(sed 's/%/%25/g' ../login-errors.txt | cut -c1-300 | awk '{printf "%s%%0A", $0}')"; exit 1
+          fi
+          grep -q 'type="password"' ../login-dom.html || {
+            echo "::error title=登录页没有渲染出来::$(grep -iE 'console|error' ../login-console.log | tail -15 | sed 's/%/%25/g' | cut -c1-300 | awk '{printf "%s%%0A", $0}')"; exit 1; }
+          echo "::notice title=登录页::正常渲染"
+
       - uses: actions/upload-artifact@v4
         with:
           name: web-antd-dist

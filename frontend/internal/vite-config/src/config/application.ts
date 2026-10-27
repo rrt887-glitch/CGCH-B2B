@@ -62,6 +62,26 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
           output: {
             assetFileNames: '[ext]/[name]-[hash].[ext]',
             chunkFileNames: 'js/[name]-[hash].js',
+            // 每个页面都要用的基础库合并成少数几个文件，减少首次打开时的请求数和依赖表（__vite__mapDeps）的大小
+            codeSplitting: {
+              groups: [
+                {
+                  name: 'vue-vendor',
+                  priority: 30,
+                  test: /node_modules[\\/](?:@vue|vue|vue-router|pinia|pinia-plugin-persistedstate|vue-i18n|@intlify|@vueuse|vue-dompurify-html|dompurify|secure-ls|crypto-js|jsencrypt|axios|dayjs|lodash-es|defu|@iconify)[\\/]/,
+                },
+                {
+                  name: 'antd-base',
+                  priority: 20,
+                  test: /node_modules[\\/]ant-design-vue[\\/]es[\\/](?:_util|style|theme|config-provider|locale|locale-provider|locale\/[^\\/]+|vc-util|vc-trigger|vc-align|vc-motion|vc-resize-observer|vc-overflow|vc-virtual-list|button|spin|message|notification|modal|tooltip|popover|dropdown|menu|space|wave)[\\/]/,
+                },
+                {
+                  name: 'vben-core',
+                  priority: 10,
+                  test: /packages[\\/]@core[\\/]/,
+                },
+              ],
+            },
             entryFileNames: 'jse/index-[name]-[hash].js',
             minify: isBuild
               ? {
