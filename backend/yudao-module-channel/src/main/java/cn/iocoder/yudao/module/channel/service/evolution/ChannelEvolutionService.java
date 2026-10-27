@@ -242,6 +242,9 @@ public class ChannelEvolutionService {
             result[0] = a;
         });
         stringRedisTemplate.delete(PENDING_KEY + instance);
+        if (result[0] != null) {
+            scheduleHistory(result[0]);
+        }
         return result[0];
     }
 
@@ -251,6 +254,75 @@ public class ChannelEvolutionService {
         } catch (Exception e) {
             log.info("[quietDelete][删除实例 {}] {}", instance, e.getMessage());
         }
+    }
+
+    // ==================== 聊天记录 ====================
+
+    /** 最多导入的历史消息条数 */
+    private static final int HISTORY_MAX = 200000;
+    private static final int HISTORY_PAGE = 500;
+    private final java.util.concurrent.ScheduledExecutorService historyExecutor =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "channel-evolution-history");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /**
+     * 关联后手机会分几批把聊天记录发给 Evolution（存进它的数据库），推送可能因为太大而发不过来，
+     * 所以连接成功后分几次从 Evolution 数据库拉取，按消息编号去重。
+     */
+    private void scheduleHistory(ChannelWaAccountDO a) {
+        for (int delay : new int[]{15, 60, 180, 600}) {
+            historyExecutor.schedule(() -> {
+                try {
+                    ChannelWaAccountDO fresh = findAccount(a.getPhoneNumberId());
+                    if (fresh != null) {
+                        TenantUtils.execute(fresh.getTenantId(), () -> syncHistory(fresh));
+                    }
+                } catch (Exception e) {
+                    log.warn("[scheduleHistory][账号 {} 拉取聊天记录失败] {}", a.getId(), e.getMessage());
+                }
+            }, delay, java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
+
+    /** 手动同步：聊天记录可能很多，放到后台执行，立即返回 */
+    public void syncHistoryAsync(ChannelWaAccountDO a) {
+        requireEnabled();
+        historyExecutor.execute(() -> {
+            try {
+                TenantUtils.execute(a.getTenantId(), () -> syncHistory(a));
+            } catch (Exception e) {
+                log.warn("[syncHistoryAsync][账号 {} 拉取聊天记录失败] {}", a.getId(), e.getMessage());
+            }
+        });
+    }
+
+    /** 从 Evolution 数据库拉取聊天记录入库（不计未读、不触发 AI），返回新导入的条数 */
+    public int syncHistory(ChannelWaAccountDO a) {
+        requireEnabled();
+        java.util.List<JsonNode> all = new java.util.ArrayList<>();
+        try {
+            for (int page = 1; all.size() < HISTORY_MAX; page++) {
+                EvolutionClient.MessagePage mp = EvolutionClient.findMessages(cfg(), a.getPhoneNumberId(), page, HISTORY_PAGE);
+                all.addAll(mp.records());
+                if (mp.records().size() < HISTORY_PAGE || page >= mp.pages()) {
+                    break;
+                }
+            }
+        } catch (WaGraphClient.WaApiException e) {
+            throw exception(WA_API_FAIL, e.getMessage());
+        }
+        all.sort(java.util.Comparator.comparingLong(d -> d.path("messageTimestamp").asLong(0))); // 按时间先后入库，会话里按顺序显示
+        int n = 0;
+        for (JsonNode d : all) {
+            if (history(a, d)) {
+                n++;
+            }
+        }
+        log.info("[syncHistory][账号 {} 从 Evolution 拉取 {} 条，可入库 {} 条]", a.getId(), all.size(), n);
+        return n;
     }
 
     /** 删除账号时退出手机上的关联设备并删除实例 */
@@ -401,9 +473,8 @@ public class ChannelEvolutionService {
                 return false;
             }
             boolean fromMe = key.path("fromMe").asBoolean(false);
-            whatsAppService.evolutionHistory(a, m, customer, fromMe,
+            return whatsAppService.evolutionHistory(a, m, customer, fromMe,
                     fromMe ? null : StrUtil.emptyToNull(d.path("pushName").asText(null)));
-            return true;
         } catch (Exception e) {
             log.warn("[history][账号 {}] 聊天记录处理失败 {}", a.getId(), d, e);
             return false;

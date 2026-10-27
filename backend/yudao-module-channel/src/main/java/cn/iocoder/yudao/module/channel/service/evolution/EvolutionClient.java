@@ -117,7 +117,7 @@ public final class EvolutionClient {
         body.put("alwaysOnline", false);
         body.put("readMessages", false);
         body.put("readStatus", false);
-        body.put("syncFullHistory", false);
+        body.put("syncFullHistory", true); // 关联时让手机同步全部聊天记录（不只是最近的），与原网站一致
         ObjectNode w = body.putObject("webhook");
         w.put("enabled", true);
         w.put("url", webhookUrl);
@@ -202,6 +202,21 @@ public final class EvolutionClient {
             body.put("caption", caption);
         }
         return messageId(call(c, "POST", "/message/sendMedia/" + enc(name), body, 120));
+    }
+
+    public record MessagePage(java.util.List<JsonNode> records, int pages) {
+    }
+
+    /** Evolution 数据库里保存的消息（含关联时同步的聊天记录），按时间倒序分页 */
+    public static MessagePage findMessages(ChannelOAuthProperties.Evolution c, String name, int page, int size) {
+        ObjectNode body = JSON.createObjectNode();
+        body.putObject("where");
+        body.put("page", page);
+        body.put("offset", size);
+        JsonNode m = call(c, "POST", "/chat/findMessages/" + enc(name), body, 60).path("messages");
+        java.util.List<JsonNode> list = new java.util.ArrayList<>();
+        m.path("records").forEach(list::add);
+        return new MessagePage(list, m.path("pages").asInt(0));
     }
 
     public record Media(byte[] content, String mimeType, String fileName) {

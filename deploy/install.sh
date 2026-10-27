@@ -192,7 +192,7 @@ services:
       DEL_INSTANCE: "false"
       LANGUAGE: en
       CONFIG_SESSION_PHONE_CLIENT: \${CGCH_PRODUCT_NAME:-CGCH}
-      CONFIG_SESSION_PHONE_NAME: Chrome
+      CONFIG_SESSION_PHONE_NAME: Desktop # 以桌面版身份关联，WhatsApp 才会同步完整聊天记录
       QRCODE_LIMIT: "15"
       TELEMETRY_ENABLED: "false"
       WEBSOCKET_ENABLED: "false"
