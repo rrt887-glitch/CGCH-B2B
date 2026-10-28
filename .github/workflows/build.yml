@@ -1988,8 +1988,10 @@ jobs:
           [ "$n" -eq 0 ]
 
       - name: 单元测试
+        if: ${{ !cancelled() }}
         run: |
-          pnpm exec vitest run --dom --reporter=default --reporter=json --outputFile=../vitest.json > ../vitest.log 2>&1; code=$?
+          code=0
+          pnpm exec vitest run --dom --reporter=default --reporter=json --outputFile=../vitest.json > ../vitest.log 2>&1 || code=$?
           tail -30 ../vitest.log
           node -e '
             const r = JSON.parse(require("fs").readFileSync("../vitest.json", "utf8"));
