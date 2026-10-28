@@ -3,6 +3,7 @@
  * 渠道管理中的 Meta 即时通讯账号：WhatsApp（官方 Cloud API）、Facebook 主页私信、Instagram 私信。
  * Facebook / Instagram 推荐用「Facebook 登录授权」一键接入；也可以手动填写主页令牌。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
 
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
@@ -227,7 +228,7 @@ defineExpose({ openForm, connect, connectOfficial, accounts, load, toggle, remov
         <template v-else-if="column.key === 'webhook'">
           <Tag v-if="record.lastWebhookTime" color="green">已收到推送</Tag>
           <Tag v-else color="orange">尚未收到推送</Tag>
-          <div v-if="record.lastWebhookTime" class="text-xs text-gray-500">{{ record.lastWebhookTime }}</div>
+          <div v-if="record.lastWebhookTime" class="text-xs text-gray-500">{{ fmtDateTime(record.lastWebhookTime) }}</div>
         </template>
         <template v-else-if="column.key === 'action'">
           <Space>

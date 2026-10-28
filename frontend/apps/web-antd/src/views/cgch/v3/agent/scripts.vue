@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 /** 教话术：学习真人销售、FAQ（成交案例）、固定开场白、言语边界 */
+import { fmtDateTime } from '#/utils/datetime';
 import type { AgentApi } from '#/api/channel/agent';
 
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
@@ -258,7 +259,7 @@ onMounted(() => {
         <Button type="primary" :loading="learning" :disabled="!learn.enabled" @click="runLearn">
           <IconifyIcon icon="lucide:graduation-cap" class="mr-1 inline size-4" />立即学习
         </Button>
-        <span v-if="learn.lastLearnTime" class="text-xs text-gray-500">上次学习：{{ learn.lastLearnTime }} · {{ learn.lastSamples }} 段对话</span>
+        <span v-if="learn.lastLearnTime" class="text-xs text-gray-500">上次学习：{{ fmtDateTime(learn.lastLearnTime) }} · {{ learn.lastSamples }} 段对话</span>
       </div>
 
       <div class="sc__block mt-5">

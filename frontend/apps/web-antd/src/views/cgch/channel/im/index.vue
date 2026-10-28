@@ -3,6 +3,7 @@
  * 消息工作台（WhatsApp、Facebook 主页私信、Instagram 私信）：左侧会话列表，右侧聊天记录与输入框。
  * 客户 24 小时内发过消息才能发自由文本，窗口关闭后只能发已审核的模板。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
 import type { ChannelAiApi } from '#/api/channel/ai';
 import { loadTranslatePrefs, translateTexts } from '#/api/channel/translate';
@@ -78,6 +79,8 @@ const PLATFORM_META: Record<string, { avatar: string; color: string; label: stri
 const plat = (c?: { platform?: string }) => PLATFORM_META[c?.platform || 'whatsapp'] ?? PLATFORM_META.whatsapp!;
 const isWa = (c?: { platform?: string }) => !c?.platform || c.platform === 'whatsapp';
 const waAccounts = computed(() => accounts.value.filter((a) => isWa(a)));
+/** 扫码接入的号码（WhatsApp 网页版协议）没有模板和 24 小时窗口限制，可以直接发普通消息 */
+const isScanAccount = (id?: number) => accounts.value.find((a) => a.id === id)?.authType === 'evolution';
 
 const accountOptions = computed(() => [
   { label: '全部账号', value: undefined as any },
@@ -304,6 +307,56 @@ function pickAndSend() {
   input.click();
 }
 
+// ===== 新会话：扫码号码直接输入号码和消息；官方 API 号码只能先发已审核的模板 =====
+const newOpen = ref(false);
+const newSending = ref(false);
+const newForm = ref({ accountId: undefined as number | undefined, to: '', text: '' });
+const newAccountOptions = computed(() =>
+  waAccounts.value.map((a) => ({
+    value: a.id,
+    label: `${a.displayPhone || a.name || a.phoneNumberId}${a.authType === 'evolution' ? '（扫码）' : '（官方 API）'}`,
+  })),
+);
+function openNewChat() {
+  const selected = accounts.value.find((a) => a.id === accountId.value);
+  newForm.value = { accountId: selected && isWa(selected) ? selected.id : waAccounts.value[0]?.id, to: '', text: '' };
+  if (!isScanAccount(newForm.value.accountId)) {
+    openTemplate(true);
+    return;
+  }
+  newOpen.value = true;
+}
+function onNewAccountChange(id: number) {
+  if (!isScanAccount(id)) {
+    newOpen.value = false;
+    const keepTo = newForm.value.to;
+    openTemplate(true, id).then(() => (newTo.value = keepTo));
+  }
+}
+async function sendNewChat() {
+  const f = newForm.value;
+  const to = f.to.replaceAll(/[^\d]/g, '');
+  if (to.length < 8 || to.length > 15) {
+    message.warning('请填写正确的号码（含国家码，如 +8613800001111）');
+    return;
+  }
+  if (!f.text.trim()) {
+    message.warning('请填写消息内容');
+    return;
+  }
+  newSending.value = true;
+  try {
+    const sent = await sendWaMessage({ accountId: f.accountId, to, text: f.text.trim() });
+    message.success('消息已发送');
+    newOpen.value = false;
+    await loadConversations(true);
+    const conv = conversations.value.find((c) => c.id === sent.conversationId);
+    if (conv) await openConversation(conv);
+  } finally {
+    newSending.value = false;
+  }
+}
+
 // ===== 发送模板（窗口外，或主动联系新号码） =====
 const tplOpen = ref(false);
 const tplLoading = ref(false);
@@ -318,9 +371,12 @@ watch(chosen, (t) => {
   tplParams.value = Array.from({ length: templateParamCount(t) }, () => '');
 });
 
-async function openTemplate(newChat = false) {
+async function openTemplate(newChat = false, forAccount?: number) {
   const selected = accounts.value.find((a) => a.id === accountId.value);
-  const acc = newChat ? (selected && isWa(selected) ? selected.id : waAccounts.value[0]?.id) : current.value?.accountId;
+  const officialFirst = waAccounts.value.find((a) => a.authType !== 'evolution')?.id;
+  const acc = newChat
+    ? forAccount ?? (selected && isWa(selected) && !isScanAccount(selected.id) ? selected.id : officialFirst)
+    : current.value?.accountId;
   if (!acc) return;
   newAccountId.value = acc;
   newTo.value = newChat ? '' : current.value!.waId;
@@ -377,8 +433,8 @@ const initials = (c: ChannelWaApi.Conversation) => (c.profileName || c.waId).sli
 const contact = (c: ChannelWaApi.Conversation) =>
   c.profileName ||
   (isWa(c) ? `+${c.waId}` : c.platform === 'web' ? `官网访客 ${c.waId.slice(-4).toUpperCase()}` : `${plat(c).label} 用户`);
-const hm = (t?: string) => t?.slice(11, 16) ?? '';
-const md = (t?: string) => t?.slice(5, 10) ?? '';
+const hm = (t?: number | string) => fmtDateTime(t, 'HH:mm');
+const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 </script>
 
 <template>
@@ -396,7 +452,7 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
           <div class="flex gap-2">
             <Select v-if="!embedded" v-model:value="accountId" :options="accountOptions" class="min-w-0 flex-1" />
             <span v-else class="flex-1"></span>
-            <Button v-if="waAccounts.length > 0" type="primary" @click="openTemplate(true)">新会话</Button>
+            <Button v-if="waAccounts.length > 0" type="primary" @click="openNewChat">新会话</Button>
           </div>
           <InputSearch v-model:value="keyword" allow-clear placeholder="号码或昵称" @search="() => loadConversations()" />
           <label class="flex items-center gap-2 text-sm text-gray-500">
@@ -447,7 +503,7 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
                   线索：{{ current.clueName }}
                 </Tag>
                 <Tag v-else>未关联客户</Tag>
-                <Tooltip v-if="current.windowOpen" :title="`窗口在 ${current.windowExpireTime} 关闭`">
+                <Tooltip v-if="current.windowOpen" :title="`窗口在 ${fmtDateTime(current.windowExpireTime)} 关闭`">
                   <Tag color="green">24 小时窗口内</Tag>
                 </Tooltip>
                 <Tag v-else color="orange">{{ isWa(current) ? '窗口已关闭，仅可发模板' : '窗口已关闭，等待客户来信' }}</Tag>
@@ -531,7 +587,7 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
               <div class="mt-2 flex justify-between">
                 <Space>
                   <Button :loading="fileSending" @click="pickAndSend">发送文件</Button>
-                  <Button v-if="isWa(current)" @click="openTemplate()">发送模板</Button>
+                  <Button v-if="isWa(current) && !isScanAccount(current.accountId)" @click="openTemplate()">发送模板</Button>
                   <Button :loading="aiLoading" @click="aiCompose">AI 起草</Button>
                 </Space>
                 <Button type="primary" :loading="sending" :disabled="!text.trim()" @click="sendText">发送</Button>
@@ -553,6 +609,21 @@ const md = (t?: string) => t?.slice(5, 10) ?? '';
         </template>
       </div>
     </div>
+
+    <Modal v-model:open="newOpen" title="新会话" ok-text="发送" :confirm-loading="newSending" :width="520" @ok="sendNewChat">
+      <div class="flex flex-col gap-3">
+        <Select
+          v-if="waAccounts.length > 1"
+          v-model:value="newForm.accountId"
+          :options="newAccountOptions"
+          placeholder="用哪个号码发送"
+          @change="(v: any) => onNewAccountChange(v)"
+        />
+        <Input v-model:value="newForm.to" placeholder="客户号码，含国家码，如 +8613800001111" />
+        <Textarea v-model:value="newForm.text" :auto-size="{ minRows: 4, maxRows: 10 }" :maxlength="4096" placeholder="消息内容" />
+        <div class="text-xs text-gray-400">扫码接入的号码可以直接发送普通消息。请勿短时间内群发陌生号码，以免号码被 WhatsApp 限制。</div>
+      </div>
+    </Modal>
 
     <Modal v-model:open="tplOpen" title="发送模板消息" ok-text="发送" :width="560" @ok="sendTemplate">
       <Spin :spinning="tplLoading">

@@ -3,6 +3,7 @@
  * 深度背调：输入客户官网（或选择客户 / 线索），AI 读取官网公开页面并结合往来记录，整理成背调报告。
  * 可从 CRM 跳转过来：?customerId=1 或 ?clueId=2
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelResearchApi } from '#/api/channel/research';
 
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
@@ -183,7 +184,7 @@ onMounted(async () => {
               <span class="truncate text-sm font-medium">{{ r.companyName || r.website || `#${r.id}` }}</span>
               <Tag v-if="r.status !== 'done'" :color="r.status === 'running' ? 'processing' : 'red'">{{ r.status === 'running' ? '进行中' : '失败' }}</Tag>
             </div>
-            <div class="truncate text-xs text-gray-500">{{ r.website }} · {{ r.createTime?.slice(5) }}</div>
+            <div class="truncate text-xs text-gray-500">{{ r.website }} · {{ fmtDateTime(r.createTime, 'MM-DD HH:mm') }}</div>
           </div>
         </Card>
       </div>

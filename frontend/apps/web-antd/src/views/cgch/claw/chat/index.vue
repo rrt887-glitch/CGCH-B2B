@@ -2,9 +2,11 @@
 /**
  * 对话助手：用自然语言问 CRM 和消息里的事，AI 先查数据再回答。只读，按本人数据权限过滤。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelAssistantApi } from '#/api/channel/assistant';
 
 import { nextTick, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
@@ -30,9 +32,13 @@ const SUGGESTIONS = [
   '帮我总结一下和 Acme 的往来',
 ];
 
+const router = useRouter();
 const chats = ref<ChannelAssistantApi.Chat[]>([]);
 const chatId = ref<number>();
-const msgs = ref<(ChannelAssistantApi.Message & { pending?: boolean })[]>([]);
+const msgs = ref<(ChannelAssistantApi.Message & { error?: boolean; pending?: boolean })[]>([]);
+/** 等待回答的秒数（查询可能要查多张表、调用大模型，给出进度感） */
+const waited = ref(0);
+let waitTimer: ReturnType<typeof setInterval> | undefined;
 const input = ref('');
 const sending = ref(false);
 const loading = ref(false);
@@ -64,6 +70,8 @@ async function send(text?: string) {
   msgs.value.push({ id: -Date.now() - 1, role: 'assistant', content: '', steps: [], pending: true });
   scrollDown();
   sending.value = true;
+  waited.value = 0;
+  waitTimer = setInterval(() => waited.value++, 1000);
   try {
     const r = await askAssistant(q, chatId.value);
     msgs.value.pop();
@@ -72,9 +80,13 @@ async function send(text?: string) {
       chatId.value = r.chatId;
     }
     await loadChats();
-  } catch {
+  } catch (error: any) {
     msgs.value.pop();
+    // 失败原因直接显示在对话里，不只是一闪而过的提示
+    const reason = error?.response?.data?.msg || error?.msg || error?.message || '查询失败，请稍后重试';
+    msgs.value.push({ id: -Date.now() - 2, role: 'assistant', content: String(reason), steps: [], error: true });
   } finally {
+    clearInterval(waitTimer);
     sending.value = false;
     scrollDown();
   }
@@ -130,7 +142,7 @@ onMounted(() => {
         >
           <div class="min-w-0">
             <div class="truncate text-sm">{{ c.title }}</div>
-            <div class="text-xs text-gray-400">{{ c.updateTime?.slice(5) }}</div>
+            <div class="text-xs text-gray-400">{{ fmtDateTime(c.updateTime, 'MM-DD HH:mm') }}</div>
           </div>
           <Popconfirm title="删除这个对话？" @confirm="remove(c.id)">
             <Button size="small" type="text" danger class="opacity-0 group-hover:opacity-100" @click.stop>删除</Button>
@@ -157,9 +169,16 @@ onMounted(() => {
                 </div>
                 <div
                   class="whitespace-pre-wrap rounded-lg px-3 py-2 leading-6"
-                  :class="m.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-800'"
+                  :class="m.role === 'user' ? 'bg-blue-500 text-white' : m.error ? 'bg-red-50 text-red-600' : 'bg-gray-100 dark:bg-gray-800'"
                 >
-                  <Spin v-if="m.pending" size="small" class="mr-2" />{{ m.pending ? '正在查询…' : m.content }}
+                  <template v-if="m.pending">
+                    <Spin size="small" class="mr-2" />{{ waited < 8 ? '正在查询 CRM 和消息数据…' : `正在整理回答…已等待 ${waited} 秒` }}
+                  </template>
+                  <template v-else-if="m.error">
+                    查询失败：{{ m.content }}
+                    <a v-if="m.content.includes('大模型')" class="ml-1" @click="router.push({ path: '/v3/settings', query: { tab: 'ai' } })">去配置大模型 →</a>
+                  </template>
+                  <template v-else>{{ m.content }}</template>
                 </div>
                 <div v-if="m.role === 'assistant' && m.credits" class="mt-1 text-xs text-gray-400">消耗 {{ m.credits }} 智点</div>
               </div>

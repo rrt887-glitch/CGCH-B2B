@@ -11,6 +11,7 @@ import { useAccess } from '@vben/access';
 
 import { Badge, Button, Card, Empty, message, Pagination, Radio, RadioGroup, Space, Spin, Switch, Tag } from 'ant-design-vue';
 
+import { fmtDateTime } from '#/utils/datetime';
 import { getAiConfig, saveAiConfig } from '#/api/channel/ai';
 import { getMyNotifyMessagePage, updateAllNotifyMessageRead, updateNotifyMessageRead } from '#/api/system/notify/message';
 
@@ -103,7 +104,7 @@ onMounted(async () => {
               <div class="flex items-center gap-2">
                 <Badge v-if="!x.readStatus" status="processing" />
                 <Tag v-if="TYPES[typeOf(x)]" :color="TYPES[typeOf(x)]!.color">{{ TYPES[typeOf(x)]!.label }}</Tag>
-                <span class="text-xs text-gray-400">{{ x.createTime ? new Date(x.createTime).toLocaleString() : '' }}</span>
+                <span class="text-xs text-gray-400">{{ fmtDateTime(x.createTime) }}</span>
               </div>
               <div class="mt-1" :class="x.readStatus ? 'text-gray-500' : ''">{{ x.templateContent }}</div>
             </div>
