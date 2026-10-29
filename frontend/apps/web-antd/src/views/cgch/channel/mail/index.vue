@@ -3,6 +3,7 @@
  * 邮件工作台：左侧邮箱与文件夹，中间邮件列表，右侧正文、往来记录与回复。
  * 邮件 HTML 放在禁用脚本的 iframe 里展示，避免来信中的脚本执行。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelMailApi } from '#/api/channel/mail';
 import type { ChannelAiApi } from '#/api/channel/ai';
 import type { MailTemplateApi } from '#/api/channel/mail-template';
@@ -348,7 +349,7 @@ onMounted(async () => {
                       <span class="truncate" :class="item.readStatus ? '' : 'font-semibold'">
                         {{ item.direction === 2 ? `发给 ${item.toAddresses}` : item.fromName || item.fromAddress }}
                       </span>
-                      <span class="shrink-0 text-xs text-gray-400">{{ item.sentTime?.slice(5, 16) }}</span>
+                      <span class="shrink-0 text-xs text-gray-400">{{ fmtDateTime(item.sentTime, 'MM-DD HH:mm') }}</span>
                     </div>
                     <div class="truncate text-sm" :class="item.readStatus ? 'text-gray-700' : 'font-semibold'">
                       {{ item.subject || '（无主题）' }}
@@ -391,7 +392,7 @@ onMounted(async () => {
                 <span v-if="current.ccAddresses">，抄送 {{ current.ccAddresses }}</span>
               </div>
               <div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-                <span>{{ current.sentTime }}</span>
+                <span>{{ fmtDateTime(current.sentTime) }}</span>
                 <Tag v-if="current.customerName" color="blue" class="cursor-pointer" @click="router.push(`/crm/customer/detail/${current.customerId}`)">
                   客户：{{ current.customerName }}
                 </Tag>
@@ -434,7 +435,7 @@ onMounted(async () => {
                   :class="t.direction === 2 ? 'border-green-400 bg-green-50' : 'border-blue-400 bg-blue-50'"
                 >
                   <div class="text-xs text-gray-500">
-                    {{ t.direction === 2 ? '我方' : t.fromName || t.fromAddress }} · {{ t.sentTime }}
+                    {{ t.direction === 2 ? '我方' : t.fromName || t.fromAddress }} · {{ fmtDateTime(t.sentTime) }}
                   </div>
                   <div class="truncate">{{ t.snippet }}</div>
                 </div>

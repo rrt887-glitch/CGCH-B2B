@@ -3,6 +3,7 @@
  * 成交案例：AI 从已成交客户的往来记录中总结成交关键点、客户顾虑与回应、有效话术；
  * 人工确认开启后，AI 回复同类询盘时参考（不会透露原客户名称和价格）。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelCaseApi } from '#/api/channel/cases';
 
 import { computed, onMounted, reactive, ref } from 'vue';
@@ -172,7 +173,7 @@ onMounted(load);
             <span>
               <a v-if="c.customerId" @click="router.push(`/crm/customer/detail/${c.customerId}`)">来源客户：{{ c.customerName }}（仅内部可见）</a>
               <template v-else>手动录入</template>
-              · {{ c.createTime }}
+              · {{ fmtDateTime(c.createTime) }}
             </span>
             <Space>
               <Button size="small" type="link" @click="openEdit(c)">修改</Button>

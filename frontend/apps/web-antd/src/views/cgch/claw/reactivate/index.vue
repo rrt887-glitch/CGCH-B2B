@@ -2,6 +2,7 @@
 /**
  * 客户唤醒：筛出久未联系的老客户 → AI 逐个写跟进邮件（WhatsApp 用已审核模板）→ 业务员确认 → 批量发出 → 跟踪回复。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelReactivateApi } from '#/api/channel/reactivate';
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
 
@@ -253,7 +254,7 @@ onMounted(async () => {
             <span class="truncate font-medium">{{ t.name }}</span>
             <Tag :color="TASK_STATUS[t.status]?.color">{{ TASK_STATUS[t.status]?.label }}</Tag>
           </div>
-          <div class="mt-2 text-sm text-gray-500">{{ t.createTime }} · {{ t.total }} 位客户</div>
+          <div class="mt-2 text-sm text-gray-500">{{ fmtDateTime(t.createTime) }} · {{ t.total }} 位客户</div>
           <div class="mt-2 flex gap-4 text-sm">
             <span>已发送 <b>{{ t.counts.sent }}</b></span>
             <span>待确认 <b>{{ t.counts.draft + t.counts.approved }}</b></span>
@@ -298,7 +299,7 @@ onMounted(async () => {
             </template>
             <template v-else-if="column.key === 'owner'">{{ userName(record.ownerUserId) }}</template>
             <template v-else-if="column.key === 'last'">
-              <div class="text-sm">{{ record.lastContactTime }}</div>
+              <div class="text-sm">{{ fmtDateTime(record.lastContactTime, 'YYYY-MM-DD HH:mm', '—') }}</div>
               <div class="text-xs text-gray-500">
                 {{ record.contacted ? `${record.inactiveDays} 天前` : '建档后未联系' }}
                 <Tag v-if="record.inTask" color="orange" class="ml-1">已在任务中</Tag>
@@ -397,7 +398,7 @@ onMounted(async () => {
             <template v-else-if="column.key === 'status'">
               <Tag :color="ITEM_STATUS[record.status]?.color">{{ ITEM_STATUS[record.status]?.label }}</Tag>
               <Tag v-if="record.replied" color="green">已回复</Tag>
-              <div v-if="record.sentTime" class="text-xs text-gray-400">{{ record.sentTime }}</div>
+              <div v-if="record.sentTime" class="text-xs text-gray-400">{{ fmtDateTime(record.sentTime) }}</div>
             </template>
             <template v-else-if="column.key === 'action'">
               <Space :size="2">

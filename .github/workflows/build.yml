@@ -1971,24 +1971,38 @@ jobs:
       - name: 安装依赖
         run: pnpm install --no-frozen-lockfile
 
-      - name: 类型检查（上游代码的既有类型错误只报告；草根出海自己的页面有错误则失败）
+      - name: 类型检查（有任何类型错误则失败）
         run: |
-          # setup-node 自带的 tsc 问题匹配器会把上游的既有错误也变成注解（每步最多 10 条），先关掉
+          # setup-node 自带的 tsc 问题匹配器每步最多 10 条注解，先关掉，下面自己合并成注解
           echo "::remove-matcher owner=tsc::"
           pnpm -F @vben/web-antd run typecheck > typecheck.log 2>&1 || true
           sed -i 's/\x1b\[[0-9;]*m//g' typecheck.log
-          echo "全部类型错误：$(grep -c 'error TS' typecheck.log || true) 个（含上游既有错误）"
-          # 草根出海新增 / 改写的代码：views/cgch、api/channel、api/crm/cgch、主框架与路由
-          grep -E "src/(views/cgch|api/channel|api/crm/cgch|layouts/basic\.vue|router/routes/modules/cgch\.ts)" typecheck.log | grep -E "error TS" > own-errors.log || true
-          n=$(wc -l < own-errors.log)
-          echo "草根出海代码的类型错误：$n 个"
-          cat own-errors.log
-          # 全部错误合成一条注解（每步最多 10 条注解）
-          sed -E 's/^src\/views\/cgch\///; s/error TS[0-9]+: //' own-errors.log | split -l 15 - own-part-
-          for f in $(ls own-part-* 2>/dev/null | head -10); do
-            echo "::error title=草根出海代码类型错误（共 $n 个）::$(sed 's/%/%25/g' "$f" | awk '{printf "%s%%0A", $0}')"
+          grep -E "error TS" typecheck.log > ts-errors.log || true
+          n=$(wc -l < ts-errors.log)
+          echo "类型错误：$n 个"
+          cat ts-errors.log
+          sed -E 's/^src\///; s/error TS[0-9]+: //' ts-errors.log | cut -c1-260 | split -l 12 - ts-part-
+          for f in $(ls ts-part-* 2>/dev/null | head -10); do
+            echo "::error title=类型错误（共 $n 个）::$(sed 's/%/%25/g' "$f" | awk '{printf "%s%%0A", $0}')"
           done
           [ "$n" -eq 0 ]
+
+      - name: 单元测试
+        if: ${{ !cancelled() }}
+        run: |
+          code=0
+          pnpm exec vitest run --dom --reporter=default --reporter=json --outputFile=../vitest.json > ../vitest.log 2>&1 || code=$?
+          tail -30 ../vitest.log
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("../vitest.json", "utf8"));
+            console.log(`::notice title=单元测试::共 ${r.numTotalTests} 个，通过 ${r.numPassedTests} 个，失败 ${r.numFailedTests} 个`);
+            for (const f of r.testResults) for (const t of f.assertionResults) if (t.status === "failed") {
+              const msg = (t.failureMessages || []).join(" ").replace(/\x1b\[[0-9;]*m/g, "").slice(0, 900);
+              const file = f.name.replace(/.*\/frontend\//, "");
+              console.log(`::error title=单元测试失败 ${file}::${t.fullName} — ${msg}`.replace(/%/g, "%25").replace(/\n/g, "%0A"));
+            }
+          ' || true
+          exit $code
 
       - name: 打包（web-antd）
         env:

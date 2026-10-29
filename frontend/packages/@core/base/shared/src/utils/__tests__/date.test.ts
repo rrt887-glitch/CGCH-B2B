@@ -114,7 +114,9 @@ describe('dateUtils', () => {
     it('should return a valid IANA timezone string', () => {
       const tz = getSystemTimezone();
       expect(typeof tz).toBe('string');
-      expect(tz).toMatch(/^[A-Z]+\/[A-Z_]+/i);
+      // 服务器 / CI 常用 UTC，也是合法的 IANA 时区
+      expect(tz).toMatch(/^(?:UTC|Etc\/[\w+-]+|[A-Z]+\/[\w+-]+(?:\/[\w+-]+)?)$/i);
+      expect(() => new Intl.DateTimeFormat('en-US', { timeZone: tz })).not.toThrow();
     });
   });
 

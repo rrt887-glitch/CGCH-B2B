@@ -57,22 +57,22 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '客户名称',
       component: 'ApiSelect',
       rules: 'required',
-      componentProps: (_values, form) => ({
-        api: getCustomerSimpleList,
-        labelField: 'name',
-        valueField: 'id',
-        placeholder: '请选择客户',
-        onChange: () => {
-          form.setFieldValue('contractId', undefined);
-          form.setFieldValue('planId', undefined);
-          form.setFieldValue('price', undefined);
-          form.setFieldValue('returnTime', undefined);
-          form.setFieldValue('returnType', undefined);
-        },
-      }),
       dependencies: {
-        triggerFields: ['id'],
-        disabled: (values) => values.id,
+        triggerFields: ['id', 'customerId'],
+        componentProps: (_values, actions) => ({
+          api: getCustomerSimpleList,
+          labelField: 'name',
+          valueField: 'id',
+          placeholder: '请选择客户',
+          onChange: () => {
+            actions.setFieldValue('contractId', undefined);
+            actions.setFieldValue('planId', undefined);
+            actions.setFieldValue('price', undefined);
+            actions.setFieldValue('returnTime', undefined);
+            actions.setFieldValue('returnType', undefined);
+          },
+        }),
+        disabled: (values) => !!values.id,
       },
     },
     {

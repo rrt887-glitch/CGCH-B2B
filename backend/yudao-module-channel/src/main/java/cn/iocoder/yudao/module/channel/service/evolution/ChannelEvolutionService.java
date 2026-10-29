@@ -443,7 +443,7 @@ public class ChannelEvolutionService {
             }
             String customer = EvolutionClient.digits(jid);
             ObjectNode m = toMeta(d, customer);
-            if (customer.isEmpty() || m == null) {
+            if (!isCustomer(customer) || m == null) {
                 return;
             }
             if (key.path("fromMe").asBoolean(false)) {
@@ -469,7 +469,7 @@ public class ChannelEvolutionService {
             }
             String customer = EvolutionClient.digits(jid);
             ObjectNode m = toMeta(d, customer);
-            if (customer.isEmpty() || m == null || "reaction".equals(m.path("type").asText())) {
+            if (!isCustomer(customer) || m == null || "reaction".equals(m.path("type").asText())) {
                 return false;
             }
             boolean fromMe = key.path("fromMe").asBoolean(false);
@@ -498,10 +498,34 @@ public class ChannelEvolutionService {
         }
     }
 
+    /** 真实客户号码：排除 WhatsApp 官方系统账号（0@s.whatsapp.net 等）这类过短的号码 */
+    static boolean isCustomer(String digits) {
+        return digits != null && digits.length() >= 6;
+    }
+
+    /** 阅后即焚、限时消息等外层包装里取出真正的消息 */
+    private static final java.util.List<String> WRAPPERS = java.util.List.of("ephemeralMessage", "viewOnceMessage",
+            "viewOnceMessageV2", "viewOnceMessageV2Extension", "documentWithCaptionMessage", "editedMessage");
+
     /** Evolution（Baileys）消息转成 Meta 消息结构；不需要入库的消息（协议消息、投票等）返回 null */
     static ObjectNode toMeta(JsonNode d, String customer) {
         JsonNode msg = d.path("message");
         String type = d.path("messageType").asText("");
+        for (int i = 0; i < 3 && WRAPPERS.contains(type); i++) {
+            msg = msg.path(type).path("message");
+            String inner = null;
+            for (java.util.Iterator<String> it = msg.fieldNames(); it.hasNext(); ) {
+                String f = it.next();
+                if (!"messageContextInfo".equals(f)) {
+                    inner = f;
+                    break;
+                }
+            }
+            if (inner == null) {
+                return null;
+            }
+            type = inner;
+        }
         String id = d.path("key").path("id").asText("");
         if (id.isEmpty()) {
             return null;
@@ -543,8 +567,23 @@ public class ChannelEvolutionService {
             case "buttonsResponseMessage" -> text(o, msg.path(type).path("selectedDisplayText").asText(""));
             case "templateButtonReplyMessage" -> text(o, msg.path(type).path("selectedDisplayText").asText(""));
             case "listResponseMessage" -> text(o, msg.path(type).path("title").asText(""));
+            // 商家发来的按钮、列表、模板、互动消息：取出正文显示
+            case "interactiveMessage" -> text(o, StrUtil.blankToDefault(msg.path(type).path("body").path("text").asText(null),
+                    StrUtil.blankToDefault(msg.path(type).path("header").path("title").asText(null), "[互动消息]")));
+            case "buttonsMessage" -> text(o, StrUtil.blankToDefault(msg.path(type).path("contentText").asText(null), "[按钮消息]"));
+            case "listMessage" -> text(o, StrUtil.blankToDefault(msg.path(type).path("description").asText(null),
+                    StrUtil.blankToDefault(msg.path(type).path("title").asText(null), "[列表消息]")));
+            case "templateMessage" -> {
+                JsonNode t = msg.path(type).path("hydratedTemplate");
+                if (t.isMissingNode()) {
+                    t = msg.path(type).path("hydratedFourRowTemplate");
+                }
+                text(o, StrUtil.blankToDefault(t.path("hydratedContentText").asText(null), "[模板消息]"));
+            }
+            case "interactiveResponseMessage" -> text(o, StrUtil.blankToDefault(
+                    msg.path(type).path("body").path("text").asText(null), "[互动回复]"));
             case "protocolMessage", "senderKeyDistributionMessage", "messageContextInfo", "pollUpdateMessage",
-                 "editedMessage", "keepInChatMessage", "pinInChatMessage", "unknown", "" -> {
+                 "keepInChatMessage", "pinInChatMessage", "unknown", "" -> {
                 return null;
             }
             default -> o.put("type", type);

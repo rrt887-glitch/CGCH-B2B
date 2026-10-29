@@ -447,16 +447,14 @@ const indeterminateKeys = computed(() => {
 function mergeIndeterminate(
   selectedIds: (number | string)[],
 ): (number | string)[] {
-  if (
-    !props.includeIndeterminate ||
-    !props.multiple ||
-    selectedIds.length === 0
-  ) {
-    return selectedIds;
+  // 选中半选的父节点时，Reka UI 会把已选的子节点再追加一次，这里统一去重
+  const unique = [...new Set(selectedIds)];
+  if (!props.includeIndeterminate || !props.multiple || unique.length === 0) {
+    return unique;
   }
-  const indeterminate = computeIndeterminateKeys(selectedIds);
-  if (indeterminate.length === 0) return selectedIds;
-  return [...new Set([...selectedIds, ...indeterminate])];
+  const indeterminate = computeIndeterminateKeys(unique);
+  if (indeterminate.length === 0) return unique;
+  return [...new Set([...unique, ...indeterminate])];
 }
 
 defineExpose({

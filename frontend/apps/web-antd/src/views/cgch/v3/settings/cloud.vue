@@ -3,6 +3,7 @@
  * 云盘文件（与原网站一致）：企业云盘全员共享，打开「AI 可发送」的文件会在客户需要时由 AI 作为附件发出；
  * 个人云盘只有自己能看到。支持文件夹、搜索、改名、写描述。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { CloudApi } from '#/api/channel/cloud';
 
 import { computed, onMounted, reactive, ref } from 'vue';
@@ -187,7 +188,7 @@ onMounted(load);
         <template v-else-if="column.key === 'ai'">
           <Switch v-if="!record.folder" size="small" :checked="!!record.aiSendable" @change="(v: any) => toggleAi(record as any, !!v)" />
         </template>
-        <template v-else-if="column.key === 'updateTime'">{{ String(record.updateTime || '').replace('T', ' ').slice(0, 16) }}</template>
+        <template v-else-if="column.key === 'updateTime'">{{ fmtDateTime(record.updateTime) }}</template>
         <div v-else-if="column.key === 'action'" class="flex gap-3">
           <a v-if="!record.folder" :href="record.url" target="_blank">下载</a>
           <a @click="edit(record as any)">编辑</a>

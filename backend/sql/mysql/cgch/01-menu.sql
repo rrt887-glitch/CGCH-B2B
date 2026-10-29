@@ -48,3 +48,19 @@ UPDATE `system_menu` SET `sort` = 99 WHERE `id` = 2;    -- 基础设施
 -- 隐藏后端已移除模块的菜单与上游文档链接
 UPDATE `system_menu` SET `visible` = b'0'
 WHERE `id` IN (148, 194, 207, 272, 347, 348, 373, 449, 597, 860, 959, 1348, 1418, 1476, 1637, 1894, 8000, 8200, 12940);
+
+-- 财务（fms）、内容管理（cms）模块本项目没有页面，停用其菜单（与 migrations/015 相同）
+SET NAMES utf8mb4;
+UPDATE `system_menu` m
+  JOIN (
+    WITH RECURSIVE sub AS (
+      SELECT `id` FROM `system_menu` WHERE `parent_id` = 0 AND `path` IN ('/fms', '/cms', 'fms', 'cms') AND `deleted` = b'0'
+      UNION ALL
+      SELECT c.`id` FROM `system_menu` c JOIN sub ON c.`parent_id` = sub.`id` WHERE c.`deleted` = b'0'
+    )
+    SELECT `id` FROM sub
+  ) t ON t.`id` = m.`id`
+   SET m.`status` = 1;
+-- 其他位置引用了这两个模块页面的菜单
+UPDATE `system_menu` SET `status` = 1
+ WHERE `deleted` = b'0' AND (`component` LIKE 'fms/%' OR `component` LIKE 'cms/%');

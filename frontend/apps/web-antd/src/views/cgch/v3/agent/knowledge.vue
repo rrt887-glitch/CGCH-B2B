@@ -3,6 +3,7 @@
  * 知识库：上方是企业信息（名称、行业、官网、简介，可编辑）；下方是资料文件，
  * 上传 PDF / Word / Excel / PPT 后自动解析学习，AI 回复时检索使用。也可以切到「文字条目」手动录入。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { AgentApi } from '#/api/channel/agent';
 
 import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue';
@@ -185,7 +186,7 @@ onMounted(() => {
             <span class="kb__icon" :style="{ background: ICON[kindOf(record.fileType)]!.color }">{{ ICON[kindOf(record.fileType)]!.letter }}</span>
             <span class="truncate">{{ record.name }}</span>
           </div>
-          <template v-else-if="column.key === 'createTime'">{{ String(record.createTime || '').slice(0, 10).replaceAll('-', '/') }}</template>
+          <template v-else-if="column.key === 'createTime'">{{ fmtDateTime(record.createTime, 'YYYY/MM/DD') }}</template>
           <template v-else-if="column.key === 'status'">
             <span v-if="record.status === 'done'" class="text-green-600">学习完成</span>
             <Tooltip v-else-if="record.status === 'failed'" :title="record.errorMsg">

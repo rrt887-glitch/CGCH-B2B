@@ -2,6 +2,7 @@
 /**
  * AI 工作报告：日报 / 周报。总结 AI 接待情况，列出转人工的对话和知识库缺口；缺口可直接补进常见问答。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelReportApi } from '#/api/channel/report';
 
 import { computed, onMounted, reactive, ref } from 'vue';
@@ -195,7 +196,7 @@ onMounted(async () => {
           >
             <div class="text-sm font-medium">{{ label(r) }}</div>
             <div class="text-xs text-gray-500">
-              {{ r.generateMode === 'auto' ? '自动生成' : '手动生成' }} · {{ r.createTime?.slice(5, 16) }}
+              {{ r.generateMode === 'auto' ? '自动生成' : '手动生成' }} · {{ fmtDateTime(r.createTime, 'MM-DD HH:mm') }}
             </div>
           </div>
           <div v-if="total > list.length" class="text-center">

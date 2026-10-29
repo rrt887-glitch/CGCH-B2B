@@ -3,6 +3,7 @@
  * 邮件模板（与原网站一致）：按分类筛选、搜索；新建 / 编辑（标题可一键翻译，正文富文本，电脑 / 手机预览）、
  * 启用停用、设为默认、删除。写邮件时可以一键套用模板。
  */
+import { fmtDateTime } from '#/utils/datetime';
 import type { MailTemplateApi } from '#/api/channel/mail-template';
 
 import { computed, onMounted, reactive, ref } from 'vue';
@@ -139,7 +140,7 @@ onMounted(load);
           <Tag v-if="record.defaulted" color="blue" class="m-0">默认</Tag>
           <a v-else class="text-xs" @click="makeDefault(record as any)">设为默认</a>
         </template>
-        <template v-else-if="column.key === 'updateTime'">{{ String(record.updateTime || '').replace('T', ' ').slice(0, 16) }}</template>
+        <template v-else-if="column.key === 'updateTime'">{{ fmtDateTime(record.updateTime) }}</template>
         <div v-else-if="column.key === 'action'" class="flex gap-3">
           <a @click="edit(record as any)">编辑</a>
           <Popconfirm title="删除这个模板？" @confirm="remove(record as any)"><a class="text-red-500">删除</a></Popconfirm>

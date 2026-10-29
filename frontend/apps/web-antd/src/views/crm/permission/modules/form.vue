@@ -34,7 +34,7 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-const [Modal, modalApi] = useVbenModal({
+const [Modal, modalApi] = useVbenModal<any>({
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {

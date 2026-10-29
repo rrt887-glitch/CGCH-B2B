@@ -39,6 +39,7 @@ import {
   rechargeCredit,
 } from '#/api/channel/credit';
 import { getSimpleUserList } from '#/api/system/user';
+import { fmtDateTime } from '#/utils/datetime';
 
 defineOptions({ name: 'CgchConfigCredits' });
 
@@ -94,7 +95,7 @@ function search() {
   loadLedger();
 }
 const columns = [
-  { title: '时间', dataIndex: 'createTime', key: 'time', width: 170 },
+  { title: '时间', dataIndex: 'createTime', key: 'time', width: 170, customRender: ({ text }: { text: unknown }) => fmtDateTime(text, 'YYYY-MM-DD HH:mm:ss') },
   { title: '类型', key: 'type', width: 80 },
   { title: '变动', key: 'amount', width: 100 },
   { title: '余额', dataIndex: 'balanceAfter', key: 'balance', width: 100 },
@@ -137,12 +138,12 @@ async function loadOrders() {
   orders.value = (await getCreditOrderPage({ pageNo: 1, pageSize: 10 })).list;
 }
 const orderColumns = [
-  { title: '下单时间', dataIndex: 'createTime', key: 'time', width: 170 },
+  { title: '下单时间', dataIndex: 'createTime', key: 'time', width: 170, customRender: ({ text }: { text: unknown }) => fmtDateTime(text, 'YYYY-MM-DD HH:mm:ss') },
   { title: '套餐', dataIndex: 'packageName', key: 'pkg' },
   { title: '智点', dataIndex: 'credits', key: 'credits', width: 90 },
   { title: '金额', key: 'price', width: 100 },
   { title: '状态', key: 'status', width: 90 },
-  { title: '支付时间', dataIndex: 'payTime', key: 'payTime', width: 170 },
+  { title: '支付时间', dataIndex: 'payTime', key: 'payTime', width: 170, customRender: ({ text }: { text: unknown }) => fmtDateTime(text, 'YYYY-MM-DD HH:mm:ss', '—') },
 ];
 
 async function loadSummary() {
