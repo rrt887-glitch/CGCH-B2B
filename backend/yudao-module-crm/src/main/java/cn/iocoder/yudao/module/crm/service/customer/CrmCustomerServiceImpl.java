@@ -90,6 +90,8 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
 
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private cn.iocoder.yudao.module.crm.dal.mysql.followup.CrmFollowUpRecordMapper followUpRecordMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -147,6 +149,44 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
+    public void updateCustomerStage(Long id, Integer stage) {
+        CrmCustomerDO old = validateCustomerExists(id);
+        if (stage == null || cn.hutool.core.util.StrUtil.isBlank(stageLabel(stage))) {
+            throw exception(cn.iocoder.yudao.framework.common.exception.enums.GlobalErrorCodeConstants.BAD_REQUEST);
+        }
+        if (java.util.Objects.equals(old.getStage(), stage)) {
+            return;
+        }
+        customerMapper.updateById(new CrmCustomerDO().setId(id).setStage(stage));
+        String from = old.getStage() == null ? "未设置" : cn.hutool.core.util.StrUtil.blankToDefault(stageLabel(old.getStage()), "未设置");
+        followUpRecordMapper.insert(new cn.iocoder.yudao.module.crm.dal.dataobject.followup.CrmFollowUpRecordDO()
+                .setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType()).setBizId(id)
+                .setContent("客户阶段：" + from + " → " + stageLabel(stage))
+                .setPicUrls(new java.util.ArrayList<>()).setFileUrls(new java.util.ArrayList<>())
+                .setBusinessIds(new java.util.ArrayList<>()).setContactIds(new java.util.ArrayList<>()));
+    }
+
+    private static String stageLabel(Integer stage) {
+        return cn.iocoder.yudao.framework.dict.core.DictFrameworkUtils.parseDictDataLabel("crm_customer_stage", stage);
+    }
+
+    @Override
+    public java.util.Map<Integer, Long> getStageStats(Long userId) {
+        // 与「客户列表」的范围一致（列表不按负责人过滤），按阶段分组计数
+        java.util.Map<Integer, Long> out = new java.util.LinkedHashMap<>();
+        for (java.util.Map<String, Object> row : customerMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<CrmCustomerDO>()
+                        .select("stage", "COUNT(*) AS cnt").groupBy("stage"))) {
+            Object st = row.get("stage");
+            Object cnt = row.get("cnt");
+            out.put(st == null ? 0 : ((Number) st).intValue(), cnt == null ? 0L : ((Number) cnt).longValue());
+        }
+        return out;
+    }
+
+    @Override
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#id", level = CrmPermissionLevelEnum.READ)
     public void updateCustomerStarred(Long id, Boolean starred) {
         validateCustomerExists(id);
@@ -166,7 +206,12 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
         }
 
         // 2. 更新客户的成交状态
-        customerMapper.updateById(new CrmCustomerDO().setId(id).setDealStatus(dealStatus));
+        CrmCustomerDO upd = new CrmCustomerDO().setId(id).setDealStatus(dealStatus);
+        // 标记成交时，阶段还在成交之前的客户直接推进到「成交」
+        if (Boolean.TRUE.equals(dealStatus) && (customer.getStage() == null || customer.getStage() < 5)) {
+            upd.setStage(5);
+        }
+        customerMapper.updateById(upd);
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("customerName", customer.getName());

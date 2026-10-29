@@ -49,6 +49,12 @@ public interface CrmCustomerService {
      */
     void updateCustomerStarred(Long id, Boolean starred);
 
+    /** 修改客户阶段，并记一条跟进记录「客户阶段：A → B」 */
+    void updateCustomerStage(Long id, Integer stage);
+
+    /** 各阶段的客户数（按数据权限：我负责的 + 下属负责的） */
+    java.util.Map<Integer, Long> getStageStats(Long userId);
+
     /**
      * 更新客户相关的跟进信息
      *

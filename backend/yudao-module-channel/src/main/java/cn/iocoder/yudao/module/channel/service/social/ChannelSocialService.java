@@ -45,6 +45,8 @@ public class ChannelSocialService {
     private static final String STATE_KEY = "cgch:social-oauth:state:";
 
     @Resource
+    private cn.iocoder.yudao.module.channel.service.assign.ChannelAssignService channelAssignService;
+    @Resource
     private ChannelOAuthProperties channelOAuthProperties;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -230,6 +232,7 @@ public class ChannelSocialService {
             if (conv == null) {
                 conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(a.getPlatform()).waId(waId)
                         .profileName(top.own() ? null : StrUtil.maxLength(top.author(), 100)).unreadCount(0).build();
+                conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
                 channelWaConversationMapper.insert(conv);
             }
             LocalDateTime time = LocalDateTime.ofInstant(Instant.ofEpochSecond(c.time()), ZoneId.systemDefault());

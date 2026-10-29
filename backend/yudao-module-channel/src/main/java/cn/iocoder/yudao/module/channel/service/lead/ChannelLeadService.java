@@ -195,7 +195,7 @@ public class ChannelLeadService {
                     .companyName(ex.company())
                     .countryCode(firstNonBlank(ex.countryCode(), wa ? LeadInference.countryFromPhone(c.getWaId()) : null))
                     .source(sourceOf(c))
-                    .ownerUserId(account.getUserId())
+                    .ownerUserId(c.handlerUserId(account)) // 分给接待成员或转交过的会话，线索也归处理人
                     .contactLastTime(c.getLastMessageTime())
                     .contactLastContent(StrUtil.maxLength(first, 500))
                     .level(ex.level())

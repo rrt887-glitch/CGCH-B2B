@@ -250,6 +250,7 @@ CREATE TABLE `crm_customer` (
   `tag_ids` varchar(2000) NULL COMMENT '标签编号列表，关联 crm_tag',
   `ai_hosted` bit(1) NULL DEFAULT b'0' COMMENT '是否由 AI 数字员工托管接待',
   `starred` bit(1) NULL DEFAULT b'0' COMMENT '是否特别关注',
+  `stage` int NULL DEFAULT 1 COMMENT '客户阶段，字典 crm_customer_stage：1 新询盘、2 报价、3 样品、4 谈判、5 成交、6 复购',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',

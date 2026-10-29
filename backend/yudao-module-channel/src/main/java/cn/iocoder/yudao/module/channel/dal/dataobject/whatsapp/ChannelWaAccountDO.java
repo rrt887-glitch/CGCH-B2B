@@ -114,6 +114,14 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      * 扫码接入的连接状态：open、connecting、close；其他接入方式为空
      */
     private String connState;
+    /**
+     * 接待成员：这个号码的新客户分给哪些业务员（用户编号，逗号分隔，按顺序轮流分配）；为空表示都由号码所属业务员处理
+     */
+    private String assignUserIds;
+    /**
+     * 轮流分配的游标：下一个新客户分给接待成员里的第几个
+     */
+    private Integer assignCursor;
 
     public boolean isEvolution() {
         return AUTH_EVOLUTION.equals(authType);

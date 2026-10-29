@@ -43,6 +43,17 @@ public class ChannelWaAccountController {
         return success(true);
     }
 
+    public record AssigneesReq(Long id, java.util.List<Long> userIds) {
+    }
+
+    @PutMapping("/assignees")
+    @Operation(summary = "设置接待成员：这个号码的新客户按顺序轮流分给他们；为空表示都由自己处理")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:update')")
+    public CommonResult<Boolean> assignees(@RequestBody AssigneesReq req) {
+        whatsAppService.setAssignees(getLoginUserId(), req.id(), req.userIds());
+        return success(true);
+    }
+
     @DeleteMapping("/delete")
     @Operation(summary = "解绑号码，同时删除会话与消息")
     @Parameter(name = "id", required = true)

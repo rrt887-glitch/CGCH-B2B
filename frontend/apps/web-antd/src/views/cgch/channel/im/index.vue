@@ -41,6 +41,8 @@ import { getSimpleUserList } from '#/api/system/user';
 import { getQuickReplies, markQuickReplyUsed } from '#/api/channel/quick-reply';
 import type { QuickReplyApi } from '#/api/channel/quick-reply';
 import { onChannelRealtime } from '#/utils/channel-realtime';
+import { requestClient } from '#/api/request';
+import { stageLabel, stageOptions } from '#/views/cgch/v3/crm/components/shared';
 import {
   archiveWaConversation,
   getWaAccountList,
@@ -206,6 +208,29 @@ onBeforeUnmount(() => {
   if (timer) clearTimeout(timer);
   stopRealtime?.();
 });
+
+// ===== 客户阶段：会话关联了客户时，在顶部直接推进阶段 =====
+const customerStage = ref<number>();
+watch(
+  () => current.value?.customerId,
+  async (id) => {
+    customerStage.value = undefined;
+    if (!id) return;
+    try {
+      const c = await requestClient.get<{ stage?: number }>(`/crm/customer/get?id=${id}`);
+      if (current.value?.customerId === id) customerStage.value = c?.stage;
+    } catch {
+      // 没有查看这个客户的权限时不显示阶段
+    }
+  },
+);
+async function changeStage(v: number) {
+  const id = current.value?.customerId;
+  if (!id || v === customerStage.value) return;
+  await requestClient.put(`/crm/customer/update-stage?id=${id}&stage=${v}`);
+  customerStage.value = v;
+  message.success(`客户阶段已改为「${stageLabel(v)}」`);
+}
 
 // ===== 会话整理：收藏、归档、备注名、转交 =====
 async function toggleStar(c: ChannelWaApi.Conversation) {
@@ -619,6 +644,14 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 <Tag v-if="current.customerName" color="blue" class="cursor-pointer" @click="router.push(`/crm/customer/detail/${current.customerId}`)">
                   客户：{{ current.customerName }}
                 </Tag>
+                <Select
+                  v-if="current.customerId && customerStage !== undefined"
+                  :value="customerStage"
+                  size="small"
+                  class="w-24"
+                  :options="stageOptions().map((o) => ({ label: o.label, value: o.value }))"
+                  @change="(v: any) => changeStage(Number(v))"
+                />
                 <Tag v-else-if="current.clueName" color="cyan" class="cursor-pointer" @click="router.push(`/crm/clue/detail/${current.clueId}`)">
                   线索：{{ current.clueName }}
                 </Tag>

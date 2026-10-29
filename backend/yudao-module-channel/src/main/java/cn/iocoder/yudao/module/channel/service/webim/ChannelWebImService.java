@@ -40,6 +40,8 @@ public class ChannelWebImService {
     private static final int PER_MINUTE = 20;
 
     @Resource
+    private cn.iocoder.yudao.module.channel.service.assign.ChannelAssignService channelAssignService;
+    @Resource
     private ChannelWaAccountMapper accountMapper;
     @Resource
     private ChannelWaConversationMapper conversationMapper;
@@ -141,6 +143,7 @@ public class ChannelWebImService {
             if (conv == null) {
                 conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WEB)
                         .waId(visitorId).unreadCount(0).build();
+                conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
                 conversationMapper.insert(conv);
             } else {
                 Long recent = messageMapper.selectCount(new LambdaQueryWrapperX<ChannelWaMessageDO>()

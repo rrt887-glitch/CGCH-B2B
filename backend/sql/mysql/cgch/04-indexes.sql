@@ -82,4 +82,5 @@ CALL cgch_add_index('crm_permission', 'idx_biz', 'biz_type', 'biz_id', NULL); --
 CALL cgch_add_index('crm_permission', 'idx_user', 'user_id', NULL, NULL); -- 我负责 / 参与的数据
 CALL cgch_add_index('channel_wa_conversation', 'idx_owner', 'owner_user_id', NULL, NULL); -- 转交给我的会话
 CALL cgch_add_index('channel_quick_reply', 'idx_owner', 'owner_user_id', NULL, NULL); -- 我的快捷回复
+CALL cgch_add_index('crm_customer', 'idx_stage', 'stage', NULL, NULL); -- 按客户阶段筛选、统计
 DROP PROCEDURE cgch_add_index;

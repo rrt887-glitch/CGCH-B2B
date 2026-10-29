@@ -8,6 +8,8 @@ export namespace ChannelWaApi {
     name?: string;
     /** whatsapp（默认）、messenger（Facebook 主页私信）、instagram */
     platform?: 'instagram' | 'messenger' | 'tiktok' | 'web' | 'whatsapp' | 'youtube';
+    /** 接待成员：逗号分隔的用户编号，新客户轮流分给他们；为空时由号码所属的业务员接待 */
+    assignUserIds?: string;
     /** manual 手动填写令牌、oauth Facebook 登录授权 */
     authType?: string;
     /** 扫码接入的连接状态：open 已连接、connecting 连接中、close 已断开 */
@@ -152,3 +154,7 @@ export function templatePreview(t: ChannelWaApi.Template, params: string[]) {
   const body = t.components?.find((c) => c.type === 'BODY')?.text ?? `[模板] ${t.name}`;
   return body.replaceAll(/\{\{(\d+)\}\}/g, (_, n) => params[Number(n) - 1] || `{{${n}}}`);
 }
+
+/** 设置号码的接待成员：这个号码上的新客户在他们之间轮流分配；传空数组恢复为号码所属的业务员接待 */
+export const setWaAssignees = (id: number, userIds: number[]) =>
+  requestClient.put<boolean>('/channel/wa-account/assignees', { id, userIds });

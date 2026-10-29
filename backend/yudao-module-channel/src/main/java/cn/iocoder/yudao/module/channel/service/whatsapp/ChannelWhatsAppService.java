@@ -54,6 +54,8 @@ public class ChannelWhatsAppService {
             ChannelWaMessageDO.STATUS_SENT, ChannelWaMessageDO.STATUS_DELIVERED, ChannelWaMessageDO.STATUS_READ);
 
     @Resource
+    private cn.iocoder.yudao.module.channel.service.assign.ChannelAssignService channelAssignService;
+    @Resource
     private cn.iocoder.yudao.module.channel.service.realtime.ChannelRealtimeService channelRealtimeService;
     @Resource
     private cn.iocoder.yudao.module.system.api.user.AdminUserApi adminUserApi;
@@ -501,6 +503,7 @@ public class ChannelWhatsAppService {
         if (conv == null) {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(a.getPlatform()).waId(userId)
                     .profileName(WaGraphClient.getMessagingUserName(a, userId)).unreadCount(0).build();
+            conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
             conversationMapper.insert(conv);
         }
         return conv;
@@ -641,6 +644,7 @@ public class ChannelWhatsAppService {
         if (conv == null) {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(a.getPlatform()).waId(customer)
                     .profileName(name).unreadCount(0).build();
+            conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
             conversationMapper.insert(conv);
         }
         ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
@@ -689,6 +693,7 @@ public class ChannelWhatsAppService {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
                     .waId(from).profileName(profileName)
                     .customerId(findCustomerId(from)).unreadCount(0).build();
+            conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
             conversationMapper.insert(conv);
         }
         msg.setConversationId(conv.getId());
@@ -768,6 +773,7 @@ public class ChannelWhatsAppService {
         if (conv == null) {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
                     .waId(waId).profileName(profileName).customerId(findCustomerId(waId)).unreadCount(0).build();
+            conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
             conversationMapper.insert(conv);
         }
         msg.setConversationId(conv.getId());
@@ -1164,6 +1170,13 @@ public class ChannelWhatsAppService {
         }
         PageResult<ChannelWaConversationDO> page = conversationMapper.selectPage(req, accountIds, userId, one);
         return new PageResult<>(toConversationVOs(page.getList()), page.getTotal());
+    }
+
+    /** 设置号码的接待成员（按顺序轮流分配新客户） */
+    public void setAssignees(Long userId, Long accountId, List<Long> userIds) {
+        validateAccount(userId, accountId);
+        accountMapper.updateById(new ChannelWaAccountDO().setId(accountId)
+                .setAssignUserIds(channelAssignService.normalize(userIds)).setAssignCursor(0));
     }
 
     // ==================== 会话整理：归档、收藏、备注名、转交 ====================

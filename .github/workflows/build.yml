@@ -1515,6 +1515,18 @@ jobs:
           levels = call('GET', '/system/dict-data/simple-list')
           assert [d['label'] for d in levels if d['dictType'] == 'crm_customer_level'] == ['A类客户', 'B类客户', 'C类客户', 'D类客户'], '客户级别应为 A～D'
           print('CRM：特别关注、标签与最近联系时间筛选、公海线索、A～D 客户级别')
+          # 客户阶段：新建默认「新询盘」，修改后可筛选、可统计，并留一条跟进记录；标记成交时推进到「成交」
+          assert [d['label'] for d in levels if d['dictType'] == 'crm_customer_stage'] == ['新询盘', '报价', '样品', '谈判', '成交', '复购'], '客户阶段字典'
+          assert call('GET', f'/crm/customer/get?id={cid}')['stage'] == 1, '新建客户默认新询盘'
+          call('PUT', f'/crm/customer/update-stage?id={cid}&stage=3')
+          assert [c['id'] for c in call('GET', '/crm/customer/page?pageNo=1&pageSize=50&stage=3')['list']] == [cid], '按阶段筛选'
+          assert call('GET', '/crm/customer/stage-stats').get('3') == 1, call('GET', '/crm/customer/stage-stats')
+          fr = call('GET', f'/crm/follow-up-record/page?pageNo=1&pageSize=10&bizType=2&bizId={cid}')['list']
+          assert any(r['content'] == '客户阶段：新询盘 → 样品' for r in fr), fr
+          assert call('PUT', f'/crm/customer/update-stage?id={cid}&stage=99', ok=False)['code'] != 0, '不存在的阶段应拒绝'
+          call('PUT', f'/crm/customer/update-deal-status?id={cid}&dealStatus=true')
+          assert call('GET', f'/crm/customer/get?id={cid}')['stage'] == 5, '标记成交后阶段为成交'
+          print('客户阶段：默认新询盘、修改留痕、按阶段筛选与统计、成交联动')
           # 智能跟进：AI 回复后客户一直没回，到时间自动跟进一次，达到轮数后不再跟进
           import smtplib, subprocess, time, urllib.parse
           from email.message import EmailMessage
@@ -1966,6 +1978,23 @@ jobs:
           for q in (q0, q1):
               call('DELETE', f'/channel/quick-reply/delete?id={q}')
           assert call_s('DELETE', f"/channel/quick-reply/delete?id={q2['data']}")['code'] == 0
+          # 按号码分配接待成员：新客户在小王和我之间轮流分配（分到我＝号码所属业务员，不设负责人）
+          call('PUT', '/channel/wa-account/assignees', {'id': ea['id'], 'userIds': [sid, 1, 999999]})
+          assert next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == ea['id'])['assignUserIds'] == f'{sid},1', '不存在的用户不保存'
+          assert call_s('PUT', '/channel/wa-account/assignees', {'id': ea['id'], 'userIds': [sid]})['code'] != 0, '别人的号码不能设置'
+          assert evo_msg(s2['session'], 'EVOAS1', '8615900007771@s.whatsapp.net', {'conversation': 'Price list please'}, 'conversation') == 200
+          a1 = wait(lambda: next((c for c in call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['data']['list']
+                                  if c['waId'] == '8615900007771'), None), '第一个新客户分给小王')
+          assert a1['ownerUserId'] == sid and a1['id'] not in [c['id'] for c in cpage()], a1
+          assert evo_msg(s2['session'], 'EVOAS2', '8615900007772@s.whatsapp.net', {'conversation': 'Do you ship to Kenya?'}, 'conversation') == 200
+          a2 = wait(lambda: next((c for c in cpage() if c['waId'] == '8615900007772'), None), '第二个新客户轮到号码所属业务员')
+          assert not a2.get('ownerUserId'), a2
+          assert evo_msg(s2['session'], 'EVOAS3', '8615900007771@s.whatsapp.net', {'conversation': 'Still there?'}, 'conversation') == 200
+          time.sleep(1)
+          assert sql(f"SELECT IFNULL(owner_user_id, 0) FROM channel_wa_conversation WHERE id = {a1['id']}") == str(sid), '老客户再来信不重新分配'
+          call('PUT', '/channel/wa-account/assignees', {'id': ea['id'], 'userIds': []})
+          assert not next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == ea['id']).get('assignUserIds')
+          print('按号码分配：接待成员轮流分新客户、老客户不重新分配、只能设置自己的号码')
           print('会话工作台：收藏置顶、备注名搜索、归档与客户来信自动取消、未回复筛选、实时推送、转交与转回、快捷回复权限')
           # 删除账号：退出关联设备并删除实例
           call('DELETE', f"/channel/wa-account/delete?id={ea['id']}")
