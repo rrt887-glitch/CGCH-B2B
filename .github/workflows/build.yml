@@ -1921,14 +1921,16 @@ jobs:
           assert ecv['id'] not in [c['id'] for c in cpage('&unreplied=true')], '最后一条是我方发的，不算未回复'
           call('PUT', f"/channel/wa/conversation/archive?id={ecv['id']}&archived=true")
           assert ecv['id'] not in [c['id'] for c in cpage()] and ecv['id'] in [c['id'] for c in cpage('&archived=true')], '归档后只在归档里'
+          import subprocess
+          log_mark = int(subprocess.run('wc -l < server.log', shell=True, capture_output=True, text=True).stdout.strip() or 0)
           wsk, wbuf = ws_open(TOKEN)
+          time.sleep(1)  # 握手完成后服务端登记连接需要一点时间
           assert evo_msg(s2['session'], 'EVOIN9', '8615900003333@s.whatsapp.net', {'conversation': 'Any update?'}, 'conversation') == 200
           t0 = time.time()
           try:
               wtxt, wbuf = ws_read(wsk, wbuf)
           except Exception as ex:
-              import subprocess
-              lg = subprocess.run("grep -aE 'ChannelRealtime|WebSocket|doSend|EVOIN9|websocket' server.log | tail -40", shell=True, capture_output=True, text=True).stdout
+              lg = subprocess.run(f"tail -n +{log_mark} server.log | sed 's/\\x1b\\[[0-9;]*m//g' | grep -avE 'Mapper|==>|<==' | cut -c1-260 | tail -25", shell=True, capture_output=True, text=True).stdout
               print('::error title=实时推送没收到::' + str(ex) + '%0A' + lg.replace('%', '%25').replace('\n', '%0A'))
               raise
           wmsg = json.loads(wtxt)
