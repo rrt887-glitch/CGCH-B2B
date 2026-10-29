@@ -137,7 +137,54 @@ public class ChannelAiService {
         return channelAiKnowledgeMapper.selectListByType(StrUtil.emptyToNull(type));
     }
 
+    /** 公司物料：管理员维护 */
     public Long saveKnowledge(ChannelAiKnowledgeDO k) {
+        if (k.getId() != null) {
+            ChannelAiKnowledgeDO old = channelAiKnowledgeMapper.selectById(k.getId());
+            if (old == null || old.isPersonal()) {
+                throw exception(AI_KNOWLEDGE_NOT_EXISTS);
+            }
+        }
+        k.setScope(ChannelAiKnowledgeDO.SCOPE_ENTERPRISE);
+        k.setOwnerUserId(null);
+        return doSaveKnowledge(k);
+    }
+
+    // ==================== 个人物料：业务员自己维护，只在他负责的会话里使用 ====================
+
+    public List<ChannelAiKnowledgeDO> listPersonal(Long userId) {
+        return channelAiKnowledgeMapper.selectPersonal(userId);
+    }
+
+    public Long savePersonal(Long userId, ChannelAiKnowledgeDO k) {
+        if (k.getId() != null) {
+            validatePersonal(userId, k.getId());
+        }
+        if (!ChannelAiKnowledgeDO.TYPE_FAQ.equals(k.getType())) {
+            k.setType(ChannelAiKnowledgeDO.TYPE_PRODUCT); // 个人物料不能写企业介绍（企业介绍每次回复都会带上）
+        }
+        k.setScope(ChannelAiKnowledgeDO.SCOPE_PERSONAL);
+        k.setOwnerUserId(userId);
+        k.setFileId(null);
+        return doSaveKnowledge(k);
+    }
+
+    public void deletePersonal(Long userId, Long id) {
+        validatePersonal(userId, id);
+        channelAiKnowledgeMapper.deleteById(id);
+    }
+
+    private void validatePersonal(Long userId, Long id) {
+        ChannelAiKnowledgeDO old = channelAiKnowledgeMapper.selectById(id);
+        if (old == null || !old.isPersonal() || !java.util.Objects.equals(old.getOwnerUserId(), userId)) {
+            throw exception(AI_KNOWLEDGE_NOT_EXISTS);
+        }
+    }
+
+    private Long doSaveKnowledge(ChannelAiKnowledgeDO k) {
+        if (k.getCategory() != null && !ChannelAiKnowledgeDO.CATEGORIES.contains(k.getCategory())) {
+            k.setCategory(null);
+        }
         if (StrUtil.isBlank(k.getContent())) {
             throw exception(AI_KNOWLEDGE_EMPTY);
         }
@@ -275,7 +322,7 @@ public class ChannelAiService {
     /** 检索测试：返回命中的条目及得分（知识库页面「检索测试」） */
     public List<Map<String, Object>> searchKnowledge(Long userId, String q) {
         ChannelAiConfigDO cfg = getConfig();
-        List<ChannelAiKnowledgeDO> all = channelAiKnowledgeMapper.selectEnabled();
+        List<ChannelAiKnowledgeDO> all = channelAiKnowledgeMapper.selectEnabledFor(userId);
         Semantic sem = semanticEnabled(cfg) && channelCreditService.hasBalance() ? semanticScores(cfg, all, q) : null;
         if (sem != null) {
             channelCreditService.consume("knowledge", null, userId, Math.max(sem.tokens(), 1), "知识库检索测试");
@@ -285,6 +332,8 @@ public class ChannelAiService {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", h.knowledge().getId());
             m.put("type", h.knowledge().getType());
+            m.put("scope", h.knowledge().isPersonal() ? ChannelAiKnowledgeDO.SCOPE_PERSONAL : ChannelAiKnowledgeDO.SCOPE_ENTERPRISE);
+            m.put("category", h.knowledge().getCategory());
             m.put("title", h.knowledge().getTitle());
             m.put("content", StrUtil.maxLength(h.knowledge().getContent(), 200));
             m.put("keywordScore", h.keywordScore());
@@ -300,6 +349,10 @@ public class ChannelAiService {
     }
 
     public void deleteKnowledge(Long id) {
+        ChannelAiKnowledgeDO old = channelAiKnowledgeMapper.selectById(id);
+        if (old == null || old.isPersonal()) {
+            throw exception(AI_KNOWLEDGE_NOT_EXISTS);
+        }
         channelAiKnowledgeMapper.deleteById(id);
     }
 
@@ -433,8 +486,12 @@ public class ChannelAiService {
         return sb.toString();
     }
 
-    private Generated generate(ChannelAiConfigDO cfg, String channel, String customerText, List<LlmClient.Message> history) {
-        List<ChannelAiKnowledgeDO> knowledge = channelAiKnowledgeMapper.selectEnabled();
+    /**
+     * 生成回复。handlerUserId 是这次回复代表的业务员（会话的处理人 / 邮箱所属人 / 点「AI 起草」的人），
+     * 决定能用到哪些个人物料；公司物料所有人都能用。
+     */
+    private Generated generate(ChannelAiConfigDO cfg, String channel, String customerText, List<LlmClient.Message> history, Long handlerUserId) {
+        List<ChannelAiKnowledgeDO> knowledge = channelAiKnowledgeMapper.selectEnabledFor(handlerUserId);
         Semantic sem = semanticScores(cfg, knowledge, customerText);
         List<ChannelCloudFileDO> sendable = ChannelAgentSettings.skills(cfg).isSendFiles() ? channelCloudFileService.aiSendable() : List.of();
         String system = AiPromptBuilder.systemPrompt(cfg, knowledge, customerText, channel, sem == null ? null : sem.scores());
@@ -527,7 +584,7 @@ public class ChannelAiService {
         if (history.isEmpty() || !"user".equals(history.get(history.size() - 1).role())) {
             throw exception(AI_LLM_FAIL, "请先输入客户的问题");
         }
-        Generated g = generate(cfg, ch, lastUserText(history), history.subList(Math.max(0, history.size() - 20), history.size()));
+        Generated g = generate(cfg, ch, lastUserText(history), history.subList(Math.max(0, history.size() - 20), history.size()), userId);
         long credits = channelCreditService.consume(ch, 0L, userId, g.promptTokens() + g.completionTokens(), "智能体测试对话");
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("content", ChannelAiDraftDO.CHANNEL_MAIL.equals(ch) ? withSignature(g, cfg) : g.content());
@@ -546,7 +603,7 @@ public class ChannelAiService {
         requireCredit();
         ChannelAiConfigDO cfg = getConfig();
         List<LlmClient.Message> history = mailHistory(m);
-        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history);
+        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history, userId);
         return charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), withFileNote(withSignature(g, cfg), g), g, ChannelAiDraftDO.STATUS_PENDING,
                 g.handoff() ? ChannelAiDraftDO.REASON_HANDOFF : g.forbidden() != null ? ChannelAiDraftDO.REASON_FORBIDDEN : ChannelAiDraftDO.REASON_MANUAL,
                 g.forbidden()), userId, "邮件起草");
@@ -557,7 +614,7 @@ public class ChannelAiService {
         requireCredit();
         ChannelAiConfigDO cfg = getConfig();
         List<LlmClient.Message> history = waHistory(conversationId);
-        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history);
+        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history, userId);
         return charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, withFileNote(g.content(), g), g, ChannelAiDraftDO.STATUS_PENDING,
                 g.handoff() ? ChannelAiDraftDO.REASON_HANDOFF : g.forbidden() != null ? ChannelAiDraftDO.REASON_FORBIDDEN : ChannelAiDraftDO.REASON_MANUAL,
                 g.forbidden()), userId, "WhatsApp 起草");
@@ -683,7 +740,7 @@ public class ChannelAiService {
             return;
         }
         List<LlmClient.Message> history = mailHistory(m);
-        Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history);
+        Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history, account.getUserId());
         String content = withSignature(g, cfg);
         String reason = blockReason(cfg.getMailMode(), g, m.getCustomerId(),
                 humanRepliedRecently(mailService.getThreadInternal(m).stream()
@@ -757,7 +814,7 @@ public class ChannelAiService {
             sendOpeningFiles(account.getUserId(), conversationId, opening.getFileIds());
         }
         List<LlmClient.Message> history = waHistory(conversationId);
-        Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history);
+        Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history, conv.handlerUserId(account));
         String reason = blockReason(cfg.getWaMode(), g, conv.getCustomerId(),
                 humanRepliedRecently(recent.stream()
                         .filter(t -> t.getDirection() == ChannelWaMessageDO.DIRECTION_OUT && !Boolean.TRUE.equals(t.getAiGenerated()))
@@ -893,7 +950,7 @@ public class ChannelAiService {
         long since = java.time.Duration.between(last.getSentTime(), LocalDateTime.now()).toHours();
         history.add(LlmClient.Message.user(followUpPrompt(round, since, ChannelAiDraftDO.CHANNEL_MAIL)));
         String customerText = HtmlText.snippet(lastIn.getTextBody(), lastIn.getHtmlBody(), HISTORY_CHARS);
-        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, customerText, history);
+        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, customerText, history, account.getUserId());
         String reason = blockReason(ChannelAiConfigDO.MODE_AUTO, g, lastIn.getCustomerId(), false);
         if (reason != null || StrUtil.isBlank(g.content())) {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, lastIn.getId(), g.content(), g, ChannelAiDraftDO.STATUS_DISCARDED,
@@ -981,7 +1038,7 @@ public class ChannelAiService {
         List<LlmClient.Message> history = waHistory(conversationId);
         long since = java.time.Duration.between(last.getMessageTime(), LocalDateTime.now()).toHours();
         history.add(LlmClient.Message.user(followUpPrompt(round, since, ChannelAiDraftDO.CHANNEL_WHATSAPP)));
-        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(waHistory(conversationId)), history);
+        Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(waHistory(conversationId)), history, conv.handlerUserId(account));
         String reason = blockReason(ChannelAiConfigDO.MODE_AUTO, g, conv.getCustomerId(), false);
         if (reason != null || StrUtil.isBlank(g.content())) {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_DISCARDED,

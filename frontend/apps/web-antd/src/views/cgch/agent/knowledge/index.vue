@@ -20,6 +20,7 @@ import {
   message,
   Modal,
   Popconfirm,
+  Select,
   Space,
   Switch,
   Tag,
@@ -30,7 +31,16 @@ import {
   Textarea,
 } from 'ant-design-vue';
 
-import { deleteKnowledge, getAiConfig, getKnowledgeList, reindexKnowledge, saveKnowledge, searchKnowledge } from '#/api/channel/ai';
+import {
+  categoryLabel,
+  deleteKnowledge,
+  getAiConfig,
+  getKnowledgeList,
+  MATERIAL_CATEGORIES,
+  reindexKnowledge,
+  saveKnowledge,
+  searchKnowledge,
+} from '#/api/channel/ai';
 
 defineOptions({ name: 'CgchAgentKnowledge' });
 
@@ -44,7 +54,11 @@ const TABS: { key: Kind; label: string; titleLabel: string; contentLabel: string
 const active = ref<Kind>('company');
 const loading = ref(false);
 const all = ref<ChannelAiApi.Knowledge[]>([]);
-const rows = computed(() => all.value.filter((k) => k.type === active.value));
+const category = ref<string>();
+const hasCategory = computed(() => active.value !== 'company');
+const rows = computed(() =>
+  all.value.filter((k) => k.type === active.value && (!hasCategory.value || !category.value || k.category === category.value)),
+);
 const tab = computed(() => TABS.find((t) => t.key === active.value)!);
 
 const embeddingModel = ref<string>();
@@ -78,6 +92,7 @@ async function search() {
 
 const columns = computed(() => [
   { title: tab.value.titleLabel, dataIndex: 'title', key: 'title', width: 240 },
+  ...(hasCategory.value ? [{ title: '分类', key: 'category', width: 100 }] : []),
   { title: tab.value.contentLabel, key: 'content' },
   { title: '启用', key: 'enabled', width: 80 },
   ...(embeddingModel.value ? [{ title: '语义索引', key: 'index', width: 100 }] : []),
@@ -97,7 +112,11 @@ const open = ref(false);
 const saving = ref(false);
 const form = reactive<ChannelAiApi.Knowledge>({ type: 'company', title: '', content: '', enabled: true, sort: 0 });
 function openForm(row?: ChannelAiApi.Knowledge) {
-  Object.assign(form, { id: undefined, type: active.value, title: '', content: '', enabled: true, sort: 0 }, row ?? {});
+  Object.assign(
+    form,
+    { id: undefined, type: active.value, title: '', content: '', enabled: true, sort: 0, category: hasCategory.value ? category.value : undefined },
+    row ?? {},
+  );
   open.value = true;
 }
 async function save() {
@@ -146,11 +165,18 @@ onMounted(async () => {
       <Tabs v-model:active-key="active">
         <TabPane v-for="t in TABS" :key="t.key" :tab="`${t.label} ${all.filter((k) => k.type === t.key).length}`" />
       </Tabs>
-      <p class="mb-3 text-sm text-gray-500">{{ tab.tip }}</p>
+      <div class="mb-3 flex items-center gap-3">
+        <p class="m-0 flex-1 text-sm text-gray-500">{{ tab.tip }}</p>
+        <Select v-if="hasCategory" v-model:value="category" allow-clear class="w-36" placeholder="全部分类" :options="MATERIAL_CATEGORIES" />
+      </div>
       <Table :columns="columns" :data-source="rows" :loading="loading" :pagination="false" row-key="id">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'content'">
             <div class="line-clamp-3 whitespace-pre-wrap text-sm">{{ record.content }}</div>
+          </template>
+          <template v-else-if="column.key === 'category'">
+            <Tag v-if="record.category" class="m-0">{{ categoryLabel(record.category) }}</Tag>
+            <span v-else class="text-gray-300">-</span>
           </template>
           <template v-else-if="column.key === 'index'">
             <Tag :color="indexed(record as any) ? 'green' : 'default'">{{ indexed(record as any) ? '已建立' : '未建立' }}</Tag>
@@ -185,7 +211,9 @@ onMounted(async () => {
         <div class="flex items-center gap-2">
           <span class="text-gray-400">{{ i + 1 }}.</span>
           <span class="font-medium">{{ h.title || '（无标题）' }}</span>
-          <Tag>{{ TABS.find((t) => t.key === h.type)?.label }}</Tag>
+          <Tag>{{ TABS.find((t) => t.key === h.type)?.label || '资料文件' }}</Tag>
+          <Tag v-if="h.category">{{ categoryLabel(h.category) }}</Tag>
+          <Tag v-if="h.scope === 'personal'" color="purple">我的个人物料</Tag>
           <Tag v-if="h.keywordScore > 0" color="blue">关键词 {{ h.keywordScore }}</Tag>
           <Tag v-if="h.semantic" :color="h.semanticScore >= 0.35 ? 'green' : 'default'">语义相似度 {{ h.semanticScore.toFixed(2) }}</Tag>
         </div>
@@ -196,6 +224,9 @@ onMounted(async () => {
     <Modal v-model:open="open" :title="form.id ? `修改${tab.label}` : `新增${tab.label}`" :width="720" :confirm-loading="saving" @ok="save">
       <Form layout="vertical">
         <FormItem :label="tab.titleLabel"><Input v-model:value="form.title" :maxlength="200" /></FormItem>
+        <FormItem v-if="hasCategory" label="分类">
+          <Select v-model:value="form.category" allow-clear class="w-48" placeholder="不分类" :options="MATERIAL_CATEGORIES" />
+        </FormItem>
         <FormItem :label="tab.contentLabel" required>
           <Textarea v-model:value="form.content" :rows="10" show-count :maxlength="8000" />
         </FormItem>

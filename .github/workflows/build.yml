@@ -1978,6 +1978,27 @@ jobs:
           for q in (q0, q1):
               call('DELETE', f'/channel/quick-reply/delete?id={q}')
           assert call_s('DELETE', f"/channel/quick-reply/delete?id={q2['data']}")['code'] == 0
+          # 物料库：个人物料只有本人能看、能改，AI 只在本人负责的会话里用；公司物料列表不含个人物料
+          pm = call_s('POST', '/channel/ai/material/my/save', {'type': 'product', 'title': 'Wang private price HD-200', 'category': 'price',
+                                                               'content': 'HD-200 special price for my buyers: USD 7.2 FOB'})
+          assert pm['code'] == 0, pm
+          pid = pm['data']
+          mine = call_s('GET', '/channel/ai/material/my/list')['data']
+          assert [m['id'] for m in mine] == [pid] and mine[0]['scope'] == 'personal' and mine[0]['category'] == 'price', mine
+          assert pid not in [k['id'] for k in call('GET', '/channel/ai/knowledge/list')], '公司物料列表不含个人物料'
+          assert not call('GET', '/channel/ai/material/my/list'), '看不到别人的个人物料'
+          assert call('DELETE', f'/channel/ai/knowledge/delete?id={pid}', ok=False)['code'] != 0, '管理员接口不能删个人物料'
+          assert call('POST', '/channel/ai/material/my/save', {'id': pid, 'type': 'product', 'content': 'x'}, ok=False)['code'] != 0, '不能改别人的个人物料'
+          ck = call('POST', '/channel/ai/knowledge/save', {'type': 'product', 'title': 'CE certificate', 'category': 'certificate', 'content': 'All dryers have CE and RoHS.'})
+          assert next(k for k in call('GET', '/channel/ai/knowledge/list?type=product') if k['id'] == ck)['category'] == 'certificate'
+          assert call_s('POST', '/channel/ai/material/my/save', {'id': ck, 'type': 'product', 'content': 'hijack'})['code'] != 0, '个人接口不能改公司物料'
+          sh = call_s('GET', '/channel/ai/material/my/search?q=' + urllib.parse.quote('HD-200 special price CE certificate'))['data']
+          assert {(h['id'], h['scope']) for h in sh} >= {(pid, 'personal'), (ck, 'enterprise')}, sh
+          ah = call('GET', '/channel/ai/knowledge/search?q=' + urllib.parse.quote('HD-200 special price'))
+          assert pid not in [h['id'] for h in ah], '别人的会话检索不到我的个人物料'
+          assert call_s('DELETE', f'/channel/ai/material/my/delete?id={pid}')['code'] == 0
+          call('DELETE', f'/channel/ai/knowledge/delete?id={ck}')
+          print('物料库：个人物料仅本人可见可改、检索只命中本人的个人物料、公司物料分类')
           # 按号码分配接待成员：新客户在小王和我之间轮流分配（分到我＝号码所属业务员，不设负责人）
           call('PUT', '/channel/wa-account/assignees', {'id': ea['id'], 'userIds': [sid, 1, 999999]})
           assert next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == ea['id'])['assignUserIds'] == f'{sid},1', '不存在的用户不保存'

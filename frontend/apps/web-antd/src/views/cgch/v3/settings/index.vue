@@ -17,6 +17,7 @@ const groups: HubGroup[] = [
       { key: 'templates', label: '消息模板', load: () => import('#/views/cgch/config/templates/index.vue') },
       { key: 'emailTemplates', label: '邮件模板', load: () => import('./email-templates.vue') },
       { key: 'quickReplies', label: '快捷回复', load: () => import('./quick-replies.vue') },
+      { key: 'materials', label: '我的物料', load: () => import('./my-materials.vue') },
       { key: 'routing', label: '消息分流设置', load: () => import('./routing.vue') },
       { key: 'notifications', label: '通知设置', load: () => import('./notifications.vue') },
       { key: 'translate', label: '翻译设置', load: () => import('./translate.vue') },

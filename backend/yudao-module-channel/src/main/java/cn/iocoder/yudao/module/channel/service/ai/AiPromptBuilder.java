@@ -147,7 +147,9 @@ public final class AiPromptBuilder {
                 break;
             }
             ChannelAiKnowledgeDO k = h.knowledge();
-            append(sb, ChannelAiKnowledgeDO.TYPE_FAQ.equals(k.getType()) ? "常见问答" : "产品资料", k);
+            String label = ChannelAiKnowledgeDO.TYPE_FAQ.equals(k.getType()) ? "常见问答" : "产品资料";
+            String cat = k.getCategory() == null ? null : ChannelAiKnowledgeDO.CATEGORY_LABELS.get(k.getCategory());
+            append(sb, cat == null ? label : label + "（" + cat + "）", k);
         }
         return StrUtil.maxLength(sb.toString(), MAX_KNOWLEDGE_CHARS);
     }
