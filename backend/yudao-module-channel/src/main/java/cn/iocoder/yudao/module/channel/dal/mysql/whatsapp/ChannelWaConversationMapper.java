@@ -45,7 +45,9 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
             q.gt(ChannelWaConversationDO::getUnreadCount, 0);
         }
         if (Boolean.TRUE.equals(req.getUnreplied())) {
-            q.isNotNull(ChannelWaConversationDO::getLastInboundTime).apply("last_inbound_time >= last_message_time");
+            // 最后一条消息是客户发的（按消息编号判断，避免同一秒内收发时按时间分不清先后）
+            q.apply("(SELECT m.direction FROM channel_wa_message m WHERE m.conversation_id = channel_wa_conversation.id"
+                    + " AND m.deleted = 0 ORDER BY m.id DESC LIMIT 1) = 1");
         }
         if (req.getLevel() != null) {
             q.inSql(ChannelWaConversationDO::getCustomerId,
