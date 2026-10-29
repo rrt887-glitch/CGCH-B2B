@@ -29,7 +29,7 @@ const conditionData = ref<{
 // 条件组件的引用
 const conditionRef = ref();
 
-const [Modal, modalApi] = useVbenModal({
+const [Modal, modalApi] = useVbenModal<any>({
   title: '条件配置',
   destroyOnClose: true,
   draggable: true,

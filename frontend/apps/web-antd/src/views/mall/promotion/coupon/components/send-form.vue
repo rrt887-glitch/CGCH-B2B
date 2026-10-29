@@ -59,7 +59,7 @@ const [Grid] = useVbenVxeGrid({
   } as VxeGridProps<MallCouponTemplateApi.CouponTemplate>,
 });
 
-const [Modal, modalApi] = useVbenModal({
+const [Modal, modalApi] = useVbenModal<any>({
   showCancelButton: false,
   showConfirmButton: false,
 });

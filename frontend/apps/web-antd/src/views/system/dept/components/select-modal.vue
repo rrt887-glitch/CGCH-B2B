@@ -49,7 +49,7 @@ function buildDeptTreeNode(dept: SystemDeptApi.Dept): DataNode {
   };
 }
 
-const [Modal, modalApi] = useVbenModal({
+const [Modal, modalApi] = useVbenModal<any>({
   async onConfirm() {
     // 获取选中的部门 ID
     const selectedIds: number[] = Array.isArray(selectedDeptIds.value)

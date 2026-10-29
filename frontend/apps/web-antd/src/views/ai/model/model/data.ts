@@ -38,15 +38,18 @@ export function useFormSchema(): VbenFormSchema[] {
       fieldName: 'type',
       label: '模型类型',
       component: 'Select',
-      componentProps: (values) => {
-        return {
-          placeholder: '请输入模型类型',
-          disabled: !!values.id,
-          options: getDictOptions(DICT_TYPE.AI_MODEL_TYPE, 'number'),
-          allowClear: true,
-        };
-      },
       rules: 'required',
+      dependencies: {
+        triggerFields: ['id'],
+        componentProps: (values) => {
+          return {
+            placeholder: '请输入模型类型',
+            disabled: !!values.id,
+            options: getDictOptions(DICT_TYPE.AI_MODEL_TYPE, 'number'),
+            allowClear: true,
+          };
+        },
+      },
     },
     {
       fieldName: 'keyId',

@@ -33,15 +33,15 @@ export function useTypeFormSchema(): VbenFormSchema[] {
       fieldName: 'type',
       label: '字典类型',
       component: 'Input',
-      componentProps: (values) => {
-        return {
-          placeholder: '请输入字典类型',
-          disabled: !!values.id,
-        };
-      },
       rules: 'required',
       dependencies: {
-        triggerFields: [''],
+        triggerFields: ['id'],
+        componentProps: (values) => {
+          return {
+            placeholder: '请输入字典类型',
+            disabled: !!values.id,
+          };
+        },
       },
     },
     {
@@ -178,18 +178,18 @@ export function useDataFormSchema(): VbenFormSchema[] {
       fieldName: 'dictType',
       label: '字典类型',
       component: 'ApiSelect',
-      componentProps: (values) => {
-        return {
-          api: getSimpleDictTypeList,
-          placeholder: '请输入字典类型',
-          labelField: 'name',
-          valueField: 'type',
-          disabled: !!values.id,
-        };
-      },
       rules: 'required',
       dependencies: {
-        triggerFields: [''],
+        triggerFields: ['id'],
+        componentProps: (values) => {
+          return {
+            api: getSimpleDictTypeList,
+            placeholder: '请输入字典类型',
+            labelField: 'name',
+            valueField: 'type',
+            disabled: !!values.id,
+          };
+        },
       },
     },
     {

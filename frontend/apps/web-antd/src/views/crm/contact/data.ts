@@ -55,13 +55,16 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '客户名称',
       component: 'ApiSelect',
       rules: 'required',
-      componentProps: (_values, form) => ({
-        api: getCustomerSimpleList,
-        labelField: 'name',
-        valueField: 'id',
-        placeholder: '请选择客户',
-        onChange: () => form.setFieldValue('parentId', undefined),
-      }),
+      dependencies: {
+        triggerFields: ['customerId'],
+        componentProps: (_values, actions) => ({
+          api: getCustomerSimpleList,
+          labelField: 'name',
+          valueField: 'id',
+          placeholder: '请选择客户',
+          onChange: () => actions.setFieldValue('parentId', undefined),
+        }),
+      },
     },
     {
       fieldName: 'mobile',

@@ -54,8 +54,8 @@ export async function runIncrementalPull<T extends PullRecord>(
 ): Promise<void> {
   const storedCursor = await getPullCursor(db, cursorKey);
   const highWater = { ...storedCursor };
-  let cursor =
-    storedCursor.lastUpdateTime === null
+  let cursor: { lastId?: number; lastUpdateTime?: number } =
+    storedCursor.lastUpdateTime === undefined || storedCursor.lastUpdateTime === null
       ? {}
       : {
           lastUpdateTime: Math.max(
@@ -77,18 +77,20 @@ export async function runIncrementalPull<T extends PullRecord>(
       }
       // 推进游标到本页最后一条并持久化：下次从这里接着拉
       const last = list[list.length - 1]!;
-      if (last.updateTime === null) {
+      if (last.updateTime === undefined || last.updateTime === null) {
         return;
       }
-      cursor = { lastUpdateTime: last.updateTime, lastId: last.id };
+      const next = { lastUpdateTime: last.updateTime, lastId: last.id ?? 0 };
+      cursor = next;
       if (
+        highWater.lastUpdateTime === undefined ||
         highWater.lastUpdateTime === null ||
-        cursor.lastUpdateTime > highWater.lastUpdateTime ||
-        (cursor.lastUpdateTime === highWater.lastUpdateTime &&
-          cursor.lastId > (highWater.lastId ?? 0))
+        next.lastUpdateTime > highWater.lastUpdateTime ||
+        (next.lastUpdateTime === highWater.lastUpdateTime &&
+          next.lastId > (highWater.lastId ?? 0))
       ) {
-        highWater.lastUpdateTime = cursor.lastUpdateTime;
-        highWater.lastId = cursor.lastId;
+        highWater.lastUpdateTime = next.lastUpdateTime;
+        highWater.lastId = next.lastId;
         await db.setSetting(cursorKey, highWater);
       }
     }
@@ -139,14 +141,14 @@ export async function runMinIdPull<T extends { id?: number }>(options: {
     // 本批最大消息 id 作为下次游标；无有效 id 则本批 apply 后停（无法继续翻页）
     const validIds = list
       .map((record) => record.id)
-      .filter((id): id is number => id !== null);
+      .filter((id): id is number => id !== undefined && id !== null);
     const nextMinId = validIds.length > 0 ? Math.max(...validIds) : undefined;
     // applyPage 返回 false：本页未落地（如入库失败），不推进游标并终止，避免漏消息
     if ((await applyPage(list, nextMinId)) === false) {
       return;
     }
     // 无有效 id，或游标没前进（后端契约是 id > minId，理论不会出现）：停，防御死翻
-    if (nextMinId === null || nextMinId <= minId) {
+    if (nextMinId === undefined || nextMinId <= minId) {
       return;
     }
     minId = nextMinId;
