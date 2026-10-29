@@ -2249,7 +2249,7 @@ jobs:
           grep -qi '^x-content-type-options: nosniff' /tmp/h3.txt || { echo "::error::接口响应缺少安全响应头"; cat /tmp/h3.txt; exit 1; }
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT config FROM infra_file_config WHERE id=4\""' | grep -q '"domain": *"http://'
           echo "--- 模拟老数据库：删掉 v3 新增字段并清除升级记录，验证升级脚本 ---"
-          sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD ruoyi-vue-pro -e \"ALTER TABLE channel_wa_conversation DROP COLUMN intent; ALTER TABLE channel_mail_message DROP COLUMN intent; ALTER TABLE channel_wa_message DROP INDEX idx_account_wamid; DELETE FROM cgch_migration;\""'
+          sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD ruoyi-vue-pro -e \"ALTER TABLE channel_wa_conversation DROP COLUMN intent; ALTER TABLE channel_mail_message DROP COLUMN intent; ALTER TABLE channel_wa_message DROP INDEX idx_account_wamid; DELETE FROM cgch_migration WHERE name IN (\\\"001-v3-brand-intent.sql\\\", \\\"016-indexes.sql\\\");\""'
           echo "--- 再执行一次（升级场景）---"
           set -o pipefail
           cat deploy/install.sh | sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash 2>&1 | tee /tmp/install2.log \
