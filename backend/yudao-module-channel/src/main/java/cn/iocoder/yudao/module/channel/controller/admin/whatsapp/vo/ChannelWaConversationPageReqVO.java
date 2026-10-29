@@ -14,5 +14,13 @@ public class ChannelWaConversationPageReqVO extends PageParam {
     private String keyword;
     /** 只看有未读的 */
     private Boolean unreadOnly;
+    /** 归档：不填或 false 看未归档的，true 只看已归档的 */
+    private Boolean archived;
+    /** 只看收藏的 */
+    private Boolean starred;
+    /** 只看客户最后发言、我方还没回复的 */
+    private Boolean unreplied;
+    /** 客户等级（crm_customer_level 字典值：1 A 类 … 4 D 类） */
+    private Integer level;
 
 }

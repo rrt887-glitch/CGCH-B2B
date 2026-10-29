@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-/** 设置：订阅与用量、AI 接待设置（大模型、自动回复模式）、成员与部门、云盘文件、消息模板、邮件模板、消息分流、通知、翻译，通过「设置菜单」切换 */
+/** 设置：订阅与用量、AI 接待设置（大模型、自动回复模式）、成员与部门、云盘文件、消息模板、邮件模板、快捷回复、消息分流、通知、翻译，通过「设置菜单」切换 */
 import type { HubGroup } from '../components/types';
 
 import MenuHub from '../components/menu-hub.vue';
@@ -16,6 +16,7 @@ const groups: HubGroup[] = [
       { key: 'cloud', label: '云盘文件', load: () => import('./cloud.vue') },
       { key: 'templates', label: '消息模板', load: () => import('#/views/cgch/config/templates/index.vue') },
       { key: 'emailTemplates', label: '邮件模板', load: () => import('./email-templates.vue') },
+      { key: 'quickReplies', label: '快捷回复', load: () => import('./quick-replies.vue') },
       { key: 'routing', label: '消息分流设置', load: () => import('./routing.vue') },
       { key: 'notifications', label: '通知设置', load: () => import('./notifications.vue') },
       { key: 'translate', label: '翻译设置', load: () => import('./translate.vue') },

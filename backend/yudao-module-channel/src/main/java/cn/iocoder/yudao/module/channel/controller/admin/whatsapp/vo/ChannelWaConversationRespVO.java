@@ -24,6 +24,14 @@ public class ChannelWaConversationRespVO {
     private LocalDateTime lastInboundTime;
     private String lastMessagePreview;
     private Integer unreadCount;
+    private Boolean archived;
+    private Boolean starred;
+    @Schema(description = "负责人：转交后的处理人；为空表示号码所属业务员")
+    private Long ownerUserId;
+    @Schema(description = "备注名")
+    private String remarkName;
+    @Schema(description = "客户等级（crm_customer_level 字典值）")
+    private Integer customerLevel;
 
     @Schema(description = "24 小时客服窗口是否开启；关闭时只能发模板消息")
     private Boolean windowOpen;

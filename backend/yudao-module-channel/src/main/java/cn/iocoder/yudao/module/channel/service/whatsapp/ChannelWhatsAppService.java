@@ -54,6 +54,10 @@ public class ChannelWhatsAppService {
             ChannelWaMessageDO.STATUS_SENT, ChannelWaMessageDO.STATUS_DELIVERED, ChannelWaMessageDO.STATUS_READ);
 
     @Resource
+    private cn.iocoder.yudao.module.channel.service.realtime.ChannelRealtimeService channelRealtimeService;
+    @Resource
+    private cn.iocoder.yudao.module.system.api.user.AdminUserApi adminUserApi;
+    @Resource
     private cn.iocoder.yudao.module.channel.service.policy.ChannelSendPolicyService channelSendPolicyService;
     @Resource
     private ChannelWaAccountMapper accountMapper;
@@ -517,7 +521,7 @@ public class ChannelWhatsAppService {
                 .setLastInboundTime(max(conv.getLastInboundTime(), time))
                 .setLastMessageTime(max(conv.getLastMessageTime(), time))
                 .setLastMessagePreview(preview(msg))
-                .setUnreadCount((conv.getUnreadCount() == null ? 0 : conv.getUnreadCount()) + 1);
+                .setUnreadCount((conv.getUnreadCount() == null ? 0 : conv.getUnreadCount()) + 1).setArchived(false);
         if (StrUtil.isBlank(conv.getProfileName())) {
             upd.setProfileName(WaGraphClient.getMessagingUserName(a, sender));
         }
@@ -543,6 +547,7 @@ public class ChannelWhatsAppService {
                 .waMessageId(mid).type(type).textBody(text).mediaId(mediaUrl)
                 .status(ChannelWaMessageDO.STATUS_SENT).messageTime(time).aiGenerated(false).build();
         messageMapper.insert(msg);
+        channelRealtimeService.conversationChanged(msg.getConversationId(), msg.getId(), "out");
         conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
                 .setLastMessageTime(max(conv.getLastMessageTime(), time)).setLastMessagePreview(preview(msg)));
     }
@@ -692,7 +697,7 @@ public class ChannelWhatsAppService {
                 .setLastInboundTime(max(conv.getLastInboundTime(), time))
                 .setLastMessageTime(max(conv.getLastMessageTime(), time))
                 .setLastMessagePreview(preview(msg))
-                .setUnreadCount((conv.getUnreadCount() == null ? 0 : conv.getUnreadCount()) + 1);
+                .setUnreadCount((conv.getUnreadCount() == null ? 0 : conv.getUnreadCount()) + 1).setArchived(false);
         if (StrUtil.isNotBlank(profileName)) {
             upd.setProfileName(profileName);
         }
@@ -767,6 +772,7 @@ public class ChannelWhatsAppService {
         }
         msg.setConversationId(conv.getId());
         messageMapper.insert(msg);
+        channelRealtimeService.conversationChanged(msg.getConversationId(), msg.getId(), "out");
         ChannelWaConversationDO upd = new ChannelWaConversationDO().setId(conv.getId())
                 .setLastMessageTime(max(conv.getLastMessageTime(), time));
         if (conv.getLastMessageTime() == null || !time.isBefore(conv.getLastMessageTime())) {
@@ -846,6 +852,7 @@ public class ChannelWhatsAppService {
             return;
         }
         messageMapper.updateById(upd);
+        channelRealtimeService.conversationChanged(msg.getConversationId(), msg.getId(), "status");
     }
 
     // ==================== 扫码接入（Evolution）推送，已转换成 Meta 消息结构 ====================
@@ -891,7 +898,11 @@ public class ChannelWhatsAppService {
         ChannelWaConversationDO conv;
         ChannelWaAccountDO a;
         if (req.getConversationId() != null) {
-            conv = validateConversation(userId, req.getConversationId());
+            // AI 数字员工以号码所属业务员的身份发送：会话可能已转交给别人，不按处理人校验
+            conv = ai ? conversationMapper.selectById(req.getConversationId()) : validateConversation(userId, req.getConversationId());
+            if (conv == null) {
+                throw exception(WA_CONVERSATION_NOT_EXISTS);
+            }
             a = accountMapper.selectById(conv.getAccountId());
         } else {
             a = validateAccount(userId, req.getAccountId());
@@ -945,6 +956,7 @@ public class ChannelWhatsAppService {
                 .templateName(template ? req.getTemplateName() : null)
                 .status(ChannelWaMessageDO.STATUS_SENT).messageTime(now).aiGenerated(ai).build();
         messageMapper.insert(msg);
+        channelRealtimeService.conversationChanged(msg.getConversationId(), msg.getId(), "out");
         conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
                 .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
         return BeanUtils.toBean(msg, ChannelWaMessageRespVO.class);
@@ -962,7 +974,8 @@ public class ChannelWhatsAppService {
         if (m == null) {
             throw exception(WA_MESSAGE_NOT_EXISTS);
         }
-        ChannelWaAccountDO a = validateAccount(userId, m.getAccountId());
+        validateConversation(userId, m.getConversationId()); // 转交后由处理人查看
+        ChannelWaAccountDO a = accountMapper.selectById(m.getAccountId());
         if (StrUtil.isBlank(m.getFileUrl())) {
             if (StrUtil.isBlank(m.getMediaId())) {
                 throw exception(WA_NO_MEDIA);
@@ -1047,6 +1060,7 @@ public class ChannelWhatsAppService {
                 .fileName(name).fileUrl(url).fileSize((long) bytes.length)
                 .status(ChannelWaMessageDO.STATUS_SENT).messageTime(now).build();
         messageMapper.insert(msg);
+        channelRealtimeService.conversationChanged(msg.getConversationId(), msg.getId(), "out");
         conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
                 .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
         return BeanUtils.toBean(msg, ChannelWaMessageRespVO.class);
@@ -1080,6 +1094,7 @@ public class ChannelWhatsAppService {
                 .fileName(name).fileUrl(url).fileSize((long) bytes.length)
                 .status(ChannelWaMessageDO.STATUS_SENT).messageTime(now).build();
         messageMapper.insert(msg);
+        channelRealtimeService.conversationChanged(msg.getConversationId(), msg.getId(), "out");
         conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
                 .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
         if (StrUtil.isNotBlank(caption)) {
@@ -1106,6 +1121,7 @@ public class ChannelWhatsAppService {
                 .mimeType(file.getContentType()).fileName(name).fileUrl(url).fileSize((long) bytes.length)
                 .status(ChannelWaMessageDO.STATUS_SENT).messageTime(now).build();
         messageMapper.insert(msg);
+        channelRealtimeService.conversationChanged(msg.getConversationId(), msg.getId(), "out");
         conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
                 .setLastMessageTime(now).setLastMessagePreview(preview(msg)));
         return BeanUtils.toBean(msg, ChannelWaMessageRespVO.class);
@@ -1139,14 +1155,48 @@ public class ChannelWhatsAppService {
     // ==================== 查询 ====================
 
     public PageResult<ChannelWaConversationRespVO> getConversationPage(Long userId, ChannelWaConversationPageReqVO req) {
-        Collection<Long> accountIds = req.getAccountId() != null
+        boolean one = req.getAccountId() != null;
+        Collection<Long> accountIds = one
                 ? List.of(validateAccount(userId, req.getAccountId()).getId())
                 : accountMapper.selectListByUserId(userId).stream().map(ChannelWaAccountDO::getId).toList();
         if (accountIds.isEmpty()) {
-            return PageResult.empty();
+            accountIds = List.of(-1L); // 自己没有号码，但可能有别人转交过来的会话
         }
-        PageResult<ChannelWaConversationDO> page = conversationMapper.selectPage(req, accountIds, req.getKeyword(), req.getUnreadOnly());
+        PageResult<ChannelWaConversationDO> page = conversationMapper.selectPage(req, accountIds, userId, one);
         return new PageResult<>(toConversationVOs(page.getList()), page.getTotal());
+    }
+
+    // ==================== 会话整理：归档、收藏、备注名、转交 ====================
+
+    public void archiveConversation(Long userId, Long id, boolean archived) {
+        validateConversation(userId, id);
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setArchived(archived));
+    }
+
+    public void starConversation(Long userId, Long id, boolean starred) {
+        validateConversation(userId, id);
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setStarred(starred));
+    }
+
+    public void renameConversation(Long userId, Long id, String remarkName) {
+        validateConversation(userId, id);
+        conversationMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaConversationDO>()
+                .eq(ChannelWaConversationDO::getId, id)
+                .set(ChannelWaConversationDO::getRemarkName, StrUtil.emptyToNull(StrUtil.maxLength(StrUtil.trim(remarkName), 100))));
+    }
+
+    /** 转交给同事：之后由对方处理（看得到、能回复），自己不再看到；转回号码所属业务员时清空负责人 */
+    public void transferConversation(Long userId, Long id, Long toUserId) {
+        ChannelWaConversationDO c = validateConversation(userId, id);
+        ChannelWaAccountDO a = accountMapper.selectById(c.getAccountId());
+        cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO to = toUserId == null ? null : adminUserApi.getUser(toUserId);
+        if (to == null || !cn.iocoder.yudao.framework.common.enums.CommonStatusEnum.isEnable(to.getStatus())) {
+            throw exception(AI_LLM_FAIL, "请选择要转交的同事");
+        }
+        Long owner = Objects.equals(toUserId, a.getUserId()) ? null : toUserId;
+        conversationMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaConversationDO>()
+                .eq(ChannelWaConversationDO::getId, id).set(ChannelWaConversationDO::getOwnerUserId, owner));
+        log.info("[transferConversation][会话 {} 由用户 {} 转交给 {}]", id, userId, toUserId);
     }
 
     /** 会话消息（按时间正序），并清零未读 */
@@ -1163,12 +1213,19 @@ public class ChannelWhatsAppService {
         return toConversationVOs(List.of(validateConversation(userId, id))).get(0);
     }
 
+    /** 只有会话的处理人能看和操作：转交给了别人就是负责人，否则是号码所属的业务员 */
     private ChannelWaConversationDO validateConversation(Long userId, Long id) {
         ChannelWaConversationDO c = id == null ? null : conversationMapper.selectById(id);
         if (c == null) {
             throw exception(WA_CONVERSATION_NOT_EXISTS);
         }
-        validateAccount(userId, c.getAccountId());
+        if (c.getOwnerUserId() != null) {
+            if (!Objects.equals(c.getOwnerUserId(), userId)) {
+                throw exception(WA_CONVERSATION_NOT_EXISTS);
+            }
+        } else {
+            validateAccount(userId, c.getAccountId());
+        }
         return c;
     }
 
@@ -1184,6 +1241,7 @@ public class ChannelWhatsAppService {
             vo.setPlatform(StrUtil.blankToDefault(c.getPlatform(), ChannelWaAccountDO.PLATFORM_WHATSAPP));
             CrmCustomerDO cu = c.getCustomerId() == null ? null : customers.get(c.getCustomerId());
             vo.setCustomerName(cu == null ? null : cu.getName());
+            vo.setCustomerLevel(cu == null ? null : cu.getLevel());
             vo.setClueName(c.getClueId() == null ? null : clueNames.get(c.getClueId()));
             vo.setWindowOpen(windowOpen(c));
             vo.setWindowExpireTime(c.getLastInboundTime() == null || c.isWeb() ? null : c.getLastInboundTime().plusHours(WINDOW_HOURS));

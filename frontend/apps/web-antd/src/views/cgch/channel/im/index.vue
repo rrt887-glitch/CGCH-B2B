@@ -24,16 +24,25 @@ import {
   InputSearch,
   message,
   Modal,
+  Dropdown,
+  Menu,
+  MenuItem,
+  Popover,
+  Segmented,
   Select,
   Space,
   Spin,
-  Switch,
   Tag,
   Textarea,
   Tooltip,
 } from 'ant-design-vue';
 
+import { getSimpleUserList } from '#/api/system/user';
+import { getQuickReplies, markQuickReplyUsed } from '#/api/channel/quick-reply';
+import type { QuickReplyApi } from '#/api/channel/quick-reply';
+import { onChannelRealtime } from '#/utils/channel-realtime';
 import {
+  archiveWaConversation,
   getWaAccountList,
   getWaConversation,
   getWaConversationPage,
@@ -42,23 +51,37 @@ import {
   getWaTemplates,
   sendWaMedia,
   sendWaMessage,
+  remarkWaConversation,
+  starWaConversation,
   templateParamCount,
+  transferWaConversation,
   templatePreview,
 } from '#/api/channel/whatsapp';
 
 defineOptions({ name: 'CgchChannelIm' });
 
 /** 嵌入「会话」页时：账号由左栏选择，隐藏本页的账号下拉 */
-const props = defineProps<{ accountId?: number; embedded?: boolean; openId?: number }>();
+const props = defineProps<{ accountId?: number; embedded?: boolean; level?: number; openId?: number }>();
 
 const router = useRouter();
 const route = useRoute();
-const POLL_MS = 10_000; // Webhook 写库后前端轮询刷新
+const POLL_MS = 10_000; // 实时推送没连上时的定时刷新间隔
+const POLL_MS_LIVE = 60_000; // 实时推送连上后只做兜底刷新
 
 const accounts = ref<ChannelWaApi.Account[]>([]);
 const accountId = ref<number | undefined>(props.accountId);
 const keyword = ref('');
-const unreadOnly = ref(false);
+/** 列表筛选：全部、未读、未回复（客户最后发言）、收藏、已归档 */
+type ListFilter = 'all' | 'archived' | 'starred' | 'unread' | 'unreplied';
+const listFilter = ref<ListFilter>('all');
+const FILTER_OPTIONS = [
+  { label: '全部', value: 'all' },
+  { label: '未读', value: 'unread' },
+  { label: '未回复', value: 'unreplied' },
+  { label: '收藏', value: 'starred' },
+  { label: '归档', value: 'archived' },
+];
+const live = ref(false);
 const conversations = ref<ChannelWaApi.Conversation[]>([]);
 const listLoading = ref(false);
 
@@ -98,7 +121,11 @@ async function loadConversations(silent = false) {
       pageSize: 100,
       accountId: accountId.value,
       keyword: keyword.value || undefined,
-      unreadOnly: unreadOnly.value || undefined,
+      unreadOnly: listFilter.value === 'unread' || undefined,
+      unreplied: listFilter.value === 'unreplied' || undefined,
+      starred: listFilter.value === 'starred' || undefined,
+      archived: listFilter.value === 'archived' || undefined,
+      level: props.level,
     });
     conversations.value = res.list;
   } finally {
@@ -134,7 +161,7 @@ async function refreshCurrent() {
   if (grew) await scrollBottom();
 }
 
-watch([accountId, unreadOnly], () => loadConversations());
+watch([accountId, listFilter, () => props.level], () => loadConversations());
 watch(
   () => props.accountId,
   (v) => {
@@ -142,20 +169,112 @@ watch(
   },
 );
 
-let timer: ReturnType<typeof setInterval> | undefined;
+let timer: ReturnType<typeof setTimeout> | undefined;
+let stopRealtime: (() => void) | undefined;
+let refreshQueued = false;
+/** 收到推送：合并 300 毫秒内的多条，刷新列表；是当前会话就刷新消息 */
+function onRealtime(e: { channel: string; refId: number }) {
+  if (e.channel !== 'whatsapp') return;
+  const isCurrent = current.value?.id === e.refId;
+  if (refreshQueued && !isCurrent) return;
+  refreshQueued = true;
+  setTimeout(() => {
+    refreshQueued = false;
+    loadConversations(true);
+    if (current.value) refreshCurrent();
+  }, 300);
+}
+function schedulePoll() {
+  timer = setTimeout(() => {
+    if (!document.hidden) {
+      loadConversations(true);
+      refreshCurrent();
+    }
+    schedulePoll();
+  }, live.value ? POLL_MS_LIVE : POLL_MS);
+}
 onMounted(async () => {
   accounts.value = await getWaAccountList();
-  if (accounts.value.length > 0) await loadConversations();
+  await loadConversations(); // 没有自己的号码也可能有同事转交过来的会话
   // 从工作报告等页面跳转过来时，直接打开指定会话：/channel-msg/im?conversationId=123
   const cid = props.openId || Number(route.query.conversationId);
   if (cid) await openConversation(await getWaConversation(cid));
-  timer = setInterval(() => {
-    if (accounts.value.length === 0 || document.hidden) return;
-    loadConversations(true);
-    refreshCurrent();
-  }, POLL_MS);
+  stopRealtime = onChannelRealtime(onRealtime, (v) => (live.value = v));
+  schedulePoll();
 });
-onBeforeUnmount(() => timer && clearInterval(timer));
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer);
+  stopRealtime?.();
+});
+
+// ===== 会话整理：收藏、归档、备注名、转交 =====
+async function toggleStar(c: ChannelWaApi.Conversation) {
+  await starWaConversation(c.id, !c.starred);
+  c.starred = !c.starred;
+  if (current.value?.id === c.id) current.value.starred = c.starred;
+  await loadConversations(true);
+}
+async function toggleArchive(c: ChannelWaApi.Conversation) {
+  await archiveWaConversation(c.id, !c.archived);
+  message.success(c.archived ? '已移出归档' : '已归档，客户再发消息时会自动回到列表');
+  if (current.value?.id === c.id) current.value = undefined;
+  await loadConversations(true);
+}
+const remarkOpen = ref(false);
+const remarkText = ref('');
+function openRemark() {
+  remarkText.value = current.value?.remarkName || '';
+  remarkOpen.value = true;
+}
+async function saveRemark() {
+  if (!current.value) return;
+  await remarkWaConversation(current.value.id, remarkText.value.trim());
+  current.value.remarkName = remarkText.value.trim() || undefined;
+  remarkOpen.value = false;
+  await loadConversations(true);
+}
+const transferOpen = ref(false);
+const transferTo = ref<number>();
+const users = ref<{ id?: number; nickname: string }[]>([]);
+async function openTransfer() {
+  transferTo.value = undefined;
+  transferOpen.value = true;
+  if (users.value.length === 0) users.value = await getSimpleUserList();
+}
+async function doTransfer() {
+  if (!current.value || !transferTo.value) {
+    message.warning('请选择同事');
+    return;
+  }
+  await transferWaConversation(current.value.id, transferTo.value);
+  message.success('已转交，对方会在会话列表里看到');
+  transferOpen.value = false;
+  current.value = undefined;
+  await loadConversations(true);
+}
+function onMenu(key: string) {
+  if (!current.value) return;
+  if (key === 'star') toggleStar(current.value);
+  else if (key === 'archive') toggleArchive(current.value);
+  else if (key === 'remark') openRemark();
+  else if (key === 'transfer') openTransfer();
+}
+
+// ===== 快捷回复：选中后插入输入框，{name} 换成客户称呼 =====
+const quickOpen = ref(false);
+const quickKeyword = ref('');
+const quickList = ref<QuickReplyApi.Item[]>([]);
+async function loadQuick() {
+  quickList.value = await getQuickReplies(quickKeyword.value.trim() || undefined);
+}
+watch(quickOpen, (v) => v && loadQuick());
+function useQuick(q: QuickReplyApi.Item) {
+  const name = current.value ? current.value.remarkName || current.value.profileName || '' : '';
+  const body = q.content.replaceAll('{name}', name).trim();
+  text.value = text.value ? `${text.value.trimEnd()}\n${body}` : body;
+  quickOpen.value = false;
+  if (q.id) markQuickReplyUsed(q.id);
+}
 
 // ===== AI 起草 =====
 const aiDraft = ref<ChannelAiApi.Draft>();
@@ -439,7 +558,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
 <template>
   <Page auto-content-height>
-    <div v-if="accounts.length === 0" class="flex h-full items-center justify-center rounded bg-white">
+    <div v-if="accounts.length === 0 && conversations.length === 0 && listFilter === 'all'" class="flex h-full items-center justify-center rounded bg-white">
       <Empty description="还没有绑定 WhatsApp、Facebook 或 Instagram 账号">
         <Button type="primary" @click="router.push('/v3/channel')">去绑定账号</Button>
       </Empty>
@@ -455,9 +574,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             <Button v-if="waAccounts.length > 0" type="primary" @click="openNewChat">新会话</Button>
           </div>
           <InputSearch v-model:value="keyword" allow-clear placeholder="号码或昵称" @search="() => loadConversations()" />
-          <label class="flex items-center gap-2 text-sm text-gray-500">
-            <Switch v-model:checked="unreadOnly" size="small" /> 只看未读
-          </label>
+          <Segmented v-model:value="listFilter" :options="FILTER_OPTIONS" block size="small" />
         </div>
         <div class="flex-1 overflow-auto">
           <Spin :spinning="listLoading">
@@ -474,7 +591,9 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               </Badge>
               <div class="min-w-0 flex-1">
                 <div class="flex justify-between gap-2">
-                  <span class="truncate font-medium">{{ c.customerName || contact(c) }}</span>
+                  <span class="truncate font-medium">
+                    <span v-if="c.starred" class="mr-1 text-amber-500">★</span>{{ c.remarkName || c.customerName || contact(c) }}
+                  </span>
                   <span class="shrink-0 text-xs text-gray-400">{{ md(c.lastMessageTime) }} {{ hm(c.lastMessageTime) }}</span>
                 </div>
                 <div class="truncate text-xs text-gray-500">{{ c.lastMessagePreview }}</div>
@@ -491,7 +610,8 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
           <div class="flex items-center justify-between border-b px-4 py-3">
             <div>
               <div class="font-medium">
-                {{ contact(current) }}
+                <span v-if="current.starred" class="mr-1 text-amber-500">★</span>{{ current.remarkName || contact(current) }}
+                <span v-if="current.remarkName" class="text-sm text-gray-400">（{{ contact(current) }}）</span>
                 <span v-if="isWa(current)" class="text-sm text-gray-400">+{{ current.waId }}</span>
                 <Tag v-else :color="plat(current).color" class="ml-1">{{ plat(current).label }}</Tag>
               </div>
@@ -508,6 +628,22 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 </Tooltip>
                 <Tag v-else color="orange">{{ isWa(current) ? '窗口已关闭，仅可发模板' : '窗口已关闭，等待客户来信' }}</Tag>
               </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <Tooltip :title="live ? '实时推送已连接，新消息会立即出现' : '实时推送未连接，每 10 秒自动刷新'">
+                <span class="inline-block size-2 rounded-full" :class="live ? 'bg-green-500' : 'bg-gray-300'"></span>
+              </Tooltip>
+              <Button size="small" @click="toggleStar(current)">{{ current.starred ? '取消收藏' : '收藏' }}</Button>
+              <Dropdown :trigger="['click']">
+                <Button size="small">更多</Button>
+                <template #overlay>
+                  <Menu @click="(e: any) => onMenu(String(e.key))">
+                    <MenuItem key="archive">{{ current.archived ? '移出归档' : '归档' }}</MenuItem>
+                    <MenuItem key="remark">设置备注名</MenuItem>
+                    <MenuItem key="transfer">转交给同事</MenuItem>
+                  </Menu>
+                </template>
+              </Dropdown>
             </div>
           </div>
 
@@ -587,6 +723,28 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               <div class="mt-2 flex justify-between">
                 <Space>
                   <Button :loading="fileSending" @click="pickAndSend">发送文件</Button>
+                  <Popover v-model:open="quickOpen" trigger="click" placement="topLeft">
+                    <template #content>
+                      <div class="w-80">
+                        <InputSearch v-model:value="quickKeyword" allow-clear size="small" placeholder="搜索快捷回复" @search="loadQuick" />
+                        <div class="mt-2 max-h-72 overflow-auto">
+                          <Empty v-if="quickList.length === 0" :image="Empty.PRESENTED_IMAGE_SIMPLE" description="还没有快捷回复，可在「设置 → 快捷回复」添加" />
+                          <div
+                            v-for="q in quickList"
+                            :key="q.id"
+                            class="cursor-pointer rounded px-2 py-1.5 hover:bg-gray-50"
+                            @click="useQuick(q)"
+                          >
+                            <div class="text-sm font-medium">
+                              {{ q.title }}<Tag v-if="q.scope === 'personal'" class="ml-1" color="default">个人</Tag>
+                            </div>
+                            <div class="truncate text-xs text-gray-500">{{ q.content }}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                    <Button>快捷回复</Button>
+                  </Popover>
                   <Button v-if="isWa(current) && !isScanAccount(current.accountId)" @click="openTemplate()">发送模板</Button>
                   <Button :loading="aiLoading" @click="aiCompose">AI 起草</Button>
                 </Space>
@@ -609,6 +767,21 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         </template>
       </div>
     </div>
+
+    <Modal v-model:open="remarkOpen" title="设置备注名" ok-text="保存" @ok="saveRemark">
+      <Input v-model:value="remarkText" :maxlength="100" allow-clear placeholder="例如：Rashid（迪拜灯具批发商），留空表示清除" />
+    </Modal>
+    <Modal v-model:open="transferOpen" title="转交给同事" ok-text="转交" @ok="doTransfer">
+      <div class="mb-2 text-sm text-gray-500">转交后由对方处理这个会话，你的列表里不再显示；AI 接待设置不变。</div>
+      <Select
+        v-model:value="transferTo"
+        show-search
+        option-filter-prop="label"
+        class="w-full"
+        placeholder="选择同事"
+        :options="users.map((u) => ({ value: u.id, label: u.nickname }))"
+      />
+    </Modal>
 
     <Modal v-model:open="newOpen" title="新会话" ok-text="发送" :confirm-loading="newSending" :width="520" @ok="sendNewChat">
       <div class="flex flex-col gap-3">

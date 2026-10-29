@@ -80,4 +80,6 @@ CALL cgch_add_index('crm_receivable', 'idx_contract', 'contract_id', NULL, NULL)
 CALL cgch_add_index('crm_follow_up_record', 'idx_biz', 'biz_type', 'biz_id', NULL); -- 客户 / 线索 / 商机的跟进记录
 CALL cgch_add_index('crm_permission', 'idx_biz', 'biz_type', 'biz_id', NULL); -- 数据权限
 CALL cgch_add_index('crm_permission', 'idx_user', 'user_id', NULL, NULL); -- 我负责 / 参与的数据
+CALL cgch_add_index('channel_wa_conversation', 'idx_owner', 'owner_user_id', NULL, NULL); -- 转交给我的会话
+CALL cgch_add_index('channel_quick_reply', 'idx_owner', 'owner_user_id', NULL, NULL); -- 我的快捷回复
 DROP PROCEDURE cgch_add_index;

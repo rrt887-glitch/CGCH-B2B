@@ -37,12 +37,19 @@ export namespace ChannelWaApi {
     customerName?: string;
     clueId?: number;
     clueName?: string;
-    lastMessageTime?: string;
-    lastInboundTime?: string;
+    lastMessageTime?: number | string;
+    lastInboundTime?: number | string;
     lastMessagePreview?: string;
     unreadCount?: number;
     windowOpen?: boolean;
-    windowExpireTime?: string;
+    windowExpireTime?: number | string;
+    archived?: boolean;
+    starred?: boolean;
+    /** 转交后的处理人；为空表示号码所属业务员 */
+    ownerUserId?: number;
+    remarkName?: string;
+    /** 客户等级：1 A 类 … 4 D 类 */
+    customerLevel?: number;
   }
 
   export interface Message {
@@ -60,7 +67,7 @@ export namespace ChannelWaApi {
     templateName?: string;
     status?: 'delivered' | 'failed' | 'read' | 'received' | 'sent';
     errorMessage?: string;
-    messageTime?: string;
+    messageTime?: number | string;
     aiGenerated?: boolean;
   }
 
@@ -76,6 +83,10 @@ export namespace ChannelWaApi {
     accountId?: number;
     keyword?: string;
     unreadOnly?: boolean;
+    archived?: boolean;
+    starred?: boolean;
+    unreplied?: boolean;
+    level?: number;
   }
 
   export interface SendReq {
@@ -107,6 +118,14 @@ export const getWaConversationPage = (params: ChannelWaApi.ConversationPageReq) 
   requestClient.get<PageResult<ChannelWaApi.Conversation>>('/channel/wa/conversation/page', { params });
 export const getWaConversation = (id: number) =>
   requestClient.get<ChannelWaApi.Conversation>(`/channel/wa/conversation/get?id=${id}`);
+export const archiveWaConversation = (id: number, archived: boolean) =>
+  requestClient.put(`/channel/wa/conversation/archive?id=${id}&archived=${archived}`);
+export const starWaConversation = (id: number, starred: boolean) =>
+  requestClient.put(`/channel/wa/conversation/star?id=${id}&starred=${starred}`);
+export const remarkWaConversation = (id: number, name: string) =>
+  requestClient.put('/channel/wa/conversation/remark', null, { params: { id, name } });
+export const transferWaConversation = (id: number, userId: number) =>
+  requestClient.put(`/channel/wa/conversation/transfer?id=${id}&userId=${userId}`);
 export const getWaMessages = (conversationId: number, beforeId?: number) =>
   requestClient.get<ChannelWaApi.Message[]>('/channel/wa/message/list', { params: { conversationId, beforeId } });
 export const sendWaMessage = (data: ChannelWaApi.SendReq) =>

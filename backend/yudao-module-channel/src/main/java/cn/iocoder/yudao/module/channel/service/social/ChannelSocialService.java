@@ -245,6 +245,7 @@ public class ChannelSocialService {
                     .setLastMessageTime(max(conv.getLastMessageTime(), time)).setLastMessagePreview(StrUtil.maxLength(c.text(), 200));
             if (!c.own()) {
                 upd.setLastInboundTime(max(conv.getLastInboundTime(), time));
+                upd.setArchived(false); // 客户来新消息：自动取消归档
                 if (!first) {
                     upd.setUnreadCount((conv.getUnreadCount() == null ? 0 : conv.getUnreadCount()) + 1);
                 }
