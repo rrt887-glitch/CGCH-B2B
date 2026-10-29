@@ -86,6 +86,21 @@ public class CrmCustomerController {
         return success(true);
     }
 
+    @PutMapping("/update-stage")
+    @Operation(summary = "修改客户阶段，并记一条跟进记录")
+    @PreAuthorize("@ss.hasPermission('crm:customer:update')")
+    public CommonResult<Boolean> updateCustomerStage(@RequestParam("id") Long id, @RequestParam("stage") Integer stage) {
+        customerService.updateCustomerStage(id, stage);
+        return success(true);
+    }
+
+    @GetMapping("/stage-stats")
+    @Operation(summary = "各阶段的客户数（我能看到的客户）")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<java.util.Map<Integer, Long>> stageStats() {
+        return success(customerService.getStageStats(getLoginUserId()));
+    }
+
     @PutMapping("/update-deal-status")
     @Operation(summary = "更新客户的成交状态")
     @Parameters({

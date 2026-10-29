@@ -69,6 +69,7 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
                 .eqIfPresent(CrmCustomerDO::getGroupId, pageReqVO.getGroupId())
                 .eqIfPresent(CrmCustomerDO::getAiHosted, pageReqVO.getAiHosted())
                 .eqIfPresent(CrmCustomerDO::getStarred, pageReqVO.getStarred())
+                .eqIfPresent(CrmCustomerDO::getStage, pageReqVO.getStage())
                 .betweenIfPresent(CrmCustomerDO::getContactLastTime, pageReqVO.getContactLastTime());
         if (pageReqVO.getTagId() != null) {
             query.apply("FIND_IN_SET({0}, t.tag_ids)", pageReqVO.getTagId());

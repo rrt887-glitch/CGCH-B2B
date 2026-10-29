@@ -74,3 +74,17 @@ UPDATE `system_dict_data` SET `label` = 'C类客户', `remark` = '创业者' WHE
 DELETE FROM `system_dict_data` WHERE `dict_type` = 'crm_customer_level' AND `value` = '4';
 INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
 VALUES (4, 'D类客户', '4', 'crm_customer_level', 0, 'default', '', '自用', '1', '1', b'0');
+
+-- 客户阶段（新询盘 → 报价 → 样品 → 谈判 → 成交 → 复购）
+INSERT INTO `system_dict_type` (`name`, `type`, `status`, `remark`, `creator`, `updater`, `deleted`)
+SELECT '客户阶段', 'crm_customer_stage', 0, '客户从询盘到复购的阶段，可在这里增改', '1', '1', b'0' FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_type` WHERE `type` = 'crm_customer_stage' AND `deleted` = b'0');
+INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`, `creator`, `updater`, `deleted`)
+SELECT s.sort, s.label, s.value, 'crm_customer_stage', 0, s.color, '', '', '1', '1', b'0' FROM (
+  SELECT 1 AS sort, '新询盘' AS label, '1' AS value, 'processing' AS color UNION ALL
+  SELECT 2, '报价', '2', 'warning' UNION ALL
+  SELECT 3, '样品', '3', 'warning' UNION ALL
+  SELECT 4, '谈判', '4', 'danger' UNION ALL
+  SELECT 5, '成交', '5', 'success' UNION ALL
+  SELECT 6, '复购', '6', 'success') s
+WHERE NOT EXISTS (SELECT 1 FROM `system_dict_data` d WHERE d.`dict_type` = 'crm_customer_stage' AND d.`value` = s.value AND d.`deleted` = b'0');

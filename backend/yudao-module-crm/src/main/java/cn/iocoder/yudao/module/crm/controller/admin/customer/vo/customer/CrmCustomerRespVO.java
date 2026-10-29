@@ -155,4 +155,7 @@ public class CrmCustomerRespVO {
     @Schema(description = "是否特别关注", example = "true")
     private Boolean starred;
 
+    @Schema(description = "客户阶段（字典 crm_customer_stage）", example = "1")
+    private Integer stage;
+
 }

@@ -581,6 +581,8 @@ CREATE TABLE `channel_wa_account` (
   `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否启用',
   `last_webhook_time` datetime NULL COMMENT '最近一次收到 Webhook 的时间',
   `conn_state` varchar(16) NULL COMMENT '扫码接入的连接状态：open 已连接、connecting 连接中、close 已断开（需重新扫码）；其他接入方式为空',
+  `assign_user_ids` varchar(255) NULL COMMENT '接待成员：逗号分隔的用户编号；这个号码上的新客户轮流分给他们，为空时由号码所属的业务员接待',
+  `assign_cursor` int NULL DEFAULT 0 COMMENT '轮流分配的游标：下一个新客户分给第几个接待成员',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',

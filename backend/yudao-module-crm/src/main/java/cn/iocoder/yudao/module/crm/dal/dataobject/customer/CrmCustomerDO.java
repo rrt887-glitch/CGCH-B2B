@@ -163,5 +163,9 @@ public class CrmCustomerDO extends BaseDO {
      * 是否特别关注
      */
     private Boolean starred;
+    /**
+     * 客户阶段，对应字典 crm_customer_stage（新询盘、报价、样品、谈判、成交、复购，可在字典里调整）
+     */
+    private Integer stage;
 
 }

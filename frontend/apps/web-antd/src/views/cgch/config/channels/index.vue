@@ -37,7 +37,8 @@ import {
 import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
 import type { SocialPlatform } from '#/api/channel/social';
 import { getSocialPlatforms, pollSocial } from '#/api/channel/social';
-import { syncWaHistory } from '#/api/channel/whatsapp';
+import { setWaAssignees, syncWaHistory } from '#/api/channel/whatsapp';
+import { getSimpleUserList } from '#/api/system/user';
 
 import LeadRules from './lead-rules.vue';
 import WaAccounts from './wa-accounts.vue';
@@ -367,6 +368,35 @@ async function syncNow(a: ChannelMailApi.Account) {
   }
 }
 
+// ===== 接待成员：这个号码上的新客户轮流分给谁 =====
+const assignOpen = ref(false);
+const assignAccount = ref<ChannelWaApi.Account>();
+const assignIds = ref<number[]>([]);
+const users = ref<{ id?: number; nickname: string }[]>([]);
+const assignSaving = ref(false);
+async function openAssign(a: ChannelWaApi.Account) {
+  assignAccount.value = a;
+  assignIds.value = (a.assignUserIds || '').split(',').map(Number).filter((n) => n > 0);
+  assignOpen.value = true;
+  if (!users.value.length) users.value = ((await getSimpleUserList().catch(() => [])) as any) || [];
+}
+async function saveAssign() {
+  if (!assignAccount.value?.id) return;
+  assignSaving.value = true;
+  try {
+    await setWaAssignees(assignAccount.value.id, assignIds.value);
+    message.success(assignIds.value.length ? `已设置，新客户将在 ${assignIds.value.length} 位成员之间轮流分配` : '已恢复为号码所属的业务员接待');
+    assignOpen.value = false;
+    await waRef.value?.load();
+  } finally {
+    assignSaving.value = false;
+  }
+}
+function assignText(a?: ChannelWaApi.Account) {
+  const n = (a?.assignUserIds || '').split(',').filter(Boolean).length;
+  return n ? `接待成员(${n})` : '接待成员';
+}
+
 async function toggle(r: AccountRow) {
   if (r.mail) {
     await updateMailAccount({ ...r.mail, enabled: !r.mail.enabled, password: '' });
@@ -482,6 +512,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
                 >同步聊天记录</a>
                 <a v-else-if="r.wa && r.wa.authType !== 'oauth'" @click="waRef?.showGuide(r.wa)">回调配置</a>
                 <a v-if="r.mail || (r.wa && r.wa.authType !== 'oauth' && r.wa.authType !== 'evolution')" @click="edit(c, r)">{{ r.mail?.authType === 'oauth2' ? '重新授权' : '修改' }}</a>
+                <a v-if="r.wa" @click="openAssign(r.wa)">{{ assignText(r.wa) }}</a>
                 <a @click="toggle(r)">{{ (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停' : '停用') : '启用' }}</a>
                 <Popconfirm
                   :title="r.mail ? '解绑后已同步的邮件也会删除，确定吗？' : '解绑后会话与消息记录也会删除，确定吗？'"
@@ -501,6 +532,29 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
     <WebImModal ref="imRef" v-model:open="imOpen" :sites="webSites" @changed="waRef?.load()" />
     <EvoConnectModal v-model:open="evoOpen" :account-id="evoAccountId" @done="waRef?.load()" />
     <SocialConnectModal v-model:open="socialOpen" :platform="socialPlatform" :enabled="socialEnabled.includes(socialPlatform)" />
+
+    <Modal
+      v-model:open="assignOpen"
+      title="接待成员"
+      :width="460"
+      centered
+      :confirm-loading="assignSaving"
+      ok-text="保存"
+      @ok="saveAssign"
+    >
+      <div class="mb-3 text-sm leading-6 text-gray-500">
+        {{ assignAccount?.displayPhone || assignAccount?.name }} 上的<b>新客户</b>会在下面的成员之间轮流分配，分到谁就出现在谁的会话列表里。
+        不选成员时由号码所属的业务员接待。已有的会话不受影响，可以在会话里「转交」。
+      </div>
+      <Select
+        v-model:value="assignIds"
+        mode="multiple"
+        class="w-full"
+        placeholder="选择接待成员"
+        :options="users.map((u) => ({ label: u.nickname, value: u.id }))"
+        option-filter-prop="label"
+      />
+    </Modal>
 
     <Modal v-model:open="mailOpen" :footer="null" :width="476" centered :closable="false">
       <div class="mb-5 flex items-center gap-3">

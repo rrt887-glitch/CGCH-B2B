@@ -28,6 +28,8 @@ public class ChannelWaAccountRespVO {
 
     @Schema(description = "扫码接入的连接状态：open 已连接、connecting 连接中、close 已断开")
     private String connState;
+    @Schema(description = "接待成员（用户编号，逗号分隔）")
+    private String assignUserIds;
     private LocalDateTime createTime;
 
     @Schema(description = "在 Meta 后台填写的回调地址路径，需拼上你的公网域名")

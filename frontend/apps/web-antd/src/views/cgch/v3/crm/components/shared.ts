@@ -19,6 +19,11 @@ export function dictRail(dictType: string, field: string, prefix: string): RailI
 export const sourceRail = (prefix = 'source') => dictRail(DICT_TYPE.CRM_CUSTOMER_SOURCE, 'source', prefix);
 export const levelRail = (prefix = 'level') => dictRail(DICT_TYPE.CRM_CUSTOMER_LEVEL, 'level', prefix);
 
+/** 客户阶段字典（新询盘 → 报价 → 样品 → 谈判 → 成交 → 复购），可在「系统 → 字典」里增改 */
+export const STAGE_DICT = 'crm_customer_stage';
+export const stageOptions = () => getDictOptions(STAGE_DICT, 'number');
+export const stageLabel = (v?: number) => (v === undefined || v === null ? '-' : getDictLabel(STAGE_DICT, v) || '-');
+
 export const sourceLabel = (v?: number) => (v === undefined || v === null ? '-' : getDictLabel(DICT_TYPE.CRM_CUSTOMER_SOURCE, v) || '-');
 export const levelLabel = (v?: number) => (v === undefined || v === null ? '-' : getDictLabel(DICT_TYPE.CRM_CUSTOMER_LEVEL, v) || '-');
 export const industryLabel = (v?: number) => (v === undefined || v === null ? '-' : getDictLabel(DICT_TYPE.CRM_CUSTOMER_INDUSTRY, v) || '-');

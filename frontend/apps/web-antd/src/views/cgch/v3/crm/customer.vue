@@ -15,7 +15,7 @@ import { IconifyIcon } from '@vben/icons';
 import { useUserStore } from '@vben/stores';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Button, message, Popconfirm, Tag, Tooltip } from 'ant-design-vue';
+import { Button, message, Popconfirm, Select, Tag, Tooltip } from 'ant-design-vue';
 
 import { getCustomerGroupList, getTagList } from '#/api/crm/cgch';
 import {
@@ -33,7 +33,7 @@ import CustomerForm from '#/views/crm/customer/modules/form.vue';
 import ImportForm from '#/views/crm/customer/modules/import-form.vue';
 
 import CrmList from './components/crm-list.vue';
-import { channelTags, countryName, fmtTime, industryLabel, levelLabel, levelRail, page, sourceLabel } from './components/shared';
+import { channelTags, countryName, fmtTime, industryLabel, levelLabel, levelRail, page, sourceLabel, stageLabel, stageOptions } from './components/shared';
 
 const props = defineProps<{ pool?: boolean }>();
 const router = useRouter();
@@ -51,6 +51,15 @@ const rail = computed<RailItem[]>(() =>
     ? []
     : [
         { key: 'star', label: '特别关注', icon: 'mdi:star', filter: { starred: true } },
+        {
+          key: 'stage',
+          label: '客户阶段',
+          children: stageOptions().map((o) => ({
+            key: `stage-${o.value}`,
+            label: stageCount.value[o.value] ? `${o.label} (${stageCount.value[o.value]})` : o.label,
+            filter: { stage: o.value },
+          })),
+        },
         { key: 'level', label: '客户级别', children: levelRail() },
         {
           key: 'group',
@@ -72,6 +81,7 @@ const columns = computed<CrmColumn[]>(() => [
   { key: 'name', title: props.pool ? '客户名称' : '客户名称(背调名称)', width: 200, fixed: 'left', required: true },
   ...(props.pool ? [{ key: 'companyName', title: '公司名称', width: 180 }] : []),
   ...(props.pool ? [] : [{ key: 'aiHosted', title: 'AI托管状态', width: 110 }, { key: 'channel', title: '渠道状态', width: 140 }]),
+  ...(props.pool ? [] : [{ key: 'stage', title: '客户阶段', width: 120 }]),
   { key: 'source', title: '客户来源', width: 110 },
   { key: 'dealStatus', title: '成交状态', width: 100 },
   ...(props.pool ? [] : [{ key: 'ownerUserName', title: '负责人', width: 100 }]),
@@ -110,6 +120,25 @@ async function toggleStar(r: any) {
   await requestClient.put(`/crm/customer/update-starred?id=${r.id}&starred=${!r.starred}`);
   r.starred = !r.starred;
   message.success(r.starred ? '已特别关注' : '已取消特别关注');
+}
+
+// ===== 客户阶段 =====
+const stageCount = ref<Record<number, number>>({});
+async function loadStageStats() {
+  if (props.pool) return;
+  try {
+    stageCount.value = await requestClient.get('/crm/customer/stage-stats');
+  } catch {
+    stageCount.value = {};
+  }
+}
+
+async function changeStage(r: any, stage: number) {
+  if (stage === r.stage) return;
+  await requestClient.put(`/crm/customer/update-stage?id=${r.id}&stage=${stage}`);
+  r.stage = stage;
+  message.success(`已改为「${stageLabel(stage)}」，跟进记录里已留痕`);
+  loadStageStats();
 }
 
 async function remove(r: any) {
@@ -208,6 +237,7 @@ async function oneClickWake() {
 
 onMounted(async () => {
   if (props.pool) return;
+  loadStageStats();
   [groups.value, tags.value] = await Promise.all([getCustomerGroupList().catch(() => []), getTagList().catch(() => [])]);
 });
 
@@ -258,6 +288,16 @@ const me = computed(() => userStore.userInfo?.id);
         <template v-else-if="column.key === 'channel'">
           <Tag v-for="t in channelTags(record)" :key="t" class="m-0 mr-1">{{ t }}</Tag>
           <span v-if="!channelTags(record).length">-</span>
+        </template>
+        <template v-else-if="column.key === 'stage'">
+          <Select
+            :value="record.stage"
+            size="small"
+            class="w-full"
+            :options="stageOptions().map((o) => ({ label: o.label, value: o.value }))"
+            placeholder="未设置"
+            @change="(v: any) => changeStage(record, Number(v))"
+          />
         </template>
         <template v-else-if="column.key === 'source'">{{ sourceLabel(record.source) }}</template>
         <template v-else-if="column.key === 'dealStatus'">
