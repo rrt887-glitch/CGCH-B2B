@@ -855,7 +855,8 @@ jobs:
           assert outbound('447900000902') == [], '未到时间不应回复'
           ai_out = wait(lambda: outbound('447900000902'), 'AI 到时接手', timeout=25)
           assert 'Lead time: 25 days' in ai_out[0]['textBody'] or '25 days' in ai_out[0]['textBody'], ai_out
-          assert deferred('447900000902')['status'] == 'ai_handled'
+          # AI 回复发出后才更新等待项状态，稍等一下
+          wait(lambda: deferred('447900000902')['status'] == 'ai_handled', 'AI 接手后等待项结束', timeout=10)
 
           # 3) 等待期间客户又发消息：重新计时，旧的作废
           push('447900000903', 'Hello')
