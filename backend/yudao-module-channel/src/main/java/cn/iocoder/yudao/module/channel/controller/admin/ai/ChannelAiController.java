@@ -188,6 +188,37 @@ public class ChannelAiController {
         return success(true);
     }
 
+    // ===== 个人物料：业务员自己维护，AI 只在他负责的会话里引用 =====
+
+    @GetMapping("/material/my/list")
+    @Operation(summary = "我的个人物料")
+    @PreAuthorize("@ss.hasAnyPermissions('channel:wa-message:send', 'channel:mail-message:send', 'channel:ai:knowledge')")
+    public CommonResult<List<ChannelAiKnowledgeDO>> listMyMaterials() {
+        return success(aiService.listPersonal(getLoginUserId()));
+    }
+
+    @PostMapping("/material/my/save")
+    @Operation(summary = "新增或修改个人物料")
+    @PreAuthorize("@ss.hasAnyPermissions('channel:wa-message:send', 'channel:mail-message:send', 'channel:ai:knowledge')")
+    public CommonResult<Long> saveMyMaterial(@RequestBody ChannelAiKnowledgeDO req) {
+        return success(aiService.savePersonal(getLoginUserId(), req));
+    }
+
+    @DeleteMapping("/material/my/delete")
+    @Operation(summary = "删除个人物料")
+    @PreAuthorize("@ss.hasAnyPermissions('channel:wa-message:send', 'channel:mail-message:send', 'channel:ai:knowledge')")
+    public CommonResult<Boolean> deleteMyMaterial(@RequestParam("id") Long id) {
+        aiService.deletePersonal(getLoginUserId(), id);
+        return success(true);
+    }
+
+    @GetMapping("/material/my/search")
+    @Operation(summary = "检索测试：公司物料 + 我的个人物料里哪些会被这句话命中")
+    @PreAuthorize("@ss.hasAnyPermissions('channel:wa-message:send', 'channel:mail-message:send', 'channel:ai:knowledge')")
+    public CommonResult<List<Map<String, Object>>> searchMyMaterials(@RequestParam("q") String q) {
+        return success(aiService.searchKnowledge(getLoginUserId(), q));
+    }
+
     // ===== 违禁词 =====
 
     @GetMapping("/forbidden/list")

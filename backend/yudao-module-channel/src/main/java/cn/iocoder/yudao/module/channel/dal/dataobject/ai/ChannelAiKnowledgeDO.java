@@ -26,6 +26,15 @@ public class ChannelAiKnowledgeDO extends TenantBaseDO {
     /** 从资料文件拆出的段落，fileId 指向资料文件 */
     public static final String TYPE_FILE = "file";
 
+    /** 公司物料：管理员维护，所有人的会话都会用 */
+    public static final String SCOPE_ENTERPRISE = "enterprise";
+    /** 个人物料：业务员自己维护，只在他负责的会话里使用 */
+    public static final String SCOPE_PERSONAL = "personal";
+    /** 物料分类：产品、资质认证、价格政策、物流交期、售后服务、其他 */
+    public static final java.util.List<String> CATEGORIES = java.util.List.of("product", "certificate", "price", "logistics", "aftersale", "other");
+    public static final java.util.Map<String, String> CATEGORY_LABELS = java.util.Map.of("product", "产品", "certificate", "资质认证",
+            "price", "价格政策", "logistics", "物流交期", "aftersale", "售后服务", "other", "其他");
+
     /**
      * 编号
      */
@@ -65,5 +74,26 @@ public class ChannelAiKnowledgeDO extends TenantBaseDO {
      * 来源资料文件编号（type 为 file 时）
      */
     private Long fileId;
+    /**
+     * 范围：enterprise 公司物料（默认）、personal 个人物料
+     */
+    private String scope;
+    /**
+     * 个人物料的所属用户
+     */
+    private Long ownerUserId;
+    /**
+     * 分类：product、certificate、price、logistics、aftersale、other，可为空
+     */
+    private String category;
+
+    public boolean isPersonal() {
+        return SCOPE_PERSONAL.equals(scope);
+    }
+
+    /** 这条资料能否用于 userId 负责的会话：公司物料都能用，个人物料只给本人 */
+    public boolean usableBy(Long userId) {
+        return !isPersonal() || (ownerUserId != null && ownerUserId.equals(userId));
+    }
 
 }

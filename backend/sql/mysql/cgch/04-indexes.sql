@@ -57,6 +57,7 @@ CALL cgch_add_index('channel_assistant_chat', 'idx_user_update', 'user_id', 'upd
 CALL cgch_add_index('channel_cloud_file', 'idx_parent', 'parent_id', NULL, NULL); -- 云盘目录
 CALL cgch_add_index('channel_cloud_file', 'idx_owner', 'owner_user_id', NULL, NULL); -- 个人云盘
 CALL cgch_add_index('channel_ai_knowledge', 'idx_file', 'file_id', NULL, NULL); -- 知识文件拆出的条目
+CALL cgch_add_index('channel_ai_knowledge', 'idx_owner', 'owner_user_id', NULL, NULL); -- 我的个人物料
 CALL cgch_add_index('channel_research', 'idx_customer', 'customer_id', NULL, NULL); -- 客户的背调
 CALL cgch_add_index('channel_research', 'idx_clue', 'clue_id', NULL, NULL); -- 线索的背调
 CALL cgch_add_index('channel_ai_report', 'idx_period', 'period_type', 'period_start', NULL); -- 日报 / 周报

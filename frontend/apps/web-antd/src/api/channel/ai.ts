@@ -35,6 +35,10 @@ export namespace ChannelAiApi {
     sort?: number;
     /** 生成向量所用模型；与当前向量模型一致才算已建语义索引 */
     embeddingModel?: string;
+    /** enterprise 公司物料（默认）、personal 个人物料 */
+    scope?: 'enterprise' | 'personal';
+    /** 分类，见 MATERIAL_CATEGORIES */
+    category?: string;
   }
 
   export interface SearchHit {
@@ -46,6 +50,8 @@ export namespace ChannelAiApi {
     semanticScore: number;
     score: number;
     semantic: boolean;
+    scope?: 'enterprise' | 'personal';
+    category?: string;
   }
 
   export interface ForbiddenWord {
@@ -110,6 +116,24 @@ export const getDraftPage = (params: PageParam & { channel?: string; status?: st
   requestClient.get<PageResult<ChannelAiApi.Draft>>('/channel/ai/draft/page', { params });
 export const closeDraft = (id: number, used: boolean) =>
   requestClient.post(`/channel/ai/draft/close?id=${id}&used=${used}`);
+/** 物料分类：AI 回复时会带上分类，帮助它判断资料用途 */
+export const MATERIAL_CATEGORIES = [
+  { value: 'product', label: '产品' },
+  { value: 'certificate', label: '资质认证' },
+  { value: 'price', label: '价格政策' },
+  { value: 'logistics', label: '物流交期' },
+  { value: 'aftersale', label: '售后服务' },
+  { value: 'other', label: '其他' },
+];
+export const categoryLabel = (v?: string) => MATERIAL_CATEGORIES.find((c) => c.value === v)?.label;
+
+/** 个人物料：只在自己负责的会话里被 AI 引用 */
+export const getMyMaterials = () => requestClient.get<ChannelAiApi.Knowledge[]>('/channel/ai/material/my/list');
+export const saveMyMaterial = (data: ChannelAiApi.Knowledge) => requestClient.post<number>('/channel/ai/material/my/save', data);
+export const deleteMyMaterial = (id: number) => requestClient.delete(`/channel/ai/material/my/delete?id=${id}`);
+export const searchMyMaterials = (q: string) =>
+  requestClient.get<ChannelAiApi.SearchHit[]>('/channel/ai/material/my/search', { params: { q } });
+
 export const reindexKnowledge = () => requestClient.post<number>('/channel/ai/knowledge/reindex');
 export const searchKnowledge = (q: string) =>
   requestClient.get<ChannelAiApi.SearchHit[]>('/channel/ai/knowledge/search', { params: { q } });
