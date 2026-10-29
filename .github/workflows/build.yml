@@ -2234,6 +2234,12 @@ jobs:
           grep -qi '^cache-control: public, max-age=31536000, immutable' /tmp/h.txt || { echo "::error::打包文件没有长期缓存头"; exit 1; }
           grep -qi '^content-encoding: br' /tmp/h.txt || { echo "::error::打包文件没有使用 brotli 压缩"; exit 1; }
           curl -fsS -o /dev/null -D /tmp/h2.txt http://127.0.0.1/; grep -qi '^cache-control: no-cache' /tmp/h2.txt || { echo "::error::index.html 不应长期缓存"; cat /tmp/h2.txt; exit 1; }
+          for h in 'x-content-type-options: nosniff' 'x-frame-options: sameorigin' 'referrer-policy: strict-origin-when-cross-origin' 'x-request-id: '; do
+            grep -qi "^$h" /tmp/h2.txt || { echo "::error::缺少安全响应头 $h"; cat /tmp/h2.txt; exit 1; }
+          done
+          ! grep -qi '^server:' /tmp/h2.txt || { echo "::error::不应返回 Server 头"; exit 1; }
+          curl -fsS -o /dev/null -D /tmp/h3.txt -H 'tenant-id: 1' http://127.0.0.1/admin-api/system/tenant/get-id-by-name?name=x || true
+          grep -qi '^x-content-type-options: nosniff' /tmp/h3.txt || { echo "::error::接口响应缺少安全响应头"; cat /tmp/h3.txt; exit 1; }
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT config FROM infra_file_config WHERE id=4\""' | grep -q '"domain": *"http://'
           echo "--- 模拟老数据库：删掉 v3 新增字段并清除升级记录，验证升级脚本 ---"
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD ruoyi-vue-pro -e \"ALTER TABLE channel_wa_conversation DROP COLUMN intent; ALTER TABLE channel_mail_message DROP COLUMN intent; DELETE FROM cgch_migration;\""'

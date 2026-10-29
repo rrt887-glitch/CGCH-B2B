@@ -2,6 +2,27 @@
 {$CGCH_SITE::80} {
 	encode zstd gzip
 
+	# 安全响应头：禁止浏览器猜测文件类型、禁止被其他网站用框架嵌入（防点击劫持）、跨站跳转只带域名、
+	# 只允许通过 HTTPS 访问（HTTP 访问时浏览器会忽略此项）、关闭用不到的摄像头 / 定位等权限，并去掉服务器版本信息。
+	# 官网在线客服是外部网站引用的脚本（不是框架嵌入），不受影响
+	header {
+		# 等后端响应后再设置，避免和后端自带的同名响应头重复
+		defer
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Content-Security-Policy "frame-ancestors 'self'"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000"
+		Permissions-Policy "camera=(), geolocation=(), payment=(), usb=(), microphone=(self)"
+		X-XSS-Protection "0"
+		-Server
+		-X-Powered-By
+	}
+
+	# 每个请求一个编号，同时传给后端，出问题时按编号对日志
+	header X-Request-ID {http.request.uuid}
+	request_header X-Request-ID {http.request.uuid}
+
 	# 对外公开页面：产品介绍、隐私政策、服务条款、数据删除说明（平台审核要求公开可访问）
 	@public path_regexp pub ^/(about|privacy|terms|data-deletion)/?$
 	rewrite @public /admin-api/public/site/{re.pub.1}
