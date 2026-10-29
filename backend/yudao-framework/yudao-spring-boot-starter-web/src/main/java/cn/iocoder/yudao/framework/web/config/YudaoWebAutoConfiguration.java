@@ -108,7 +108,9 @@ public class YudaoWebAutoConfiguration {
     public FilterRegistrationBean<CorsFilter> corsFilterBean() {
         // 创建 CorsConfiguration 对象
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowCredentials(true);
+        // 登录令牌放在 Authorization 请求头里，不用 Cookie，跨域请求不需要带凭据；
+        // 关掉 allowCredentials，避免任意网站借用户浏览器里的 Cookie 调接口（官网客服窗口等跨域调用不受影响）
+        config.setAllowCredentials(false);
         config.addAllowedOriginPattern("*"); // 设置访问源地址
         config.addAllowedHeader("*"); // 设置访问源请求头
         config.addAllowedMethod("*"); // 设置访问源请求方法
@@ -116,6 +118,14 @@ public class YudaoWebAutoConfiguration {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config); // 对接口配置跨域设置
         return createFilterBean(new CorsFilter(source), WebFilterOrderEnum.CORS_FILTER);
+    }
+
+    /**
+     * 请求编号：写进日志并在响应头返回，出错时页面能显示，方便排查
+     */
+    @Bean
+    public FilterRegistrationBean<cn.iocoder.yudao.framework.web.core.filter.RequestIdFilter> requestIdFilter() {
+        return createFilterBean(new cn.iocoder.yudao.framework.web.core.filter.RequestIdFilter(), WebFilterOrderEnum.TRACE_FILTER + 1);
     }
 
     /**

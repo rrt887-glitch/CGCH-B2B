@@ -342,8 +342,10 @@ public class GlobalExceptionHandler {
         log.error("[defaultExceptionHandler]", ex);
         // 插入异常日志
         createExceptionLog(req, ex);
-        // 返回 ERROR CommonResult
-        return CommonResult.error(INTERNAL_SERVER_ERROR.getCode(), INTERNAL_SERVER_ERROR.getMsg());
+        // 返回 ERROR CommonResult；带上请求编号，用户报错时提供它就能在日志里找到这次请求
+        String rid = cn.iocoder.yudao.framework.web.core.filter.RequestIdFilter.current();
+        return CommonResult.error(INTERNAL_SERVER_ERROR.getCode(),
+                rid == null ? INTERNAL_SERVER_ERROR.getMsg() : INTERNAL_SERVER_ERROR.getMsg() + "（请求编号 " + rid + "）");
     }
 
     private void createExceptionLog(HttpServletRequest req, Throwable e) {

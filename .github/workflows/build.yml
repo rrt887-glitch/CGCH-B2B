@@ -227,6 +227,14 @@ jobs:
                   print(f'::error title={method} {path}::{d}')
                   raise SystemExit(f'{method} {path} 失败: {d}')
               return d if not ok else d['data']
+          # 请求编号回传；跨域不带凭据
+          rq = urllib.request.Request(BASE + '/system/auth/get-permission-info', headers=dict(H, **{'X-Request-ID': 'ci-rid-123', 'Origin': 'https://evil.example'}))
+          rs = urllib.request.urlopen(rq)
+          assert rs.headers.get('X-Request-ID') == 'ci-rid-123', dict(rs.headers)
+          assert rs.headers.get('Access-Control-Allow-Credentials') is None, '跨域不应允许带凭据'
+          rs2 = urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/get-permission-info', headers=H))
+          assert len(rs2.headers.get('X-Request-ID') or '') >= 16, '没有请求编号时自动生成'
+          print('请求编号回传、跨域不带凭据')
           import struct, zlib
           def tiny_png(tag):  # 1x1 像素的真实 PNG，末尾附带标记便于校验
               chunk = lambda t, d: struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
