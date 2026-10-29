@@ -4,6 +4,8 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import cn.iocoder.yudao.module.channel.dal.dataobject.template.ChannelMailTemplateDO;
 import cn.iocoder.yudao.module.channel.dal.mysql.template.ChannelMailTemplateMapper;
+import cn.iocoder.yudao.framework.common.exception.enums.GlobalErrorCodeConstants;
+import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +18,7 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.AI_LLM_FAIL;
 
 /**
- * 邮件模板：全员可见的模板所有人可用、可编辑；「仅自己」的模板只有创建人能看到。
+ * 邮件模板：全员可见的模板所有人可用，只有创建人和有「公共邮件模板维护」权限的人能修改；「仅自己」的模板只有创建人能看到和修改。
  */
 @Service
 public class ChannelMailTemplateService {
@@ -26,6 +28,19 @@ public class ChannelMailTemplateService {
 
     @Resource
     private ChannelMailTemplateMapper channelMailTemplateMapper;
+    @Resource
+    private SecurityFrameworkService securityFrameworkService;
+
+    public static final String PERMISSION_MANAGE = "channel:mail-template:manage";
+
+    /** 修改前校验：自己的模板可以改；别人建的全员模板需要维护权限 */
+    private ChannelMailTemplateDO getEditable(Long userId, Long id) {
+        ChannelMailTemplateDO t = get(userId, id);
+        if (!Objects.equals(t.getOwnerUserId(), userId) && !securityFrameworkService.hasPermission(PERMISSION_MANAGE)) {
+            throw exception(GlobalErrorCodeConstants.FORBIDDEN);
+        }
+        return t;
+    }
 
     public List<ChannelMailTemplateDO> list(Long userId, String category, String keyword, Boolean enabled) {
         return channelMailTemplateMapper.selectVisible(userId, StrUtil.emptyToNull(category), StrUtil.trimToNull(keyword), enabled);
@@ -60,8 +75,9 @@ public class ChannelMailTemplateService {
             t.setOwnerUserId(userId);
             channelMailTemplateMapper.insert(t);
         } else {
-            get(userId, req.getId());
+            ChannelMailTemplateDO old = getEditable(userId, req.getId());
             t.setId(req.getId());
+            t.setOwnerUserId(old.getOwnerUserId());
             channelMailTemplateMapper.updateById(t);
         }
         if (Boolean.TRUE.equals(t.getDefaulted())) {
@@ -70,28 +86,35 @@ public class ChannelMailTemplateService {
         return t.getId();
     }
 
-    /** 每个分类只有一个默认模板 */
+    /** 每个分类只有一个默认模板：全员模板之间一个，每人的「仅自己」模板之间各一个（不影响别人的设置） */
     private void clearOtherDefaults(ChannelMailTemplateDO t) {
-        channelMailTemplateMapper.update(null, new LambdaUpdateWrapper<ChannelMailTemplateDO>()
+        LambdaUpdateWrapper<ChannelMailTemplateDO> w = new LambdaUpdateWrapper<ChannelMailTemplateDO>()
                 .set(ChannelMailTemplateDO::getDefaulted, false)
                 .eq(ChannelMailTemplateDO::getCategory, t.getCategory())
-                .ne(ChannelMailTemplateDO::getId, t.getId()));
+                .ne(ChannelMailTemplateDO::getId, t.getId());
+        if (ChannelMailTemplateDO.VISIBILITY_SELF.equals(t.getVisibility())) {
+            w.eq(ChannelMailTemplateDO::getVisibility, ChannelMailTemplateDO.VISIBILITY_SELF)
+                    .eq(ChannelMailTemplateDO::getOwnerUserId, t.getOwnerUserId());
+        } else {
+            w.ne(ChannelMailTemplateDO::getVisibility, ChannelMailTemplateDO.VISIBILITY_SELF);
+        }
+        channelMailTemplateMapper.update(null, w);
     }
 
     public void setEnabled(Long userId, Long id, boolean enabled) {
-        get(userId, id);
+        getEditable(userId, id);
         channelMailTemplateMapper.updateById(new ChannelMailTemplateDO().setId(id).setEnabled(enabled));
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void setDefault(Long userId, Long id) {
-        ChannelMailTemplateDO t = get(userId, id);
+        ChannelMailTemplateDO t = getEditable(userId, id);
         channelMailTemplateMapper.updateById(new ChannelMailTemplateDO().setId(id).setDefaulted(true));
         clearOtherDefaults(t);
     }
 
     public void delete(Long userId, Long id) {
-        get(userId, id);
+        getEditable(userId, id);
         channelMailTemplateMapper.deleteById(id);
     }
 

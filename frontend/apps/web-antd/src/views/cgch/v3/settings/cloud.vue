@@ -10,11 +10,16 @@ import { computed, onMounted, reactive, ref } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
+import { useAccess } from '@vben/access';
+
 import { Button, Empty, Input, message, Modal, Pagination, Popconfirm, Switch, Table, Textarea, Tooltip, Upload } from 'ant-design-vue';
 
 import { createCloudFolder, deleteCloudFile, getCloudFiles, getCloudPath, updateCloudFile, uploadCloudFile } from '#/api/channel/cloud';
 
 const scope = ref<CloudApi.Scope>('enterprise');
+const { hasAccessByCodes } = useAccess();
+/** 企业云盘的文件 AI 会发给客户，只有有「企业云盘维护」权限的人能增删改；个人云盘本人随意 */
+const canEdit = computed(() => scope.value === 'personal' || hasAccessByCodes(['channel:cloud:manage']));
 const parentId = ref(0);
 const path = ref<CloudApi.File[]>([]);
 const keyword = ref('');
@@ -146,10 +151,13 @@ onMounted(load);
     </div>
 
     <div class="mb-3 flex flex-wrap items-center gap-3">
+      <template v-if="canEdit">
       <Button @click="folderOpen = true">新建文件夹 <IconifyIcon icon="lucide:folder" class="ml-1 inline size-4" /></Button>
       <Upload :show-upload-list="false" multiple :before-upload="beforeUpload">
         <Button type="primary" :loading="uploading > 0">上传文件 <IconifyIcon icon="lucide:plus" class="ml-1 inline size-4" /></Button>
       </Upload>
+      </template>
+      <span v-else class="text-xs text-gray-500">企业云盘由管理员维护，你可以查看和下载</span>
       <div class="flex-1"></div>
       <Input v-model:value="keyword" allow-clear class="w-56" placeholder="搜索文件名称" @press-enter="load" @change="(e: any) => !e.target.value && load()">
         <template #suffix><IconifyIcon icon="lucide:search" class="size-3.5 cursor-pointer text-gray-400" @click="load" /></template>
@@ -186,15 +194,17 @@ onMounted(load);
         <span v-else-if="column.key === 'description'" class="text-gray-500">{{ record.description || '-' }}</span>
         <template v-else-if="column.key === 'size'">{{ record.folder ? '-' : size(record.size) }}</template>
         <template v-else-if="column.key === 'ai'">
-          <Switch v-if="!record.folder" size="small" :checked="!!record.aiSendable" @change="(v: any) => toggleAi(record as any, !!v)" />
+          <Switch v-if="!record.folder" size="small" :disabled="!canEdit" :checked="!!record.aiSendable" @change="(v: any) => toggleAi(record as any, !!v)" />
         </template>
         <template v-else-if="column.key === 'updateTime'">{{ fmtDateTime(record.updateTime) }}</template>
         <div v-else-if="column.key === 'action'" class="flex gap-3">
           <a v-if="!record.folder" :href="record.url" target="_blank">下载</a>
+          <template v-if="canEdit">
           <a @click="edit(record as any)">编辑</a>
           <Popconfirm :title="record.folder ? '删除文件夹及里面的所有文件？' : '删除这个文件？'" @confirm="remove(record as any)">
             <a class="text-red-500">删除</a>
           </Popconfirm>
+          </template>
         </div>
       </template>
       <template #emptyText>

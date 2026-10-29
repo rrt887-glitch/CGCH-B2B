@@ -5,6 +5,7 @@ import cn.iocoder.yudao.module.channel.service.translate.ChannelTranslateService
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +28,7 @@ public class ChannelTranslateController {
 
     @PostMapping
     @Operation(summary = "批量翻译：target 目标语言（默认中文）；sample 不为空时译成与它相同的语言")
+    @PreAuthorize("@ss.hasAnyPermissions('channel:wa-message:query', 'channel:mail-message:query', 'channel:ai:config')")
     public CommonResult<List<String>> translate(@RequestBody TranslateReq req) {
         return success(channelTranslateService.translate(getLoginUserId(), req.texts(), req.target(), req.sample()));
     }

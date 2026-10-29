@@ -25,6 +25,7 @@ public class ChannelRoutingRuleController {
 
     @GetMapping("/list")
     @Operation(summary = "全部规则（按优先级）")
+    @PreAuthorize("@ss.hasPermission('channel:ai:config')")
     public CommonResult<List<ChannelRoutingRuleDO>> list() {
         return success(channelRoutingService.list());
     }
