@@ -32,13 +32,13 @@ public class ChannelRealtimeService {
     @Resource
     private ObjectProvider<WebSocketMessageSender> senderProvider;
     @Resource
-    private ChannelWaConversationMapper conversationMapper;
+    private ChannelWaConversationMapper channelWaConversationMapper;
     @Resource
-    private ChannelWaAccountMapper waAccountMapper;
+    private ChannelWaAccountMapper channelWaAccountMapper;
     @Resource
-    private ChannelMailMessageMapper mailMessageMapper;
+    private ChannelMailMessageMapper channelMailMessageMapper;
     @Resource
-    private ChannelMailAccountMapper mailAccountMapper;
+    private ChannelMailAccountMapper channelMailAccountMapper;
 
     @EventListener
     public void onInbound(ChannelInboundEvent e) {
@@ -52,11 +52,11 @@ public class ChannelRealtimeService {
     /** 即时消息会话有变化：推给处理人（转交后是负责人，否则是号码所属业务员） */
     public void conversationChanged(Long conversationId, Long messageId, String kind) {
         try {
-            ChannelWaConversationDO c = conversationId == null ? null : conversationMapper.selectById(conversationId);
+            ChannelWaConversationDO c = conversationId == null ? null : channelWaConversationMapper.selectById(conversationId);
             if (c == null) {
                 return;
             }
-            Long userId = c.handlerUserId(waAccountMapper.selectById(c.getAccountId()));
+            Long userId = c.handlerUserId(channelWaAccountMapper.selectById(c.getAccountId()));
             push(userId, "whatsapp", conversationId, messageId, kind);
         } catch (Exception ex) {
             log.warn("[conversationChanged][会话 {} 推送失败] {}", conversationId, ex.getMessage());
@@ -66,8 +66,8 @@ public class ChannelRealtimeService {
     /** 邮件有变化：推给邮箱所属业务员 */
     public void mailChanged(Long mailMessageId, String kind) {
         try {
-            ChannelMailMessageDO m = mailMessageId == null ? null : mailMessageMapper.selectById(mailMessageId);
-            ChannelMailAccountDO a = m == null ? null : mailAccountMapper.selectById(m.getAccountId());
+            ChannelMailMessageDO m = mailMessageId == null ? null : channelMailMessageMapper.selectById(mailMessageId);
+            ChannelMailAccountDO a = m == null ? null : channelMailAccountMapper.selectById(m.getAccountId());
             if (a != null) {
                 push(a.getUserId(), "mail", mailMessageId, mailMessageId, kind);
             }

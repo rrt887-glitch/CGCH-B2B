@@ -235,7 +235,7 @@ async function saveRemark() {
 }
 const transferOpen = ref(false);
 const transferTo = ref<number>();
-const users = ref<{ id: number; nickname: string }[]>([]);
+const users = ref<{ id?: number; nickname: string }[]>([]);
 async function openTransfer() {
   transferTo.value = undefined;
   transferOpen.value = true;
