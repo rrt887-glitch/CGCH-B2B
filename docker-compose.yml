@@ -28,6 +28,7 @@ services:
       - ./backend/sql/mysql/cgch/01-menu.sql:/docker-entrypoint-initdb.d/07-cgch-menu.sql:ro
       - ./backend/sql/mysql/cgch/02-crm-seed.sql:/docker-entrypoint-initdb.d/08-crm-seed.sql:ro
       - ./backend/sql/mysql/cgch/03-channel-seed.sql:/docker-entrypoint-initdb.d/09-channel-seed.sql:ro
+      - ./backend/sql/mysql/cgch/04-indexes.sql:/docker-entrypoint-initdb.d/10-indexes.sql:ro
 
   redis:
     image: redis:7
