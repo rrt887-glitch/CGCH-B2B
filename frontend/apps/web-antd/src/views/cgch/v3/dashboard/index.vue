@@ -13,6 +13,7 @@ import { Empty, Modal, RangePicker, Spin, Tooltip } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import { getDashboardV3 } from '#/api/channel/dashboard';
+import { stageOptions } from '#/views/cgch/v3/crm/components/shared';
 
 defineOptions({ name: 'CgchV3Dashboard' });
 
@@ -67,6 +68,25 @@ const trendOpen = ref(false);
 
 // ===== 迷你趋势线（装饰，与原网站一致） =====
 const SPARK = 'M0 26 C 10 26, 14 4, 24 4 S 36 24, 46 24 L 120 24';
+
+// ===== 客户阶段漏斗：到达某阶段 = 当前阶段在它及之后的客户数 =====
+const funnel = computed(() => {
+  const counts = new Map((data.value?.stages ?? []).map((s) => [s.stage, s.count]));
+  const opts = stageOptions();
+  const rows = opts.map((o) => ({
+    label: String(o.label),
+    value: Number(o.value),
+    current: counts.get(Number(o.value)) ?? 0,
+    reached: [...counts.entries()].filter(([k]) => k >= Number(o.value)).reduce((a, [, n]) => a + n, 0),
+  }));
+  const top = rows[0]?.reached || 0;
+  return rows.map((r, i) => ({
+    ...r,
+    width: top ? Math.max(4, (r.reached / top) * 100) : 4,
+    conv: i > 0 && rows[i - 1]!.reached ? r.reached / rows[i - 1]!.reached : null,
+  }));
+});
+const funnelTotal = computed(() => (data.value?.stages ?? []).reduce((a, s) => a + s.count, 0));
 
 // ===== 需要支持 =====
 const supportTab = ref<'im' | 'mail'>('im');
@@ -231,6 +251,21 @@ onMounted(load);
           </div>
         </section>
       </div>
+
+      <!-- 客户阶段漏斗 -->
+      <section class="v3-card mt-3">
+        <div class="v3-card__title">客户阶段 <span>当前 {{ funnelTotal }} 个客户走到了哪一步（不含公海，不受日期影响）</span></div>
+        <div v-if="!funnelTotal" class="py-4 text-center text-sm text-gray-400">还没有客户</div>
+        <div v-else class="flex flex-col gap-2">
+          <div v-for="r in funnel" :key="r.value" class="flex items-center gap-3 text-sm">
+            <span class="w-14 shrink-0 text-gray-600">{{ r.label }}</span>
+            <div class="h-6 flex-1 rounded bg-gray-50">
+              <div class="flex h-6 items-center rounded bg-[#155dfc]/80 px-2 text-xs text-white" :style="{ width: `${r.width}%` }">{{ r.reached }}</div>
+            </div>
+            <span class="w-28 shrink-0 text-xs text-gray-500">当前 {{ r.current }}<template v-if="r.conv !== null"> · 转化 {{ pct(r.conv) }}</template></span>
+          </div>
+        </div>
+      </section>
 
       <!-- 需要支持 -->
       <section class="v3-support">

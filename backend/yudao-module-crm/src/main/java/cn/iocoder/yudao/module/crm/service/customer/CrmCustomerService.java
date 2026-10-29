@@ -49,6 +49,9 @@ public interface CrmCustomerService {
      */
     void updateCustomerStarred(Long id, Boolean starred);
 
+    /** 修改客户的标签和分组；groupId 为空表示不分组 */
+    void updateCustomerTags(Long id, java.util.List<Long> tagIds, Long groupId);
+
     /** 修改客户阶段，并记一条跟进记录「客户阶段：A → B」 */
     void updateCustomerStage(Long id, Integer stage);
 

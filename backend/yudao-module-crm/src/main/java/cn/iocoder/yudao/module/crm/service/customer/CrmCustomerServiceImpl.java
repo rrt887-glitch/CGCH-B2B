@@ -168,6 +168,17 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
                 .setBusinessIds(new java.util.ArrayList<>()).setContactIds(new java.util.ArrayList<>()));
     }
 
+    @Override
+    @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
+    public void updateCustomerTags(Long id, java.util.List<Long> tagIds, Long groupId) {
+        validateCustomerExists(id);
+        java.util.List<Long> tags = tagIds == null ? new java.util.ArrayList<>()
+                : new java.util.ArrayList<>(new java.util.LinkedHashSet<>(tagIds.stream().filter(java.util.Objects::nonNull).toList()));
+        customerMapper.updateById(new CrmCustomerDO().setId(id).setTagIds(tags));
+        customerMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CrmCustomerDO>()
+                .set(CrmCustomerDO::getGroupId, groupId).eq(CrmCustomerDO::getId, id));
+    }
+
     private static String stageLabel(Integer stage) {
         return cn.iocoder.yudao.framework.dict.core.DictFrameworkUtils.parseDictDataLabel("crm_customer_stage", stage);
     }
