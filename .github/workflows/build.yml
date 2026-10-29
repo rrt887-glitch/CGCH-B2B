@@ -75,6 +75,13 @@ jobs:
           done
           mysql -h 127.0.0.1 -uroot -p123456 ruoyi-vue-pro -e \
             "SELECT id, name, sort FROM system_menu WHERE parent_id = 0 AND visible = b'1' ORDER BY sort;"
+          # 索引脚本里的每个索引都要建好；再执行一次验证可重复执行
+          mysql -h 127.0.0.1 -uroot -p123456 ruoyi-vue-pro < backend/sql/mysql/cgch/04-indexes.sql
+          grep -oE "^CALL cgch_add_index\('[a-z_]+', '[a-z_]+'" backend/sql/mysql/cgch/04-indexes.sql | sed -E "s/.*\('([a-z_]+)', '([a-z_]+)'/\1 \2/" | sort > idx-want.txt
+          mysql -h 127.0.0.1 -uroot -p123456 -N ruoyi-vue-pro -e "SELECT DISTINCT CONCAT(TABLE_NAME, ' ', INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME LIKE 'idx%';" | sort > idx-have.txt
+          missing=$(comm -23 idx-want.txt idx-have.txt | tr '\n' ' ')
+          [ -z "$missing" ] || { echo "::error title=索引没有建好::缺少：$missing"; exit 1; }
+          echo "索引 $(wc -l < idx-want.txt) 个全部建好"
 
       - name: 生产配置安全检查
         run: |
@@ -2250,7 +2257,11 @@ jobs:
           # 升级脚本补的索引：去重查询要走索引
           dbq() { sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro"' 2>/dev/null; }
           idx=$(echo "SELECT COUNT(DISTINCT TABLE_NAME, INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND (TABLE_NAME LIKE 'channel\\_%' OR TABLE_NAME LIKE 'crm\\_%') AND INDEX_NAME LIKE 'idx%';" | dbq | tail -1)
-          echo "索引数：$idx"; [ "${idx:-0}" -ge 60 ] || { echo "::error::数据库索引没有建好（$idx 个）"; exit 1; }
+          echo "索引数：$idx"
+          grep -oE "^CALL cgch_add_index\('[a-z_]+', '[a-z_]+'" backend/sql/mysql/cgch/04-indexes.sql | sed -E "s/.*\('([a-z_]+)', '([a-z_]+)'/\1 \2/" | sort > /tmp/idx-want.txt
+          echo "SELECT DISTINCT CONCAT(TABLE_NAME, ' ', INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME LIKE 'idx%';" | dbq | sort > /tmp/idx-have.txt
+          missing=$(comm -23 /tmp/idx-want.txt /tmp/idx-have.txt | tr '\n' ' ')
+          [ -z "$missing" ] || { echo "::error::数据库索引没有建好，缺少：$missing"; grep -n 'cgch_add_index\|016' /tmp/install2.log | head -20; exit 1; }
           echo "EXPLAIN SELECT id FROM channel_wa_message WHERE account_id = 1 AND wa_message_id = 'x';" | dbq | tee /tmp/explain.txt
           grep -q 'idx_account_wamid' /tmp/explain.txt || { echo "::error::消息查重没有使用索引"; exit 1; }
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD --default-character-set=utf8mb4 -N ruoyi-vue-pro -e \"SELECT name FROM system_tenant WHERE id = 1\""' | grep -q '草根出海'
