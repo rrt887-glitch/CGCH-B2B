@@ -52,6 +52,11 @@ public interface ChannelDashboardV3Mapper {
     List<Map<String, Object>> businesses(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
                                          @Param("userIds") Collection<Long> userIds);
 
+    /** 客户阶段分布（当前快照，不含公海客户）：s 为阶段（字典 crm_customer_stage），n 为客户数 */
+    @Select("<script>SELECT IFNULL(stage, 0) AS s, COUNT(*) AS n FROM crm_customer WHERE deleted = 0 AND owner_user_id IS NOT NULL"
+            + OWNERS + " GROUP BY IFNULL(stage, 0)</script>")
+    List<Map<String, Object>> customerStages(@Param("userIds") Collection<Long> userIds);
+
     /** AI 完成的任务：深度背调、客户唤醒、助手执行（按完成记录计） */
     @Select("SELECT (SELECT COUNT(*) FROM channel_research WHERE deleted = 0 AND status = 'done' "
             + "AND create_time >= #{start} AND create_time < #{end}) "

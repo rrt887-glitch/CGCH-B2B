@@ -94,6 +94,17 @@ public class CrmCustomerController {
         return success(true);
     }
 
+    public record TagsReq(Long id, List<Long> tagIds, Long groupId) {
+    }
+
+    @PutMapping("/update-tags")
+    @Operation(summary = "修改客户的标签和分组（会话页右侧直接改）")
+    @PreAuthorize("@ss.hasPermission('crm:customer:update')")
+    public CommonResult<Boolean> updateCustomerTags(@RequestBody TagsReq req) {
+        customerService.updateCustomerTags(req.id(), req.tagIds(), req.groupId());
+        return success(true);
+    }
+
     @GetMapping("/stage-stats")
     @Operation(summary = "各阶段的客户数（我能看到的客户）")
     @PreAuthorize("@ss.hasPermission('crm:customer:query')")

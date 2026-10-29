@@ -1527,6 +1527,18 @@ jobs:
           call('PUT', f'/crm/customer/update-deal-status?id={cid}&dealStatus=true')
           assert call('GET', f'/crm/customer/get?id={cid}')['stage'] == 5, '标记成交后阶段为成交'
           print('客户阶段：默认新询盘、修改留痕、按阶段筛选与统计、成交联动')
+          st = {x['stage']: x['count'] for x in call('GET', '/channel/dashboard/v3')['stages']}
+          assert st.get(5, 0) >= 1, st
+          tg = call('POST', '/crm/tag/create', {'name': 'VIP 买家'})
+          gp = call('POST', '/crm/customer-group/create', {'name': '中东客户'})
+          call('PUT', '/crm/customer/update-tags', {'id': cid, 'tagIds': [tg, tg], 'groupId': gp})
+          cg = call('GET', f'/crm/customer/get?id={cid}')
+          assert cg['tagIds'] == [tg] and cg['groupId'] == gp, cg
+          assert cid in [c['id'] for c in call('GET', f'/crm/customer/page?pageNo=1&pageSize=50&tagId={tg}')['list']], '按标签筛选'
+          call('PUT', '/crm/customer/update-tags', {'id': cid, 'tagIds': [], 'groupId': None})
+          cg = call('GET', f'/crm/customer/get?id={cid}')
+          assert not cg.get('tagIds') and not cg.get('groupId'), cg
+          print('看板客户阶段分布；会话里改客户标签与分组')
           # 智能跟进：AI 回复后客户一直没回，到时间自动跟进一次，达到轮数后不再跟进
           import smtplib, subprocess, time, urllib.parse
           from email.message import EmailMessage

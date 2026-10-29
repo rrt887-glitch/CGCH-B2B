@@ -110,6 +110,9 @@ public class ChannelDashboardV3Service {
         biz2.put("businessToWinRate", rate(won, biz.size()));
         biz2.put("businesses", biz.size());
         r.put("business", biz2);
+        r.put("stages", channelDashboardV3Mapper.customerStages(users).stream()
+                .map(m -> Map.<String, Object>of("stage", num(m.get("s")), "count", num(m.get("n"))))
+                .sorted(java.util.Comparator.comparingLong(m -> (Long) m.get("stage"))).toList());
         r.put("support", support(mailAccounts, waAccounts));
         return r;
     }

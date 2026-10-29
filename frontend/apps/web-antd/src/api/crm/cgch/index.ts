@@ -60,3 +60,8 @@ export function searchDedup(keyword: string, scope: 'all' | 'clue' | 'customer' 
     params: { keyword, scope },
   });
 }
+
+/** 修改客户的标签和分组（会话页直接改）；groupId 不传表示不分组 */
+export function updateCustomerTags(id: number, tagIds: number[], groupId?: number) {
+  return requestClient.put<boolean>('/crm/customer/update-tags', { id, tagIds, groupId: groupId ?? null });
+}

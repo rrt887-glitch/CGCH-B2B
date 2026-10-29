@@ -94,6 +94,8 @@ export namespace ChannelDashboardV3Api {
       replyIn1hRate: null | number;
       tasks: number;
     };
+    /** 客户阶段分布（当前快照，不含公海）：stage 0 为未设置 */
+    stages?: { count: number; stage: number }[];
     business: {
       businesses: number;
       businessToWinRate: null | number;

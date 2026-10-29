@@ -43,6 +43,8 @@ import type { QuickReplyApi } from '#/api/channel/quick-reply';
 import { onChannelRealtime } from '#/utils/channel-realtime';
 import { requestClient } from '#/api/request';
 import { stageLabel, stageOptions } from '#/views/cgch/v3/crm/components/shared';
+import { getCustomerGroupList, getTagList, updateCustomerTags } from '#/api/crm/cgch';
+import type { CgchCrmApi } from '#/api/crm/cgch';
 import {
   archiveWaConversation,
   getWaAccountList,
@@ -211,19 +213,52 @@ onBeforeUnmount(() => {
 
 // ===== 客户阶段：会话关联了客户时，在顶部直接推进阶段 =====
 const customerStage = ref<number>();
+const customerTags = ref<number[]>([]);
+const customerGroup = ref<number>();
+const tagOptions = ref<CgchCrmApi.TreeNode[]>([]);
+const groupOptions = ref<CgchCrmApi.TreeNode[]>([]);
+const tagName = (id: number) => tagOptions.value.find((t) => t.id === id)?.name;
 watch(
   () => current.value?.customerId,
   async (id) => {
     customerStage.value = undefined;
+    customerTags.value = [];
+    customerGroup.value = undefined;
     if (!id) return;
     try {
-      const c = await requestClient.get<{ stage?: number }>(`/crm/customer/get?id=${id}`);
-      if (current.value?.customerId === id) customerStage.value = c?.stage;
+      const c = await requestClient.get<{ groupId?: number; stage?: number; tagIds?: number[] }>(`/crm/customer/get?id=${id}`);
+      if (current.value?.customerId !== id) return;
+      customerStage.value = c?.stage;
+      customerTags.value = c?.tagIds ?? [];
+      customerGroup.value = c?.groupId ?? undefined;
+      if (!tagOptions.value.length) {
+        [tagOptions.value, groupOptions.value] = await Promise.all([getTagList().catch(() => []), getCustomerGroupList().catch(() => [])]);
+      }
     } catch {
       // 没有查看这个客户的权限时不显示阶段
     }
   },
 );
+const tagEditOpen = ref(false);
+const tagDraft = ref<number[]>([]);
+const groupDraft = ref<number>();
+function openTagEdit(v: boolean) {
+  tagEditOpen.value = v;
+  if (v) {
+    tagDraft.value = [...customerTags.value];
+    groupDraft.value = customerGroup.value;
+  }
+}
+async function saveTags() {
+  const id = current.value?.customerId;
+  if (!id) return;
+  await updateCustomerTags(id, tagDraft.value, groupDraft.value);
+  customerTags.value = [...tagDraft.value];
+  customerGroup.value = groupDraft.value;
+  tagEditOpen.value = false;
+  message.success('已保存客户标签');
+}
+
 async function changeStage(v: number) {
   const id = current.value?.customerId;
   if (!id || v === customerStage.value) return;
@@ -652,6 +687,35 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   :options="stageOptions().map((o) => ({ label: o.label, value: o.value }))"
                   @change="(v: any) => changeStage(Number(v))"
                 />
+                <template v-if="current.customerId && customerStage !== undefined">
+                  <Tag v-for="t in customerTags.slice(0, 3)" :key="t" class="m-0">{{ tagName(t) || t }}</Tag>
+                  <Tag v-if="customerTags.length > 3" class="m-0">+{{ customerTags.length - 3 }}</Tag>
+                  <Popover trigger="click" placement="bottomLeft" :open="tagEditOpen" @open-change="openTagEdit">
+                    <template #content>
+                      <div class="flex w-72 flex-col gap-2">
+                        <div class="text-xs text-gray-500">客户标签</div>
+                        <Select
+                          v-model:value="tagDraft"
+                          mode="multiple"
+                          size="small"
+                          placeholder="选择标签"
+                          :options="tagOptions.map((t) => ({ label: t.name, value: t.id }))"
+                          option-filter-prop="label"
+                        />
+                        <div class="text-xs text-gray-500">客户分组</div>
+                        <Select
+                          v-model:value="groupDraft"
+                          size="small"
+                          allow-clear
+                          placeholder="不分组"
+                          :options="groupOptions.map((g) => ({ label: g.name, value: g.id }))"
+                        />
+                        <div class="text-right"><Button size="small" type="primary" @click="saveTags">保存</Button></div>
+                      </div>
+                    </template>
+                    <a class="text-xs">{{ customerTags.length ? '改标签' : '+ 打标签' }}</a>
+                  </Popover>
+                </template>
                 <Tag v-else-if="current.clueName" color="cyan" class="cursor-pointer" @click="router.push(`/crm/clue/detail/${current.clueId}`)">
                   线索：{{ current.clueName }}
                 </Tag>
