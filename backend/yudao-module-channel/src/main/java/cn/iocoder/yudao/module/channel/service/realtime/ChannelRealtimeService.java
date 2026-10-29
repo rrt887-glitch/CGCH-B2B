@@ -78,6 +78,8 @@ public class ChannelRealtimeService {
 
     /** 在事务里调用时等提交后再推，避免前端收到通知去查时还查不到新消息 */
     private void push(Long userId, String channel, Long refId, Long messageId, String kind) {
+        log.debug("[push][用户 {} {} {} {}，事务同步 {}]", userId, channel, refId, kind,
+                org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive());
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
             org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
                     new org.springframework.transaction.support.TransactionSynchronization() {
@@ -94,8 +96,10 @@ public class ChannelRealtimeService {
     private void send(Long userId, String channel, Long refId, Long messageId, String kind) {
         WebSocketMessageSender sender = senderProvider.getIfAvailable();
         if (sender == null || userId == null) {
+            log.debug("[send][没有推送通道或处理人：sender={} userId={}]", sender, userId);
             return;
         }
+        log.debug("[send][推送给用户 {}：{} {} {}]", userId, channel, refId, kind);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("channel", channel);
         body.put("refId", refId);
