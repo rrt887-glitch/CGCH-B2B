@@ -1881,6 +1881,84 @@ jobs:
           call('DELETE', f"/channel/evolution/session?session={s3['session']}")
           assert wait(lambda: s3['session'] in evo()['deleted'] or None, '放弃的实例删除')
           assert call('GET', f"/channel/evolution/session?session={s3['session']}")['status'] == 'expired'
+          # ---- 会话工作台：收藏、备注名、归档（客户来信自动取消）、未回复筛选、实时推送、转交、快捷回复 ----
+          import socket, base64
+          def cpage(q=''):
+              return call('GET', f'/channel/wa/conversation/page?pageNo=1&pageSize=50{q}')['list']
+          def ws_open(token):
+              sk = socket.create_connection(('127.0.0.1', 48080), timeout=10)
+              key = base64.b64encode(os.urandom(16)).decode()
+              sk.sendall((f"GET /infra/ws?token={token} HTTP/1.1\r\nHost: 127.0.0.1:48080\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                          f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+              resp = b''
+              while b'\r\n\r\n' not in resp:
+                  resp += sk.recv(1024)
+              head, rest = resp.split(b'\r\n\r\n', 1)
+              assert b' 101 ' in head.split(b'\r\n')[0], head
+              return sk, rest
+          def ws_read(sk, buf):
+              def need(n):
+                  nonlocal buf
+                  while len(buf) < n:
+                      chunk = sk.recv(4096)
+                      if not chunk:
+                          raise SystemExit('WebSocket 被关闭')
+                      buf += chunk
+              need(2)
+              ln, off = buf[1] & 0x7f, 2
+              if ln == 126:
+                  need(4); ln, off = int.from_bytes(buf[2:4], 'big'), 4
+              elif ln == 127:
+                  need(10); ln, off = int.from_bytes(buf[2:10], 'big'), 10
+              need(off + ln)
+              return buf[off:off + ln].decode(), buf[off + ln:]
+          call('PUT', f"/channel/wa/conversation/star?id={ecv['id']}&starred=true")
+          assert [c['id'] for c in cpage('&starred=true')] == [ecv['id']], cpage('&starred=true')
+          assert cpage()[0]['id'] == ecv['id'], '收藏的会话排在最前'
+          call('PUT', f"/channel/wa/conversation/remark?id={ecv['id']}&name=" + urllib.parse.quote('Rashid 迪拜'))
+          assert next(c for c in cpage() if c['id'] == ecv['id'])['remarkName'] == 'Rashid 迪拜'
+          assert [c['id'] for c in cpage('&keyword=Rashid')] == [ecv['id']], '按备注名搜索'
+          assert ecv['id'] not in [c['id'] for c in cpage('&unreplied=true')], '最后一条是我方发的，不算未回复'
+          call('PUT', f"/channel/wa/conversation/archive?id={ecv['id']}&archived=true")
+          assert ecv['id'] not in [c['id'] for c in cpage()] and ecv['id'] in [c['id'] for c in cpage('&archived=true')], '归档后只在归档里'
+          wsk, wbuf = ws_open(TOKEN)
+          assert evo_msg(s2['session'], 'EVOIN9', '8615900003333@s.whatsapp.net', {'conversation': 'Any update?'}, 'conversation') == 200
+          t0 = time.time()
+          wtxt, wbuf = ws_read(wsk, wbuf)
+          wmsg = json.loads(wtxt)
+          assert wmsg['type'] == 'channel-message', wmsg
+          wev = json.loads(wmsg['content'])
+          assert wev['channel'] == 'whatsapp' and wev['refId'] == ecv['id'] and wev['kind'] == 'in' and time.time() - t0 < 5, wev
+          wsk.close()
+          assert ecv['id'] in [c['id'] for c in cpage()], '客户来信后自动取消归档'
+          assert ecv['id'] in [c['id'] for c in cpage('&unreplied=true')], '客户最后发言：未回复'
+          # 转交给业务员小王：他能看到、能回复；我看不到；转回来后恢复
+          sid = next(u['id'] for u in call('GET', '/system/user/simple-list') if u['nickname'] == '业务员小王')
+          srole = next(r['id'] for r in call('GET', '/system/role/simple-list') if r['name'] == '业务员（仅本人）')
+          call('POST', '/system/permission/assign-role-menu', {'roleId': srole, 'menuIds': [20000, 20001, 22401, 22111, 22112]})
+          call('PUT', f"/channel/wa/conversation/transfer?id={ecv['id']}&userId={sid}")
+          assert ecv['id'] not in [c['id'] for c in cpage()], '转交后自己的列表里没有'
+          assert call('GET', f"/channel/wa/conversation/get?id={ecv['id']}", ok=False)['code'] != 0, '转交后不能再查看'
+          sl = call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')
+          assert sl['code'] == 0 and [c['id'] for c in sl['data']['list']] == [ecv['id']] and sl['data']['list'][0]['ownerUserId'] == sid, sl
+          sr = call_s('POST', '/channel/wa/message/send', {'conversationId': ecv['id'], 'text': 'I will follow up today.'})
+          assert sr['code'] == 0 and evo()['sent'][-1]['text'] == 'I will follow up today.', sr
+          assert call_s('PUT', f"/channel/wa/conversation/transfer?id={ecv['id']}&userId=1")['code'] == 0
+          assert ecv['id'] in [c['id'] for c in cpage()] and call_s('GET', f"/channel/wa/conversation/get?id={ecv['id']}")['code'] != 0, '转回号码所属业务员'
+          # 快捷回复：全员的需要维护权限；个人的只有自己看得到
+          q1 = call('POST', '/channel/quick-reply/save', {'scope': 'enterprise', 'title': 'MOQ', 'content': 'Hi {name}, our MOQ is 300 units.'})
+          q0 = call('POST', '/channel/quick-reply/save', {'scope': 'personal', 'title': 'Admin only', 'content': 'secret'})
+          assert call_s('POST', '/channel/quick-reply/save', {'scope': 'enterprise', 'title': 'x', 'content': 'y'})['code'] == 403
+          q2 = call_s('POST', '/channel/quick-reply/save', {'scope': 'personal', 'title': 'Mine', 'content': 'Thanks {name}!'})
+          assert q2['code'] == 0, q2
+          assert call_s('DELETE', f'/channel/quick-reply/delete?id={q1}')['code'] == 403
+          assert sorted(r['title'] for r in call_s('GET', '/channel/quick-reply/list')['data']) == ['MOQ', 'Mine'], '看不到别人的个人快捷回复'
+          call('POST', f'/channel/quick-reply/used?id={q1}')
+          assert next(r for r in call('GET', '/channel/quick-reply/list?keyword=MOQ') if r['id'] == q1)['useCount'] == 1
+          for q in (q0, q1):
+              call('DELETE', f'/channel/quick-reply/delete?id={q}')
+          assert call_s('DELETE', f"/channel/quick-reply/delete?id={q2['data']}")['code'] == 0
+          print('会话工作台：收藏置顶、备注名搜索、归档与客户来信自动取消、未回复筛选、实时推送、转交与转回、快捷回复权限')
           # 删除账号：退出关联设备并删除实例
           call('DELETE', f"/channel/wa-account/delete?id={ea['id']}")
           assert s2['session'] in evo()['deleted'], evo()['deleted']

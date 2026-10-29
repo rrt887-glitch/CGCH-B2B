@@ -27,6 +27,11 @@
 	@public path_regexp pub ^/(about|privacy|terms|data-deletion)/?$
 	rewrite @public /admin-api/public/site/{re.pub.1}
 
+	# 实时推送（WebSocket）：新消息到达时通知页面刷新
+	handle /infra/ws* {
+		reverse_proxy backend:48080
+	}
+
 	handle /admin-api/* {
 		reverse_proxy backend:48080 {
 			transport http {

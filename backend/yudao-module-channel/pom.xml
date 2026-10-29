@@ -49,6 +49,10 @@
         </dependency>
         <dependency>
             <groupId>cn.iocoder.boot</groupId>
+            <artifactId>yudao-spring-boot-starter-websocket</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.iocoder.boot</groupId>
             <artifactId>yudao-spring-boot-starter-mybatis</artifactId>
         </dependency>
         <!-- 知识库资料文件解析（PDF、Word、Excel、PPT 等）；解析器由 yudao-module-ai 引入的 Tika 解析包提供 -->

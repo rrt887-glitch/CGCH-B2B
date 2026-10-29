@@ -70,6 +70,27 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      * 咨询意图：sales 销售咨询、after_sales 售后支持、business 商务合作、invalid 无效咨询；为空表示未分类
      */
     private String intent;
+    /**
+     * 是否已归档：归档后不在默认列表里显示，客户再发消息时自动取消归档
+     */
+    private Boolean archived;
+    /**
+     * 是否收藏（星标）
+     */
+    private Boolean starred;
+    /**
+     * 负责人：转交后由该业务员处理；为空表示由号码所属的业务员处理
+     */
+    private Long ownerUserId;
+    /**
+     * 备注名：业务员给客户起的名字，优先于对方昵称显示
+     */
+    private String remarkName;
+
+    /** 实际处理人：转交给了别人就是负责人，否则是号码所属的业务员 */
+    public Long handlerUserId(ChannelWaAccountDO account) {
+        return ownerUserId != null ? ownerUserId : account == null ? null : account.getUserId();
+    }
 
     public boolean isWeb() {
         return ChannelWaAccountDO.PLATFORM_WEB.equals(platform);

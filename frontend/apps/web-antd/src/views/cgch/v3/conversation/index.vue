@@ -15,7 +15,7 @@ import { useUserStore } from '@vben/stores';
 import { Avatar, Badge, Empty, Spin } from 'ant-design-vue';
 
 import { getMailAccountList } from '#/api/channel/mail';
-import { getWaAccountList } from '#/api/channel/whatsapp';
+import { getWaAccountList, getWaConversationPage } from '#/api/channel/whatsapp';
 import MailWorkbench from '#/views/cgch/channel/mail/index.vue';
 import ImWorkbench from '#/views/cgch/channel/im/index.vue';
 import { CHANNEL_ICONS } from '#/assets/channel-icons';
@@ -42,6 +42,8 @@ const GRADES = [
   { key: 'D', label: 'D类客户' },
 ];
 const grade = ref('');
+/** 客户等级 A–D 对应 crm_customer_level 字典值 1–4 */
+const LEVEL: Record<string, number> = { A: 1, B: 2, C: 3, D: 4 };
 
 const PLATFORM: Record<string, string> = { whatsapp: 'WhatsApp', messenger: 'Facebook', instagram: 'Instagram', web: '官网IM', youtube: 'YouTube', tiktok: 'TikTok' };
 const imLabel = (a: ChannelWaApi.Account) => a.displayPhone || a.name || a.phoneNumberId;
@@ -49,7 +51,10 @@ const imLabel = (a: ChannelWaApi.Account) => a.displayPhone || a.name || a.phone
 const IM_ICON: Record<string, string> = { whatsapp: 'whatsapp', messenger: 'messenger', instagram: 'instagram', web: 'im', youtube: 'youtube', tiktok: 'tiktok' };
 const imIcon = (a: ChannelWaApi.Account) => CHANNEL_ICONS[IM_ICON[a.platform || 'whatsapp'] ?? 'whatsapp'];
 const mailIcon = (m: ChannelMailApi.Account) => CHANNEL_ICONS[m.provider || 'custom'] ?? CHANNEL_ICONS.custom;
-const hasAny = computed(() => waAccounts.value.length + mailAccounts.value.length > 0);
+/** 自己没有号码时，可能有同事转交过来的会话 */
+const hasTransferred = ref(false);
+const showIm = computed(() => waAccounts.value.length > 0 || hasTransferred.value);
+const hasAny = computed(() => showIm.value || mailAccounts.value.length > 0);
 const viewKey = computed(() => `${selected.value.kind}-${selected.value.id ?? 'all'}`);
 
 function pick(kind: 'im' | 'mail', id?: number) {
@@ -62,12 +67,15 @@ const avatar = computed(() => userStore.userInfo?.avatar || preferences.app.defa
 onMounted(async () => {
   try {
     [waAccounts.value, mailAccounts.value] = await Promise.all([getWaAccountList(), getMailAccountList()]);
+    if (waAccounts.value.length === 0) {
+      hasTransferred.value = (await getWaConversationPage({ pageNo: 1, pageSize: 1 }).catch(() => ({ total: 0 }))).total > 0;
+    }
   } finally {
     loading.value = false;
   }
   // 从看板、通知跳转过来：?channel=mail|whatsapp&ref=编号
   const refId = Number(route.query.ref);
-  if (route.query.channel === 'mail' || (!waAccounts.value.length && mailAccounts.value.length)) {
+  if (route.query.channel === 'mail' || (!showIm.value && mailAccounts.value.length)) {
     selected.value = { kind: 'mail' };
   }
   if (refId) openId.value = refId;
@@ -91,7 +99,7 @@ onMounted(async () => {
           </div>
 
           <div class="v3-conv__group">
-            <div v-if="waAccounts.length" class="v3-conv__item" :class="{ on: selected.kind === 'im' && !selected.id }" @click="pick('im')">
+            <div v-if="showIm" class="v3-conv__item" :class="{ on: selected.kind === 'im' && !selected.id }" @click="pick('im')">
               全部消息
             </div>
             <div
@@ -136,7 +144,7 @@ onMounted(async () => {
         </aside>
 
         <section class="v3-conv__main">
-          <ImWorkbench v-if="selected.kind === 'im'" :key="viewKey" embedded :account-id="selected.id" :open-id="openId" />
+          <ImWorkbench v-if="selected.kind === 'im'" :key="viewKey" embedded :account-id="selected.id" :level="LEVEL[grade]" :open-id="openId" />
           <MailWorkbench v-else :key="viewKey" embedded :account-id="selected.id" :open-id="openId" />
         </section>
       </div>

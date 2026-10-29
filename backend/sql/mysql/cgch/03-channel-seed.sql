@@ -176,3 +176,15 @@ UPDATE `system_tenant_package` SET `menu_ids` = JSON_ARRAY_APPEND(`menu_ids`, '$
  WHERE JSON_VALID(`menu_ids`) AND JSON_CONTAINS(`menu_ids`, '20504') AND NOT JSON_CONTAINS(`menu_ids`, '23201');
 UPDATE `system_tenant_package` SET `menu_ids` = JSON_ARRAY_APPEND(`menu_ids`, '$', 23202)
  WHERE JSON_VALID(`menu_ids`) AND JSON_CONTAINS(`menu_ids`, '20503') AND NOT JSON_CONTAINS(`menu_ids`, '23202');
+
+-- 全员快捷回复维护权限；已有「数字员工配置」权限的角色同时获得
+DELETE FROM `system_menu` WHERE `id` = 23203;
+INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
+  (23203, '全员快捷回复维护', 'channel:quick-reply:manage', 3, 2, 20503, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
+INSERT INTO `system_role_menu` (`role_id`, `menu_id`, `creator`, `updater`, `deleted`, `tenant_id`)
+SELECT rm.`role_id`, 23203, 'admin', 'admin', b'0', rm.`tenant_id`
+  FROM `system_role_menu` rm
+ WHERE rm.`menu_id` = 22201 AND rm.`deleted` = b'0'
+   AND NOT EXISTS (SELECT 1 FROM `system_role_menu` x WHERE x.`role_id` = rm.`role_id` AND x.`menu_id` = 23203 AND x.`deleted` = b'0');
+UPDATE `system_tenant_package` SET `menu_ids` = JSON_ARRAY_APPEND(`menu_ids`, '$', 23203)
+ WHERE JSON_VALID(`menu_ids`) AND JSON_CONTAINS(`menu_ids`, '20503') AND NOT JSON_CONTAINS(`menu_ids`, '23203');

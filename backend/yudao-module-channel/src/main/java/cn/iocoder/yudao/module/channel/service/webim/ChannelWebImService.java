@@ -161,7 +161,7 @@ public class ChannelWebImService {
             conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
                     .setLastInboundTime(now).setLastMessageTime(now)
                     .setLastMessagePreview(StrUtil.maxLength(content, 200))
-                    .setUnreadCount((conv.getUnreadCount() == null ? 0 : conv.getUnreadCount()) + 1));
+                    .setUnreadCount((conv.getUnreadCount() == null ? 0 : conv.getUnreadCount()) + 1).setArchived(false));
             accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setLastWebhookTime(now));
             eventPublisher.publishEvent(new ChannelInboundEvent("whatsapp", conv.getId(), msg.getId(), a.getTenantId()));
             return toVisitor(msg);

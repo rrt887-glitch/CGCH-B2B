@@ -434,6 +434,24 @@ CREATE TABLE `channel_suppression` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '退订与黑名单：名单中的收件人不会收到任何邮件或 WhatsApp 消息（手动发送也会被拦截）';
 
+DROP TABLE IF EXISTS `channel_quick_reply`;
+CREATE TABLE `channel_quick_reply` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `scope` varchar(255) NULL COMMENT '范围：enterprise 全员可用、personal 仅自己',
+  `owner_user_id` bigint NULL COMMENT '个人快捷回复的所属用户',
+  `title` varchar(255) NULL COMMENT '标题（输入 / 后按标题搜索）',
+  `content` mediumtext NULL COMMENT '内容，可含变量 {name} 客户称呼、{company} 我方公司名',
+  `sort` int NULL COMMENT '排序，越小越靠前',
+  `use_count` int NULL COMMENT '使用次数，常用的排在前面',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '快捷回复：会话里一键插入的常用话术，分全员（管理员维护）和个人（本人可见）';
+
 DROP TABLE IF EXISTS `channel_reactivate_item`;
 CREATE TABLE `channel_reactivate_item` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
@@ -586,6 +604,10 @@ CREATE TABLE `channel_wa_conversation` (
   `last_message_preview` varchar(255) NULL COMMENT '最后一条消息摘要',
   `unread_count` int NULL COMMENT '未读条数',
   `intent` varchar(255) NULL COMMENT '咨询意图：sales 销售咨询、after_sales 售后支持、business 商务合作、invalid 无效咨询；为空表示未分类',
+  `archived` bit(1) NULL DEFAULT b'0' COMMENT '是否已归档：归档后不在默认列表里显示，客户再发消息时自动取消归档',
+  `starred` bit(1) NULL DEFAULT b'0' COMMENT '是否收藏（星标）',
+  `owner_user_id` bigint NULL COMMENT '负责人：转交后由该业务员处理；为空表示由号码所属的业务员处理',
+  `remark_name` varchar(255) NULL COMMENT '备注名：业务员给客户起的名字，优先于对方昵称显示',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',

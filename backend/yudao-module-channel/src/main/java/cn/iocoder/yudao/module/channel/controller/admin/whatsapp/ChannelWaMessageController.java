@@ -43,6 +43,38 @@ public class ChannelWaMessageController {
         return success(whatsAppService.getConversation(getLoginUserId(), id));
     }
 
+    @PutMapping("/conversation/archive")
+    @Operation(summary = "归档 / 取消归档；客户再发消息时自动取消归档")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<Boolean> archive(@RequestParam("id") Long id, @RequestParam("archived") Boolean archived) {
+        whatsAppService.archiveConversation(getLoginUserId(), id, Boolean.TRUE.equals(archived));
+        return success(true);
+    }
+
+    @PutMapping("/conversation/star")
+    @Operation(summary = "收藏 / 取消收藏")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<Boolean> star(@RequestParam("id") Long id, @RequestParam("starred") Boolean starred) {
+        whatsAppService.starConversation(getLoginUserId(), id, Boolean.TRUE.equals(starred));
+        return success(true);
+    }
+
+    @PutMapping("/conversation/remark")
+    @Operation(summary = "设置备注名（空表示清除）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<Boolean> remark(@RequestParam("id") Long id, @RequestParam(value = "name", required = false) String name) {
+        whatsAppService.renameConversation(getLoginUserId(), id, name);
+        return success(true);
+    }
+
+    @PutMapping("/conversation/transfer")
+    @Operation(summary = "转交给同事处理")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:send')")
+    public CommonResult<Boolean> transfer(@RequestParam("id") Long id, @RequestParam("userId") Long userId) {
+        whatsAppService.transferConversation(getLoginUserId(), id, userId);
+        return success(true);
+    }
+
     @GetMapping("/message/list")
     @Operation(summary = "会话消息，时间正序；不带 beforeId 时清零未读")
     @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
