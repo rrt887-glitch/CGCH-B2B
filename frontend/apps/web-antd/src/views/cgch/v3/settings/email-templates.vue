@@ -8,7 +8,9 @@ import type { MailTemplateApi } from '#/api/channel/mail-template';
 
 import { computed, onMounted, reactive, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { IconifyIcon } from '@vben/icons';
+import { useUserStore } from '@vben/stores';
 
 import { Button, Empty, Input, message, Modal, Pagination, Popconfirm, Radio, RadioGroup, Select, Switch, Table, Tag } from 'ant-design-vue';
 
@@ -55,6 +57,11 @@ const open = ref(false);
 const saving = ref(false);
 const translating = ref(false);
 const view = ref<'desktop' | 'edit' | 'mobile'>('edit');
+const { hasAccessByCodes } = useAccess();
+const userStore = useUserStore();
+/** 自己建的模板可以改；别人建的全员模板需要「全员邮件模板维护」权限 */
+const canEdit = (t: MailTemplateApi.Template) =>
+  !t.id || t.ownerUserId === userStore.userInfo?.id || hasAccessByCodes(['channel:mail-template:manage']);
 const empty = (): MailTemplateApi.Template => ({ name: '', category: 'promo', visibility: 'all', subject: '', html: '', enabled: true, defaulted: false });
 const form = ref<MailTemplateApi.Template>(empty());
 
@@ -135,15 +142,18 @@ onMounted(load);
         <a v-if="column.key === 'name'" class="font-medium" @click="edit(record as any)">{{ record.name }}</a>
         <template v-else-if="column.key === 'category'">{{ catLabel(record.category) }}</template>
         <template v-else-if="column.key === 'visibility'">{{ record.visibility === 'self' ? '仅自己' : '全员' }}</template>
-        <Switch v-else-if="column.key === 'enabled'" size="small" :checked="!!record.enabled" @change="(v: any) => toggle(record as any, !!v)" />
+        <Switch v-else-if="column.key === 'enabled'" size="small" :disabled="!canEdit(record as any)" :checked="!!record.enabled" @change="(v: any) => toggle(record as any, !!v)" />
         <template v-else-if="column.key === 'defaulted'">
           <Tag v-if="record.defaulted" color="blue" class="m-0">默认</Tag>
           <a v-else class="text-xs" @click="makeDefault(record as any)">设为默认</a>
         </template>
         <template v-else-if="column.key === 'updateTime'">{{ fmtDateTime(record.updateTime) }}</template>
         <div v-else-if="column.key === 'action'" class="flex gap-3">
-          <a @click="edit(record as any)">编辑</a>
-          <Popconfirm title="删除这个模板？" @confirm="remove(record as any)"><a class="text-red-500">删除</a></Popconfirm>
+          <template v-if="canEdit(record as any)">
+            <a @click="edit(record as any)">编辑</a>
+            <Popconfirm title="删除这个模板？" @confirm="remove(record as any)"><a class="text-red-500">删除</a></Popconfirm>
+          </template>
+          <span v-else class="text-xs text-gray-400">管理员维护</span>
         </div>
       </template>
       <template #emptyText><Empty :image="Empty.PRESENTED_IMAGE_SIMPLE" description="暂无邮件模板" /></template>

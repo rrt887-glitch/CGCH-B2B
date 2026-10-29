@@ -1591,10 +1591,35 @@ jobs:
           t1 = call('POST', '/channel/mail-template/save', {'name': 'Promo A', 'category': 'promo', 'visibility': 'all', 'subject': 'New line', 'html': '<p>Hi</p>', 'defaulted': True})
           t2 = call('POST', '/channel/mail-template/save', {'name': 'Promo B', 'category': 'promo', 'visibility': 'self', 'subject': 'Sale', 'html': '<p>Sale</p>', 'defaulted': True})
           tl = {t['id']: t for t in call('GET', '/channel/mail-template/list?category=promo')}
-          assert tl[t2]['defaulted'] and not tl[t1]['defaulted'], tl
+          assert tl[t2]['defaulted'] and tl[t1]['defaulted'], '全员模板和个人模板的默认互不影响'
+          t3 = call('POST', '/channel/mail-template/save', {'name': 'Promo C', 'category': 'promo', 'visibility': 'all', 'subject': 'C', 'html': '<p>C</p>', 'defaulted': True})
+          tl = {t['id']: t for t in call('GET', '/channel/mail-template/list?category=promo')}
+          assert tl[t3]['defaulted'] and not tl[t1]['defaulted'] and tl[t2]['defaulted'], '全员模板之间只有一个默认'
           call('PUT', f'/channel/mail-template/enabled?id={t1}&enabled=false')
-          assert [t['id'] for t in call('GET', '/channel/mail-template/list?enabled=true')] == [t2]
-          for t in (t1, t2):
+          assert sorted(t['id'] for t in call('GET', '/channel/mail-template/list?enabled=true')) == sorted([t2, t3])
+          # 权限：没有维护权限的业务员不能改企业云盘和别人建的全员模板，自己的可以
+          lg3 = json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/login', method='POST',
+                headers={'tenant-id': '1', 'Content-Type': 'application/json'},
+                data=json.dumps({'username': 'sales2', 'password': 'Sales2pass'}).encode())))
+          assert lg3['code'] == 0, lg3
+          HS = dict(H, Authorization='Bearer ' + lg3['data']['accessToken'])
+          def call_s(method, path, body=None):
+              req = urllib.request.Request(BASE + path, method=method, headers=HS,
+                                           data=json.dumps(body).encode() if body is not None else None)
+              return json.load(urllib.request.urlopen(req))
+          assert call_s('POST', '/channel/cloud-file/folder', {'scope': 'enterprise', 'name': 'x'})['code'] == 403
+          assert call_s('PUT', '/channel/cloud-file/update', {'id': cf['data']['id'], 'aiSendable': False})['code'] == 403
+          assert call_s('DELETE', f"/channel/cloud-file/delete?id={cf['data']['id']}")['code'] == 403
+          assert any(f['id'] == cf['data']['id'] for f in call_s('GET', '/channel/cloud-file/list?scope=enterprise')['data']), '业务员可以查看企业云盘'
+          pf = call_s('POST', '/channel/cloud-file/folder', {'scope': 'personal', 'name': 'Mine'})
+          assert pf['code'] == 0 and call_s('DELETE', f"/channel/cloud-file/delete?id={pf['data']}")['code'] == 0, pf
+          assert call_s('PUT', f'/channel/mail-template/enabled?id={t3}&enabled=false')['code'] == 403
+          assert call_s('DELETE', f'/channel/mail-template/delete?id={t3}')['code'] == 403
+          own = call_s('POST', '/channel/mail-template/save', {'name': 'Mine', 'category': 'promo', 'visibility': 'all', 'subject': 'M', 'html': '<p>M</p>'})
+          assert own['code'] == 0 and call_s('DELETE', f"/channel/mail-template/delete?id={own['data']}")['code'] == 0, own
+          assert call_s('GET', '/channel/routing-rule/list')['code'] == 403, '分流规则只有配置权限的人能看'
+          print('权限：业务员只能查看企业云盘、不能改别人建的全员模板；自己的文件和模板可以改')
+          for t in (t1, t2, t3):
               call('DELETE', f'/channel/mail-template/delete?id={t}')
           # 通知规则：同一类型同一方式不能重复
           nr = call('GET', '/channel/notify-rule/list')

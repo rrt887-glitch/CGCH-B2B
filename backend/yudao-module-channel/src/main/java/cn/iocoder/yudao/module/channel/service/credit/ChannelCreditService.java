@@ -77,6 +77,10 @@ public class ChannelCreditService {
             throw exception(CREDIT_AMOUNT_ZERO);
         }
         ChannelCreditAccountDO a = getOrCreateAccount();
+        if (amount < 0 && a.getBalance() + amount < 0) { // 手动扣减不能把余额扣成负数
+            throw exception(cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.AI_LLM_FAIL,
+                    "最多只能扣减 " + Math.max(0, a.getBalance()) + " 智点");
+        }
         channelCreditAccountMapper.addBalance(a.getId(), amount);
         long after = channelCreditAccountMapper.selectById(a.getId()).getBalance();
         channelCreditLedgerMapper.insert(ChannelCreditLedgerDO.builder()

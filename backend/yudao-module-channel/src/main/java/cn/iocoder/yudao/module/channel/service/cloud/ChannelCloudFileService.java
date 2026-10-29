@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.channel.dal.dataobject.cloud.ChannelCloudFileDO;
 import cn.iocoder.yudao.module.channel.dal.mysql.cloud.ChannelCloudFileMapper;
 import cn.iocoder.yudao.module.channel.service.file.ChannelFileHelper;
+import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +27,17 @@ public class ChannelCloudFileService {
     private ChannelCloudFileMapper channelCloudFileMapper;
     @Resource
     private ChannelFileHelper channelFileHelper;
+    @Resource
+    private SecurityFrameworkService securityFrameworkService;
+
+    /** 维护企业云盘权限：企业云盘的文件 AI 会发给客户，只有管理员等有权限的人能增删改 */
+    public static final String PERMISSION_MANAGE = "channel:cloud:manage";
+
+    private void checkWritable(String scope) {
+        if (ChannelCloudFileDO.SCOPE_ENTERPRISE.equals(scope) && !securityFrameworkService.hasPermission(PERMISSION_MANAGE)) {
+            throw exception(cn.iocoder.yudao.framework.common.exception.enums.GlobalErrorCodeConstants.FORBIDDEN);
+        }
+    }
 
     private static String scope(String s) {
         return ChannelCloudFileDO.SCOPE_PERSONAL.equals(s) ? ChannelCloudFileDO.SCOPE_PERSONAL : ChannelCloudFileDO.SCOPE_ENTERPRISE;
@@ -73,6 +85,7 @@ public class ChannelCloudFileService {
 
     public Long createFolder(Long userId, String scope, Long parentId, String name) {
         String s = scope(scope);
+        checkWritable(s);
         if (StrUtil.isBlank(name)) {
             throw exception(AI_LLM_FAIL, "请输入文件夹名称");
         }
@@ -85,6 +98,7 @@ public class ChannelCloudFileService {
 
     public ChannelCloudFileDO upload(Long userId, String scope, Long parentId, String fileName, String mimeType, byte[] content, String description) {
         String s = scope(scope);
+        checkWritable(s);
         checkParent(userId, s, parentId);
         if (content == null || content.length == 0) {
             throw exception(AI_LLM_FAIL, "文件是空的");
@@ -106,6 +120,7 @@ public class ChannelCloudFileService {
     /** 修改名称、描述、是否允许 AI 发送 */
     public void update(Long userId, Long id, String name, String description, Boolean aiSendable) {
         ChannelCloudFileDO f = get(userId, id);
+        checkWritable(f.getScope());
         ChannelCloudFileDO upd = new ChannelCloudFileDO().setId(id);
         if (StrUtil.isNotBlank(name)) {
             upd.setName(StrUtil.maxLength(name.trim(), 200));
@@ -122,6 +137,7 @@ public class ChannelCloudFileService {
     /** 删除；文件夹连同里面的文件一起删除 */
     public void delete(Long userId, Long id) {
         ChannelCloudFileDO f = get(userId, id);
+        checkWritable(f.getScope());
         List<Long> ids = new ArrayList<>(List.of(f.getId()));
         for (int i = 0; i < ids.size() && i < 5000; i++) {
             Long cur = ids.get(i);
