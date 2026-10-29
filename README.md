@@ -26,7 +26,7 @@ WhatsApp、Facebook、Instagram、邮箱、官网在线客服等多渠道询盘�
    ```
 
    **首次启动会自动建好全部表并导入初始数据**，不需要另外导入：系统与基础设施（`ruoyi-vue-pro.sql`、`quartz.sql`），
-   BPM / CRM / 支付 / AI / 渠道业务表（`cgch/00-*-schema.sql`），菜单（`cgch/01-menu.sql`），CRM 字典与渠道初始数据（`cgch/02-*`、`cgch/03-*`）。
+   BPM / CRM / 支付 / AI / 渠道业务表（`cgch/00-*-schema.sql`），菜单（`cgch/01-menu.sql`），CRM 字典与渠道初始数据（`cgch/02-*`、`cgch/03-*`），常用查询的索引（`cgch/04-indexes.sql`）。
    数据库已经存在时这些脚本不会再执行；要重建请先 `docker compose down -v` 删除数据卷。
 
 2. 已有的本地数据库升级：按文件名顺序执行 `backend/sql/mysql/cgch/migrations/` 里还没执行过的脚本，例如
