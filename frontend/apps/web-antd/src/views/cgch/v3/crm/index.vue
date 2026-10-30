@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-/** CRM：左侧常驻子菜单（CRM 智枢、线索、客户、商机、订单管理、CRM 设置），右侧为所选页面 */
+/** CRM：左侧常驻子菜单（CRM 智枢、线索、客户、跟进日程、商机、订单管理、CRM 设置），右侧为所选页面 */
 import type { HubGroup } from '../components/types';
 
 import { defineComponent, h } from 'vue';
@@ -27,6 +27,7 @@ const groups: HubGroup[] = [
     label: '客户',
     items: [
       { key: 'customer', label: '客户列表', load: () => import('./customer.vue') },
+      { key: 'agenda', label: '跟进日程', load: () => import('./agenda.vue') },
       { key: 'customer-pool', label: '公海客户', load: withProps(() => import('./customer.vue'), { pool: true }) },
       { key: 'dedup', label: '查重', load: () => import('./dedup.vue') },
     ],

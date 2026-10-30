@@ -76,6 +76,9 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
             q.apply("(SELECT m.direction FROM channel_wa_message m WHERE m.conversation_id = channel_wa_conversation.id"
                     + " AND m.deleted = 0 ORDER BY m.id DESC LIMIT 1) = 1");
         }
+        if (req.getCustomerId() != null) {
+            q.eq(ChannelWaConversationDO::getCustomerId, req.getCustomerId());
+        }
         if (req.getLevel() != null) {
             q.inSql(ChannelWaConversationDO::getCustomerId,
                     "SELECT id FROM crm_customer WHERE deleted = 0 AND level = " + req.getLevel().intValue());

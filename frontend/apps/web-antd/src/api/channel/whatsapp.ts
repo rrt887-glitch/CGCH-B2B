@@ -94,6 +94,8 @@ export namespace ChannelWaApi {
     level?: number;
     /** 团队会话：数据权限范围内其他同事负责的会话 */
     team?: boolean;
+    /** 只看关联了这个 CRM 客户的会话 */
+    customerId?: number;
   }
 
   export interface SendReq {
