@@ -45,7 +45,30 @@ export function offlineIcons(): Plugin {
   // @iconify/json 是 @vben-core/design 的依赖，从那里解析
   const req = createRequire(join(root, 'packages', '@core', 'base', 'design', 'package.json'));
 
+  /** @iconify/json 的 json 目录：先按包名解析，不行再到 node_modules 里找 */
+  function findJsonDir(): string | undefined {
+    const tries: (() => string)[] = [
+      () => dirname(req.resolve('@iconify/json/package.json')),
+      () => resolve(dirname(req.resolve('@iconify/json')), '..'),
+      () => join(root, 'packages', '@core', 'base', 'design', 'node_modules', '@iconify', 'json'),
+      () => join(root, 'node_modules', '@iconify', 'json'),
+    ];
+    for (const t of tries) {
+      try {
+        const dir = join(t(), 'json');
+        if (statSync(join(dir, 'lucide.json')).isFile()) return dir;
+      } catch {
+        // 试下一个位置
+      }
+    }
+    return undefined;
+  }
+
   function build(): string {
+    const jsonDir = findJsonDir();
+    if (!jsonDir) {
+      throw new Error('[offline-icons] 找不到 @iconify/json，图标无法打包进网站');
+    }
     const files: string[] = [];
     walk(join(root, 'apps', 'web-antd', 'src'), files);
     walk(join(root, 'packages'), files);
@@ -62,9 +85,10 @@ export function offlineIcons(): Plugin {
     const out: Collection[] = [];
     let total = 0;
     for (const [prefix, names] of wanted) {
+      const file = jsonDir ? join(jsonDir, `${prefix}.json`) : '';
       let data: Collection;
       try {
-        data = JSON.parse(readFileSync(req.resolve(`@iconify/json/json/${prefix}.json`), 'utf8'));
+        data = JSON.parse(readFileSync(file, 'utf8'));
       } catch {
         continue; // 不是图标集（例如 http:、mailto: 之类的字符串）
       }
@@ -83,6 +107,9 @@ export function offlineIcons(): Plugin {
         total += count;
         out.push(pick);
       }
+    }
+    if (total < 100) {
+      throw new Error(`[offline-icons] 只找到 ${total} 个图标，扫描或解析有问题`);
     }
     console.log(`[offline-icons] 打包 ${total} 个图标（${out.map((c) => c.prefix).join('、')}）`);
     return `import { addCollection } from '@vben/icons';\n${out.map((c) => `addCollection(${JSON.stringify(c)});`).join('\n')}\n`;
