@@ -908,7 +908,8 @@ describe('useVbenForm integration', () => {
 
     await input.trigger('blur');
     await flushPromises();
-    expect(wrapper.text()).toContain('Name is required');
+    // 校验是异步的，CI 机器慢时一次 flushPromises 不一定够：最多等 2 秒
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Name is required'), { timeout: 2000 });
 
     await input.setValue('Ada');
     await flushPromises();
