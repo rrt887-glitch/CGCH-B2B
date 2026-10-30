@@ -626,7 +626,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 .ch-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 16px);
+  height: calc(100vh - 24px);
   padding: 20px 16px 12px;
   background: #fff;
   border-radius: 12px;
@@ -655,7 +655,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 }
 
 .ch-count b {
-  color: #155dfc;
+  color: #2563EB;
 }
 
 .ch-spin {
@@ -728,7 +728,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 }
 
 .ch-col-op a {
-  color: #155dfc;
+  color: #2563EB;
 }
 
 .ch-ops {
@@ -839,7 +839,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 .ch-radio {
   width: 16px;
   height: 16px;
-  border: 5px solid #155dfc;
+  border: 5px solid #2563EB;
   border-radius: 50%;
 }
 
@@ -852,7 +852,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 
 .ch-btn-gray {
   min-width: 98px;
-  color: #155dfc;
+  color: #2563EB;
   background: #f3f4f6;
   border: 0;
 }

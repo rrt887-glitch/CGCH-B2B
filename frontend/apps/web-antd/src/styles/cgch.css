@@ -1,0 +1,72 @@
+/*
+ * 草根出海 · 清爽专业：全局字体、画布底色、文字颜色、滚动条。
+ * 颜色和字号见设计稿「风格规范」页；组件的主色、圆角、边框由 app.vue 的 antd 主题统一设置。
+ * 字体用系统自带的中文字体（苹方 / 微软雅黑），不从外网加载，国内打开不受影响。
+ */
+:root {
+  --cg-primary: #2563eb;
+  --cg-primary-strong: #1d4ed8;
+  --cg-primary-soft: #eff4ff;
+  --cg-text: #111827;
+  --cg-text-2: #4b5563;
+  --cg-text-3: #6b7280;
+  --cg-canvas: #f6f7f9;
+  --cg-surface: #fff;
+  --cg-border: #e5e7eb;
+  --cg-success: #15803d;
+  --cg-warning: #b45309;
+  --cg-danger: #b91c1c;
+  --cg-font: inter, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+}
+
+html,
+body {
+  font-family: var(--cg-font);
+  color: var(--cg-text);
+  background: var(--cg-canvas);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 数字列对齐 */
+.tabular-nums,
+.ant-table td,
+.ant-statistic-content {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 细滚动条 */
+* {
+  scrollbar-color: #d1d5db transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 表头：浅灰底、次要文字色 */
+.ant-table-wrapper .ant-table-thead > tr > th {
+  font-weight: 500;
+  color: var(--cg-text-2);
+  background: #f9fafb;
+}
+
+/* 卡片：用边框分层，不用阴影 */
+.ant-card {
+  border: 1px solid var(--cg-border);
+  box-shadow: none;
+}
+
+.ant-card.ant-card-bordered {
+  border-color: var(--cg-border);
+}

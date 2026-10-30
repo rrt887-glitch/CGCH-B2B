@@ -59,7 +59,7 @@ const RULES = [
 }
 
 .lf__seg button.on {
-  color: #155dfc;
+  color: #2563EB;
   background: #eef3fe;
 }
 
@@ -82,7 +82,7 @@ const RULES = [
   line-height: 22px;
   color: #fff;
   text-align: center;
-  background: #155dfc;
+  background: #2563EB;
   border-radius: 50%;
 }
 

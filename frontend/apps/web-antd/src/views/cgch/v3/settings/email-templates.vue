@@ -261,7 +261,7 @@ onMounted(load);
 }
 
 .et__seg button.on {
-  color: #155dfc;
+  color: #2563EB;
   background: #eef3fe;
 }
 </style>

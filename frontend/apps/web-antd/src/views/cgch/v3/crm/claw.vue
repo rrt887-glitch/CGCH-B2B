@@ -75,7 +75,7 @@ function go(key: string) {
 }
 
 .claw__item.on {
-  color: #155dfc;
+  color: #2563EB;
   background: #eef3fe;
 }
 

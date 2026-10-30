@@ -80,9 +80,10 @@ function select(key: string) {
 .v3-hub {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 16px);
+  height: calc(100vh - 24px);
   overflow: hidden;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
 
@@ -107,7 +108,7 @@ function select(key: string) {
 }
 
 .v3-hub__btn:hover {
-  color: #155dfc;
+  color: #2563EB;
 }
 
 .v3-hub__menu {
@@ -147,7 +148,7 @@ function select(key: string) {
 }
 
 .v3-hub__item.on {
-  color: #155dfc;
+  color: #2563EB;
   background: #eaf0fe;
 }
 

@@ -352,7 +352,7 @@ const me = computed(() => userStore.userInfo?.id);
 
 <style scoped>
 .crm-ai-btn {
-  color: #155dfc;
+  color: #2563EB;
   background: #eef3fe;
   border-color: #dbe5fd;
 }

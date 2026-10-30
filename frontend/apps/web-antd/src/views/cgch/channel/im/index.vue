@@ -13,6 +13,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
 import {
   Alert,
@@ -628,7 +629,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
     <div v-else class="flex h-full gap-3">
       <!-- 会话列表 -->
-      <div class="flex w-80 shrink-0 flex-col rounded bg-white">
+      <div class="flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E7EB] bg-white">
         <div class="flex flex-col gap-2 border-b p-3">
           <div class="flex gap-2">
             <Select v-if="!embedded" v-model:value="accountId" :options="accountOptions" class="min-w-0 flex-1" />
@@ -646,8 +647,8 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             <div
               v-for="c in conversations"
               :key="c.id"
-              class="flex cursor-pointer gap-3 border-b px-3 py-3"
-              :class="current?.id === c.id ? 'bg-green-50' : 'hover:bg-gray-50'"
+              class="flex cursor-pointer gap-3 border-0 border-b border-solid border-[#F3F4F6] px-4 py-3"
+              :class="current?.id === c.id ? 'bg-[#EFF4FF] shadow-[inset_3px_0_0_#2563EB]' : 'hover:bg-[#F9FAFB]'"
               @click="openConversation(c)"
             >
               <Badge :count="c.unreadCount" :offset="[-4, 4]">
@@ -655,13 +656,13 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               </Badge>
               <div class="min-w-0 flex-1">
                 <div class="flex justify-between gap-2">
-                  <span class="truncate font-medium">
+                  <span class="truncate font-semibold text-[#111827]">
                     <span v-if="c.starred" class="mr-1 text-amber-500">★</span>{{ c.remarkName || c.customerName || contact(c) }}
                   </span>
-                  <span class="shrink-0 text-xs text-gray-400">{{ md(c.lastMessageTime) }} {{ hm(c.lastMessageTime) }}</span>
+                  <span class="shrink-0 text-xs text-[#6B7280]">{{ md(c.lastMessageTime) }} {{ hm(c.lastMessageTime) }}</span>
                 </div>
-                <div class="truncate text-xs text-gray-500">
-                  <span v-if="listFilter === 'team' && c.handlerName" class="mr-1 text-[#155dfc]">[{{ c.handlerName }}]</span>{{ c.lastMessagePreview }}
+                <div class="mt-0.5 truncate text-[13px] text-[#4B5563]">
+                  <span v-if="listFilter === 'team' && c.handlerName" class="mr-1 text-[#2563EB]">[{{ c.handlerName }}]</span>{{ c.lastMessagePreview }}
                 </div>
               </div>
             </div>
@@ -670,12 +671,12 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
       </div>
 
       <!-- 聊天区 -->
-      <div class="flex min-w-0 flex-1 flex-col rounded bg-white">
+      <div class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E7EB] bg-white">
         <div v-if="!current" class="flex h-full items-center justify-center"><Empty description="选择一个会话" /></div>
         <template v-else>
-          <div class="flex items-center justify-between border-b px-4 py-3">
+          <div class="flex items-center justify-between border-0 border-b border-solid border-[#E5E7EB] px-5 py-3">
             <div>
-              <div class="font-medium">
+              <div class="text-[15px] font-semibold">
                 <span v-if="current.starred" class="mr-1 text-amber-500">★</span>{{ current.remarkName || contact(current) }}
                 <span v-if="current.remarkName" class="text-sm text-gray-400">（{{ contact(current) }}）</span>
                 <span v-if="isWa(current)" class="text-sm text-gray-400">+{{ current.waId }}</span>
@@ -750,18 +751,22 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             </div>
           </div>
 
-          <div ref="chatBox" class="flex-1 overflow-auto bg-[#efeae2] p-4">
+          <div ref="chatBox" class="flex-1 overflow-auto bg-[#F6F7F9] px-7 py-6">
             <Spin :spinning="chatLoading">
-              <div v-for="m in messages" :key="m.id" class="mb-2 flex" :class="m.direction === 2 ? 'justify-end' : 'justify-start'">
+              <div v-for="m in messages" :key="m.id" class="mb-3 flex" :class="m.direction === 2 ? 'justify-end' : 'justify-start'">
                 <div
-                  class="max-w-[70%] rounded-lg px-3 py-2 text-sm shadow-sm"
-                  :class="m.direction === 2 ? 'bg-[#d9fdd3]' : 'bg-white'"
+                  class="max-w-[70%] px-3.5 py-2.5 text-sm leading-[22px]"
+                  :class="
+                    m.direction === 2
+                      ? 'rounded-[14px_4px_14px_14px] bg-[#2563EB] text-white [&_a]:text-white [&_a]:underline'
+                      : 'rounded-[4px_14px_14px_14px] border border-solid border-[#E5E7EB] bg-white text-[#111827]'
+                  "
                 >
                   <template v-if="MEDIA_LABEL[m.type]">
                     <a v-if="isImage(m)" :href="m.fileUrl" target="_blank" rel="noopener">
                       <img :src="m.fileUrl" class="mb-1 max-h-60 max-w-full rounded" alt="" />
                     </a>
-                    <div v-else class="mb-1 flex items-center gap-2 text-xs text-gray-500">
+                    <div v-else class="mb-1 flex items-center gap-2 text-xs" :class="m.direction === 2 ? 'text-white/85' : 'text-[#4B5563]'">
                       <span>[{{ MEDIA_LABEL[m.type] }}{{ m.fileName ? `：${m.fileName}` : '' }}]</span>
                       <a v-if="m.fileUrl" :href="m.fileUrl" target="_blank" rel="noopener">下载</a>
                       <Button
@@ -776,16 +781,20 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                       </Button>
                     </div>
                   </template>
-                  <div v-if="m.type === 'template'" class="mb-1 text-xs text-gray-500">[模板 {{ m.templateName }}]</div>
+                  <div v-if="m.type === 'template'" class="mb-1 text-xs" :class="m.direction === 2 ? 'text-white/85' : 'text-[#4B5563]'">[模板 {{ m.templateName }}]</div>
                   <div class="whitespace-pre-wrap break-words">{{ m.textBody }}</div>
-                  <div v-if="translations[m.id]" class="mt-1 whitespace-pre-wrap break-words border-0 border-t border-solid border-gray-200 pt-1 text-gray-600">
+                  <div
+                    v-if="translations[m.id]"
+                    class="mt-1.5 whitespace-pre-wrap break-words border-0 border-t border-dashed pt-1.5 text-[13px]"
+                    :class="m.direction === 2 ? 'border-white/40 text-white/90' : 'border-[#D1D5DB] text-[#4B5563]'"
+                  >
                     {{ translations[m.id] }}
                   </div>
-                  <div class="mt-1 flex items-center justify-end gap-1 text-[11px] text-gray-400">
-                    <span v-if="m.aiGenerated" class="text-purple-500">AI</span>
+                  <div class="mt-1 flex items-center justify-end gap-1 text-[11px]" :class="m.direction === 2 ? 'text-white/80' : 'text-[#6B7280]'">
+                    <span v-if="m.aiGenerated" class="rounded px-1 font-semibold" :class="m.direction === 2 ? 'bg-white/20' : 'bg-[#EFF4FF] text-[#1D4ED8]'">AI</span>
                     <span>{{ md(m.messageTime) }} {{ hm(m.messageTime) }}</span>
                     <Tooltip v-if="m.direction === 2 && m.status" :title="m.errorMessage || STATUS_ICON[m.status]?.label">
-                      <span :class="m.status === 'read' ? 'text-sky-500' : m.status === 'failed' ? 'font-bold text-red-500' : ''">
+                      <span :class="m.status === 'failed' ? 'rounded bg-white px-1 font-bold text-[#B91C1C]' : m.status === 'read' ? 'font-semibold' : ''">
                         {{ STATUS_ICON[m.status]?.text }}
                       </span>
                     </Tooltip>
@@ -795,16 +804,17 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             </Spin>
           </div>
 
-          <div class="border-t p-3">
-            <div v-if="aiDraft" class="mb-2 rounded border border-orange-200 bg-orange-50 p-3 text-sm">
-              <div class="mb-1 font-medium text-orange-700">
+          <div class="border-0 border-t border-solid border-[#E5E7EB] px-5 pb-4 pt-3">
+            <div v-if="aiDraft" class="mb-3 rounded-xl border border-solid border-[#BFDBFE] bg-white p-3.5 text-sm">
+              <div class="mb-1.5 text-xs font-semibold text-[#1D4ED8]">
+                <IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5 align-[-2px]" />
                 AI 已准备回复，未自动发出：{{ DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason }}
                 <span v-if="aiDraft.reasonDetail">（{{ aiDraft.reasonDetail }}）</span>
               </div>
-              <div v-if="aiDraft.content" class="line-clamp-3 whitespace-pre-wrap text-gray-700">{{ aiDraft.content }}</div>
-              <div class="mt-2 flex gap-2">
-                <Button v-if="aiDraft.content && current.windowOpen" size="small" type="primary" ghost @click="useDraft">填入输入框</Button>
-                <Button size="small" @click="discardDraft">忽略</Button>
+              <div v-if="aiDraft.content" class="line-clamp-4 whitespace-pre-wrap leading-[22px] text-[#111827]">{{ aiDraft.content }}</div>
+              <div class="mt-2.5 flex justify-end gap-2">
+                <Button size="small" @click="discardDraft">不用</Button>
+                <Button v-if="aiDraft.content && current.windowOpen" size="small" type="primary" @click="useDraft">填入输入框修改后发送</Button>
               </div>
             </div>
             <template v-if="current.windowOpen">

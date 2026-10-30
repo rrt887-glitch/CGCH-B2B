@@ -347,7 +347,7 @@ onMounted(() => {
   height: 18px;
   font-size: 11px;
   color: #fff;
-  background: #155dfc;
+  background: #2563EB;
   border-radius: 50%;
 }
 
@@ -449,7 +449,7 @@ onMounted(() => {
   width: 22px;
   height: 22px;
   font-size: 12px;
-  color: #155dfc;
+  color: #2563EB;
   background: #dbe5fd;
   border-radius: 50%;
 }

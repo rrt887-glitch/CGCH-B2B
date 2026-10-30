@@ -90,7 +90,7 @@ onMounted(() => load());
         <div class="min-w-0 flex-1">
           <div class="mb-1 flex flex-wrap items-center gap-2 text-xs">
             <Tag :color="PLATFORM[i.platform]?.color" class="m-0">{{ PLATFORM[i.platform]?.label || i.platform }}</Tag>
-            <span :class="i.direction === 1 ? 'text-gray-700' : 'text-[#155dfc]'">{{ i.direction === 1 ? `客户 ${i.contact || ''}` : i.ai ? 'AI 回复' : '我方' }}</span>
+            <span :class="i.direction === 1 ? 'text-gray-700' : 'text-[#2563EB]'">{{ i.direction === 1 ? `客户 ${i.contact || ''}` : i.ai ? 'AI 回复' : '我方' }}</span>
             <span v-if="i.subject" class="font-medium text-gray-800">{{ i.subject }}</span>
             <a class="ml-auto" @click="open(i)">{{ i.channel === 'mail' ? '打开邮件' : '打开会话' }}</a>
           </div>

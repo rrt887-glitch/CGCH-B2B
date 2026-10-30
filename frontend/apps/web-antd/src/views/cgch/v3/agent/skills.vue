@@ -114,7 +114,7 @@ onMounted(async () => {
   <div class="sk">
     <aside class="sk__list">
       <div v-for="s in SKILLS" :key="s.key" class="sk__item" :class="{ on: active === s.key }" @click="active = s.key">
-        <div v-if="s.hot" class="sk__robot"><IconifyIcon icon="lucide:bot-message-square" class="size-7 text-[#155dfc]" /></div>
+        <div v-if="s.hot" class="sk__robot"><IconifyIcon icon="lucide:bot-message-square" class="size-7 text-[#2563EB]" /></div>
         <div>
           <div class="font-semibold text-gray-900">{{ s.title }}</div>
           <div class="mt-0.5 text-xs text-gray-500">{{ s.desc }}</div>

@@ -275,7 +275,7 @@ async function copyCode() {
   justify-content: center;
   margin-top: 26px;
   font-size: 14px;
-  color: #155dfc;
+  color: #2563EB;
 }
 
 .evo__code {

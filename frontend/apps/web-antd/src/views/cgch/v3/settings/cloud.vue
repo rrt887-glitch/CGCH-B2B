@@ -262,7 +262,7 @@ onMounted(load);
 
 .cd__seg button.on {
   font-weight: 600;
-  color: #155dfc;
+  color: #2563EB;
   background: #fff;
   box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
 }

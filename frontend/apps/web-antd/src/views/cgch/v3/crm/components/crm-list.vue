@@ -421,7 +421,7 @@ defineExpose({ reload, setExtra, currentParams: params });
 }
 
 .crm-rail__item.on {
-  color: #155dfc;
+  color: #2563EB;
   background: #eef3fe;
 }
 
@@ -517,7 +517,7 @@ defineExpose({ reload, setExtra, currentParams: params });
 }
 
 .crm-list__icon:hover {
-  color: #155dfc;
+  color: #2563EB;
   background: #f3f6fd;
 }
 

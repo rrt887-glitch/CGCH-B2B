@@ -105,7 +105,7 @@ function switchMode() {
             </span>
           </template>
           <template v-else>
-            <IconifyIcon icon="lucide:loader-circle" class="size-10 animate-spin text-[#155dfc]" />
+            <IconifyIcon icon="lucide:loader-circle" class="size-10 animate-spin text-[#2563EB]" />
             <span class="mt-3 text-sm text-gray-500">{{ state === 'waiting' ? '等待在 Meta 窗口中完成' : '正在接入' }}</span>
           </template>
         </button>
@@ -204,7 +204,7 @@ function switchMode() {
 }
 
 .wa-connect__qr:not(:disabled):hover {
-  box-shadow: inset 0 0 0 1px #155dfc;
+  box-shadow: inset 0 0 0 1px #2563EB;
 }
 
 .wa-connect__primary {
@@ -213,7 +213,7 @@ function switchMode() {
   align-items: center;
   margin-top: 22px;
   font-size: 14px;
-  color: #155dfc;
+  color: #2563EB;
   cursor: pointer;
   background: none;
   border: 0;
@@ -230,7 +230,7 @@ function switchMode() {
   align-items: center;
   margin-top: auto;
   font-size: 13px;
-  color: #155dfc;
+  color: #2563EB;
 }
 
 .wa-connect__right {
@@ -314,7 +314,7 @@ function switchMode() {
 }
 
 .wa-connect__foot a {
-  color: #155dfc;
+  color: #2563EB;
 }
 
 .wa-connect__foot a.text-gray-400 {

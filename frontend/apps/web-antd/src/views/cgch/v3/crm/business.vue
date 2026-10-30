@@ -140,7 +140,7 @@ onMounted(async () => {
               <div class="truncate font-medium text-gray-900">{{ b.name }}</div>
               <div class="mt-1 truncate text-xs text-gray-500">{{ b.customerName || '-' }}</div>
               <div class="mt-2 flex items-center justify-between text-xs">
-                <span class="font-medium text-[#155dfc]">{{ fmtMoney(b.totalPrice) }}</span>
+                <span class="font-medium text-[#2563EB]">{{ fmtMoney(b.totalPrice) }}</span>
                 <span class="text-gray-400">{{ b.dealTime ? fmtTime(b.dealTime).slice(0, 10) : '' }}</span>
               </div>
             </div>
@@ -209,7 +209,7 @@ onMounted(async () => {
 }
 
 .biz__switch button.on {
-  color: #155dfc;
+  color: #2563EB;
   background: #fff;
   box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }
@@ -296,7 +296,7 @@ onMounted(async () => {
 
 .biz__card:hover {
   border-color: #c7d7fe;
-  box-shadow: 0 2px 8px rgb(21 93 252 / 8%);
+  box-shadow: 0 2px 8px rgb(37 99 235 / 8%);
 }
 
 .biz__empty {

@@ -154,7 +154,7 @@ onMounted(async () => {
 
 <style scoped>
 .v3-conv {
-  height: calc(100vh - 16px);
+  height: calc(100vh - 24px);
 }
 
 .v3-conv :deep(.ant-spin-container) {
@@ -172,14 +172,15 @@ onMounted(async () => {
 
 .v3-conv__body {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   height: 100%;
 }
 
 .v3-conv__side {
-  flex: 0 0 172px;
+  flex: 0 0 188px;
   overflow: auto;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
 
@@ -192,11 +193,11 @@ onMounted(async () => {
   gap: 6px;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 8px;
-  font-size: 14px;
-  color: #1f2937;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #374151;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .v3-conv__icon {
@@ -214,11 +215,14 @@ onMounted(async () => {
 }
 
 .v3-conv__item:hover {
-  background: #f3f6fd;
+  color: #111827;
+  background: #f3f4f6;
 }
 
 .v3-conv__item.on {
-  background: #eaf0fe;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff4ff;
 }
 
 .v3-conv__main {

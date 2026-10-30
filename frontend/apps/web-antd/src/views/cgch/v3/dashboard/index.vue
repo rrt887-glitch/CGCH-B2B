@@ -48,7 +48,7 @@ const updated = computed(() => (data.value ? dayjs(data.value.updateTime).format
 
 // ===== 流量占比 =====
 const SEGMENTS = [
-  { key: 'sales', label: '销售咨询', color: '#155dfc' },
+  { key: 'sales', label: '销售咨询', color: '#2563EB' },
   { key: 'after_sales', label: '售后支持', color: '#5cc8f5' },
   { key: 'business', label: '商务合作', color: '#8a7cf0' },
   { key: 'invalid', label: '无效咨询', color: '#aab4cc' },
@@ -224,7 +224,7 @@ onMounted(load);
                   <Tooltip :title="m.tip"><div class="v3-tile__label">{{ m.label }}</div></Tooltip>
                   <div class="v3-tile__value">{{ pct(m.v) }}</div>
                 </div>
-                <svg viewBox="0 0 120 30" class="h-8 w-32"><path :d="SPARK" fill="none" stroke="#155dfc" stroke-width="1.5" /></svg>
+                <svg viewBox="0 0 120 30" class="h-8 w-32"><path :d="SPARK" fill="none" stroke="#2563EB" stroke-width="1.5" /></svg>
               </div>
             </div>
           </div>
@@ -247,21 +247,21 @@ onMounted(load);
                   </small>
                 </div>
               </div>
-              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#155dfc" stroke-width="1.5" /></svg>
+              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#2563EB" stroke-width="1.5" /></svg>
             </div>
             <div class="v3-tile flex items-center justify-between">
               <div>
                 <div class="v3-tile__label">询盘 → 报价</div>
                 <div class="v3-tile__value">{{ pct2(data?.business.inquiryToQuoteRate ?? 0) }}</div>
               </div>
-              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#155dfc" stroke-width="1.5" /></svg>
+              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#2563EB" stroke-width="1.5" /></svg>
             </div>
             <div class="v3-tile flex items-center justify-between">
               <div>
                 <div class="v3-tile__label">商机 → 赢单</div>
                 <div class="v3-tile__value">{{ pct2(data?.business.businessToWinRate ?? 0) }}</div>
               </div>
-              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#155dfc" stroke-width="1.5" /></svg>
+              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#2563EB" stroke-width="1.5" /></svg>
             </div>
           </div>
         </section>
@@ -275,7 +275,7 @@ onMounted(load);
           <div v-for="r in funnel" :key="r.value" class="flex items-center gap-3 text-sm">
             <span class="w-14 shrink-0 text-gray-600">{{ r.label }}</span>
             <div class="h-6 flex-1 rounded bg-gray-50">
-              <div class="flex h-6 items-center rounded bg-[#155dfc]/80 px-2 text-xs text-white" :style="{ width: `${r.width}%` }">{{ r.reached }}</div>
+              <div class="flex h-6 items-center rounded bg-[#2563EB]/80 px-2 text-xs text-white" :style="{ width: `${r.width}%` }">{{ r.reached }}</div>
             </div>
             <span class="w-28 shrink-0 text-xs text-gray-500">当前 {{ r.current }}<template v-if="r.conv !== null"> · 转化 {{ pct(r.conv) }}</template></span>
           </div>
@@ -470,7 +470,7 @@ onMounted(load);
 }
 
 .v3-chip.on {
-  color: #155dfc;
-  background: rgb(21 93 252 / 10%);
+  color: #2563EB;
+  background: rgb(37 99 235 / 10%);
 }
 </style>
