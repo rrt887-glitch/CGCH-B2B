@@ -6,10 +6,10 @@ import type { Dayjs } from 'dayjs';
 
 import type { ChannelDashboardV3Api } from '#/api/channel/dashboard';
 
-import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
-import { Empty, Modal, RangePicker, Spin, Tooltip } from 'ant-design-vue';
+import { Empty, Modal, RangePicker, Segmented, Spin, Tooltip } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import { getDashboardV3 } from '#/api/channel/dashboard';
@@ -18,6 +18,17 @@ import { stageOptions } from '#/views/cgch/v3/crm/components/shared';
 defineOptions({ name: 'CgchV3Dashboard' });
 
 const router = useRouter();
+const route = useRoute();
+/** 看板三个标签：数据分析（AI 接待表现）、经营分析（业务员 / 平台 / 国家）、客户概览 */
+const TABS = [
+  { label: '数据分析', value: 'data' },
+  { label: '经营分析', value: 'business' },
+  { label: '客户概览', value: 'customers' },
+];
+const BusinessAnalysis = defineAsyncComponent(() => import('#/views/cgch/board/overview/index.vue'));
+const CustomerOverview = defineAsyncComponent(() => import('#/views/cgch/board/customer-overview/index.vue'));
+const tab = ref(TABS.some((t) => t.value === route.query.tab) ? String(route.query.tab) : 'data');
+watch(tab, (v) => router.replace({ query: { ...route.query, tab: v === 'data' ? undefined : v } }));
 const range = ref<[Dayjs, Dayjs]>([dayjs(), dayjs()]);
 const loading = ref(false);
 const data = ref<ChannelDashboardV3Api.Overview>();
@@ -121,6 +132,10 @@ onMounted(load);
 
 <template>
   <div class="v3-dash">
+    <div class="mb-2 px-1"><Segmented v-model:value="tab" :options="TABS" /></div>
+    <BusinessAnalysis v-if="tab === 'business'" />
+    <CustomerOverview v-else-if="tab === 'customers'" />
+    <template v-else>
     <div class="v3-dash__bar">
       <span class="text-base font-semibold">数据分析</span>
       <RangePicker
@@ -315,6 +330,7 @@ onMounted(load);
         </div>
       </div>
     </Modal>
+    </template>
   </div>
 </template>
 

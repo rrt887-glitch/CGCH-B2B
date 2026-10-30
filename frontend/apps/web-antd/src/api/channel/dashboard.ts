@@ -42,6 +42,18 @@ export namespace ChannelDashboardApi {
     waIn: number;
     out: number;
     aiOut: number;
+    clues: number;
+    customers: number;
+    followUps: number;
+    orders: number;
+    orderAmount: number;
+  }
+
+  export interface CountryRow {
+    countryCode: string;
+    clues: number;
+    customers: number;
+    deals: number;
   }
 
   export interface Overview {
@@ -53,6 +65,11 @@ export namespace ChannelDashboardApi {
     pendingReasons: Record<string, number>;
     users: UserRow[];
     scope: { all: boolean; userIds: number[]; userId?: number };
+    /** 按平台的询盘会话数；mail 为邮件来信数 */
+    platforms: Record<string, number>;
+    countries: CountryRow[];
+    orders: number;
+    orderAmount: number;
   }
 }
 

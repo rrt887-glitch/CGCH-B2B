@@ -28,6 +28,21 @@ public class ChannelDashboardRespVO {
     private List<UserRow> users = new ArrayList<>();
     @Schema(description = "数据范围")
     private Scope scope;
+    @Schema(description = "经营分析：按平台的询盘会话数（mail 为邮件来信数）")
+    private Map<String, Long> platforms = new LinkedHashMap<>();
+    @Schema(description = "经营分析：按国家的新增线索、客户、成交")
+    private List<CountryRow> countries = new ArrayList<>();
+    @Schema(description = "经营分析：订单数和金额（本期）")
+    private long orders;
+    private java.math.BigDecimal orderAmount = java.math.BigDecimal.ZERO;
+
+    @Data
+    public static class CountryRow {
+        private String countryCode;
+        private long clues;
+        private long customers;
+        private long deals;
+    }
 
     @Data
     public static class Scope {
@@ -86,6 +101,12 @@ public class ChannelDashboardRespVO {
         private long waIn;
         private long out;
         private long aiOut;
+        /** 经营指标：新增线索、新增客户、写跟进次数、订单数、订单金额 */
+        private long clues;
+        private long customers;
+        private long followUps;
+        private long orders;
+        private java.math.BigDecimal orderAmount = java.math.BigDecimal.ZERO;
     }
 
 }

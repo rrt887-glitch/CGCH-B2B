@@ -1563,6 +1563,15 @@ jobs:
           call('GET', '/crm/customer/put-pool-remind-page?pageNo=1&pageSize=10&sceneType=1')
           assert call('GET', f'/channel/wa/conversation/page?pageNo=1&pageSize=10&customerId={cid}')['total'] == 0
           print('跟进日程：今天需联系、写跟进后移出、今天已联系、外贸跟进方式')
+          # 经营分析：按业务员的线索 / 客户 / 跟进 / 订单，按平台的询盘，按国家的线索和客户
+          ba = call('GET', '/channel/dashboard/overview?days=30')
+          me = next((u for u in ba['users'] if u['userId'] == 1), None)
+          assert me and me['customers'] >= 1 and me['followUps'] >= 2, ba['users']
+          assert 'mail' in ba['platforms'] and isinstance(ba['countries'], list) and 'orderAmount' in ba and ba['orders'] >= 0, ba
+          assert sum(c['customers'] for c in ba['countries']) >= 1, ba['countries']
+          one = call('GET', '/channel/dashboard/overview?days=30&userId=1')
+          assert [u['userId'] for u in one['users']] in ([1], []) or all(u['userId'] == 1 for u in one['users']), one['users']
+          print('经营分析：按业务员、平台、国家统计')
           # 智能跟进：AI 回复后客户一直没回，到时间自动跟进一次，达到轮数后不再跟进
           import smtplib, subprocess, time, urllib.parse
           from email.message import EmailMessage
