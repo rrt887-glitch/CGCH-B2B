@@ -43,7 +43,8 @@ import { getQuickReplies, markQuickReplyUsed } from '#/api/channel/quick-reply';
 import type { QuickReplyApi } from '#/api/channel/quick-reply';
 import { onChannelRealtime } from '#/utils/channel-realtime';
 import { requestClient } from '#/api/request';
-import { stageLabel, stageOptions } from '#/views/cgch/v3/crm/components/shared';
+import { levelLabel, stageLabel, stageOptions } from '#/views/cgch/v3/crm/components/shared';
+import { countryName } from '#/views/cgch/crm/shared/countries';
 import { getCustomerGroupList, getTagList, updateCustomerTags } from '#/api/crm/cgch';
 import type { CgchCrmApi } from '#/api/crm/cgch';
 import {
@@ -218,6 +219,24 @@ onBeforeUnmount(() => {
 const customerStage = ref<number>();
 const customerTags = ref<number[]>([]);
 const customerGroup = ref<number>();
+/** 右侧客户信息栏用到的客户字段 */
+interface PanelCustomer {
+  name?: string;
+  level?: number;
+  countryCode?: string;
+  email?: string;
+  mobile?: string;
+  contactNextTime?: number | string;
+  contactLastTime?: number | string;
+  contactLastContent?: string;
+  ownerUserName?: string;
+  companyName?: string;
+}
+const customer = ref<PanelCustomer>();
+/** 客户阶段进度条：已走过的阶段标蓝，点击可直接改阶段 */
+const stageSteps = computed(() =>
+  stageOptions().map((o) => ({ label: String(o.label), value: Number(o.value), done: (customerStage.value ?? 0) >= Number(o.value), on: customerStage.value === Number(o.value) })),
+);
 const tagOptions = ref<CgchCrmApi.TreeNode[]>([]);
 const groupOptions = ref<CgchCrmApi.TreeNode[]>([]);
 const tagName = (id: number) => tagOptions.value.find((t) => t.id === id)?.name;
@@ -227,10 +246,12 @@ watch(
     customerStage.value = undefined;
     customerTags.value = [];
     customerGroup.value = undefined;
+    customer.value = undefined;
     if (!id) return;
     try {
-      const c = await requestClient.get<{ groupId?: number; stage?: number; tagIds?: number[] }>(`/crm/customer/get?id=${id}`);
+      const c = await requestClient.get<PanelCustomer & { groupId?: number; stage?: number; tagIds?: number[] }>(`/crm/customer/get?id=${id}`);
       if (current.value?.customerId !== id) return;
+      customer.value = c ?? undefined;
       customerStage.value = c?.stage;
       customerTags.value = c?.tagIds ?? [];
       customerGroup.value = c?.groupId ?? undefined;
@@ -260,6 +281,51 @@ async function saveTags() {
   customerGroup.value = groupDraft.value;
   tagEditOpen.value = false;
   message.success('已保存客户标签');
+}
+
+// ===== 写跟进：记下这次沟通并约下次联系时间 =====
+const followOpen = ref(false);
+const followSaving = ref(false);
+const followForm = ref<{ content: string; days: number }>({ content: '', days: 3 });
+const FOLLOW_DAYS = [
+  { label: '明天', value: 1 },
+  { label: '3 天后', value: 3 },
+  { label: '一周后', value: 7 },
+  { label: '两周后', value: 14 },
+];
+function openFollow() {
+  followForm.value = { content: '', days: 3 };
+  followOpen.value = true;
+}
+async function saveFollow() {
+  const id = current.value?.customerId;
+  if (!id) return;
+  if (!followForm.value.content.trim()) {
+    message.warning('请填写跟进内容');
+    return;
+  }
+  followSaving.value = true;
+  try {
+    const next = new Date();
+    next.setDate(next.getDate() + followForm.value.days);
+    next.setHours(10, 0, 0, 0);
+    await requestClient.post('/crm/follow-up-record/create', {
+      bizType: 2,
+      bizId: id,
+      type: isWa(current.value) ? 5 : 4,
+      content: followForm.value.content.trim(),
+      nextTime: next.getTime(),
+      businessIds: [],
+      contactIds: [],
+      picUrls: [],
+      fileUrls: [],
+    });
+    customer.value = { ...customer.value, contactLastContent: followForm.value.content.trim(), contactLastTime: Date.now(), contactNextTime: next.getTime() };
+    followOpen.value = false;
+    message.success('已记录跟进');
+  } finally {
+    followSaving.value = false;
+  }
 }
 
 async function changeStage(v: number) {
@@ -686,47 +752,21 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 <Tag v-if="current.customerName" color="blue" class="cursor-pointer" @click="router.push(`/crm/customer/detail/${current.customerId}`)">
                   客户：{{ current.customerName }}
                 </Tag>
-                <Select
-                  v-if="current.customerId && customerStage !== undefined"
-                  :value="customerStage"
-                  size="small"
-                  class="w-24"
-                  :options="stageOptions().map((o) => ({ label: o.label, value: o.value }))"
-                  @change="(v: any) => changeStage(Number(v))"
-                />
-                <template v-if="current.customerId && customerStage !== undefined">
-                  <Tag v-for="t in customerTags.slice(0, 3)" :key="t" class="m-0">{{ tagName(t) || t }}</Tag>
-                  <Tag v-if="customerTags.length > 3" class="m-0">+{{ customerTags.length - 3 }}</Tag>
-                  <Popover trigger="click" placement="bottomLeft" :open="tagEditOpen" @open-change="openTagEdit">
-                    <template #content>
-                      <div class="flex w-72 flex-col gap-2">
-                        <div class="text-xs text-gray-500">客户标签</div>
-                        <Select
-                          v-model:value="tagDraft"
-                          mode="multiple"
-                          size="small"
-                          placeholder="选择标签"
-                          :options="tagOptions.map((t) => ({ label: t.name, value: t.id }))"
-                          option-filter-prop="label"
-                        />
-                        <div class="text-xs text-gray-500">客户分组</div>
-                        <Select
-                          v-model:value="groupDraft"
-                          size="small"
-                          allow-clear
-                          placeholder="不分组"
-                          :options="groupOptions.map((g) => ({ label: g.name, value: g.id }))"
-                        />
-                        <div class="text-right"><Button size="small" type="primary" @click="saveTags">保存</Button></div>
-                      </div>
-                    </template>
-                    <a class="text-xs">{{ customerTags.length ? '改标签' : '+ 打标签' }}</a>
-                  </Popover>
-                </template>
                 <Tag v-else-if="current.clueName" color="cyan" class="cursor-pointer" @click="router.push(`/crm/clue/detail/${current.clueId}`)">
                   线索：{{ current.clueName }}
                 </Tag>
                 <Tag v-else>未关联客户</Tag>
+                <!-- 窄屏没有右侧客户栏时，阶段和标签在这里改 -->
+                <span v-if="current.customerId && customerStage !== undefined" class="contents xl:hidden">
+                  <Select
+                    :value="customerStage"
+                    size="small"
+                    class="w-24"
+                    :options="stageOptions().map((o) => ({ label: o.label, value: o.value }))"
+                    @change="(v: any) => changeStage(Number(v))"
+                  />
+                  <Tag v-for="t in customerTags.slice(0, 3)" :key="t" class="m-0">{{ tagName(t) || t }}</Tag>
+                </span>
                 <Tooltip v-if="current.windowOpen" :title="`窗口在 ${fmtDateTime(current.windowExpireTime)} 关闭`">
                   <Tag color="green">24 小时窗口内</Tag>
                 </Tooltip>
@@ -879,7 +919,105 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
           </div>
         </template>
       </div>
+
+      <!-- 客户信息栏（设计稿「会话工作台」右侧）：关联了客户时显示，窄屏隐藏 -->
+      <aside
+        v-if="current?.customerId && customerStage !== undefined"
+        class="hidden w-80 shrink-0 flex-col gap-5 overflow-auto rounded-xl border border-solid border-[#E5E7EB] bg-white p-5 xl:flex"
+      >
+        <div class="flex flex-col gap-1">
+          <div class="text-xs text-[#6B7280]">客户</div>
+          <a class="text-base font-semibold text-[#111827]" @click="router.push(`/crm/customer/detail/${current.customerId}`)">{{ customer?.name || current.customerName }}</a>
+          <div class="mt-1 flex flex-wrap gap-1.5">
+            <span v-if="customer?.level" class="rounded bg-[#FEF3C7] px-2 py-0.5 text-xs font-medium text-[#92400E]">{{ levelLabel(customer.level) }}</span>
+            <span v-if="customer?.countryCode" class="rounded bg-[#F3F4F6] px-2 py-0.5 text-xs text-[#374151]">{{ countryName(customer.countryCode) || customer.countryCode }}</span>
+            <span v-for="t in customerTags" :key="t" class="rounded bg-[#F3F4F6] px-2 py-0.5 text-xs text-[#374151]">{{ tagName(t) || t }}</span>
+            <Popover trigger="click" placement="bottomRight" :open="tagEditOpen" @open-change="openTagEdit">
+              <template #content>
+                <div class="flex w-72 flex-col gap-2">
+                  <div class="text-xs text-gray-500">客户标签</div>
+                  <Select
+                    v-model:value="tagDraft"
+                    mode="multiple"
+                    size="small"
+                    placeholder="选择标签"
+                    :options="tagOptions.map((t) => ({ label: t.name, value: t.id }))"
+                    option-filter-prop="label"
+                  />
+                  <div class="text-xs text-gray-500">客户分组</div>
+                  <Select
+                    v-model:value="groupDraft"
+                    size="small"
+                    allow-clear
+                    placeholder="不分组"
+                    :options="groupOptions.map((g) => ({ label: g.name, value: g.id }))"
+                  />
+                  <div class="text-right"><Button size="small" type="primary" @click="saveTags">保存</Button></div>
+                </div>
+              </template>
+              <button type="button" class="cursor-pointer rounded border border-dashed border-[#D1D5DB] bg-white px-2 py-0.5 text-xs text-[#4B5563]">+ 标签</button>
+            </Popover>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2.5">
+          <div class="text-[13px] font-semibold">客户阶段</div>
+          <div class="flex gap-1">
+            <button
+              v-for="s in stageSteps"
+              :key="s.value"
+              type="button"
+              class="flex flex-1 cursor-pointer flex-col items-center gap-1.5 border-0 bg-transparent p-0"
+              :title="`改为「${s.label}」`"
+              @click="changeStage(s.value)"
+            >
+              <span class="block h-1.5 w-full rounded-full" :class="s.done ? 'bg-[#2563EB]' : 'bg-[#E5E7EB]'"></span>
+              <span class="text-[11px]" :class="s.on ? 'font-semibold text-[#2563EB]' : 'text-[#6B7280]'">{{ s.label }}</span>
+            </button>
+          </div>
+        </div>
+
+        <dl class="m-0 grid grid-cols-[72px_1fr] gap-x-3 gap-y-2.5 text-[13px]">
+          <template v-if="customer?.companyName">
+            <dt class="text-[#6B7280]">公司</dt><dd class="m-0 break-words">{{ customer.companyName }}</dd>
+          </template>
+          <template v-if="customer?.email">
+            <dt class="text-[#6B7280]">邮箱</dt><dd class="m-0 break-all">{{ customer.email }}</dd>
+          </template>
+          <template v-if="customer?.mobile">
+            <dt class="text-[#6B7280]">电话</dt><dd class="m-0">{{ customer.mobile }}</dd>
+          </template>
+          <dt class="text-[#6B7280]">下次联系</dt>
+          <dd class="m-0" :class="customer?.contactNextTime ? 'font-medium text-[#B45309]' : 'text-[#6B7280]'">{{ fmtDateTime(customer?.contactNextTime, 'MM-DD HH:mm', '未约') }}</dd>
+          <dt class="text-[#6B7280]">负责人</dt><dd class="m-0">{{ customer?.ownerUserName || '-' }}</dd>
+        </dl>
+
+        <div class="flex flex-col gap-2 rounded-[10px] bg-[#F9FAFB] p-3">
+          <div class="flex items-center justify-between">
+            <span class="text-[13px] font-semibold">最近跟进</span>
+            <a class="text-xs" @click="router.push(`/crm/customer/detail/${current.customerId}`)">全部记录</a>
+          </div>
+          <div class="text-[13px] leading-5 text-[#374151]">{{ customer?.contactLastContent || '还没有跟进记录' }}</div>
+          <div v-if="customer?.contactLastTime" class="text-xs text-[#6B7280]">{{ fmtDateTime(customer.contactLastTime, 'MM-DD HH:mm') }}</div>
+        </div>
+
+        <div class="flex-1"></div>
+        <div class="flex gap-2">
+          <Button class="flex-1" @click="router.push(`/crm/customer/detail/${current.customerId}`)">客户详情</Button>
+          <Button class="flex-1 !border-[#111827] !bg-[#111827] !text-white" @click="openFollow">写跟进</Button>
+        </div>
+      </aside>
     </div>
+
+    <Modal v-model:open="followOpen" title="写跟进" ok-text="保存" :confirm-loading="followSaving" @ok="saveFollow">
+      <div class="flex flex-col gap-3">
+        <Textarea v-model:value="followForm.content" :auto-size="{ minRows: 4, maxRows: 8 }" :maxlength="2000" placeholder="这次聊了什么、客户的反馈、下一步要做什么" />
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <span class="text-[#4B5563]">下次联系</span>
+          <Segmented v-model:value="followForm.days" :options="FOLLOW_DAYS" size="small" />
+        </div>
+      </div>
+    </Modal>
 
     <Modal v-model:open="remarkOpen" title="设置备注名" ok-text="保存" @ok="saveRemark">
       <Input v-model:value="remarkText" :maxlength="100" allow-clear placeholder="例如：Rashid（迪拜灯具批发商），留空表示清除" />

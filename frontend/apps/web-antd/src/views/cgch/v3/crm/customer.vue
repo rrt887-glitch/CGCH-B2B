@@ -124,6 +124,12 @@ async function toggleStar(r: any) {
 
 // ===== 客户阶段 =====
 const stageCount = ref<Record<number, number>>({});
+/** 顶部阶段快捷筛选（设计稿「CRM · 客户列表」） */
+const stageChip = ref<number>();
+function pickStage(v?: number) {
+  stageChip.value = v;
+  listRef.value?.setExtra({ stage: v });
+}
 async function loadStageStats() {
   if (props.pool) return;
   try {
@@ -261,6 +267,14 @@ const me = computed(() => userStore.userInfo?.id);
       @select="(rows) => (selected = rows)"
       @loaded="loadResearch"
     >
+      <template v-if="!pool" #filters>
+        <div class="crm-stage-chips" role="group" aria-label="按阶段筛选">
+          <button type="button" :class="{ on: stageChip === undefined }" @click="pickStage(undefined)">全部阶段</button>
+          <button v-for="o in stageOptions()" :key="o.value" type="button" :class="{ on: stageChip === o.value }" @click="pickStage(Number(o.value))">
+            {{ o.label }}<span v-if="stageCount[Number(o.value)]">{{ stageCount[Number(o.value)] }}</span>
+          </button>
+        </div>
+      </template>
       <template #actions>
         <Button class="crm-ai-btn" :loading="busy" @click="oneClickWake"><IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5" />一键唤醒</Button>
         <Button v-if="!pool" class="crm-ai-btn" :loading="busy" @click="oneClickResearch">
@@ -355,5 +369,38 @@ const me = computed(() => userStore.userInfo?.id);
   color: #2563EB;
   background: #EFF4FF;
   border-color: #BFDBFE;
+}
+.crm-stage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.crm-stage-chips button {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+}
+
+.crm-stage-chips button span {
+  margin-left: 4px;
+  color: #6b7280;
+}
+
+.crm-stage-chips button.on {
+  font-weight: 500;
+  color: #fff;
+  background: #111827;
+  border-color: #111827;
+}
+
+.crm-stage-chips button.on span {
+  color: #d1d5db;
 }
 </style>
