@@ -157,6 +157,7 @@ public class CrmContractController {
     @ApiAccessLog(operateType = EXPORT)
     public void exportContractExcel(@Valid CrmContractPageReqVO exportReqVO,
                                     HttpServletResponse response) throws IOException {
+        exportReqVO.setPageSize(PageParam.PAGE_SIZE_NONE); // 导出全部，不分页
         PageResult<CrmContractDO> pageResult = contractService.getContractPage(exportReqVO, getLoginUserId());
         // 导出 Excel
         ExcelUtils.write(response, "合同.xls", "数据", CrmContractRespVO.class,

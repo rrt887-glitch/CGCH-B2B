@@ -160,7 +160,8 @@ async function receive(r: any) {
 }
 
 async function doExport() {
-  const data = await exportCustomer({ ...listRef.value?.currentParams(), pageNo: 1, pageSize: -1 });
+  // 导出时后端自己取全部，这里的分页参数只为通过校验
+  const data = await exportCustomer({ ...listRef.value?.currentParams(), pageNo: 1, pageSize: 10 });
   downloadFileFromBlobPart({ fileName: props.pool ? '公海客户.xls' : '客户.xls', source: data });
 }
 
