@@ -113,7 +113,7 @@ public interface ChannelDashboardMapper {
     /** 按记录人：写跟进的次数（creator 存的是用户编号） */
     @Select("<script>SELECT creator AS u, COUNT(*) AS n FROM crm_follow_up_record WHERE deleted = 0" + RANGE
             + "<if test='userIds != null'> AND creator IN "
-            + "<foreach collection='userIds' item='x' open='(' separator=',' close=')'>CAST(#{x} AS CHAR)</foreach></if>"
+            + "<foreach collection='userIds' item='x' open='(' separator=',' close=')'>#{x}</foreach></if>"
             + " GROUP BY creator</script>")
     List<Map<String, Object>> followUpsByCreator(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
                                                  @Param("userIds") Collection<Long> userIds);
