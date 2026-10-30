@@ -169,6 +169,12 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     }
 
     @Override
+    @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#id", level = CrmPermissionLevelEnum.READ)
+    public CrmCustomerDO validateCustomerReadable(Long id) {
+        return validateCustomerExists(id);
+    }
+
+    @Override
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
     public void updateCustomerTags(Long id, java.util.List<Long> tagIds, Long groupId) {
         validateCustomerExists(id);
