@@ -68,14 +68,16 @@ public class ChannelCustomerTimelineService {
                         m.getAiGenerated(), c.getId(), null, StrUtil.blankToDefault(c.getRemarkName(), c.contactLabel())));
             }
         }
-        LambdaQueryWrapperX<ChannelMailMessageDO> mq = new LambdaQueryWrapperX<ChannelMailMessageDO>()
-                .eq(ChannelMailMessageDO::getCustomerId, customerId).ne(ChannelMailMessageDO::getFolder, "DRAFT");
+        LambdaQueryWrapperX<ChannelMailMessageDO> mq = new LambdaQueryWrapperX<>();
+        mq.eq(ChannelMailMessageDO::getCustomerId, customerId);
+        mq.ne(ChannelMailMessageDO::getFolder, "DRAFT");
         long mailCount = channelMailMessageMapper.selectCount(mq);
-        for (ChannelMailMessageDO m : channelMailMessageMapper.selectList(new LambdaQueryWrapperX<ChannelMailMessageDO>()
-                .eq(ChannelMailMessageDO::getCustomerId, customerId).ne(ChannelMailMessageDO::getFolder, "DRAFT")
-                .ltIfPresent(ChannelMailMessageDO::getSentTime, before)
-                .orderByDesc(ChannelMailMessageDO::getSentTime).orderByDesc(ChannelMailMessageDO::getId)
-                .last("LIMIT " + (n + 1)))) {
+        LambdaQueryWrapperX<ChannelMailMessageDO> ml = new LambdaQueryWrapperX<>();
+        ml.eq(ChannelMailMessageDO::getCustomerId, customerId);
+        ml.ne(ChannelMailMessageDO::getFolder, "DRAFT");
+        ml.ltIfPresent(ChannelMailMessageDO::getSentTime, before);
+        ml.orderByDesc(ChannelMailMessageDO::getSentTime).orderByDesc(ChannelMailMessageDO::getId).last("LIMIT " + (n + 1));
+        for (ChannelMailMessageDO m : channelMailMessageMapper.selectList(ml)) {
             String body = HtmlText.snippet(m.getTextBody(), m.getHtmlBody(), 1000);
             items.add(new Item("mail", "mail", m.getDirection(), m.getSentTime(), body, m.getSubject(), "email", null,
                     m.getAiGenerated(), null, m.getId(), StrUtil.blankToDefault(m.getFromName(), m.getFromAddress())));
