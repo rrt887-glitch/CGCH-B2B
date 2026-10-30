@@ -1,9 +1,12 @@
 import { defineConfig } from '@vben/vite-config';
 
+import { offlineIcons } from './build/offline-icons';
+
 export default defineConfig(async () => {
   return {
     application: {},
     vite: {
+      plugins: [offlineIcons()],
       server: {
         allowedHosts: true,
         proxy: {
