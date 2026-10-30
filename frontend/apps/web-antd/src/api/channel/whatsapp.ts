@@ -52,6 +52,9 @@ export namespace ChannelWaApi {
     remarkName?: string;
     /** 客户等级：1 A 类 … 4 D 类 */
     customerLevel?: number;
+    /** 当前处理人及姓名（团队会话里显示） */
+    handlerUserId?: number;
+    handlerName?: string;
   }
 
   export interface Message {
@@ -89,6 +92,8 @@ export namespace ChannelWaApi {
     starred?: boolean;
     unreplied?: boolean;
     level?: number;
+    /** 团队会话：数据权限范围内其他同事负责的会话 */
+    team?: boolean;
   }
 
   export interface SendReq {

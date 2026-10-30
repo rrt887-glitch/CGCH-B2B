@@ -1978,7 +1978,13 @@ jobs:
           call('POST', '/system/permission/assign-role-menu', {'roleId': srole, 'menuIds': [20000, 20001, 22401, 22111, 22112]})
           call('PUT', f"/channel/wa/conversation/transfer?id={ecv['id']}&userId={sid}")
           assert ecv['id'] not in [c['id'] for c in cpage()], '转交后自己的列表里没有'
-          assert call('GET', f"/channel/wa/conversation/get?id={ecv['id']}", ok=False)['code'] != 0, '转交后不能再查看'
+          # 团队会话：管理员（全部数据权限）在「团队」里看得到转交给小王的会话并能查看；小王只有本人数据权限，团队里没有别人的会话
+          tm = call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')['list']
+          tv = next((c for c in tm if c['id'] == ecv['id']), None)
+          assert tv and tv['handlerUserId'] == sid and tv['handlerName'] == '业务员小王', tm
+          assert not [c for c in tm if c.get('handlerUserId') == 1], '团队会话不含自己负责的'
+          assert call('GET', f"/channel/wa/conversation/get?id={ecv['id']}")['id'] == ecv['id'], '主管能查看下属的会话'
+          assert call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')['data']['total'] == 0, '只有本人权限时团队会话为空'
           sl = call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')
           assert sl['code'] == 0 and [c['id'] for c in sl['data']['list']] == [ecv['id']] and sl['data']['list'][0]['ownerUserId'] == sid, sl
           sr = call_s('POST', '/channel/wa/message/send', {'conversationId': ecv['id'], 'text': 'I will follow up today.'})

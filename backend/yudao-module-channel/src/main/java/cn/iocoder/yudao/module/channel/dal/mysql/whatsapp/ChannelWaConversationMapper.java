@@ -18,6 +18,27 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
     }
 
     /**
+     * 团队会话：处理人是同事（不是我）且在我的数据权限范围内。
+     * teamUsers 为 null 表示可看全部（管理员）；teamAccounts 是这些同事名下的号码；myAccounts 是我名下的号码。
+     */
+    default PageResult<ChannelWaConversationDO> selectTeamPage(cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaConversationPageReqVO req,
+                                                               Long userId, Collection<Long> teamUsers, Collection<Long> teamAccounts,
+                                                               Collection<Long> myAccounts) {
+        LambdaQueryWrapperX<ChannelWaConversationDO> q = new LambdaQueryWrapperX<>();
+        if (teamUsers == null) {
+            q.and(w -> w.nested(x -> x.isNotNull(ChannelWaConversationDO::getOwnerUserId).ne(ChannelWaConversationDO::getOwnerUserId, userId))
+                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).notIn(ChannelWaConversationDO::getAccountId, myAccounts)));
+        } else {
+            q.and(w -> w.in(ChannelWaConversationDO::getOwnerUserId, teamUsers)
+                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).in(ChannelWaConversationDO::getAccountId, teamAccounts)));
+        }
+        if (req.getAccountId() != null) {
+            q.eq(ChannelWaConversationDO::getAccountId, req.getAccountId());
+        }
+        return selectPage(req, applyFilters(q, req));
+    }
+
+    /**
      * 会话列表：我号码上的会话（没转交给别人的）+ 转交给我的会话
      *
      * @param accountIds 我的号码；accountId 筛选时只含这一个
@@ -33,6 +54,12 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
                 w.or().eq(ChannelWaConversationDO::getOwnerUserId, userId);
             }
         });
+        return selectPage(req, applyFilters(q, req));
+    }
+
+    /** 归档、收藏、未读、未回复、客户等级、关键词筛选，按收藏、最近消息排序 */
+    default LambdaQueryWrapperX<ChannelWaConversationDO> applyFilters(LambdaQueryWrapperX<ChannelWaConversationDO> q,
+                                                                     cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaConversationPageReqVO req) {
         if (Boolean.TRUE.equals(req.getArchived())) {
             q.eq(ChannelWaConversationDO::getArchived, true);
         } else {
@@ -61,7 +88,7 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
         }
         q.orderByDesc(ChannelWaConversationDO::getStarred).orderByDesc(ChannelWaConversationDO::getLastMessageTime)
                 .orderByDesc(ChannelWaConversationDO::getId);
-        return selectPage(req, q);
+        return q;
     }
 
 }

@@ -30,6 +30,10 @@ public class ChannelWaConversationRespVO {
     private Long ownerUserId;
     @Schema(description = "备注名")
     private String remarkName;
+    @Schema(description = "当前处理人（转交后的负责人，否则为号码所属业务员）")
+    private Long handlerUserId;
+    @Schema(description = "当前处理人姓名")
+    private String handlerName;
     @Schema(description = "客户等级（crm_customer_level 字典值）")
     private Integer customerLevel;
 
