@@ -23,4 +23,7 @@ public class ChannelWaConversationPageReqVO extends PageParam {
     /** 客户等级（crm_customer_level 字典值：1 A 类 … 4 D 类） */
     private Integer level;
 
+    @Schema(description = "团队会话：看数据权限范围内其他同事负责的会话（主管用）", example = "true")
+    private Boolean team;
+
 }

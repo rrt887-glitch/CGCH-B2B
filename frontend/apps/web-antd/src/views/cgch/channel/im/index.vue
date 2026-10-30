@@ -76,7 +76,7 @@ const accounts = ref<ChannelWaApi.Account[]>([]);
 const accountId = ref<number | undefined>(props.accountId);
 const keyword = ref('');
 /** 列表筛选：全部、未读、未回复（客户最后发言）、收藏、已归档 */
-type ListFilter = 'all' | 'archived' | 'starred' | 'unread' | 'unreplied';
+type ListFilter = 'all' | 'archived' | 'starred' | 'team' | 'unread' | 'unreplied';
 const listFilter = ref<ListFilter>('all');
 const FILTER_OPTIONS = [
   { label: '全部', value: 'all' },
@@ -84,6 +84,7 @@ const FILTER_OPTIONS = [
   { label: '未回复', value: 'unreplied' },
   { label: '收藏', value: 'starred' },
   { label: '归档', value: 'archived' },
+  { label: '团队', value: 'team' },
 ];
 const live = ref(false);
 const conversations = ref<ChannelWaApi.Conversation[]>([]);
@@ -129,6 +130,7 @@ async function loadConversations(silent = false) {
       unreplied: listFilter.value === 'unreplied' || undefined,
       starred: listFilter.value === 'starred' || undefined,
       archived: listFilter.value === 'archived' || undefined,
+      team: listFilter.value === 'team' || undefined,
       level: props.level,
     });
     conversations.value = res.list;
@@ -638,7 +640,9 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         </div>
         <div class="flex-1 overflow-auto">
           <Spin :spinning="listLoading">
-            <div v-if="conversations.length === 0" class="p-8"><Empty description="暂无会话" /></div>
+            <div v-if="conversations.length === 0" class="p-8">
+              <Empty :description="listFilter === 'team' ? '没有同事负责的会话（需要部门数据权限才能看到下属的会话）' : '暂无会话'" />
+            </div>
             <div
               v-for="c in conversations"
               :key="c.id"
@@ -656,7 +660,9 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   </span>
                   <span class="shrink-0 text-xs text-gray-400">{{ md(c.lastMessageTime) }} {{ hm(c.lastMessageTime) }}</span>
                 </div>
-                <div class="truncate text-xs text-gray-500">{{ c.lastMessagePreview }}</div>
+                <div class="truncate text-xs text-gray-500">
+                  <span v-if="listFilter === 'team' && c.handlerName" class="mr-1 text-[#155dfc]">[{{ c.handlerName }}]</span>{{ c.lastMessagePreview }}
+                </div>
               </div>
             </div>
           </Spin>

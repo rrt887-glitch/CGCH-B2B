@@ -56,6 +56,9 @@ public class ChannelWhatsAppService {
     @Resource
     private cn.iocoder.yudao.module.channel.service.assign.ChannelAssignService channelAssignService;
     @Resource
+    @org.springframework.context.annotation.Lazy
+    private cn.iocoder.yudao.module.channel.service.dashboard.ChannelDashboardService channelDashboardService;
+    @Resource
     private cn.iocoder.yudao.module.channel.service.realtime.ChannelRealtimeService channelRealtimeService;
     @Resource
     private cn.iocoder.yudao.module.system.api.user.AdminUserApi adminUserApi;
@@ -1161,6 +1164,9 @@ public class ChannelWhatsAppService {
     // ==================== 查询 ====================
 
     public PageResult<ChannelWaConversationRespVO> getConversationPage(Long userId, ChannelWaConversationPageReqVO req) {
+        if (Boolean.TRUE.equals(req.getTeam())) {
+            return getTeamConversationPage(userId, req);
+        }
         boolean one = req.getAccountId() != null;
         Collection<Long> accountIds = one
                 ? List.of(validateAccount(userId, req.getAccountId()).getId())
@@ -1170,6 +1176,32 @@ public class ChannelWhatsAppService {
         }
         PageResult<ChannelWaConversationDO> page = conversationMapper.selectPage(req, accountIds, userId, one);
         return new PageResult<>(toConversationVOs(page.getList()), page.getTotal());
+    }
+
+    /** 团队会话：数据权限范围内其他同事负责的会话（主管查看、必要时接手） */
+    private PageResult<ChannelWaConversationRespVO> getTeamConversationPage(Long userId, ChannelWaConversationPageReqVO req) {
+        Set<Long> team = teamUsers(userId);
+        if (team != null && team.isEmpty()) {
+            return PageResult.empty();
+        }
+        List<Long> mine = accountMapper.selectListByUserId(userId).stream().map(ChannelWaAccountDO::getId).toList();
+        List<Long> teamAccounts = team == null ? List.of() : accountMapper.selectList().stream()
+                .filter(a -> a.getUserId() != null && team.contains(a.getUserId())).map(ChannelWaAccountDO::getId).toList();
+        PageResult<ChannelWaConversationDO> page = conversationMapper.selectTeamPage(req, userId, team,
+                teamAccounts.isEmpty() ? List.of(-1L) : teamAccounts, mine.isEmpty() ? List.of(-1L) : mine);
+        return new PageResult<>(toConversationVOs(page.getList()), page.getTotal());
+    }
+
+    /** 我的数据权限范围内的其他同事（不含自己）；null 表示可看全部（例如管理员） */
+    private Set<Long> teamUsers(Long userId) {
+        cn.iocoder.yudao.module.channel.controller.admin.dashboard.vo.ChannelDashboardRespVO.Scope s =
+                channelDashboardService.resolveScope(userId, null);
+        if (s.isAll()) {
+            return null;
+        }
+        Set<Long> set = new HashSet<>(s.getUserIds());
+        set.remove(userId);
+        return set;
     }
 
     /** 设置号码的接待成员（按顺序轮流分配新客户） */
@@ -1226,20 +1258,28 @@ public class ChannelWhatsAppService {
         return toConversationVOs(List.of(validateConversation(userId, id))).get(0);
     }
 
-    /** 只有会话的处理人能看和操作：转交给了别人就是负责人，否则是号码所属的业务员 */
+    /**
+     * 能看和操作会话的人：处理人（转交给了别人就是负责人，否则是号码所属的业务员），
+     * 以及数据权限范围包含处理人的主管（在「团队会话」里查看、必要时接手回复）。
+     */
     private ChannelWaConversationDO validateConversation(Long userId, Long id) {
         ChannelWaConversationDO c = id == null ? null : conversationMapper.selectById(id);
         if (c == null) {
             throw exception(WA_CONVERSATION_NOT_EXISTS);
         }
-        if (c.getOwnerUserId() != null) {
-            if (!Objects.equals(c.getOwnerUserId(), userId)) {
-                throw exception(WA_CONVERSATION_NOT_EXISTS);
-            }
-        } else {
-            validateAccount(userId, c.getAccountId());
+        Long handler = c.getOwnerUserId();
+        if (handler == null) {
+            ChannelWaAccountDO a = accountMapper.selectById(c.getAccountId());
+            handler = a == null ? null : a.getUserId();
         }
-        return c;
+        if (Objects.equals(handler, userId)) {
+            return c;
+        }
+        Set<Long> team = handler == null ? Set.of() : teamUsers(userId);
+        if (team == null || team.contains(handler)) {
+            return c;
+        }
+        throw exception(WA_CONVERSATION_NOT_EXISTS);
     }
 
     private List<ChannelWaConversationRespVO> toConversationVOs(List<ChannelWaConversationDO> list) {
@@ -1249,6 +1289,10 @@ public class ChannelWhatsAppService {
         Set<Long> clueIds = list.stream().map(ChannelWaConversationDO::getClueId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, String> clueNames = clueIds.isEmpty() ? Map.of()
                 : crmClueMapper.selectByIds(clueIds).stream().collect(Collectors.toMap(CrmClueDO::getId, CrmClueDO::getName, (a, b) -> a));
+        Set<Long> accIds = list.stream().map(ChannelWaConversationDO::getAccountId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, ChannelWaAccountDO> accounts = accIds.isEmpty() ? Map.of()
+                : accountMapper.selectByIds(accIds).stream().collect(Collectors.toMap(ChannelWaAccountDO::getId, Function.identity()));
+        Map<Long, String> names = new HashMap<>();
         return list.stream().map(c -> {
             ChannelWaConversationRespVO vo = BeanUtils.toBean(c, ChannelWaConversationRespVO.class);
             vo.setPlatform(StrUtil.blankToDefault(c.getPlatform(), ChannelWaAccountDO.PLATFORM_WHATSAPP));
@@ -1256,6 +1300,14 @@ public class ChannelWhatsAppService {
             vo.setCustomerName(cu == null ? null : cu.getName());
             vo.setCustomerLevel(cu == null ? null : cu.getLevel());
             vo.setClueName(c.getClueId() == null ? null : clueNames.get(c.getClueId()));
+            Long handler = c.handlerUserId(accounts.get(c.getAccountId()));
+            vo.setHandlerUserId(handler);
+            if (handler != null) {
+                vo.setHandlerName(names.computeIfAbsent(handler, uid -> {
+                    cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO u = adminUserApi.getUser(uid);
+                    return u == null ? null : u.getNickname();
+                }));
+            }
             vo.setWindowOpen(windowOpen(c));
             vo.setWindowExpireTime(c.getLastInboundTime() == null || c.isWeb() ? null : c.getLastInboundTime().plusHours(WINDOW_HOURS));
             return vo;
