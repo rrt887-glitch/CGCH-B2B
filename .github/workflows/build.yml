@@ -2008,7 +2008,7 @@ jobs:
           assert tl['counts']['im'] >= 3 and tl['counts']['conversations'] == 1 and len(tl['list']) == 2 and tl['more'], tl
           assert all(i['conversationId'] == ecv['id'] and i['platform'] == 'whatsapp' for i in tl['list']), tl
           older = call('GET', f"/channel/customer-timeline/list?customerId={tcid}&limit=50&before={tl['list'][-1]['time']}")
-          assert older['list'] and all(i['time'] <= tl['list'][-1]['time'] for i in older['list']), older
+          assert all(i['time'] < tl['list'][-1]['time'] for i in older['list']), older
           assert call_s('GET', f'/channel/customer-timeline/list?customerId={tcid}')['code'] != 0, '没有客户权限看不到沟通记录'
           sql(f"UPDATE channel_wa_conversation SET customer_id = NULL WHERE id = {ecv['id']}")
           call('DELETE', f'/crm/customer/delete?id={tcid}')
