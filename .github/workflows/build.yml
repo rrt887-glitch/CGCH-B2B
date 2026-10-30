@@ -1547,6 +1547,22 @@ jobs:
           cg = call('GET', f'/crm/customer/get?id={cid}')
           assert not cg.get('tagIds') and not cg.get('groupId'), cg
           print('看板客户阶段分布；会话里改客户标签与分组')
+          # 跟进日程：约在今天的客户出现在「今天需联系」；写跟进约到明天后移出，出现在「今天已联系」
+          assert {'WhatsApp', '邮件', '视频会议'} <= {d['label'] for d in levels if d['dictType'] == 'crm_follow_up_type'}, '外贸跟进方式'
+          import datetime as _dt
+          now_ms = lambda d: int((_dt.datetime.now() + _dt.timedelta(days=d)).timestamp() * 1000)
+          call('POST', '/crm/follow-up-record/create', {'bizType': 2, 'bizId': cid, 'type': 5, 'content': 'Sent catalog', 'nextTime': now_ms(0) + 60000,
+                                                       'businessIds': [], 'contactIds': [], 'picUrls': [], 'fileUrls': []})
+          today = call('GET', '/crm/customer/page?pageNo=1&pageSize=50&sceneType=1&contactStatus=1')['list']
+          assert cid in [c['id'] for c in today], today
+          call('POST', '/crm/follow-up-record/create', {'bizType': 2, 'bizId': cid, 'type': 6, 'content': 'Quoted USD 7.5', 'nextTime': now_ms(2),
+                                                       'businessIds': [], 'contactIds': [], 'picUrls': [], 'fileUrls': []})
+          assert cid not in [c['id'] for c in call('GET', '/crm/customer/page?pageNo=1&pageSize=50&sceneType=1&contactStatus=1')['list']]
+          done = call('GET', '/crm/customer/page?pageNo=1&pageSize=50&sceneType=1&contactStatus=3')['list']
+          assert any(c['id'] == cid and c['contactLastContent'] == 'Quoted USD 7.5' for c in done), done
+          call('GET', '/crm/customer/put-pool-remind-page?pageNo=1&pageSize=10&sceneType=1')
+          assert call('GET', f'/channel/wa/conversation/page?pageNo=1&pageSize=10&customerId={cid}')['total'] == 0
+          print('跟进日程：今天需联系、写跟进后移出、今天已联系、外贸跟进方式')
           # 智能跟进：AI 回复后客户一直没回，到时间自动跟进一次，达到轮数后不再跟进
           import smtplib, subprocess, time, urllib.parse
           from email.message import EmailMessage

@@ -25,5 +25,7 @@ public class ChannelWaConversationPageReqVO extends PageParam {
 
     /** 团队会话：看数据权限范围内其他同事负责的会话（主管用） */
     private Boolean team;
+    /** 只看关联了这个 CRM 客户的会话（跟进日程里「去会话」用） */
+    private Long customerId;
 
 }
