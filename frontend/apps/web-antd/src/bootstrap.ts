@@ -8,6 +8,8 @@ import { initStores } from '@vben/stores';
 import '@vben/styles';
 import '@vben/styles/antd';
 import './styles/cgch.css';
+// 图标打包进网站，不再从国外图标网站临时下载（见 build/offline-icons.ts）
+import 'virtual:cgch-offline-icons';
 
 import { useTitle } from '@vueuse/core';
 
