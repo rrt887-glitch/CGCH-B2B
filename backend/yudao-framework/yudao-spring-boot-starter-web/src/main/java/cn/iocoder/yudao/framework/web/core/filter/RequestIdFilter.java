@@ -27,11 +27,9 @@ public class RequestIdFilter extends OncePerRequestFilter {
         String id = request.getHeader(HEADER);
         if (id == null || !VALID.matcher(id).matches()) {
             id = IdUtil.fastSimpleUUID();
+            response.setHeader(HEADER, id); // 网关已经带了编号时由网关回写响应头，这里不重复写
         }
         MDC.put(MDC_KEY, id);
-        if (!response.containsHeader(HEADER)) {
-            response.setHeader(HEADER, id);
-        }
         try {
             chain.doFilter(request, response);
         } finally {
