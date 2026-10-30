@@ -1,4 +1,4 @@
-import { initPreferences } from '@vben/preferences';
+import { initPreferences, preferences, updatePreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
 import { overridesPreferences, preferencesExtension } from './preferences';
@@ -19,6 +19,10 @@ async function initApplication() {
     namespace,
     overrides: overridesPreferences,
   });
+  // 浏览器里缓存过旧的深色设置时也改回浅色
+  if (preferences.theme.mode !== 'light') {
+    updatePreferences({ theme: { mode: 'light' } });
+  }
 
   // 启动应用并挂载
   // vue应用主要逻辑及视图

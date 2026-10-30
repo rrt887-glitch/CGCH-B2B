@@ -103,7 +103,7 @@ onMounted(loadSums);
     >
       <template #actions>
         <Button type="primary" @click="formApi.setData(null).open()"><IconifyIcon icon="lucide:plus" class="mr-1 inline size-4" />新增</Button>
-        <Button type="primary" @click="doExport"><IconifyIcon icon="lucide:upload" class="mr-1 inline size-4" />导出</Button>
+        <Button @click="doExport"><IconifyIcon icon="lucide:upload" class="mr-1 inline size-4" />导出</Button>
       </template>
       <template #filters>
         <div class="inline-flex items-center rounded-md border border-solid border-gray-200 pl-2.5">

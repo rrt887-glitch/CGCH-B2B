@@ -705,14 +705,15 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 
 .ch-col-name {
   display: flex;
-  flex: 0 0 180px;
+  flex: 0 0 210px;
   gap: 10px;
   align-items: center;
   min-width: 0;
 }
 
 .ch-col-status {
-  flex: 0 0 90px;
+  flex: 0 0 140px;
+  white-space: nowrap;
 }
 
 .ch-col-account {
