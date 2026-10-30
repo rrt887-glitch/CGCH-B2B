@@ -283,8 +283,8 @@ const me = computed(() => userStore.userInfo?.id);
         <Button v-if="!pool" type="primary" @click="formApi.setData(null).open()">
           <IconifyIcon icon="lucide:plus" class="mr-1 inline size-4" />新增
         </Button>
-        <Button type="primary" @click="importApi.open()"><IconifyIcon icon="lucide:download" class="mr-1 inline size-4" />导入</Button>
-        <Button type="primary" @click="doExport"><IconifyIcon icon="lucide:upload" class="mr-1 inline size-4" />导出</Button>
+        <Button @click="importApi.open()"><IconifyIcon icon="lucide:download" class="mr-1 inline size-4" />导入</Button>
+        <Button @click="doExport"><IconifyIcon icon="lucide:upload" class="mr-1 inline size-4" />导出</Button>
       </template>
       <template #cell="{ column, record }">
         <span v-if="column.key === 'name'" class="inline-flex items-center gap-1">

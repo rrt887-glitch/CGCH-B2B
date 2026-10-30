@@ -1,8 +1,8 @@
 <script lang="ts" setup>
-/** 设置：订阅与用量、AI 接待设置（大模型、自动回复模式）、成员与部门、云盘文件、消息模板、邮件模板、快捷回复、消息分流、通知、翻译，通过「设置菜单」切换 */
+/** 设置：订阅与用量、AI 接待设置（大模型、自动回复模式）、成员与部门、云盘文件、消息模板、邮件模板、快捷回复、消息分流、通知、翻译，通过左侧常驻菜单切换（窄屏收起为「设置菜单」按钮） */
 import type { HubGroup } from '../components/types';
 
-import MenuHub from '../components/menu-hub.vue';
+import SideHub from '../components/side-hub.vue';
 
 defineOptions({ name: 'CgchV3Settings' });
 
@@ -27,5 +27,5 @@ const groups: HubGroup[] = [
 </script>
 
 <template>
-  <MenuHub :groups="groups" menu-label="设置菜单" />
+  <SideHub :groups="groups" menu-label="设置菜单" />
 </template>

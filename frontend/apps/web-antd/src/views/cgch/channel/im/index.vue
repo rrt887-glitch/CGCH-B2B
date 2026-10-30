@@ -703,7 +703,18 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             <Button v-if="waAccounts.length > 0" type="primary" @click="openNewChat">新会话</Button>
           </div>
           <InputSearch v-model:value="keyword" allow-clear placeholder="号码或昵称" @search="() => loadConversations()" />
-          <Segmented v-model:value="listFilter" :options="FILTER_OPTIONS" block size="small" />
+          <div class="flex flex-wrap gap-1.5" role="group" aria-label="会话筛选">
+            <button
+              v-for="f in FILTER_OPTIONS"
+              :key="f.value"
+              type="button"
+              class="h-[26px] cursor-pointer rounded-full border border-solid px-2.5 text-xs"
+              :class="listFilter === f.value ? 'border-[#111827] bg-[#111827] font-medium text-white' : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#D1D5DB]'"
+              @click="listFilter = f.value as any"
+            >
+              {{ f.label }}
+            </button>
+          </div>
         </div>
         <div class="flex-1 overflow-auto">
           <Spin :spinning="listLoading">

@@ -33,6 +33,8 @@ export const overridesPreferences = defineOverridesPreferences({
     source: '/brand/logo.png',
   },
   theme: {
+    /** 固定浅色：页面按浅色设计，没有切换入口（框架默认是深色，会和页面里的白底混在一起） */
+    mode: 'light',
     /** 主色 #2563EB（设计稿「风格规范」） */
     colorPrimary: 'hsl(221 83% 53%)',
     radius: '0.5',
