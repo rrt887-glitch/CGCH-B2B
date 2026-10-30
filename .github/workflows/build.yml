@@ -230,7 +230,7 @@ jobs:
           # 请求编号回传；跨域不带凭据
           rq = urllib.request.Request(BASE + '/system/auth/get-permission-info', headers=dict(H, **{'X-Request-ID': 'ci-rid-123', 'Origin': 'https://evil.example'}))
           rs = urllib.request.urlopen(rq)
-          assert rs.headers.get('X-Request-ID') == 'ci-rid-123', dict(rs.headers)
+          assert rs.headers.get('X-Request-ID') is None, '网关带了编号时由网关回写，后端不重复写'
           assert rs.headers.get('Access-Control-Allow-Credentials') is None, '跨域不应允许带凭据'
           rs2 = urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/get-permission-info', headers=H))
           assert len(rs2.headers.get('X-Request-ID') or '') >= 16, '没有请求编号时自动生成'
