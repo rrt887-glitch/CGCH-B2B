@@ -17,7 +17,7 @@ import { deleteContract, exportContract, getContractPage } from '#/api/crm/contr
 import ContractForm from '#/views/crm/contract/modules/form.vue';
 
 import CrmList from './components/crm-list.vue';
-import { dictRail, fmtMoney, fmtTime, page } from './components/shared';
+import { dictRail, fetchAll, fmtMoney, fmtTime, page } from './components/shared';
 
 const router = useRouter();
 const listRef = ref<InstanceType<typeof CrmList>>();
@@ -55,8 +55,7 @@ const fetch = (p: Record<string, any>) => page(getContractPage({ ...p } as any))
 const [FormModal, formApi] = useVbenModal({ connectedComponent: ContractForm, destroyOnClose: true });
 
 async function loadSums() {
-  const r = await getContractPage({ pageNo: 1, pageSize: -1 } as any).catch(() => undefined);
-  const list = r?.list ?? [];
+  const list = await fetchAll((p) => getContractPage(p as any)).catch(() => []);
   sums.value = {
     total: list.reduce((s, c) => s + Number(c.totalPrice || 0), 0),
     received: list.reduce((s, c) => s + Number(c.totalReceivablePrice || 0), 0),
@@ -79,7 +78,8 @@ async function remove(r: any) {
 }
 
 async function doExport() {
-  const data = await exportContract({ ...listRef.value?.currentParams(), pageNo: 1, pageSize: -1 });
+  // 导出时后端自己取全部，这里的分页参数只为通过校验
+  const data = await exportContract({ ...listRef.value?.currentParams(), pageNo: 1, pageSize: 10 });
   downloadFileFromBlobPart({ fileName: '订单.xls', source: data });
 }
 

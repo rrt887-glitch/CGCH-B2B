@@ -16,7 +16,7 @@ import { getBusinessPage, updateBusinessStatus } from '#/api/crm/business';
 import { getBusinessStatusSimpleList, getBusinessStatusTypeSimpleList } from '#/api/crm/business/status';
 import BusinessForm from '#/views/crm/business/modules/form.vue';
 
-import { fmtMoney, fmtTime } from './components/shared';
+import { fetchAll, fmtMoney, fmtTime } from './components/shared';
 
 const router = useRouter();
 const view = ref<'board' | 'list'>('board');
@@ -31,8 +31,7 @@ const [FormModal, formApi] = useVbenModal({ connectedComponent: BusinessForm, de
 async function load() {
   loading.value = true;
   try {
-    const r = await getBusinessPage({ pageNo: 1, pageSize: -1, ...(keyword.value.trim() ? { [field.value]: keyword.value.trim() } : {}) } as any);
-    rows.value = r?.list ?? [];
+    rows.value = await fetchAll((p) => getBusinessPage(p as any), keyword.value.trim() ? { [field.value]: keyword.value.trim() } : {});
   } finally {
     loading.value = false;
   }

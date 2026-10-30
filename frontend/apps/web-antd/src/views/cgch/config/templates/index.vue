@@ -60,7 +60,8 @@ async function load() {
 watch(accountId, load);
 
 onMounted(async () => {
-  accounts.value = (await getWaAccountList()).filter((a) => !a.platform || a.platform === 'whatsapp');
+  // 只有官方 API 接入的号码有消息模板；扫码接入的号码可以直接发普通消息，不需要模板
+  accounts.value = (await getWaAccountList()).filter((a) => (!a.platform || a.platform === 'whatsapp') && a.authType !== 'evolution');
   accountId.value = accounts.value[0]?.id;
 });
 </script>
@@ -83,7 +84,7 @@ onMounted(async () => {
         </Space>
       </template>
 
-      <Empty v-if="accounts.length === 0" description="还没有绑定 WhatsApp 号码">
+      <Empty v-if="accounts.length === 0" description="还没有用官方 API 接入的 WhatsApp 号码。消息模板只用于官方 API 号码；扫码接入的号码可以直接发普通消息，不需要模板">
         <Button type="primary" @click="router.push('/v3/channel')">去绑定号码</Button>
       </Empty>
       <template v-else>

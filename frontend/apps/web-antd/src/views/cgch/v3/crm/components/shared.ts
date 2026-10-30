@@ -52,3 +52,21 @@ export async function page<T>(p: Promise<{ list: T[]; total: number }>) {
   const r = await p;
   return { list: r?.list ?? [], total: r?.total ?? 0 };
 }
+
+/**
+ * 取全部数据：后端每页最多 200 条（不接受 pageSize = -1），这里逐页取完再合并；最多取 maxPages 页。
+ */
+export async function fetchAll<T>(
+  fn: (p: Record<string, any>) => Promise<{ list: T[]; total: number } | undefined>,
+  params: Record<string, any> = {},
+  maxPages = 50,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let pageNo = 1; pageNo <= maxPages; pageNo++) {
+    const r = await fn({ ...params, pageNo, pageSize: 200 });
+    const list = r?.list ?? [];
+    out.push(...list);
+    if (list.length < 200 || out.length >= (r?.total ?? 0)) break;
+  }
+  return out;
+}
