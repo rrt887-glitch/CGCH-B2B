@@ -9,7 +9,6 @@ import type { ChannelDashboardApi } from '#/api/channel/dashboard';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { Page } from '@vben/common-ui';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import { usePreferences } from '@vben/preferences';
 
@@ -18,6 +17,8 @@ import { Button, Card, Col, Empty, Radio, RadioGroup, Row, Select, Spin, Table, 
 import { DRAFT_REASON } from '#/api/channel/ai';
 import { getDashboardOverview } from '#/api/channel/dashboard';
 import { getSimpleUserList } from '#/api/system/user';
+import { countryName } from '#/views/cgch/crm/shared/countries';
+import { fmtMoney } from '#/views/cgch/v3/crm/components/shared';
 
 defineOptions({ name: 'CgchBoardOverview' });
 
@@ -77,6 +78,8 @@ const tiles = computed(() => {
     { label: '回复率', value: pct(c.replyRate), sub: `已回复 ${c.mailReplied + c.waRepliedConversations} / ${c.inquiries}`, d: delta('replyRate', true), tip: '已回复的邮件和会话占新询盘的比例' },
     { label: 'AI 发送占比', value: pct(c.aiShare), sub: `AI 发出 ${c.mailAiOut + c.waAiOut} / 全部 ${c.mailOut + c.waOut}`, d: delta('aiShare', true), tip: '发出的邮件和 WhatsApp 消息中，由 AI 自动回复或 AI 起草后发出的比例' },
     { label: '新线索', value: c.cluesCreated.toLocaleString(), sub: `询盘自动建档 ${c.cluesFromMail + c.cluesFromWhatsApp} · 已转客户 ${c.cluesConverted}`, d: delta('cluesCreated'), tip: '本期新建的 CRM 线索；自动建档来源为邮件或 WhatsApp' },
+    { label: '新客户', value: c.customersCreated.toLocaleString(), sub: `线索转客户 ${c.cluesConverted}`, d: delta('customersCreated'), tip: '本期新建的 CRM 客户' },
+    { label: '订单', value: (data.value?.orders ?? 0).toLocaleString(), sub: `金额 ${fmtMoney(data.value?.orderAmount)}`, d: { text: '按下单日期统计', up: true, flat: true }, tip: '本期下单的订单数和金额（CRM → 订单管理）', neutral: true },
     { label: '智点消耗', value: c.creditsConsumed.toLocaleString(), sub: `AI 草稿 ${c.aiDrafts} 份`, d: delta('creditsConsumed'), tip: 'AI 起草、自动回复、信息提取和知识库检索消耗的智点', neutral: true },
   ];
 });
@@ -92,10 +95,58 @@ const pendingRows = computed(() => {
 const userColumns = [
   { title: '业务员', key: 'name' },
   { title: '收到邮件', dataIndex: 'mailIn', key: 'mailIn', align: 'right' as const },
-  { title: 'WhatsApp 来信', dataIndex: 'waIn', key: 'waIn', align: 'right' as const },
+  { title: '即时消息来信', dataIndex: 'waIn', key: 'waIn', align: 'right' as const },
   { title: '发出消息', dataIndex: 'out', key: 'out', align: 'right' as const },
   { title: '其中 AI', key: 'ai', align: 'right' as const },
+  { title: '新线索', dataIndex: 'clues', key: 'clues', align: 'right' as const },
+  { title: '新客户', dataIndex: 'customers', key: 'customers', align: 'right' as const },
+  { title: '写跟进', dataIndex: 'followUps', key: 'followUps', align: 'right' as const },
+  { title: '订单', dataIndex: 'orders', key: 'orders', align: 'right' as const },
+  { title: '订单金额', key: 'orderAmount', align: 'right' as const },
 ];
+
+// ===== 询盘来源（按平台）、按国家 =====
+const PLATFORM_LABEL: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  messenger: 'Facebook',
+  instagram: 'Instagram',
+  web: '官网客服',
+  youtube: 'YouTube 评论',
+  tiktok: 'TikTok 评论',
+  mail: '邮件',
+};
+const platformRows = computed(() => {
+  const m = data.value?.platforms ?? {};
+  const total = Object.values(m).reduce((a, n) => a + n, 0);
+  return Object.entries(m)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => ({ label: PLATFORM_LABEL[k] ?? k, n, w: total ? (n / total) * 100 : 0 }));
+});
+const countryColumns = [
+  { title: '国家 / 地区', key: 'country' },
+  { title: '新线索', dataIndex: 'clues', key: 'clues', align: 'right' as const },
+  { title: '新客户', dataIndex: 'customers', key: 'customers', align: 'right' as const },
+  { title: '已成交', dataIndex: 'deals', key: 'deals', align: 'right' as const },
+];
+const countryLabel = (c?: string) => (c ? countryName(c) || c : '未识别');
+
+/** 导出按业务员的表格（CSV，Excel 可直接打开） */
+function exportUsers() {
+  const rows = data.value?.users ?? [];
+  const head = ['业务员', '收到邮件', '即时消息来信', '发出消息', '其中AI', '新线索', '新客户', '写跟进', '订单', '订单金额'];
+  const lines = rows.map((r) =>
+    [userName(r.userId), r.mailIn, r.waIn, r.out, r.aiOut, r.clues, r.customers, r.followUps, r.orders, Number(r.orderAmount || 0).toFixed(2)]
+      .map((v) => `"${String(v).replaceAll('"', '""')}"`)
+      .join(','),
+  );
+  const blob = new Blob([`\ufeff${[head.join(','), ...lines].join('\n')}`], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `经营分析-按业务员-${data.value?.startDate ?? ''}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 // ===== 图表 =====
 const inqRef = ref<EchartsUIType>();
@@ -185,10 +236,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Page auto-content-height>
+  <div class="p-1">
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <div class="text-lg font-semibold">数据看板</div>
+        <div class="text-lg font-semibold">经营分析</div>
         <div class="text-sm text-gray-500">
           {{ data ? `${data.startDate} 至今，与之前 ${data.days} 天对比 · ${scopeLabel}` : '加载中…' }}
         </div>
@@ -213,7 +264,7 @@ onMounted(async () => {
     </div>
 
     <Spin :spinning="loading">
-      <div class="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div class="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4 2xl:grid-cols-7">
         <Card v-for="t in tiles" :key="t.label" size="small" :bordered="false">
           <Tooltip :title="t.tip"><div class="text-sm text-gray-500">{{ t.label }}</div></Tooltip>
           <div class="my-1 text-2xl font-semibold tabular-nums">{{ t.value }}</div>
@@ -264,7 +315,33 @@ onMounted(async () => {
         </Col>
       </Row>
 
+      <Row :gutter="16">
+        <Col :xs="24" :lg="10" class="mb-4">
+          <Card title="询盘来源（按平台）" size="small" :bordered="false">
+            <Empty v-if="platformRows.length === 0" :image="Empty.PRESENTED_IMAGE_SIMPLE" description="本期没有询盘" />
+            <div v-for="r in platformRows" :key="r.label" class="py-1.5">
+              <div class="flex justify-between text-sm"><span>{{ r.label }}</span><span class="tabular-nums">{{ r.n }}</span></div>
+              <div class="h-1.5 rounded bg-gray-100 dark:bg-gray-800">
+                <div class="h-1.5 rounded" :style="{ width: `${r.w}%`, background: palette.s1 }" />
+              </div>
+            </div>
+            <div class="mt-2 text-xs text-gray-400">即时消息按有客户来信的会话数，邮件按收到的邮件数</div>
+          </Card>
+        </Col>
+        <Col :xs="24" :lg="14" class="mb-4">
+          <Card title="按国家 / 地区" size="small" :bordered="false">
+            <Table :columns="countryColumns" :data-source="data?.countries ?? []" row-key="countryCode" size="small" :pagination="{ pageSize: 8, size: 'small' }">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'country'">{{ countryLabel(record.countryCode) }}</template>
+              </template>
+              <template #emptyText>本期没有新线索和客户</template>
+            </Table>
+          </Card>
+        </Col>
+      </Row>
+
       <Card title="按业务员" size="small" :bordered="false">
+        <template #extra><Button size="small" :disabled="!data?.users?.length" @click="exportUsers">导出</Button></template>
         <Table :columns="userColumns" :data-source="data?.users ?? []" row-key="userId" size="small" :pagination="false">
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">{{ userName(record.userId) }}</template>
@@ -272,10 +349,11 @@ onMounted(async () => {
               {{ record.aiOut }}
               <span class="text-xs text-gray-500">（{{ record.out ? Math.round((record.aiOut / record.out) * 100) : 0 }}%）</span>
             </template>
+            <template v-else-if="column.key === 'orderAmount'">{{ fmtMoney(record.orderAmount) }}</template>
           </template>
-          <template #emptyText>本期没有渠道消息；先在「渠道管理」里接入邮箱或 WhatsApp</template>
+          <template #emptyText>本期没有数据；先在「渠道」里接入邮箱或 WhatsApp</template>
         </Table>
       </Card>
     </Spin>
-  </Page>
+  </div>
 </template>

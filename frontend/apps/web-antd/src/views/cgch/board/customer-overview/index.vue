@@ -11,7 +11,6 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { DICT_TYPE } from '@vben/constants';
-import { Page } from '@vben/common-ui';
 import { getDictOptions } from '@vben/hooks';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import { usePreferences } from '@vben/preferences';
@@ -166,7 +165,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Page auto-content-height>
+  <div class="p-1">
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div class="text-lg font-semibold">客户概览</div>
       <div class="flex flex-wrap items-center gap-3">
@@ -281,5 +280,5 @@ onMounted(async () => {
         </Col>
       </Row>
     </Spin>
-  </Page>
+  </div>
 </template>

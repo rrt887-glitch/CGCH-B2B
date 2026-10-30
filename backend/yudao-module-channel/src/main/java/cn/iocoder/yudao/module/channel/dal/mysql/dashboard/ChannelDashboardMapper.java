@@ -85,4 +85,59 @@ public interface ChannelDashboardMapper {
     Long customers(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
                    @Param("userIds") Collection<Long> userIds);
 
+    String OWNER_IN = "<if test='userIds != null'> AND owner_user_id IN "
+            + "<foreach collection='userIds' item='x' open='(' separator=',' close=')'>#{x}</foreach></if>";
+    String RANGE = " AND create_time &gt;= #{start} AND create_time &lt; #{end}";
+
+    // ========== 经营分析 ==========
+
+    /** 按负责人：新增线索数 */
+    @Select("<script>SELECT owner_user_id AS u, COUNT(*) AS n FROM crm_clue WHERE deleted = 0" + RANGE + OWNER_IN
+            + " GROUP BY owner_user_id</script>")
+    List<Map<String, Object>> cluesByOwner(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                           @Param("userIds") Collection<Long> userIds);
+
+    /** 按负责人：新增客户数 */
+    @Select("<script>SELECT owner_user_id AS u, COUNT(*) AS n FROM crm_customer WHERE deleted = 0" + RANGE + OWNER_IN
+            + " GROUP BY owner_user_id</script>")
+    List<Map<String, Object>> customersByOwner(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                               @Param("userIds") Collection<Long> userIds);
+
+    /** 按负责人：订单数和金额（按下单日期） */
+    @Select("<script>SELECT owner_user_id AS u, COUNT(*) AS n, IFNULL(SUM(total_price), 0) AS amount FROM crm_contract "
+            + "WHERE deleted = 0 AND order_date &gt;= #{start} AND order_date &lt; #{end}" + OWNER_IN
+            + " GROUP BY owner_user_id</script>")
+    List<Map<String, Object>> ordersByOwner(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                            @Param("userIds") Collection<Long> userIds);
+
+    /** 按记录人：写跟进的次数（creator 存的是用户编号） */
+    @Select("<script>SELECT creator AS u, COUNT(*) AS n FROM crm_follow_up_record WHERE deleted = 0" + RANGE
+            + "<if test='userIds != null'> AND creator IN "
+            + "<foreach collection='userIds' item='x' open='(' separator=',' close=')'>#{x}</foreach></if>"
+            + " GROUP BY creator</script>")
+    List<Map<String, Object>> followUpsByCreator(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                                 @Param("userIds") Collection<Long> userIds);
+
+    /** 按平台：有客户来信的会话数（WhatsApp、Facebook、Instagram、官网客服等） */
+    @Select("<script>SELECT IFNULL(c.platform, 'whatsapp') AS p, COUNT(DISTINCT m.conversation_id) AS n "
+            + "FROM channel_wa_message m JOIN channel_wa_conversation c ON c.id = m.conversation_id AND c.deleted = 0 "
+            + "WHERE m.deleted = 0 AND m.direction = 1 AND m.message_time &gt;= #{start} AND m.message_time &lt; #{end}"
+            + "<if test='accountIds != null'> AND m.account_id IN "
+            + "<foreach collection='accountIds' item='x' open='(' separator=',' close=')'>#{x}</foreach></if>"
+            + " GROUP BY IFNULL(c.platform, 'whatsapp')</script>")
+    List<Map<String, Object>> platformInquiries(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                                @Param("accountIds") Collection<Long> accountIds);
+
+    /** 按国家：新增线索 */
+    @Select("<script>SELECT IFNULL(country_code, '') AS c, COUNT(*) AS n FROM crm_clue WHERE deleted = 0" + RANGE + OWNER_IN
+            + " GROUP BY IFNULL(country_code, '')</script>")
+    List<Map<String, Object>> cluesByCountry(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                             @Param("userIds") Collection<Long> userIds);
+
+    /** 按国家：新增客户、其中已成交的 */
+    @Select("<script>SELECT IFNULL(country_code, '') AS c, COUNT(*) AS n, SUM(deal_status = 1) AS deal FROM crm_customer "
+            + "WHERE deleted = 0" + RANGE + OWNER_IN + " GROUP BY IFNULL(country_code, '')</script>")
+    List<Map<String, Object>> customersByCountry(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                                 @Param("userIds") Collection<Long> userIds);
+
 }

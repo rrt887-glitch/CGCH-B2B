@@ -128,10 +128,75 @@ public class ChannelDashboardService {
         vo.setCurrent(totals(start, end, f, daily, users, mailOwner, waOwner, vo.getPendingReasons()));
         vo.setPrevious(totals(prevStart, start, f, null, null, mailOwner, waOwner, null));
         vo.setDaily(new ArrayList<>(daily.values()));
+        business(vo, start, end, f, users);
         List<UserRow> rows = new ArrayList<>(users.values());
         rows.sort((a, b) -> Long.compare(b.getMailIn() + b.getWaIn(), a.getMailIn() + a.getWaIn()));
         vo.setUsers(rows);
         return vo;
+    }
+
+    /** 经营分析：按业务员的线索、客户、跟进、订单；按平台的询盘；按国家的线索、客户、成交 */
+    private void business(ChannelDashboardRespVO vo, LocalDateTime start, LocalDateTime end, Filter f, Map<Long, UserRow> users) {
+        Set<Long> ids = f.userIds();
+        for (Map<String, Object> r : channelDashboardMapper.cluesByOwner(start, end, ids)) {
+            UserRow u = user(users, longVal(r, "u"));
+            if (u != null) {
+                u.setClues(num(r, "n"));
+            }
+        }
+        for (Map<String, Object> r : channelDashboardMapper.customersByOwner(start, end, ids)) {
+            UserRow u = user(users, longVal(r, "u"));
+            if (u != null) {
+                u.setCustomers(num(r, "n"));
+            }
+        }
+        for (Map<String, Object> r : channelDashboardMapper.followUpsByCreator(start, end, ids)) {
+            Long uid = null;
+            try {
+                uid = Long.valueOf(str(r, "u"));
+            } catch (Exception ignored) {
+                // 系统写入的记录没有记录人
+            }
+            UserRow u = user(users, uid);
+            if (u != null) {
+                u.setFollowUps(num(r, "n"));
+            }
+        }
+        java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+        long orders = 0;
+        for (Map<String, Object> r : channelDashboardMapper.ordersByOwner(start, end, ids)) {
+            java.math.BigDecimal amount = r.get("amount") == null ? java.math.BigDecimal.ZERO : new java.math.BigDecimal(String.valueOf(r.get("amount")));
+            orders += num(r, "n");
+            total = total.add(amount);
+            UserRow u = user(users, longVal(r, "u"));
+            if (u != null) {
+                u.setOrders(num(r, "n"));
+                u.setOrderAmount(amount);
+            }
+        }
+        vo.setOrders(orders);
+        vo.setOrderAmount(total.setScale(2, java.math.RoundingMode.HALF_UP));
+        for (Map<String, Object> r : channelDashboardMapper.platformInquiries(start, end, f.waAccountIds())) {
+            vo.getPlatforms().put(str(r, "p"), num(r, "n"));
+        }
+        vo.getPlatforms().put("mail", vo.getCurrent() == null ? 0 : vo.getCurrent().getMailIn());
+        Map<String, ChannelDashboardRespVO.CountryRow> countries = new LinkedHashMap<>();
+        java.util.function.Function<String, ChannelDashboardRespVO.CountryRow> row = c -> countries.computeIfAbsent(c, k -> {
+            ChannelDashboardRespVO.CountryRow x = new ChannelDashboardRespVO.CountryRow();
+            x.setCountryCode(k);
+            return x;
+        });
+        for (Map<String, Object> r : channelDashboardMapper.cluesByCountry(start, end, ids)) {
+            row.apply(str(r, "c")).setClues(num(r, "n"));
+        }
+        for (Map<String, Object> r : channelDashboardMapper.customersByCountry(start, end, ids)) {
+            ChannelDashboardRespVO.CountryRow x = row.apply(str(r, "c"));
+            x.setCustomers(num(r, "n"));
+            x.setDeals(num(r, "deal"));
+        }
+        List<ChannelDashboardRespVO.CountryRow> list = new ArrayList<>(countries.values());
+        list.sort((a, b) -> Long.compare(b.getClues() + b.getCustomers(), a.getClues() + a.getCustomers()));
+        vo.setCountries(list);
     }
 
     /** 全租户范围的汇总（AI 工作报告使用），pendingReasons 可为 null */
