@@ -783,7 +783,7 @@ jobs:
           m = mine['data']
           assert m['scope']['all'] is False and m['scope']['userIds'] == [uid], m['scope']
           assert m['current']['inquiries'] == 0 and m['current']['mailIn'] == 0 and m['current']['aiDrafts'] == 0, m['current']
-          assert m['current']['cluesCreated'] == 1 and m['current']['creditsConsumed'] == 0 and m['users'] == [], m
+          assert m['current']['cluesCreated'] == 1 and m['current']['creditsConsumed'] == 0 and [(u['userId'], u['clues'], u['mailIn'] + u['waIn']) for u in m['users']] == [(uid, 1, 0)], m['users']
           assert sum(d['mailIn'] + d['waIn'] for d in m['daily']) == 0
           assert call2('/channel/dashboard/overview?days=30&userId=1')['code'] != 0, '业务员不能查看别人的数据'
           other = call('GET', f'/channel/dashboard/overview?days=30&userId={uid}')['current']
