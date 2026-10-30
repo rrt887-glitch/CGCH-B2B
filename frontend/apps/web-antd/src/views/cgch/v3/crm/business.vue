@@ -258,9 +258,9 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 600;
   line-height: 32px;
-  color: #fff;
+  color: #1d4ed8;
   text-align: center;
-  background: #34c759;
+  background: #eff4ff;
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);
 }
 
@@ -275,7 +275,7 @@ onMounted(async () => {
   font-weight: 600;
   color: #374151;
   text-align: center;
-  background: #f7f8fa;
+  background: #f9fafb;
 }
 
 .biz__cards {
