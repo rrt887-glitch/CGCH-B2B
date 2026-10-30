@@ -2001,6 +2001,18 @@ jobs:
           assert not [c for c in tm if c.get('handlerUserId') == 1], '团队会话不含自己负责的'
           assert call('GET', f"/channel/wa/conversation/get?id={ecv['id']}")['id'] == ecv['id'], '主管能查看下属的会话'
           assert call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')['data']['total'] == 0, '只有本人权限时团队会话为空'
+          # 客户 360：会话关联客户后，客户详情的沟通记录里能看到这段对话；没有客户权限的人看不到
+          tcid = call('POST', '/crm/customer/create', {'name': 'Timeline Buyer', 'ownerUserId': 1})
+          sql(f"UPDATE channel_wa_conversation SET customer_id = {tcid} WHERE id = {ecv['id']}")
+          tl = call('GET', f'/channel/customer-timeline/list?customerId={tcid}&limit=2')
+          assert tl['counts']['im'] >= 3 and tl['counts']['conversations'] == 1 and len(tl['list']) == 2 and tl['more'], tl
+          assert all(i['conversationId'] == ecv['id'] and i['platform'] == 'whatsapp' for i in tl['list']), tl
+          older = call('GET', f"/channel/customer-timeline/list?customerId={tcid}&limit=50&before={tl['list'][-1]['time']}")
+          assert all(i['time'] < tl['list'][-1]['time'] for i in older['list']), older
+          assert call_s('GET', f'/channel/customer-timeline/list?customerId={tcid}')['code'] != 0, '没有客户权限看不到沟通记录'
+          sql(f"UPDATE channel_wa_conversation SET customer_id = NULL WHERE id = {ecv['id']}")
+          call('DELETE', f'/crm/customer/delete?id={tcid}')
+          print('客户 360：沟通记录按时间合并、翻页、按客户权限控制')
           sl = call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')
           assert sl['code'] == 0 and [c['id'] for c in sl['data']['list']] == [ecv['id']] and sl['data']['list'][0]['ownerUserId'] == sid, sl
           sr = call_s('POST', '/channel/wa/message/send', {'conversationId': ecv['id'], 'text': 'I will follow up today.'})

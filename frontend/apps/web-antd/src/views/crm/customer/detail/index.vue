@@ -35,6 +35,7 @@ import Form from '../modules/form.vue';
 import { useDetailSchema } from './data';
 import DistributeForm from './modules/distribute-form.vue';
 import Info from './modules/info.vue';
+import Timeline from './modules/timeline.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -246,6 +247,9 @@ onMounted(() => {
       <Tabs>
         <Tabs.TabPane tab="跟进记录" key="1" :force-render="true">
           <FollowUp :biz-id="customerId" :biz-type="BizTypeEnum.CRM_CUSTOMER" />
+        </Tabs.TabPane>
+        <Tabs.TabPane tab="沟通记录" key="comm">
+          <Timeline v-if="customerId" :customer-id="customerId" />
         </Tabs.TabPane>
         <Tabs.TabPane tab="基本信息" key="2" :force-render="true">
           <Info :customer="customer" />

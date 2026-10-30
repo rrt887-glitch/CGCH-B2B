@@ -49,6 +49,9 @@ public interface CrmCustomerService {
      */
     void updateCustomerStarred(Long id, Boolean starred);
 
+    /** 校验当前用户能查看这个客户（CRM 数据权限 READ），返回客户；供其他模块（例如沟通记录）使用 */
+    CrmCustomerDO validateCustomerReadable(Long id);
+
     /** 修改客户的标签和分组；groupId 为空表示不分组 */
     void updateCustomerTags(Long id, java.util.List<Long> tagIds, Long groupId);
 
