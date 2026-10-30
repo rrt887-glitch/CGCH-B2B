@@ -245,7 +245,7 @@ onMounted(load);
 .cd__seg {
   display: inline-flex;
   padding: 4px;
-  background: #f3f5fa;
+  background: #F3F4F6;
   border: 1px solid #eceef3;
   border-radius: 14px;
 }

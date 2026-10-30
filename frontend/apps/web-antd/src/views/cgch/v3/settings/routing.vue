@@ -238,7 +238,7 @@ onMounted(async () => {
 }
 
 .rt__item.on {
-  background: #eef3fe;
+  background: #EFF4FF;
   border-color: #c7d7fd;
 }
 
@@ -258,7 +258,7 @@ onMounted(async () => {
   font-weight: 700;
   color: #2563EB;
   text-align: center;
-  background: #eef3fe;
+  background: #EFF4FF;
   border-radius: 6px;
 }
 

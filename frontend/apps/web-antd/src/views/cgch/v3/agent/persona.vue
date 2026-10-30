@@ -165,7 +165,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   height: 48px;
-  background: linear-gradient(135deg, #e0e9ff, #f3e8ff);
+  background: #f9fafb;
   border-radius: 50%;
 }
 
@@ -187,7 +187,7 @@ onMounted(async () => {
 
 .ps__option:hover,
 .ps__option.on {
-  background: #f3f6fd;
+  background: #F3F4F6;
 }
 
 .ps__label {

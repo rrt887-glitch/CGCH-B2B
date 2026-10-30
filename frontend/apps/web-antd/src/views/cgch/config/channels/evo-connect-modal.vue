@@ -288,7 +288,7 @@ async function copyCode() {
   text-align: center;
   letter-spacing: 6px;
   cursor: pointer;
-  background: #f5f7fb;
+  background: #F3F4F6;
   border-radius: 14px;
 }
 

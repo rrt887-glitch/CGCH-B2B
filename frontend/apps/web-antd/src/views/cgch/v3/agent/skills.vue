@@ -301,7 +301,7 @@ onMounted(async () => {
 }
 
 .sk__item.on {
-  background: linear-gradient(135deg, #f5f8ff, #fdf2f8);
+  background: #f9fafb;
   border-color: #f5c2d7;
 }
 

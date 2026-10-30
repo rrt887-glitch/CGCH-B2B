@@ -100,7 +100,7 @@ defineExpose({ add, edit });
 .wi {
   min-height: 272px;
   padding: 48px 48px 36px;
-  background: linear-gradient(120deg, #f8fafc, #eef2f7);
+  background: #f9fafb;
   border-radius: 8px;
 }
 

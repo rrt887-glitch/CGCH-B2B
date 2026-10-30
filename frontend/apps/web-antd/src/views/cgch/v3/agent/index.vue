@@ -94,12 +94,12 @@ function goStep(key: string) {
 }
 
 .agent__step:hover {
-  background: #eef2fb;
+  background: #F3F4F6;
 }
 
 .agent__step.on {
   color: #2563EB;
-  background: #e3ebfd;
+  background: #EFF4FF;
 }
 
 .agent__num {

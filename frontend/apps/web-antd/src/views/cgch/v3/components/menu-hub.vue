@@ -102,7 +102,7 @@ function select(key: string) {
   font-size: 13px;
   color: #4b5563;
   cursor: pointer;
-  background: #f3f5fa;
+  background: #F3F4F6;
   border: 0;
   border-radius: 8px;
 }
@@ -144,12 +144,12 @@ function select(key: string) {
 }
 
 .v3-hub__item:hover {
-  background: #f3f6fd;
+  background: #F3F4F6;
 }
 
 .v3-hub__item.on {
   color: #2563EB;
-  background: #eaf0fe;
+  background: #EFF4FF;
 }
 
 .v3-hub__body {

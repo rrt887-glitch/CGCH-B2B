@@ -60,7 +60,7 @@ const RULES = [
 
 .lf__seg button.on {
   color: #2563EB;
-  background: #eef3fe;
+  background: #EFF4FF;
 }
 
 .lf__card {

@@ -71,12 +71,12 @@ function go(key: string) {
 }
 
 .claw__item:hover {
-  background: #f3f6fd;
+  background: #F3F4F6;
 }
 
 .claw__item.on {
   color: #2563EB;
-  background: #eef3fe;
+  background: #EFF4FF;
 }
 
 .claw__main {

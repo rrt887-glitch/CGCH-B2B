@@ -438,7 +438,7 @@ onMounted(() => {
 
 .sc__item:hover,
 .sc__item.on {
-  background: #eef3fe;
+  background: #EFF4FF;
 }
 
 .sc__avatar {
@@ -450,7 +450,7 @@ onMounted(() => {
   height: 22px;
   font-size: 12px;
   color: #2563EB;
-  background: #dbe5fd;
+  background: #BFDBFE;
   border-radius: 50%;
 }
 

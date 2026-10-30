@@ -164,7 +164,7 @@ provide('cgchHubSelect', select);
   font-size: 13px;
   color: #4b5563;
   cursor: pointer;
-  background: #f3f5fa;
+  background: #F3F4F6;
   border: 0;
   border-radius: 8px;
 }

@@ -336,7 +336,7 @@ onMounted(load);
 
 <style scoped>
 .v3-dash {
-  padding: 4px 8px 16px;
+  padding: 4px 12px 16px;
 }
 
 .v3-dash__bar {
@@ -358,13 +358,15 @@ onMounted(load);
 }
 
 .v3-card {
-  padding: 16px;
+  padding: 18px 20px;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
 
 .v3-card__title {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -372,7 +374,7 @@ onMounted(load);
   margin-left: 6px;
   font-size: 12px;
   font-weight: 400;
-  color: #8a94a6;
+  color: #6b7280;
 }
 
 .v3-card__foot {
@@ -381,36 +383,38 @@ onMounted(load);
   padding: 10px 14px;
   margin-top: 8px;
   font-size: 13px;
-  color: #6b7280;
-  background: #f6f8fc;
+  color: #4b5563;
+  background: #f9fafb;
   border-radius: 8px;
 }
 
 .v3-tile {
   min-height: 72px;
   padding: 12px 16px;
-  background: #f6f8fc;
-  border-radius: 8px;
+  background: #f9fafb;
+  border: 1px solid #f1f2f4;
+  border-radius: 10px;
 }
 
 .v3-tile__label {
   display: inline-block;
   font-size: 13px;
-  color: #374151;
-  border-bottom: 1px dashed #c3cad8;
+  color: #4b5563;
 }
 
 .v3-tile__value {
   margin-top: 4px;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .v3-tile__value small {
   margin-left: 4px;
   font-size: 12px;
-  font-weight: 400;
-  color: #8a94a6;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .v3-donut__num {
@@ -429,48 +433,59 @@ onMounted(load);
   margin-top: 12px;
   overflow: hidden;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
 
 .v3-support__tabs {
   display: flex;
+  gap: 4px;
   align-items: center;
-  background: #fbf7f2;
+  padding: 0 12px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .v3-support__tabs button {
-  padding: 14px 24px;
-  font-size: 15px;
-  color: #374151;
+  padding: 14px 12px;
+  margin-bottom: -1px;
+  font-size: 14px;
+  color: #4b5563;
   cursor: pointer;
   background: transparent;
   border: 0;
+  border-bottom: 2px solid transparent;
 }
 
 .v3-support__tabs button.on {
   font-weight: 600;
   color: #111827;
-  background: #fff;
-  border-radius: 12px 12px 0 0;
+  border-bottom-color: #2563eb;
 }
 
 .v3-chip {
-  padding: 4px 12px;
-  font-size: 13px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
   color: #374151;
   cursor: pointer;
-  background: transparent;
-  border: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 999px;
 }
 
 .v3-chip span {
   margin-left: 4px;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .v3-chip.on {
-  color: #2563EB;
-  background: rgb(37 99 235 / 10%);
+  font-weight: 500;
+  color: #fff;
+  background: #111827;
+  border-color: #111827;
+}
+
+.v3-chip.on span {
+  color: #d1d5db;
 }
 </style>

@@ -271,7 +271,7 @@ onMounted(() => {
 .kb__seg {
   display: inline-flex;
   padding: 3px;
-  background: #f3f5fa;
+  background: #F3F4F6;
   border-radius: 8px;
 }
 
