@@ -66,7 +66,7 @@ function goStep(key: string) {
 .agent {
   display: flex;
   gap: 6px;
-  height: calc(100vh - 16px);
+  height: calc(100vh - 24px);
 }
 
 .agent__steps {
@@ -94,12 +94,12 @@ function goStep(key: string) {
 }
 
 .agent__step:hover {
-  background: #eef2fb;
+  background: #F3F4F6;
 }
 
 .agent__step.on {
-  color: #155dfc;
-  background: #e3ebfd;
+  color: #2563EB;
+  background: #EFF4FF;
 }
 
 .agent__num {
@@ -116,8 +116,8 @@ function goStep(key: string) {
 }
 
 .agent__step.on .agent__num {
-  color: #155dfc;
-  border-color: #155dfc;
+  color: #2563EB;
+  border-color: #2563EB;
 }
 
 .agent__main {

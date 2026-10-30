@@ -240,7 +240,7 @@ async function openWeb() {
   font-size: 12px;
   font-weight: 700;
   color: #fff;
-  background: #155dfc;
+  background: #2563EB;
   border-radius: 50%;
 }
 

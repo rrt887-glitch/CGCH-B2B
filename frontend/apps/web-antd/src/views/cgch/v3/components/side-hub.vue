@@ -96,22 +96,23 @@ provide('cgchHubSelect', select);
 <style scoped>
 .side-hub {
   display: flex;
-  gap: 6px;
-  height: calc(100vh - 16px);
+  gap: 12px;
+  height: calc(100vh - 24px);
 }
 
 .side-hub__menu {
-  flex: 0 0 148px;
-  padding: 12px 8px;
+  flex: 0 0 188px;
+  padding: 12px 10px;
   overflow: auto;
-  background: rgb(255 255 255 / 75%);
+  background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
 
 .side-hub__group {
-  padding: 10px 10px 4px;
+  padding: 14px 10px 6px;
   font-size: 12px;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .side-hub__sep {
@@ -121,20 +122,22 @@ provide('cgchHubSelect', select);
 }
 
 .side-hub__item {
-  padding: 8px 12px;
-  font-size: 14px;
-  color: #1f2937;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #374151;
   cursor: pointer;
   border-radius: 8px;
 }
 
 .side-hub__item:hover {
-  background: #eef2fb;
+  color: #111827;
+  background: #f3f4f6;
 }
 
 .side-hub__item.on {
-  color: #155dfc;
-  background: #e3ebfd;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff4ff;
 }
 
 .side-hub__main {
@@ -144,6 +147,7 @@ provide('cgchHubSelect', select);
   min-width: 0;
   overflow: hidden;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
 
@@ -160,7 +164,7 @@ provide('cgchHubSelect', select);
   font-size: 13px;
   color: #4b5563;
   cursor: pointer;
-  background: #f3f5fa;
+  background: #F3F4F6;
   border: 0;
   border-radius: 8px;
 }

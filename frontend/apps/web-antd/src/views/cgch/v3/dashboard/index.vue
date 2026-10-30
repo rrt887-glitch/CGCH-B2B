@@ -48,7 +48,7 @@ const updated = computed(() => (data.value ? dayjs(data.value.updateTime).format
 
 // ===== 流量占比 =====
 const SEGMENTS = [
-  { key: 'sales', label: '销售咨询', color: '#155dfc' },
+  { key: 'sales', label: '销售咨询', color: '#2563EB' },
   { key: 'after_sales', label: '售后支持', color: '#5cc8f5' },
   { key: 'business', label: '商务合作', color: '#8a7cf0' },
   { key: 'invalid', label: '无效咨询', color: '#aab4cc' },
@@ -224,7 +224,7 @@ onMounted(load);
                   <Tooltip :title="m.tip"><div class="v3-tile__label">{{ m.label }}</div></Tooltip>
                   <div class="v3-tile__value">{{ pct(m.v) }}</div>
                 </div>
-                <svg viewBox="0 0 120 30" class="h-8 w-32"><path :d="SPARK" fill="none" stroke="#155dfc" stroke-width="1.5" /></svg>
+                <svg viewBox="0 0 120 30" class="h-8 w-32"><path :d="SPARK" fill="none" stroke="#2563EB" stroke-width="1.5" /></svg>
               </div>
             </div>
           </div>
@@ -247,21 +247,21 @@ onMounted(load);
                   </small>
                 </div>
               </div>
-              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#155dfc" stroke-width="1.5" /></svg>
+              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#2563EB" stroke-width="1.5" /></svg>
             </div>
             <div class="v3-tile flex items-center justify-between">
               <div>
                 <div class="v3-tile__label">询盘 → 报价</div>
                 <div class="v3-tile__value">{{ pct2(data?.business.inquiryToQuoteRate ?? 0) }}</div>
               </div>
-              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#155dfc" stroke-width="1.5" /></svg>
+              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#2563EB" stroke-width="1.5" /></svg>
             </div>
             <div class="v3-tile flex items-center justify-between">
               <div>
                 <div class="v3-tile__label">商机 → 赢单</div>
                 <div class="v3-tile__value">{{ pct2(data?.business.businessToWinRate ?? 0) }}</div>
               </div>
-              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#155dfc" stroke-width="1.5" /></svg>
+              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#2563EB" stroke-width="1.5" /></svg>
             </div>
           </div>
         </section>
@@ -275,7 +275,7 @@ onMounted(load);
           <div v-for="r in funnel" :key="r.value" class="flex items-center gap-3 text-sm">
             <span class="w-14 shrink-0 text-gray-600">{{ r.label }}</span>
             <div class="h-6 flex-1 rounded bg-gray-50">
-              <div class="flex h-6 items-center rounded bg-[#155dfc]/80 px-2 text-xs text-white" :style="{ width: `${r.width}%` }">{{ r.reached }}</div>
+              <div class="flex h-6 items-center rounded bg-[#2563EB]/80 px-2 text-xs text-white" :style="{ width: `${r.width}%` }">{{ r.reached }}</div>
             </div>
             <span class="w-28 shrink-0 text-xs text-gray-500">当前 {{ r.current }}<template v-if="r.conv !== null"> · 转化 {{ pct(r.conv) }}</template></span>
           </div>
@@ -336,7 +336,7 @@ onMounted(load);
 
 <style scoped>
 .v3-dash {
-  padding: 4px 8px 16px;
+  padding: 4px 12px 16px;
 }
 
 .v3-dash__bar {
@@ -358,13 +358,15 @@ onMounted(load);
 }
 
 .v3-card {
-  padding: 16px;
+  padding: 18px 20px;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
 
 .v3-card__title {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -372,7 +374,7 @@ onMounted(load);
   margin-left: 6px;
   font-size: 12px;
   font-weight: 400;
-  color: #8a94a6;
+  color: #6b7280;
 }
 
 .v3-card__foot {
@@ -381,36 +383,38 @@ onMounted(load);
   padding: 10px 14px;
   margin-top: 8px;
   font-size: 13px;
-  color: #6b7280;
-  background: #f6f8fc;
+  color: #4b5563;
+  background: #f9fafb;
   border-radius: 8px;
 }
 
 .v3-tile {
   min-height: 72px;
   padding: 12px 16px;
-  background: #f6f8fc;
-  border-radius: 8px;
+  background: #f9fafb;
+  border: 1px solid #f1f2f4;
+  border-radius: 10px;
 }
 
 .v3-tile__label {
   display: inline-block;
   font-size: 13px;
-  color: #374151;
-  border-bottom: 1px dashed #c3cad8;
+  color: #4b5563;
 }
 
 .v3-tile__value {
   margin-top: 4px;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .v3-tile__value small {
   margin-left: 4px;
   font-size: 12px;
-  font-weight: 400;
-  color: #8a94a6;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .v3-donut__num {
@@ -429,48 +433,59 @@ onMounted(load);
   margin-top: 12px;
   overflow: hidden;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
 
 .v3-support__tabs {
   display: flex;
+  gap: 4px;
   align-items: center;
-  background: #fbf7f2;
+  padding: 0 12px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .v3-support__tabs button {
-  padding: 14px 24px;
-  font-size: 15px;
-  color: #374151;
+  padding: 14px 12px;
+  margin-bottom: -1px;
+  font-size: 14px;
+  color: #4b5563;
   cursor: pointer;
   background: transparent;
   border: 0;
+  border-bottom: 2px solid transparent;
 }
 
 .v3-support__tabs button.on {
   font-weight: 600;
   color: #111827;
-  background: #fff;
-  border-radius: 12px 12px 0 0;
+  border-bottom-color: #2563eb;
 }
 
 .v3-chip {
-  padding: 4px 12px;
-  font-size: 13px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
   color: #374151;
   cursor: pointer;
-  background: transparent;
-  border: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 999px;
 }
 
 .v3-chip span {
   margin-left: 4px;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .v3-chip.on {
-  color: #155dfc;
-  background: rgb(21 93 252 / 10%);
+  font-weight: 500;
+  color: #fff;
+  background: #111827;
+  border-color: #111827;
+}
+
+.v3-chip.on span {
+  color: #d1d5db;
 }
 </style>

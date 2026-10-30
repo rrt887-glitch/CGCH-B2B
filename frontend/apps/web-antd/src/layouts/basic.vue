@@ -123,22 +123,25 @@ function onUserMenu({ key }: { key: number | string }) {
 </template>
 
 <style scoped>
+/* 清爽专业：白色图标导航 + 浅灰画布（设计稿「会话工作台」左侧） */
 .cgch-shell {
-  --vben-content-height: calc(100vh - 16px);
+  --vben-content-height: calc(100vh - 24px);
 
   display: flex;
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background: linear-gradient(135deg, #eef1fb 0%, #e8edfb 50%, #eef0fa 100%);
+  background: var(--cg-canvas, #f6f7f9);
 }
 
 .cgch-rail {
   display: flex;
-  flex: 0 0 60px;
+  flex: 0 0 72px;
   flex-direction: column;
   align-items: center;
-  padding: 12px 0;
+  padding: 16px 0;
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
 }
 
 .cgch-rail__logo {
@@ -147,21 +150,22 @@ function onUserMenu({ key }: { key: number | string }) {
   justify-content: center;
   width: 40px;
   height: 40px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   cursor: pointer;
 }
 
 .cgch-rail__logo img {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
+  border-radius: 10px;
 }
 
 .cgch-rail__nav {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
 }
 
@@ -175,13 +179,14 @@ function onUserMenu({ key }: { key: number | string }) {
 .cgch-rail__item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 52px;
-  font-size: 12px;
-  color: #6b7280;
+  width: 56px;
+  height: 54px;
+  font-size: 11px;
+  line-height: 14px;
+  color: #4b5563;
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -192,13 +197,19 @@ function onUserMenu({ key }: { key: number | string }) {
 }
 
 .cgch-rail__item:hover {
-  color: #155dfc;
-  background: rgb(21 93 252 / 6%);
+  color: #111827;
+  background: #f3f4f6;
 }
 
 .cgch-rail__item.is-active {
-  color: #155dfc;
-  background: rgb(21 93 252 / 12%);
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff4ff;
+}
+
+.cgch-rail__item:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .cgch-rail__icon {
@@ -218,7 +229,7 @@ function onUserMenu({ key }: { key: number | string }) {
   flex: 1;
   min-width: 0;
   height: 100vh;
-  padding: 8px 8px 8px 0;
+  padding: 12px;
   overflow: auto;
 }
 </style>

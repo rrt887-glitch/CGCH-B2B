@@ -149,7 +149,7 @@ onMounted(() => {
         <div class="flex items-center gap-2">
           <span class="text-base font-semibold text-gray-900">{{ company.name || '未填写公司名称' }}</span>
           <span v-if="company.industry" class="kb__tag">{{ company.industry }}</span>
-          <IconifyIcon icon="lucide:pencil" class="size-3.5 cursor-pointer text-gray-400 hover:text-[#155dfc]" @click="editCompany" />
+          <IconifyIcon icon="lucide:pencil" class="size-3.5 cursor-pointer text-gray-400 hover:text-[#2563EB]" @click="editCompany" />
         </div>
         <a v-if="company.website" :href="company.website" target="_blank" class="mt-1 block text-sm text-gray-500">{{ company.website }}</a>
         <Tooltip :title="company.intro" placement="bottomLeft" :overlay-style="{ maxWidth: '560px' }">
@@ -271,7 +271,7 @@ onMounted(() => {
 .kb__seg {
   display: inline-flex;
   padding: 3px;
-  background: #f3f5fa;
+  background: #F3F4F6;
   border-radius: 8px;
 }
 
@@ -286,7 +286,7 @@ onMounted(() => {
 }
 
 .kb__seg button.on {
-  color: #155dfc;
+  color: #2563EB;
   background: #fff;
   box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }

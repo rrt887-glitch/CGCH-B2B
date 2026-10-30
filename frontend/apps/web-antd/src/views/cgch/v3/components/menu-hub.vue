@@ -80,9 +80,10 @@ function select(key: string) {
 .v3-hub {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 16px);
+  height: calc(100vh - 24px);
   overflow: hidden;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
 
@@ -101,13 +102,13 @@ function select(key: string) {
   font-size: 13px;
   color: #4b5563;
   cursor: pointer;
-  background: #f3f5fa;
+  background: #F3F4F6;
   border: 0;
   border-radius: 8px;
 }
 
 .v3-hub__btn:hover {
-  color: #155dfc;
+  color: #2563EB;
 }
 
 .v3-hub__menu {
@@ -143,12 +144,12 @@ function select(key: string) {
 }
 
 .v3-hub__item:hover {
-  background: #f3f6fd;
+  background: #F3F4F6;
 }
 
 .v3-hub__item.on {
-  color: #155dfc;
-  background: #eaf0fe;
+  color: #2563EB;
+  background: #EFF4FF;
 }
 
 .v3-hub__body {

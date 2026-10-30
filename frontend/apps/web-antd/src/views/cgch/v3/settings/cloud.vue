@@ -245,7 +245,7 @@ onMounted(load);
 .cd__seg {
   display: inline-flex;
   padding: 4px;
-  background: #f3f5fa;
+  background: #F3F4F6;
   border: 1px solid #eceef3;
   border-radius: 14px;
 }
@@ -262,7 +262,7 @@ onMounted(load);
 
 .cd__seg button.on {
   font-weight: 600;
-  color: #155dfc;
+  color: #2563EB;
   background: #fff;
   box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
 }

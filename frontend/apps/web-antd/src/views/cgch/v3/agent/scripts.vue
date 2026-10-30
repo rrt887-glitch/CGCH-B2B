@@ -347,7 +347,7 @@ onMounted(() => {
   height: 18px;
   font-size: 11px;
   color: #fff;
-  background: #155dfc;
+  background: #2563EB;
   border-radius: 50%;
 }
 
@@ -438,7 +438,7 @@ onMounted(() => {
 
 .sc__item:hover,
 .sc__item.on {
-  background: #eef3fe;
+  background: #EFF4FF;
 }
 
 .sc__avatar {
@@ -449,8 +449,8 @@ onMounted(() => {
   width: 22px;
   height: 22px;
   font-size: 12px;
-  color: #155dfc;
-  background: #dbe5fd;
+  color: #2563EB;
+  background: #BFDBFE;
   border-radius: 50%;
 }
 

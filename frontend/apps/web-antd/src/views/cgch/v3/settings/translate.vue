@@ -66,8 +66,8 @@ watch(prefs, (v) => saveTranslatePrefs({ ...v }));
   width: 30px;
   height: 30px;
   font-weight: 700;
-  color: #155dfc;
-  background: #dbe5fd;
+  color: #2563EB;
+  background: #BFDBFE;
   border-radius: 50%;
 }
 

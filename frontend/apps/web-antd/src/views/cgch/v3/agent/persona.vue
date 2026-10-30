@@ -82,7 +82,7 @@ onMounted(async () => {
     <h2 class="ps__title">角色人设</h2>
 
     <div class="ps__card">
-      <div class="ps__avatar"><IconifyIcon icon="lucide:bot" class="size-7 text-[#155dfc]" /></div>
+      <div class="ps__avatar"><IconifyIcon icon="lucide:bot" class="size-7 text-[#2563EB]" /></div>
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
           <Input
@@ -113,7 +113,7 @@ onMounted(async () => {
             </template>
             <span class="ps__tag">{{ personality.label }}</span>
           </Popover>
-          <IconifyIcon v-if="!editingName" icon="lucide:pencil" class="size-3.5 cursor-pointer text-gray-400 hover:text-[#155dfc]" @click="startName" />
+          <IconifyIcon v-if="!editingName" icon="lucide:pencil" class="size-3.5 cursor-pointer text-gray-400 hover:text-[#2563EB]" @click="startName" />
         </div>
         <div class="mt-1 text-xs leading-5 text-gray-500">
           所属行业：{{ settings?.company?.industry || '未填写（在「知识库」上方的企业信息里填写）' }}
@@ -165,7 +165,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   height: 48px;
-  background: linear-gradient(135deg, #e0e9ff, #f3e8ff);
+  background: #f9fafb;
   border-radius: 50%;
 }
 
@@ -187,7 +187,7 @@ onMounted(async () => {
 
 .ps__option:hover,
 .ps__option.on {
-  background: #f3f6fd;
+  background: #F3F4F6;
 }
 
 .ps__label {

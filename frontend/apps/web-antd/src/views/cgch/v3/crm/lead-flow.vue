@@ -59,8 +59,8 @@ const RULES = [
 }
 
 .lf__seg button.on {
-  color: #155dfc;
-  background: #eef3fe;
+  color: #2563EB;
+  background: #EFF4FF;
 }
 
 .lf__card {
@@ -82,7 +82,7 @@ const RULES = [
   line-height: 22px;
   color: #fff;
   text-align: center;
-  background: #155dfc;
+  background: #2563EB;
   border-radius: 50%;
 }
 

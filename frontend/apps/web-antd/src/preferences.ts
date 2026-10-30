@@ -33,7 +33,8 @@ export const overridesPreferences = defineOverridesPreferences({
     source: '/brand/logo.png',
   },
   theme: {
-    colorPrimary: 'hsl(221 97% 54%)',
+    /** 主色 #2563EB（设计稿「风格规范」） */
+    colorPrimary: 'hsl(221 83% 53%)',
     radius: '0.5',
   },
   widget: {
