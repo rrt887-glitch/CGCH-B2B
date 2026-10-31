@@ -6,7 +6,10 @@ import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaAccountDO;
+import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationDO;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaAccountMapper;
+import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationMapper;
+import cn.iocoder.yudao.module.channel.service.file.ChannelFileHelper;
 import cn.iocoder.yudao.module.channel.framework.oauth.ChannelOAuthProperties;
 import cn.iocoder.yudao.module.channel.service.whatsapp.ChannelWhatsAppService;
 import cn.iocoder.yudao.module.channel.service.whatsapp.WaGraphClient;
@@ -15,7 +18,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -52,6 +57,10 @@ public class ChannelEvolutionService {
     private StringRedisTemplate stringRedisTemplate;
     @Resource
     private ChannelWaAccountMapper accountMapper;
+    @Resource
+    private ChannelWaConversationMapper conversationMapper;
+    @Resource
+    private ChannelFileHelper fileHelper;
     @Resource
     @Lazy
     private ChannelWhatsAppService whatsAppService;
@@ -278,7 +287,10 @@ public class ChannelEvolutionService {
                 try {
                     ChannelWaAccountDO fresh = findAccount(a.getPhoneNumberId());
                     if (fresh != null) {
-                        TenantUtils.execute(fresh.getTenantId(), () -> syncHistory(fresh));
+                        TenantUtils.execute(fresh.getTenantId(), () -> {
+                            syncHistory(fresh);
+                            refreshAvatars(fresh);
+                        });
                     }
                 } catch (Exception e) {
                     log.warn("[scheduleHistory][账号 {} 拉取聊天记录失败] {}", a.getId(), e.getMessage());
@@ -293,6 +305,7 @@ public class ChannelEvolutionService {
         historyExecutor.execute(() -> {
             try {
                 TenantUtils.execute(a.getTenantId(), () -> syncHistory(a));
+                TenantUtils.execute(a.getTenantId(), () -> refreshAvatars(a));
             } catch (Exception e) {
                 log.warn("[syncHistoryAsync][账号 {} 拉取聊天记录失败] {}", a.getId(), e.getMessage());
                 TenantUtils.execute(a.getTenantId(), () -> whatsAppService.accountMapperInternal().updateById(new ChannelWaAccountDO()
@@ -333,6 +346,161 @@ public class ChannelEvolutionService {
                 .setHistorySyncTime(java.time.LocalDateTime.now()).setHistoryFetched(all.size())
                 .setHistoryImported(n).setHistoryNoNumber(noNumber).setHistorySyncError(""));
         return n;
+    }
+
+    // ==================== 自动同步 ====================
+
+    /** 自动同步的间隔：启动后先同步一次，之后定时补齐（按消息编号去重，重复执行没有副作用） */
+    private static final long AUTO_SYNC_FIRST_SECONDS = 120;
+    private static final long AUTO_SYNC_INTERVAL_SECONDS = 6 * 3600;
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void startAutoSync() {
+        historyExecutor.scheduleWithFixedDelay(this::syncAllAccounts, AUTO_SYNC_FIRST_SECONDS, AUTO_SYNC_INTERVAL_SECONDS,
+                java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    /** 所有已连接的扫码号码：补齐聊天记录和客户头像（升级后、重启后、漏掉推送时都能自动补上，不用手动点同步） */
+    void syncAllAccounts() {
+        if (!enabled()) {
+            return;
+        }
+        java.util.List<ChannelWaAccountDO> list;
+        try {
+            list = TenantUtils.executeIgnore(() -> accountMapper.selectList(new LambdaQueryWrapperX<ChannelWaAccountDO>()
+                    .eq(ChannelWaAccountDO::getAuthType, ChannelWaAccountDO.AUTH_EVOLUTION)
+                    .eq(ChannelWaAccountDO::getEnabled, true)
+                    .eq(ChannelWaAccountDO::getConnState, ChannelWaAccountDO.CONN_OPEN)));
+        } catch (Exception e) {
+            log.warn("[syncAllAccounts][查询扫码号码失败] {}", e.getMessage());
+            return;
+        }
+        for (ChannelWaAccountDO a : list) {
+            try {
+                TenantUtils.execute(a.getTenantId(), () -> {
+                    syncHistory(a);
+                    refreshAvatars(a);
+                });
+            } catch (Exception e) {
+                log.warn("[syncAllAccounts][账号 {} 自动同步失败] {}", a.getId(), e.getMessage());
+            }
+        }
+    }
+
+    // ==================== 客户头像 ====================
+
+    /** 头像多久更新一次；没有头像的联系人隔一天再看（联系人资料可能稍后才同步到） */
+    private static final Duration AVATAR_REFRESH = Duration.ofDays(7);
+    private static final Duration AVATAR_RETRY = Duration.ofDays(1);
+    private static final int AVATAR_BATCH = 300;
+    private static final int AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+    private static final java.net.http.HttpClient AVATAR_HTTP = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10)).followRedirects(java.net.http.HttpClient.Redirect.NORMAL).build();
+    /** 新客户来消息后稍等一会儿再取头像（Evolution 要先更新联系人资料），同一号码合并成一次 */
+    private final java.util.Set<Long> avatarPending = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    void avatarSoon(ChannelWaAccountDO a) {
+        if (a.getId() == null || !avatarPending.add(a.getId())) {
+            return;
+        }
+        historyExecutor.schedule(() -> {
+            avatarPending.remove(a.getId());
+            try {
+                TenantUtils.execute(a.getTenantId(), () -> refreshAvatars(a));
+            } catch (Exception e) {
+                log.info("[avatarSoon][账号 {} 获取头像失败] {}", a.getId(), e.getMessage());
+            }
+        }, 90, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    /**
+     * 更新客户头像：从 Evolution 读取联系人头像地址（只读它的数据库，不向 WhatsApp 逐个查询，避免被判定为异常），
+     * 由服务器下载后存到本系统，前端显示本系统地址。返回更新了头像的会话数。
+     */
+    public int refreshAvatars(ChannelWaAccountDO a) {
+        if (!enabled() || !a.isEvolution()) {
+            return 0;
+        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.util.List<ChannelWaConversationDO> todo = conversationMapper.selectList(new LambdaQueryWrapperX<ChannelWaConversationDO>()
+                .eq(ChannelWaConversationDO::getAccountId, a.getId())
+                .and(w -> w.isNull(ChannelWaConversationDO::getAvatarTime).or().lt(ChannelWaConversationDO::getAvatarTime, now.minus(AVATAR_REFRESH)))
+                .orderByDesc(ChannelWaConversationDO::getLastMessageTime)
+                .last("LIMIT " + AVATAR_BATCH));
+        if (todo.isEmpty()) {
+            return 0;
+        }
+        java.util.Map<String, String> pics;
+        try {
+            pics = EvolutionClient.contactPictures(cfg(), a.getPhoneNumberId());
+        } catch (Exception e) {
+            log.info("[refreshAvatars][账号 {} 读取联系人失败] {}", a.getId(), e.getMessage());
+            return 0;
+        }
+        int n = 0;
+        for (ChannelWaConversationDO c : todo) {
+            String url = pics.get(jidOf(c.getWaId()));
+            ChannelWaConversationDO upd = new ChannelWaConversationDO().setId(c.getId());
+            if (url == null) {
+                // 没有头像（对方未设置、隐私设置不公开，或联系人资料还没同步）：一天后再看
+                conversationMapper.updateById(upd.setAvatarTime(now.minus(AVATAR_REFRESH).plus(AVATAR_RETRY)));
+                continue;
+            }
+            String key = sha256(StrUtil.subBefore(url, "?", false));
+            if (key.equals(c.getAvatarKey()) && StrUtil.isNotBlank(c.getAvatarUrl())) {
+                conversationMapper.updateById(upd.setAvatarTime(now)); // 头像没换
+                continue;
+            }
+            try {
+                byte[] img = downloadImage(url);
+                String saved = fileHelper.save(img, "avatar-" + c.getId() + ".jpg", "wa-avatar", "image/jpeg");
+                conversationMapper.updateById(upd.setAvatarUrl(saved).setAvatarKey(key).setAvatarTime(now));
+                n++;
+            } catch (Exception e) {
+                // 地址过期（WhatsApp 图片地址带有效期）等：一天后再试
+                conversationMapper.updateById(upd.setAvatarTime(now.minus(AVATAR_REFRESH).plus(AVATAR_RETRY)));
+                log.info("[refreshAvatars][会话 {} 下载头像失败] {}", c.getId(), e.getMessage());
+            }
+        }
+        if (n > 0) {
+            log.info("[refreshAvatars][账号 {} 更新头像 {} 个]", a.getId(), n);
+        }
+        return n;
+    }
+
+    static String sha256(String s) {
+        try {
+            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** 会话的客户编号 → Evolution 联系人 jid */
+    static String jidOf(String waId) {
+        if (StrUtil.isBlank(waId)) {
+            return "";
+        }
+        return waId.endsWith("@lid") ? waId : waId + "@s.whatsapp.net";
+    }
+
+    private static byte[] downloadImage(String url) throws Exception {
+        java.net.http.HttpResponse<java.io.InputStream> resp = AVATAR_HTTP.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(url))
+                .timeout(Duration.ofSeconds(20)).GET().build(), java.net.http.HttpResponse.BodyHandlers.ofInputStream());
+        try (java.io.InputStream in = resp.body()) {
+            if (resp.statusCode() >= 300) {
+                throw new IllegalStateException("HTTP " + resp.statusCode());
+            }
+            String type = resp.headers().firstValue("Content-Type").orElse("");
+            if (!type.isEmpty() && !type.startsWith("image/")) {
+                throw new IllegalStateException("不是图片：" + type);
+            }
+            byte[] b = in.readNBytes(AVATAR_MAX_BYTES + 1);
+            if (b.length == 0 || b.length > AVATAR_MAX_BYTES) {
+                throw new IllegalStateException("图片大小不对：" + b.length);
+            }
+            return b;
+        }
     }
 
     /** 删除账号时退出手机上的关联设备并删除实例 */
@@ -460,6 +628,10 @@ public class ChannelEvolutionService {
                 whatsAppService.evolutionSynced(a, m, customer); // 手机上发出的消息（系统发出的按消息编号去重）
             } else {
                 whatsAppService.evolutionInbound(a, m, StrUtil.emptyToNull(d.path("pushName").asText(null)));
+                ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), ChannelWhatsAppService.waKey(customer));
+                if (conv != null && conv.getAvatarTime() == null) {
+                    avatarSoon(a); // 新客户：稍后取头像
+                }
             }
         } catch (Exception e) {
             log.warn("[upsert][账号 {}] 消息处理失败 {}", a.getId(), d, e);

@@ -1369,7 +1369,7 @@ public class ChannelWhatsAppService {
     }
 
     /** 会话的客户编号：号码只保留数字；隐藏了手机号的联系人保留「隐藏编号@lid」 */
-    static String waKey(String s) {
+    public static String waKey(String s) {
         return s != null && s.endsWith("@lid") ? digits(s) + "@lid" : digits(s);
     }
 
@@ -1402,6 +1402,9 @@ public class ChannelWhatsAppService {
         }
         if (StrUtil.isBlank(target.getProfileName()) && StrUtil.isNotBlank(lid.getProfileName())) {
             upd.setProfileName(lid.getProfileName());
+        }
+        if (StrUtil.isBlank(target.getAvatarUrl()) && StrUtil.isNotBlank(lid.getAvatarUrl())) {
+            upd.setAvatarUrl(lid.getAvatarUrl()).setAvatarKey(lid.getAvatarKey()).setAvatarTime(lid.getAvatarTime());
         }
         conversationMapper.updateById(upd);
         conversationMapper.deleteById(lid.getId());

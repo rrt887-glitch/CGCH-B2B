@@ -16,6 +16,8 @@ public class ChannelWaConversationRespVO {
     private Long accountId;
     private String waId;
     private String profileName;
+    @Schema(description = "客户头像地址")
+    private String avatarUrl;
     private Long customerId;
     private String customerName;
     private Long clueId;
