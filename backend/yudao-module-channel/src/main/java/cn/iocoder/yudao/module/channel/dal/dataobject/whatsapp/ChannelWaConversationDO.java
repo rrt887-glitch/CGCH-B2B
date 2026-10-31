@@ -96,6 +96,11 @@ public class ChannelWaConversationDO extends TenantBaseDO {
         return ChannelWaAccountDO.PLATFORM_WEB.equals(platform);
     }
 
+    /** WhatsApp 联系人隐藏了手机号：waId 是「隐藏编号@lid」，不是号码 */
+    public boolean isHiddenNumber() {
+        return waId != null && waId.endsWith("@lid");
+    }
+
     public boolean isWhatsApp() {
         return platform == null || ChannelWaAccountDO.PLATFORM_WHATSAPP.equals(platform);
     }
@@ -106,7 +111,7 @@ public class ChannelWaConversationDO extends TenantBaseDO {
             return profileName;
         }
         if (isWhatsApp()) {
-            return "+" + waId;
+            return isHiddenNumber() ? "隐藏号码联系人" : "+" + waId;
         }
         if ("youtube".equals(platform) || "tiktok".equals(platform)) {
             return ("youtube".equals(platform) ? "YouTube" : "TikTok") + " 用户";

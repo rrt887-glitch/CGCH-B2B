@@ -173,7 +173,7 @@ public class ChannelLeadService {
         if (account == null) {
             return;
         }
-        boolean wa = c.isWhatsApp();
+        boolean wa = c.isWhatsApp() && !c.isHiddenNumber(); // 隐藏号码的联系人没有号码可录入
         CrmClueDO clue = wa ? findClueByWhatsapp(c.getWaId()) : null;
         if (clue == null) {
             ChannelAiConfigDO cfg = channelAiConfigMapper.selectCurrent();

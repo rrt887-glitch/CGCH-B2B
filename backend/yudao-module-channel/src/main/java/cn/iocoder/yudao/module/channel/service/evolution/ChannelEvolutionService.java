@@ -322,8 +322,7 @@ public class ChannelEvolutionService {
         int noNumber = 0;
         for (JsonNode d : all) {
             if (lidWithoutNumber(d)) {
-                noNumber++;
-                continue;
+                noNumber++; // 隐藏号码的联系人：按隐藏编号建会话，对方再来消息带上真实号码时自动合并
             }
             if (history(a, d)) {
                 n++;
@@ -445,14 +444,14 @@ public class ChannelEvolutionService {
     private void upsert(ChannelWaAccountDO a, JsonNode d) {
         try {
             JsonNode key = d.path("key");
-            String jid = key.path("remoteJid").asText("");
-            if (jid.endsWith("@lid")) {
-                jid = StrUtil.blankToDefault(key.path("remoteJidAlt").asText(null), key.path("senderPn").asText(""));
+            String customer = contact(key);
+            if (customer == null) {
+                return; // 群聊、状态、频道
             }
-            if (!jid.endsWith("@s.whatsapp.net")) {
-                return; // 群聊、状态、频道，或无法识别号码的联系人
+            String lid = lidKey(key);
+            if (lid != null && !lid.equals(customer)) {
+                whatsAppService.mergeLidConversation(a, lid, customer); // 之前按隐藏号码导入的会话，换成真实号码
             }
-            String customer = EvolutionClient.digits(jid);
             ObjectNode m = toMeta(d, customer);
             if (!isCustomer(customer) || m == null) {
                 return;
@@ -468,7 +467,37 @@ public class ChannelEvolutionService {
     }
 
     /** 一条历史消息入库；返回是否是可入库的私聊消息 */
-    /** 联系人是隐藏号码（@lid）且记录里没有附带真实号码：现在没法确定对方号码，导入后也无法回复 */
+    /**
+     * 会话的客户编号：普通联系人是号码（纯数字）；隐藏了手机号的联系人（@lid）有真实号码时用号码，
+     * 没有时用「隐藏编号@lid」（可以照常收发消息，对方以后带上真实号码时会合并到号码会话）。群聊等返回 null。
+     */
+    static String contact(JsonNode key) {
+        String jid = key.path("remoteJid").asText("");
+        if (jid.endsWith("@lid")) {
+            String alt = StrUtil.blankToDefault(key.path("remoteJidAlt").asText(null), key.path("senderPn").asText(""));
+            if (alt.endsWith("@s.whatsapp.net")) {
+                String phone = EvolutionClient.digits(alt);
+                if (isCustomer(phone)) {
+                    return phone;
+                }
+            }
+            String lid = EvolutionClient.digits(jid);
+            return isCustomer(lid) ? lid + "@lid" : null;
+        }
+        if (!jid.endsWith("@s.whatsapp.net")) {
+            return null;
+        }
+        String phone = EvolutionClient.digits(jid);
+        return isCustomer(phone) ? phone : null;
+    }
+
+    /** 记录是隐藏号码联系人时返回「隐藏编号@lid」，否则 null */
+    static String lidKey(JsonNode key) {
+        String jid = key.path("remoteJid").asText("");
+        return jid.endsWith("@lid") ? EvolutionClient.digits(jid) + "@lid" : null;
+    }
+
+    /** 联系人是隐藏号码（@lid）且记录里没有附带真实号码（会按隐藏编号建会话） */
     static boolean lidWithoutNumber(JsonNode d) {
         JsonNode key = d.path("key");
         return key.path("remoteJid").asText("").endsWith("@lid")
@@ -478,14 +507,14 @@ public class ChannelEvolutionService {
     private boolean history(ChannelWaAccountDO a, JsonNode d) {
         try {
             JsonNode key = d.path("key");
-            String jid = key.path("remoteJid").asText("");
-            if (jid.endsWith("@lid")) {
-                jid = StrUtil.blankToDefault(key.path("remoteJidAlt").asText(null), key.path("senderPn").asText(""));
+            String customer = contact(key);
+            if (customer == null) {
+                return false; // 群聊、状态、频道
             }
-            if (!jid.endsWith("@s.whatsapp.net")) {
-                return false;
+            String lid = lidKey(key);
+            if (lid != null && !lid.equals(customer)) {
+                whatsAppService.mergeLidConversation(a, lid, customer);
             }
-            String customer = EvolutionClient.digits(jid);
             ObjectNode m = toMeta(d, customer);
             if (!isCustomer(customer) || m == null || "reaction".equals(m.path("type").asText())) {
                 return false;
@@ -517,8 +546,12 @@ public class ChannelEvolutionService {
     }
 
     /** 真实客户号码：排除 WhatsApp 官方系统账号（0@s.whatsapp.net 等）这类过短的号码 */
-    static boolean isCustomer(String digits) {
-        return digits != null && digits.length() >= 6;
+    static boolean isCustomer(String id) {
+        if (id == null) {
+            return false;
+        }
+        String d = id.endsWith("@lid") ? id.substring(0, id.length() - 4) : id;
+        return d.length() >= 6 && d.chars().allMatch(Character::isDigit);
     }
 
     /** 阅后即焚、限时消息等外层包装里取出真正的消息 */

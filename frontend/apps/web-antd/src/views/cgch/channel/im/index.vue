@@ -678,9 +678,12 @@ const MEDIA_LABEL: Record<string, string> = {
   sticker: '表情',
 };
 const initials = (c: ChannelWaApi.Conversation) => (c.profileName || c.waId).slice(0, 1).toUpperCase();
+/** 隐藏了手机号的 WhatsApp 联系人：waId 是「隐藏编号@lid」，不是号码 */
+const hiddenNumber = (c?: { waId?: string }) => !!c?.waId?.endsWith('@lid');
+const waNumber = (c: ChannelWaApi.Conversation) => (hiddenNumber(c) ? '隐藏号码联系人' : `+${c.waId}`);
 const contact = (c: ChannelWaApi.Conversation) =>
   c.profileName ||
-  (isWa(c) ? `+${c.waId}` : c.platform === 'web' ? `官网访客 ${c.waId.slice(-4).toUpperCase()}` : `${plat(c).label} 用户`);
+  (isWa(c) ? waNumber(c) : c.platform === 'web' ? `官网访客 ${c.waId.slice(-4).toUpperCase()}` : `${plat(c).label} 用户`);
 const hm = (t?: number | string) => fmtDateTime(t, 'HH:mm');
 const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 </script>
@@ -756,7 +759,10 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               <div class="text-[15px] font-semibold">
                 <span v-if="current.starred" class="mr-1 text-amber-500">★</span>{{ current.remarkName || contact(current) }}
                 <span v-if="current.remarkName" class="text-sm text-gray-400">（{{ contact(current) }}）</span>
-                <span v-if="isWa(current)" class="text-sm text-gray-400">+{{ current.waId }}</span>
+                <Tooltip v-if="isWa(current) && hiddenNumber(current)" title="对方在 WhatsApp 上隐藏了手机号，可以照常收发消息；对方之后带上号码时会自动合并到号码会话">
+                  <span class="text-sm text-gray-400">隐藏号码</span>
+                </Tooltip>
+                <span v-else-if="isWa(current)" class="text-sm text-gray-400">+{{ current.waId }}</span>
                 <Tag v-else :color="plat(current).color" class="ml-1">{{ plat(current).label }}</Tag>
               </div>
               <div class="mt-1 flex gap-2">
