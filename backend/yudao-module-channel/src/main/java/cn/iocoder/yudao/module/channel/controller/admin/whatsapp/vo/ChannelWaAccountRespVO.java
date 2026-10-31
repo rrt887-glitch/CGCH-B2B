@@ -30,6 +30,16 @@ public class ChannelWaAccountRespVO {
     private String connState;
     @Schema(description = "接待成员（用户编号，逗号分隔）")
     private String assignUserIds;
+    @Schema(description = "扫码接入：最近一次同步聊天记录的时间")
+    private LocalDateTime historySyncTime;
+    @Schema(description = "最近一次同步：Evolution 里保存的记录数")
+    private Integer historyFetched;
+    @Schema(description = "最近一次同步：新导入的消息数")
+    private Integer historyImported;
+    @Schema(description = "最近一次同步：来自隐藏号码联系人、暂时无法导入的消息数")
+    private Integer historyNoNumber;
+    @Schema(description = "最近一次同步失败的原因")
+    private String historySyncError;
     private LocalDateTime createTime;
 
     @Schema(description = "在 Meta 后台填写的回调地址路径，需拼上你的公网域名")

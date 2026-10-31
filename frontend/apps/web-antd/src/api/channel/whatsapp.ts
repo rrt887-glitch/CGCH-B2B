@@ -10,6 +10,12 @@ export namespace ChannelWaApi {
     platform?: 'instagram' | 'messenger' | 'tiktok' | 'web' | 'whatsapp' | 'youtube';
     /** 接待成员：逗号分隔的用户编号，新客户轮流分给他们；为空时由号码所属的业务员接待 */
     assignUserIds?: string;
+    /** 扫码接入：最近一次同步聊天记录的时间、Evolution 里保存的记录数、新导入数、隐藏号码无法导入数、失败原因 */
+    historySyncTime?: number | string;
+    historyFetched?: number;
+    historyImported?: number;
+    historyNoNumber?: number;
+    historySyncError?: string;
     /** manual 手动填写令牌、oauth Facebook 登录授权 */
     authType?: string;
     /** 扫码接入的连接状态：open 已连接、connecting 连接中、close 已断开 */

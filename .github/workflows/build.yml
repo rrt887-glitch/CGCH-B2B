@@ -1891,6 +1891,9 @@ jobs:
                'message': {'conversation': 'First message'}, 'messageType': 'conversation', 'messageTimestamp': old_ts + 10},
               {'key': {'remoteJid': '8615900005555@s.whatsapp.net', 'fromMe': True, 'id': 'EVOP3'},
                'message': {'imageMessage': {'mimetype': 'image/jpeg', 'caption': 'price list'}}, 'messageType': 'imageMessage', 'messageTimestamp': old_ts + 30},
+
+              {'key': {'remoteJid': '55443322@lid', 'fromMe': False, 'id': 'EVOLID1'}, 'pushName': 'Hidden Number',
+               'message': {'conversation': 'no phone number'}, 'messageType': 'conversation', 'messageTimestamp': old_ts + 40},
           ])
           assert call('POST', f"/channel/wa-account/sync-history?id={ea['id']}") == -1, '扫码号码在后台同步'
           pcv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
@@ -1899,6 +1902,11 @@ jobs:
           pm = wait(lambda: (lambda l: l if len(l) == 3 else None)(call('GET', f"/channel/wa/message/list?conversationId={pcv['id']}")), '三条记录入库')
           assert [(m['direction'], m['type'], m['textBody']) for m in pm] == [(1, 'text', 'First message'), (1, 'text', 'Second message'), (2, 'image', 'price list')], pm
           assert len(call('GET', f"/channel/wa/message/list?conversationId={hcv['id']}")) == 2, '已有的聊天记录不重复导入'
+          # 同步结果记在账号上，渠道页据此提示：拉到几条、导入几条、隐藏号码几条
+          # （关联后的定时同步也会写结果，所以等到拉到 5 条的那一次）
+          hs = wait(lambda: (lambda x: x if x.get('historyFetched') == 5 else None)(next(x for x in call('GET', '/channel/wa-account/list') if x['id'] == ea['id'])), '同步结果')
+          assert hs['historySyncTime'] and hs['historyNoNumber'] == 1 and 0 <= hs['historyImported'] <= 3 and not hs.get('historySyncError'), hs
+          assert not [c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c.get('profileName') == 'Hidden Number'], '隐藏号码的记录不导入'
           # 手机端发出的消息同步进会话；系统发出的消息回显不重复
           assert evo_msg(s1['session'], 'EVOECHO1', '8615900003333@s.whatsapp.net', {'conversation': 'Sent from my phone'}, 'conversation', from_me=True) == 200
           assert evo_msg(s1['session'], ewamid, '8615900003333@s.whatsapp.net', {'conversation': 'MOQ is 300 units.'}, 'conversation', from_me=True) == 200
