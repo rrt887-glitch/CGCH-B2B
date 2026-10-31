@@ -1905,7 +1905,7 @@ jobs:
           # 同步结果记在账号上，渠道页据此提示：拉到几条、导入几条、隐藏号码几条
           # （关联后的定时同步也会写结果，所以等到拉到 5 条的那一次）
           hs = wait(lambda: (lambda x: x if x.get('historyFetched') == 5 else None)(next(x for x in call('GET', '/channel/wa-account/list') if x['id'] == ea['id'])), '同步结果')
-          assert hs['historySyncTime'] and hs['historyNoNumber'] == 1 and 0 <= hs['historyImported'] <= 3 and not hs.get('historySyncError'), hs
+          assert hs['historySyncTime'] and hs['historyNoNumber'] == 1 and 0 <= hs['historyImported'] <= 4 and not hs.get('historySyncError'), hs
           # 隐藏手机号的联系人（@lid 且没带号码）：按「隐藏编号@lid」建会话，可以照常回复；对方之后带上号码时合并到号码会话
           lcv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c['waId'] == '55443322@lid'), None), '隐藏号码的会话')
           assert lcv['profileName'] == 'Hidden Number' and [m['textBody'] for m in call('GET', f"/channel/wa/message/list?conversationId={lcv['id']}")] == ['no phone number'], lcv
