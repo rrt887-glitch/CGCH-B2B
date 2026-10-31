@@ -732,7 +732,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               @click="openConversation(c)"
             >
               <Badge :count="c.unreadCount" :offset="[-4, 4]">
-                <Avatar :class="plat(c).avatar">{{ initials(c) }}</Avatar>
+                <Avatar :src="c.avatarUrl || undefined" :class="c.avatarUrl ? '' : plat(c).avatar">{{ initials(c) }}</Avatar>
               </Badge>
               <div class="min-w-0 flex-1">
                 <div class="flex justify-between gap-2">
@@ -755,7 +755,9 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         <div v-if="!current" class="flex h-full items-center justify-center"><Empty description="选择一个会话" /></div>
         <template v-else>
           <div class="flex items-center justify-between border-0 border-b border-solid border-[#E5E7EB] px-5 py-3">
-            <div>
+            <div class="flex min-w-0 items-center gap-3">
+            <Avatar :size="36" :src="current.avatarUrl || undefined" :class="current.avatarUrl ? 'shrink-0' : `shrink-0 ${plat(current).avatar}`">{{ initials(current) }}</Avatar>
+            <div class="min-w-0">
               <div class="text-[15px] font-semibold">
                 <span v-if="current.starred" class="mr-1 text-amber-500">★</span>{{ current.remarkName || contact(current) }}
                 <span v-if="current.remarkName" class="text-sm text-gray-400">（{{ contact(current) }}）</span>
@@ -789,6 +791,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 </Tooltip>
                 <Tag v-else color="orange">{{ isWa(current) ? '窗口已关闭，仅可发模板' : '窗口已关闭，等待客户来信' }}</Tag>
               </div>
+            </div>
             </div>
             <div class="flex items-center gap-2">
               <Tooltip :title="live ? '实时推送已连接，新消息会立即出现' : '实时推送未连接，每 10 秒自动刷新'">
@@ -943,6 +946,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         class="hidden w-80 shrink-0 flex-col gap-5 overflow-auto rounded-xl border border-solid border-[#E5E7EB] bg-white p-5 xl:flex"
       >
         <div class="flex flex-col gap-1">
+          <Avatar v-if="current.avatarUrl" :size="48" :src="current.avatarUrl" class="mb-2" />
           <div class="text-xs text-[#6B7280]">客户</div>
           <a class="text-base font-semibold text-[#111827]" @click="router.push(`/crm/customer/detail/${current.customerId}`)">{{ customer?.name || current.customerName }}</a>
           <div class="mt-1 flex flex-wrap gap-1.5">

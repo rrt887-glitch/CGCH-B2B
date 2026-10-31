@@ -1894,6 +1894,9 @@ jobs:
 
               {'key': {'remoteJid': '55443322@lid', 'fromMe': False, 'id': 'EVOLID1'}, 'pushName': 'Hidden Number',
                'message': {'conversation': 'no phone number'}, 'messageType': 'conversation', 'messageTimestamp': old_ts + 40},
+          ], contacts=[
+              {'remoteJid': '8615900005555@s.whatsapp.net', 'pushName': 'Pulled Buyer', 'profilePicUrl': 'http://127.0.0.1:18080/_pic/v/t61/5555_n.jpg?oe=1&sig=a'},
+              {'remoteJid': '55443322@lid', 'pushName': 'Hidden Number', 'profilePicUrl': None},
           ])
           assert call('POST', f"/channel/wa-account/sync-history?id={ea['id']}") == -1, '扫码号码在后台同步'
           pcv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
@@ -1902,6 +1905,12 @@ jobs:
           pm = wait(lambda: (lambda l: l if len(l) == 3 else None)(call('GET', f"/channel/wa/message/list?conversationId={pcv['id']}")), '三条记录入库')
           assert [(m['direction'], m['type'], m['textBody']) for m in pm] == [(1, 'text', 'First message'), (1, 'text', 'Second message'), (2, 'image', 'price list')], pm
           assert len(call('GET', f"/channel/wa/message/list?conversationId={hcv['id']}")) == 2, '已有的聊天记录不重复导入'
+          # 客户头像：从 Evolution 联系人资料取地址，服务器下载后存到本系统（国内打不开 WhatsApp 图片地址）
+          av = wait(lambda: next((c.get('avatarUrl') for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
+                                  if c['id'] == pcv['id'] and c.get('avatarUrl')), None), '下载客户头像')
+          assert '/admin-api/infra/file/' in av and urllib.request.urlopen(av, timeout=10).read() == bytes.fromhex('ffd8ffe000104a46494600010100000100010000') + b'EVOIMG' + b'\xff\xd9', av
+          assert sql(f"SELECT avatar_time IS NOT NULL FROM channel_wa_conversation WHERE id = {pcv['id']}") in ('1', 1), '记下获取时间'
+          print('客户头像：下载并存到本系统')
           # 同步结果记在账号上，渠道页据此提示：拉到几条、导入几条、隐藏号码几条
           # （关联后的定时同步也会写结果，所以等到拉到 5 条的那一次）
           hs = wait(lambda: (lambda x: x if x.get('historyFetched') == 5 else None)(next(x for x in call('GET', '/channel/wa-account/list') if x['id'] == ea['id'])), '同步结果')
@@ -2369,6 +2378,9 @@ jobs:
               time.sleep(1)
           assert any(t == 'tok-cgch-1-1-ci' and e.get('event') == 'connection.update' for t, e in GOT), GOT[:3]
           print('推送格式：', json.dumps(GOT[0][1], ensure_ascii=False)[:300])
+          ct = call('POST', '/chat/findContacts/cgch-1-1-ci', {'where': {}})
+          print('联系人（头像来源）：', json.dumps(ct, ensure_ascii=False)[:300])
+          assert isinstance(ct, list), ct
           missing = call('GET', '/instance/connectionState/cgch-not-exist')
           print('实例不存在：', missing)
           msg = json.dumps(missing)

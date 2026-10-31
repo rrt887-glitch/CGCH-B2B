@@ -41,6 +41,8 @@ export namespace ChannelWaApi {
     accountId: number;
     waId: string;
     profileName?: string;
+    /** 客户头像（存在本系统的地址） */
+    avatarUrl?: string;
     customerId?: number;
     customerName?: string;
     clueId?: number;

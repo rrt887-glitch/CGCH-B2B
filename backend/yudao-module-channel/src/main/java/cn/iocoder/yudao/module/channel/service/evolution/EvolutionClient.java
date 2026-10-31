@@ -219,6 +219,25 @@ public final class EvolutionClient {
         return new MessagePage(list, m.path("pages").asInt(0));
     }
 
+    /**
+     * Evolution 数据库里保存的联系人头像地址（关联后 Evolution 自己更新联系人资料时记下的），
+     * 只读 Evolution 的数据库，不向 WhatsApp 发请求。返回 jid（8613800001111@s.whatsapp.net / 123@lid）→ 头像地址
+     */
+    public static java.util.Map<String, String> contactPictures(ChannelOAuthProperties.Evolution c, String name) {
+        ObjectNode body = JSON.createObjectNode();
+        body.putObject("where");
+        JsonNode r = call(c, "POST", "/chat/findContacts/" + enc(name), body, 60);
+        java.util.Map<String, String> map = new java.util.HashMap<>();
+        (r.isArray() ? r : r.path("contacts")).forEach(x -> {
+            String jid = x.path("remoteJid").asText(x.path("id").asText(""));
+            String url = x.path("profilePicUrl").asText("");
+            if (!jid.isEmpty() && url.startsWith("http")) {
+                map.put(jid, url);
+            }
+        });
+        return map;
+    }
+
     public record Media(byte[] content, String mimeType, String fileName) {
     }
 

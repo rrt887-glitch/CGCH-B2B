@@ -173,6 +173,10 @@ class Handler(BaseHTTPRequestHandler):
             size, page = int(body.get('offset') or 50), int(body.get('page') or 1)
             recs = db[(page - 1) * size: page * size]
             return self._json(200, {'messages': {'total': len(db), 'pages': (len(db) + size - 1) // size, 'currentPage': page, 'records': recs}})
+        if method == 'POST' and len(path) == 3 and path[:2] == ['chat', 'findContacts']:
+            if path[2] not in EVO:
+                return missing(path[2])
+            return self._json(200, EVO[path[2]].get('contacts', []))
         if method == 'POST' and len(path) == 3 and path[:2] == ['chat', 'getBase64FromMediaMessage']:
             import base64 as b64
             if path[2] not in EVO:
@@ -261,6 +265,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._evo('GET', path[1:], b'')
         if path == ['_evo']:
             return self._json(200, {'instances': EVO, 'sent': EVO_SENT, 'deleted': EVO_DELETED})
+        if path[:1] == ['_pic']:  # 模拟 WhatsApp 头像图片地址
+            self.send_response(200); self.send_header('Content-Type', 'image/jpeg')
+            self.send_header('Content-Length', str(len(EVO_JPEG))); self.end_headers(); self.wfile.write(EVO_JPEG)
+            return
         if path == ['_site_hits']:
             return self._json(200, SITE_HITS)
         if path == ['_oauth']:

@@ -86,6 +86,18 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      * 备注名：业务员给客户起的名字，优先于对方昵称显示
      */
     private String remarkName;
+    /**
+     * 客户头像：从 WhatsApp 联系人资料下载后存到本系统的文件地址（国内打不开 WhatsApp 的图片地址）
+     */
+    private String avatarUrl;
+    /**
+     * 最近一次获取头像的时间（没有头像也记录，避免反复获取）
+     */
+    private LocalDateTime avatarTime;
+    /**
+     * 头像来源标识（WhatsApp 图片地址去掉签名参数后的摘要），头像没换就不重复下载
+     */
+    private String avatarKey;
 
     /** 实际处理人：转交给了别人就是负责人，否则是号码所属的业务员 */
     public Long handlerUserId(ChannelWaAccountDO account) {
