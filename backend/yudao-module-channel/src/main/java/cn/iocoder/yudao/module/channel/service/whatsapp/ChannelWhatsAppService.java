@@ -684,7 +684,7 @@ public class ChannelWhatsAppService {
         if (StrUtil.isBlank(wamid) || messageMapper.selectByWaMessageId(a.getId(), wamid) != null) {
             return; // Meta 会重试推送，按 wamid 去重
         }
-        String from = digits(m.path("from").asText());
+        String from = waKey(m.path("from").asText());
         String type = m.path("type").asText("unknown");
         LocalDateTime time = epoch(m.path("timestamp").asLong(0));
         ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
@@ -755,7 +755,7 @@ public class ChannelWhatsAppService {
      */
     private void saveSynced(ChannelWaAccountDO a, JsonNode m, String customer, boolean outbound, String profileName) {
         String wamid = m.path("id").asText();
-        String waId = digits(customer);
+        String waId = waKey(customer);
         if (StrUtil.isBlank(wamid) || StrUtil.isBlank(waId) || messageMapper.selectByWaMessageId(a.getId(), wamid) != null) {
             return;
         }
@@ -1366,6 +1366,45 @@ public class ChannelWhatsAppService {
 
     static String digits(String s) {
         return s == null ? "" : s.replaceAll("\\D", "");
+    }
+
+    /** 会话的客户编号：号码只保留数字；隐藏了手机号的联系人保留「隐藏编号@lid」 */
+    static String waKey(String s) {
+        return s != null && s.endsWith("@lid") ? digits(s) + "@lid" : digits(s);
+    }
+
+    /**
+     * 隐藏号码的联系人后来带上了真实号码：把按「隐藏编号@lid」建的会话换成号码；
+     * 号码会话已经有了（例如对方先用号码发过消息），就把消息并过去，删除隐藏编号的会话。
+     */
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public void mergeLidConversation(ChannelWaAccountDO a, String lidKey, String phone) {
+        ChannelWaConversationDO lid = conversationMapper.selectByAccountIdAndWaId(a.getId(), lidKey);
+        if (lid == null || StrUtil.isBlank(phone) || phone.endsWith("@lid")) {
+            return;
+        }
+        ChannelWaConversationDO target = conversationMapper.selectByAccountIdAndWaId(a.getId(), phone);
+        if (target == null) {
+            ChannelWaConversationDO upd = new ChannelWaConversationDO().setId(lid.getId()).setWaId(phone);
+            if (lid.getCustomerId() == null) {
+                upd.setCustomerId(findCustomerId(phone));
+            }
+            conversationMapper.updateById(upd);
+            return;
+        }
+        messageMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaMessageDO>()
+                .set(ChannelWaMessageDO::getConversationId, target.getId()).eq(ChannelWaMessageDO::getConversationId, lid.getId()));
+        ChannelWaConversationDO upd = new ChannelWaConversationDO().setId(target.getId())
+                .setLastMessageTime(max(target.getLastMessageTime(), lid.getLastMessageTime()))
+                .setLastInboundTime(max(target.getLastInboundTime(), lid.getLastInboundTime()));
+        if (lid.getLastMessageTime() != null && (target.getLastMessageTime() == null || lid.getLastMessageTime().isAfter(target.getLastMessageTime()))) {
+            upd.setLastMessagePreview(lid.getLastMessagePreview());
+        }
+        if (StrUtil.isBlank(target.getProfileName()) && StrUtil.isNotBlank(lid.getProfileName())) {
+            upd.setProfileName(lid.getProfileName());
+        }
+        conversationMapper.updateById(upd);
+        conversationMapper.deleteById(lid.getId());
     }
 
     private static LocalDateTime epoch(long seconds) {

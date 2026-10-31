@@ -1906,7 +1906,18 @@ jobs:
           # （关联后的定时同步也会写结果，所以等到拉到 5 条的那一次）
           hs = wait(lambda: (lambda x: x if x.get('historyFetched') == 5 else None)(next(x for x in call('GET', '/channel/wa-account/list') if x['id'] == ea['id'])), '同步结果')
           assert hs['historySyncTime'] and hs['historyNoNumber'] == 1 and 0 <= hs['historyImported'] <= 3 and not hs.get('historySyncError'), hs
-          assert not [c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c.get('profileName') == 'Hidden Number'], '隐藏号码的记录不导入'
+          # 隐藏手机号的联系人（@lid 且没带号码）：按「隐藏编号@lid」建会话，可以照常回复；对方之后带上号码时合并到号码会话
+          lcv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c['waId'] == '55443322@lid'), None), '隐藏号码的会话')
+          assert lcv['profileName'] == 'Hidden Number' and [m['textBody'] for m in call('GET', f"/channel/wa/message/list?conversationId={lcv['id']}")] == ['no phone number'], lcv
+          call('POST', '/channel/wa/message/send', {'conversationId': lcv['id'], 'text': 'Hi, how can I help?'})
+          assert evo()['sent'][-1]['number'] == '55443322@lid', evo()['sent'][-1]
+          assert evo_msg(s1['session'], 'EVOLID2', '55443322@lid', {'conversation': 'My number is attached now'}, 'conversation',
+                         push='Hidden Number', remoteJidAlt='8615900006666@s.whatsapp.net') == 200
+          mcv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c['waId'] == '8615900006666'), None), '带上号码后合并')
+          assert mcv['id'] == lcv['id'], '原会话换成号码，不新建'
+          assert [m['textBody'] for m in call('GET', f"/channel/wa/message/list?conversationId={mcv['id']}")] == ['no phone number', 'Hi, how can I help?', 'My number is attached now']
+          assert not [c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c['waId'] == '55443322@lid']
+          print('隐藏号码联系人：按隐藏编号导入、可回复、带上号码后合并')
           # 手机端发出的消息同步进会话；系统发出的消息回显不重复
           assert evo_msg(s1['session'], 'EVOECHO1', '8615900003333@s.whatsapp.net', {'conversation': 'Sent from my phone'}, 'conversation', from_me=True) == 200
           assert evo_msg(s1['session'], ewamid, '8615900003333@s.whatsapp.net', {'conversation': 'MOQ is 300 units.'}, 'conversation', from_me=True) == 200

@@ -384,7 +384,7 @@ function showHistoryResult(a: ChannelWaApi.Account) {
     return;
   }
   const lines = [`手机同步过来 ${fetched} 条记录，这次新导入 ${imported} 条（已有的自动跳过），可在「会话」中查看。`];
-  if (noNumber > 0) lines.push(`其中 ${noNumber} 条来自隐藏了手机号的联系人，暂时无法确定对方号码，没有导入。`);
+  if (noNumber > 0) lines.push(`其中 ${noNumber} 条来自隐藏了手机号的联系人，已按「隐藏号码联系人」导入，可以照常回复；对方之后带上号码时会自动合并。`);
   Modal.success({ title: '聊天记录同步完成', content: lines.join('') });
 }
 
