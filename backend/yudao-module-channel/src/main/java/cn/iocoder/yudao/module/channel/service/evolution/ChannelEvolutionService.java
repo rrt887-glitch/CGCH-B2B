@@ -295,6 +295,9 @@ public class ChannelEvolutionService {
                 TenantUtils.execute(a.getTenantId(), () -> syncHistory(a));
             } catch (Exception e) {
                 log.warn("[syncHistoryAsync][账号 {} 拉取聊天记录失败] {}", a.getId(), e.getMessage());
+                TenantUtils.execute(a.getTenantId(), () -> whatsAppService.accountMapperInternal().updateById(new ChannelWaAccountDO()
+                        .setId(a.getId()).setHistorySyncTime(java.time.LocalDateTime.now())
+                        .setHistorySyncError(StrUtil.maxLength(StrUtil.blankToDefault(e.getMessage(), "拉取失败"), 250))));
             }
         });
     }
@@ -316,12 +319,20 @@ public class ChannelEvolutionService {
         }
         all.sort(java.util.Comparator.comparingLong(d -> d.path("messageTimestamp").asLong(0))); // 按时间先后入库，会话里按顺序显示
         int n = 0;
+        int noNumber = 0;
         for (JsonNode d : all) {
+            if (lidWithoutNumber(d)) {
+                noNumber++;
+                continue;
+            }
             if (history(a, d)) {
                 n++;
             }
         }
-        log.info("[syncHistory][账号 {} 从 Evolution 拉取 {} 条，可入库 {} 条]", a.getId(), all.size(), n);
+        log.info("[syncHistory][账号 {} 从 Evolution 拉取 {} 条，可入库 {} 条，隐藏号码无法导入 {} 条]", a.getId(), all.size(), n, noNumber);
+        whatsAppService.accountMapperInternal().updateById(new ChannelWaAccountDO().setId(a.getId())
+                .setHistorySyncTime(java.time.LocalDateTime.now()).setHistoryFetched(all.size())
+                .setHistoryImported(n).setHistoryNoNumber(noNumber).setHistorySyncError(""));
         return n;
     }
 
@@ -457,6 +468,13 @@ public class ChannelEvolutionService {
     }
 
     /** 一条历史消息入库；返回是否是可入库的私聊消息 */
+    /** 联系人是隐藏号码（@lid）且记录里没有附带真实号码：现在没法确定对方号码，导入后也无法回复 */
+    static boolean lidWithoutNumber(JsonNode d) {
+        JsonNode key = d.path("key");
+        return key.path("remoteJid").asText("").endsWith("@lid")
+                && StrUtil.isBlank(key.path("remoteJidAlt").asText(null)) && StrUtil.isBlank(key.path("senderPn").asText(null));
+    }
+
     private boolean history(ChannelWaAccountDO a, JsonNode d) {
         try {
             JsonNode key = d.path("key");

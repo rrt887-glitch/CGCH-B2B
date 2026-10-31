@@ -122,6 +122,14 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      * 轮流分配的游标：下一个新客户分给接待成员里的第几个
      */
     private Integer assignCursor;
+    /**
+     * 扫码接入：最近一次同步聊天记录的时间、Evolution 里存的记录数、新导入数、因为是隐藏号码（@lid）没法导入的条数、失败原因
+     */
+    private java.time.LocalDateTime historySyncTime;
+    private Integer historyFetched;
+    private Integer historyImported;
+    private Integer historyNoNumber;
+    private String historySyncError;
 
     public boolean isEvolution() {
         return AUTH_EVOLUTION.equals(authType);

@@ -37,7 +37,8 @@ import {
 import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
 import type { SocialPlatform } from '#/api/channel/social';
 import { getSocialPlatforms, pollSocial } from '#/api/channel/social';
-import { setWaAssignees, syncWaHistory } from '#/api/channel/whatsapp';
+import { getWaAccountList, setWaAssignees, syncWaHistory } from '#/api/channel/whatsapp';
+import { fmtDateTime } from '#/utils/datetime';
 import { getSimpleUserList } from '#/api/system/user';
 
 import LeadRules from './lead-rules.vue';
@@ -338,12 +339,60 @@ const busy = ref<string>();
 async function syncHistory(a: ChannelWaApi.Account) {
   busy.value = `hist-${a.id}`;
   try {
+    const before = a.historySyncTime;
     const n = await syncWaHistory(a.id!);
-    if (n < 0) message.success('正在后台同步聊天记录，聊天记录多时需要几分钟，稍后在「会话」中查看');
-    else message.success(n > 0 ? `同步了 ${n} 条聊天记录，可在「会话」中查看` : '没有新的聊天记录');
+    if (n >= 0) {
+      message.success(n > 0 ? `同步了 ${n} 条聊天记录，可在「会话」中查看` : '没有新的聊天记录');
+      return;
+    }
+    // 扫码接入的号码在后台同步：每 3 秒看一次结果，最多等 3 分钟
+    const hide = message.loading('正在从手机同步的记录里导入聊天记录…', 0);
+    try {
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const fresh = (await getWaAccountList()).find((x) => x.id === a.id);
+        if (fresh && fresh.historySyncTime && fresh.historySyncTime !== before) {
+          showHistoryResult(fresh);
+          await waRef.value?.load();
+          return;
+        }
+      }
+      message.info('聊天记录较多，仍在后台导入，稍后在「会话」中查看');
+    } finally {
+      hide();
+    }
   } finally {
     busy.value = undefined;
   }
+}
+
+/** 同步结果：没有任何历史时，说明关联时手机没把聊天记录发过来，需要重新关联 */
+function showHistoryResult(a: ChannelWaApi.Account) {
+  if (a.historySyncError) {
+    Modal.error({ title: '同步聊天记录失败', content: a.historySyncError });
+    return;
+  }
+  const fetched = a.historyFetched ?? 0;
+  const imported = a.historyImported ?? 0;
+  const noNumber = a.historyNoNumber ?? 0;
+  if (fetched === 0) {
+    Modal.warning({
+      title: '手机没有同步过来历史聊天记录',
+      content:
+        'WhatsApp 只在「关联新设备」那一刻把历史聊天记录发过来一次。请在手机 WhatsApp →「已关联的设备」里退出这台设备，然后在这里点「重新扫码」重新关联，关联后几分钟内会自动导入。',
+    });
+    return;
+  }
+  const lines = [`手机同步过来 ${fetched} 条记录，这次新导入 ${imported} 条（已有的自动跳过），可在「会话」中查看。`];
+  if (noNumber > 0) lines.push(`其中 ${noNumber} 条来自隐藏了手机号的联系人，暂时无法确定对方号码，没有导入。`);
+  Modal.success({ title: '聊天记录同步完成', content: lines.join('') });
+}
+
+/** 渠道列表里扫码号码的同步状态 */
+function historyText(a?: ChannelWaApi.Account) {
+  if (!a?.historySyncTime) return '';
+  if (a.historySyncError) return `同步失败：${a.historySyncError}`;
+  return `上次同步 ${fmtDateTime(a.historySyncTime, 'MM-DD HH:mm')} · 导入 ${a.historyImported ?? 0} 条`;
 }
 
 async function pollNow(a: ChannelWaApi.Account) {
@@ -496,6 +545,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
               <div class="ch-col-account">
                 <span class="truncate">{{ r.label }}</span>
                 <span v-if="r.sub" class="ml-2 text-xs text-gray-400">{{ r.sub }}</span>
+                <span v-if="r.wa?.authType === 'evolution' && historyText(r.wa)" class="ml-3 text-xs text-[#6B7280]">{{ historyText(r.wa) }}</span>
               </div>
               <div class="ch-col-op ch-ops">
                 <a v-if="r.mail" :class="{ 'opacity-50': busy === `sync-${r.id}` }" @click="syncNow(r.mail)">立即收信</a>
