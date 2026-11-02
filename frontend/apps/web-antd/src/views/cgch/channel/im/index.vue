@@ -776,7 +776,8 @@ const MEDIA_LABEL: Record<string, string> = {
 const initials = (c: ChannelWaApi.Conversation) => (c.profileName || c.waId).slice(0, 1).toUpperCase();
 /** 隐藏了手机号的 WhatsApp 联系人：waId 是「隐藏编号@lid」，不是号码 */
 const hiddenNumber = (c?: { waId?: string }) => !!c?.waId?.endsWith('@lid');
-const waNumber = (c: ChannelWaApi.Conversation) => (hiddenNumber(c) ? '隐藏号码联系人' : `+${c.waId}`);
+/** 隐藏号码联系人很多时用隐藏编号末 4 位区分 */
+const waNumber = (c: ChannelWaApi.Conversation) => (hiddenNumber(c) ? `隐藏号码联系人 ·${c.waId.replace('@lid', '').slice(-4)}` : `+${c.waId}`);
 const contact = (c: ChannelWaApi.Conversation) =>
   c.profileName ||
   (isWa(c) ? waNumber(c) : c.platform === 'web' ? `官网访客 ${c.waId.slice(-4).toUpperCase()}` : `${plat(c).label} 用户`);

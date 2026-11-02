@@ -135,7 +135,7 @@ public class ChannelWaConversationDO extends TenantBaseDO {
             return profileName;
         }
         if (isWhatsApp()) {
-            return isHiddenNumber() ? "隐藏号码联系人" : "+" + waId;
+            return isHiddenNumber() ? "隐藏号码联系人 ·" + waId.substring(Math.max(0, waId.length() - 8), waId.length() - 4) : "+" + waId;
         }
         if ("youtube".equals(platform) || "tiktok".equals(platform)) {
             return ("youtube".equals(platform) ? "YouTube" : "TikTok") + " 用户";
