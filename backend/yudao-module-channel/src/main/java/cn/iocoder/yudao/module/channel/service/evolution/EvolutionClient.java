@@ -238,6 +238,14 @@ public final class EvolutionClient {
         return map;
     }
 
+    /** 向 WhatsApp 查询一个联系人的头像地址（对方未设置或隐私不公开时返回 null） */
+    public static String profilePicture(ChannelOAuthProperties.Evolution c, String name, String jid) {
+        ObjectNode body = JSON.createObjectNode();
+        body.put("number", jid);
+        String url = call(c, "POST", "/chat/fetchProfilePictureUrl/" + enc(name), body, 30).path("profilePictureUrl").asText("");
+        return url.startsWith("http") ? url : null;
+    }
+
     public record Media(byte[] content, String mimeType, String fileName) {
     }
 

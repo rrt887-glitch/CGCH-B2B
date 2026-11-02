@@ -197,7 +197,7 @@ services:
       DATABASE_SAVE_DATA_INSTANCE: "true"
       DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
       DATABASE_SAVE_MESSAGE_UPDATE: "false"
-      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "true" # 保存联系人资料（含头像地址），会话里显示客户头像
       DATABASE_SAVE_DATA_CHATS: "false"
       DATABASE_SAVE_DATA_HISTORIC: "true" # 关联时同步的聊天记录也保存，以便查看其中的图片和文件
       DATABASE_SAVE_DATA_LABELS: "false"

@@ -394,6 +394,9 @@ public class ChannelEvolutionService {
     private static final Duration AVATAR_RETRY = Duration.ofDays(1);
     private static final int AVATAR_BATCH = 300;
     private static final int AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+    /** 联系人资料里没有头像地址时，每次最多向 WhatsApp 单独查询几位、间隔多久（慢慢补齐，避免短时间大量查询） */
+    private static final int AVATAR_LOOKUP_PER_RUN = 60;
+    private static final long AVATAR_LOOKUP_GAP_MS = 2000;
     private static final java.net.http.HttpClient AVATAR_HTTP = java.net.http.HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10)).followRedirects(java.net.http.HttpClient.Redirect.NORMAL).build();
     /** 新客户来消息后稍等一会儿再取头像（Evolution 要先更新联系人资料），同一号码合并成一次 */
@@ -438,8 +441,27 @@ public class ChannelEvolutionService {
             return 0;
         }
         int n = 0;
+        int lookups = 0;
         for (ChannelWaConversationDO c : todo) {
             String url = pics.get(jidOf(c.getWaId()));
+            if (url == null && lookups < AVATAR_LOOKUP_PER_RUN) {
+                // 联系人资料里没有（例如关联前就有的老联系人）：单独查一次，查询之间留间隔
+                if (lookups++ > 0) {
+                    try {
+                        Thread.sleep(AVATAR_LOOKUP_GAP_MS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+                try {
+                    url = EvolutionClient.profilePicture(cfg(), a.getPhoneNumberId(), jidOf(c.getWaId()));
+                } catch (Exception e) {
+                    log.info("[refreshAvatars][会话 {} 查询头像失败] {}", c.getId(), e.getMessage());
+                }
+            } else if (url == null) {
+                continue; // 这次查询额度用完，下次再查（不记时间）
+            }
             ChannelWaConversationDO upd = new ChannelWaConversationDO().setId(c.getId());
             if (url == null) {
                 // 没有头像（对方未设置、隐私设置不公开，或联系人资料还没同步）：一天后再看
@@ -462,9 +484,8 @@ public class ChannelEvolutionService {
                 log.info("[refreshAvatars][会话 {} 下载头像失败] {}", c.getId(), e.getMessage());
             }
         }
-        if (n > 0) {
-            log.info("[refreshAvatars][账号 {} 更新头像 {} 个]", a.getId(), n);
-        }
+        log.info("[refreshAvatars][账号 {} 待更新 {} 个，联系人资料里有头像 {} 个，单独查询 {} 个，更新头像 {} 个]",
+                a.getId(), todo.size(), pics.size(), lookups, n);
         return n;
     }
 

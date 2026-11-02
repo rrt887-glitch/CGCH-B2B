@@ -1910,6 +1910,9 @@ jobs:
                                   if c['id'] == pcv['id'] and c.get('avatarUrl')), None), '下载客户头像')
           assert '/admin-api/infra/file/' in av and urllib.request.urlopen(av, timeout=10).read() == bytes.fromhex('ffd8ffe000104a46494600010100000100010000') + b'EVOIMG' + b'\xff\xd9', av
           assert sql(f"SELECT avatar_time IS NOT NULL FROM channel_wa_conversation WHERE id = {pcv['id']}") in ('1', 1), '记下获取时间'
+          # 联系人资料里没有头像地址的老联系人：单独向 WhatsApp 查询
+          wait(lambda: next((c.get('avatarUrl') for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
+                             if c['id'] == hcv['id'] and c.get('avatarUrl')), None), '单独查询的头像', timeout=60)
           print('客户头像：下载并存到本系统')
           # 同步结果记在账号上，渠道页据此提示：拉到几条、导入几条、隐藏号码几条
           # （关联后的定时同步也会写结果，所以等到拉到 5 条的那一次）
