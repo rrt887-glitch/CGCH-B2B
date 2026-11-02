@@ -16,6 +16,10 @@ public class ChannelWaConversationRespVO {
     private Long accountId;
     private String waId;
     private String profileName;
+    @Schema(description = "会话状态：open 进行中、pending 待处理、resolved 已解决")
+    private String status;
+    @Schema(description = "优先级：0 无、1 低、2 中、3 高、4 紧急")
+    private Integer priority;
     @Schema(description = "客户头像地址")
     private String avatarUrl;
     private Long customerId;

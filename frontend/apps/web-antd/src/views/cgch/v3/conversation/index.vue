@@ -6,7 +6,7 @@
 import type { ChannelMailApi } from '#/api/channel/mail';
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { preferences } from '@vben/preferences';
@@ -15,7 +15,7 @@ import { useUserStore } from '@vben/stores';
 import { Avatar, Badge, Empty, Spin } from 'ant-design-vue';
 
 import { getMailAccountList } from '#/api/channel/mail';
-import { getWaAccountList, getWaConversationPage } from '#/api/channel/whatsapp';
+import { getWaAccountList, getWaConversationPage, getWaInboxCounts } from '#/api/channel/whatsapp';
 import MailWorkbench from '#/views/cgch/channel/mail/index.vue';
 import ImWorkbench from '#/views/cgch/channel/im/index.vue';
 import { CHANNEL_ICONS } from '#/assets/channel-icons';
@@ -32,6 +32,20 @@ const mailAccounts = ref<ChannelMailApi.Account[]>([]);
 
 /** 当前选择：im:全部 / im:账号编号 / mail:全部 / mail:邮箱编号 */
 const selected = ref<{ id?: number; kind: 'im' | 'mail' }>({ kind: 'im' });
+/** 视图（参考 Chatwoot）：我的会话 / 团队会话（主管看下属负责的） */
+const view = ref<'mine' | 'team'>('mine');
+const counts = ref<ChannelWaApi.InboxCounts>();
+async function loadCounts() {
+  counts.value = await getWaInboxCounts().catch(() => counts.value);
+}
+const unreadOf = (id?: number) => (id === undefined ? 0 : counts.value?.unreadByAccount?.[id] ?? 0);
+let countTimer: ReturnType<typeof setInterval> | undefined;
+onBeforeUnmount(() => countTimer && clearInterval(countTimer));
+function pickView(v: 'mine' | 'team') {
+  openId.value = undefined;
+  view.value = v;
+  selected.value = { kind: 'im' };
+}
 const openId = ref<number>();
 
 const GRADES = [
@@ -55,7 +69,7 @@ const mailIcon = (m: ChannelMailApi.Account) => CHANNEL_ICONS[m.provider || 'cus
 const hasTransferred = ref(false);
 const showIm = computed(() => waAccounts.value.length > 0 || hasTransferred.value);
 const hasAny = computed(() => showIm.value || mailAccounts.value.length > 0);
-const viewKey = computed(() => `${selected.value.kind}-${selected.value.id ?? 'all'}`);
+const viewKey = computed(() => `${selected.value.kind}-${selected.value.id ?? 'all'}-${view.value}`);
 
 function pick(kind: 'im' | 'mail', id?: number) {
   openId.value = undefined;
@@ -79,6 +93,8 @@ onMounted(async () => {
     selected.value = { kind: 'mail' };
   }
   if (refId) openId.value = refId;
+  loadCounts();
+  countTimer = setInterval(() => !document.hidden && loadCounts(), 30_000);
 });
 </script>
 
@@ -95,23 +111,38 @@ onMounted(async () => {
         <aside class="v3-conv__side">
           <div class="flex items-center gap-2 px-3 py-3">
             <Avatar :src="avatar" :size="24" />
-            <span class="truncate font-medium">{{ userStore.userInfo?.nickname }}</span>
+            <span class="truncate font-semibold">会话</span>
+            <span class="ml-auto truncate text-xs text-[#6B7280]">{{ userStore.userInfo?.nickname }}</span>
           </div>
 
-          <div class="v3-conv__group">
-            <div v-if="showIm" class="v3-conv__item" :class="{ on: selected.kind === 'im' && !selected.id }" @click="pick('im')">
-              全部消息
+          <div v-if="showIm" class="v3-conv__group">
+            <div class="v3-conv__item" :class="{ on: selected.kind === 'im' && !selected.id && view === 'mine' }" @click="pickView('mine')">
+              <span class="flex-1">我的会话</span>
+              <span class="v3-conv__count">{{ counts?.open ?? '' }}</span>
             </div>
+            <div class="v3-conv__item" :class="{ on: selected.kind === 'im' && !selected.id && view === 'team' }" @click="pickView('team')">
+              <span class="flex-1">团队会话</span>
+              <span class="v3-conv__count">{{ counts?.teamOpen || '' }}</span>
+            </div>
+          </div>
+
+          <div v-if="waAccounts.length" class="v3-conv__label">收件箱</div>
+          <div class="v3-conv__group">
             <div
               v-for="a in waAccounts"
               :key="`im-${a.id}`"
               class="v3-conv__item v3-conv__item--sub"
               :class="{ on: selected.kind === 'im' && selected.id === a.id }"
-              @click="pick('im', a.id)"
+              @click="view = 'mine'; pick('im', a.id)"
             >
               <img :src="imIcon(a)" :alt="PLATFORM[a.platform || 'whatsapp']" class="v3-conv__icon" />
-              <span class="flex-1 truncate" :title="`${PLATFORM[a.platform || 'whatsapp']} · ${imLabel(a)}`">{{ imLabel(a) }}</span>
+              <span class="flex-1 truncate" :title="`${PLATFORM[a.platform || 'whatsapp']} · ${imLabel(a)}`">{{ a.name || imLabel(a) }}</span>
+              <span v-if="unreadOf(a.id)" class="v3-conv__badge">{{ unreadOf(a.id) }}</span>
             </div>
+          </div>
+
+          <div v-if="mailAccounts.length" class="v3-conv__label">邮箱</div>
+          <div class="v3-conv__group">
             <div v-if="mailAccounts.length" class="v3-conv__item" :class="{ on: selected.kind === 'mail' && !selected.id }" @click="pick('mail')">
               全部邮件
             </div>
@@ -128,23 +159,32 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="mx-3 my-2 border-t border-gray-200"></div>
-
-          <div class="v3-conv__group">
-            <div
+          <div class="v3-conv__label">客户等级</div>
+          <div class="flex flex-wrap gap-1.5 px-3 pb-3">
+            <button
               v-for="g in GRADES"
               :key="g.key"
-              class="v3-conv__item"
+              type="button"
+              class="v3-conv__chip"
               :class="{ on: grade === g.key }"
               @click="grade = g.key"
             >
-              {{ g.label }}
-            </div>
+              {{ g.key ? `${g.key} 类` : '全部' }}
+            </button>
           </div>
         </aside>
 
         <section class="v3-conv__main">
-          <ImWorkbench v-if="selected.kind === 'im'" :key="viewKey" embedded :account-id="selected.id" :level="LEVEL[grade]" :open-id="openId" />
+          <ImWorkbench
+            v-if="selected.kind === 'im'"
+            :key="viewKey"
+            embedded
+            :account-id="selected.id"
+            :level="LEVEL[grade]"
+            :open-id="openId"
+            :view="view"
+            @changed="loadCounts"
+          />
           <MailWorkbench v-else :key="viewKey" embedded :account-id="selected.id" :open-id="openId" />
         </section>
       </div>
@@ -177,9 +217,9 @@ onMounted(async () => {
 }
 
 .v3-conv__side {
-  flex: 0 0 188px;
+  flex: 0 0 212px;
   overflow: auto;
-  background: #fff;
+  background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
 }
@@ -223,6 +263,46 @@ onMounted(async () => {
   font-weight: 600;
   color: #1d4ed8;
   background: #eff4ff;
+}
+
+.v3-conv__label {
+  padding: 14px 18px 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.v3-conv__count {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.v3-conv__badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  color: #fff;
+  text-align: center;
+  background: #2563eb;
+  border-radius: 9px;
+}
+
+.v3-conv__chip {
+  padding: 2px 9px;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+}
+
+.v3-conv__chip.on {
+  color: #1d4ed8;
+  background: #eff4ff;
+  border-color: #bfdbfe;
 }
 
 .v3-conv__main {

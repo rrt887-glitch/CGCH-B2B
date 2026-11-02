@@ -1927,6 +1927,29 @@ jobs:
           assert [m['textBody'] for m in call('GET', f"/channel/wa/message/list?conversationId={mcv['id']}")] == ['no phone number', 'Hi, how can I help?', 'My number is attached now']
           assert not [c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c['waId'] == '55443322@lid']
           print('隐藏号码联系人：按隐藏编号导入、可回复、带上号码后合并')
+          # 收件箱：会话状态（进行中 / 待处理 / 已解决）、优先级、内部备注、会话动态；客户再来消息自动回到进行中
+          from urllib.parse import quote
+          assert (pcv.get('status') or 'open') == 'open'
+          call('PUT', f"/channel/wa/conversation/status?id={pcv['id']}&status=resolved")
+          call('PUT', f"/channel/wa/conversation/priority?id={pcv['id']}&priority=3")
+          note = call('POST', f"/channel/wa/conversation/note?conversationId={pcv['id']}&content={quote('报价前先确认工厂起订量')}")
+          assert note['kind'] == 'note' and note['content'] == '报价前先确认工厂起订量' and note['userName'], note
+          got = call('GET', f"/channel/wa/conversation/get?id={pcv['id']}")
+          assert got['status'] == 'resolved' and got['priority'] == 3, got
+          ids = lambda st: [c['id'] for c in call('GET', f'/channel/wa/conversation/page?pageNo=1&pageSize=100&status={st}')['list']]
+          assert pcv['id'] in ids('resolved') and pcv['id'] not in ids('open'), '按状态筛选'
+          cnt = call('GET', '/channel/wa/conversation/counts')
+          assert cnt['resolved'] >= 1 and cnt['open'] >= 1 and isinstance(cnt['unreadByAccount'], dict), cnt
+          evs = call('GET', f"/channel/wa/conversation/events?conversationId={pcv['id']}")
+          assert [e['kind'] for e in evs] == ['activity', 'activity', 'note'] and '已解决' in evs[0]['content'] and '「高」' in evs[1]['content'], evs
+          assert not [m for m in call('GET', f"/channel/wa/message/list?conversationId={pcv['id']}") if '起订量' in (m.get('textBody') or '')], '备注不进聊天记录'
+          sent_before = len(evo()['sent'])
+          assert evo_msg(s1['session'], 'EVOREOPEN1', '8615900005555@s.whatsapp.net', {'conversation': 'Any update?'}, 'conversation', push='Pulled Buyer') == 200
+          wait(lambda: call('GET', f"/channel/wa/conversation/get?id={pcv['id']}")['status'] == 'open' or None, '客户再来消息回到进行中')
+          assert '回到进行中' in call('GET', f"/channel/wa/conversation/events?conversationId={pcv['id']}")[-1]['content']
+          call('DELETE', f"/channel/wa/conversation/note?id={note['id']}")
+          assert [e['kind'] for e in call('GET', f"/channel/wa/conversation/events?conversationId={pcv['id']}")].count('note') == 0
+          print('收件箱：状态、优先级、内部备注、动态、客户来信自动重新打开')
           # 手机端发出的消息同步进会话；系统发出的消息回显不重复
           assert evo_msg(s1['session'], 'EVOECHO1', '8615900003333@s.whatsapp.net', {'conversation': 'Sent from my phone'}, 'conversation', from_me=True) == 200
           assert evo_msg(s1['session'], ewamid, '8615900003333@s.whatsapp.net', {'conversation': 'MOQ is 300 units.'}, 'conversation', from_me=True) == 200

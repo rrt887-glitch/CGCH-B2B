@@ -14,11 +14,11 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
+import { useUserStore } from '@vben/stores';
 
 import {
   Alert,
   Avatar,
-  Badge,
   Button,
   Empty,
   Input,
@@ -26,6 +26,7 @@ import {
   message,
   Modal,
   Dropdown,
+  DropdownButton,
   Menu,
   MenuItem,
   Popover,
@@ -48,8 +49,15 @@ import { countryName } from '#/views/cgch/crm/shared/countries';
 import { getCustomerGroupList, getTagList, updateCustomerTags } from '#/api/crm/cgch';
 import type { CgchCrmApi } from '#/api/crm/cgch';
 import {
+  addWaConversationNote,
   archiveWaConversation,
+  CONVERSATION_STATUS,
+  deleteWaConversationNote,
   getWaAccountList,
+  getWaConversationEvents,
+  PRIORITY_OPTIONS,
+  setWaConversationPriority,
+  setWaConversationStatus,
   getWaConversation,
   getWaConversationPage,
   getWaMedia,
@@ -67,10 +75,12 @@ import {
 defineOptions({ name: 'CgchChannelIm' });
 
 /** 嵌入「会话」页时：账号由左栏选择，隐藏本页的账号下拉 */
-const props = defineProps<{ accountId?: number; embedded?: boolean; level?: number; openId?: number }>();
+const props = defineProps<{ accountId?: number; embedded?: boolean; level?: number; openId?: number; view?: 'mine' | 'team' }>();
+const emit = defineEmits<{ changed: [] }>();
 
 const router = useRouter();
 const route = useRoute();
+const myUserId = useUserStore().userInfo?.id;
 const POLL_MS = 10_000; // 实时推送没连上时的定时刷新间隔
 const POLL_MS_LIVE = 60_000; // 实时推送连上后只做兜底刷新
 
@@ -80,14 +90,39 @@ const keyword = ref('');
 /** 列表筛选：全部、未读、未回复（客户最后发言）、收藏、已归档 */
 type ListFilter = 'all' | 'archived' | 'starred' | 'team' | 'unread' | 'unreplied';
 const listFilter = ref<ListFilter>('all');
-const FILTER_OPTIONS = [
+const FILTER_OPTIONS = computed(() => [
   { label: '全部', value: 'all' },
   { label: '未读', value: 'unread' },
   { label: '未回复', value: 'unreplied' },
   { label: '收藏', value: 'starred' },
   { label: '归档', value: 'archived' },
-  { label: '团队', value: 'team' },
-];
+  ...(props.embedded ? [] : [{ label: '团队', value: 'team' }]),
+]);
+/** 会话状态筛选（参考 Chatwoot）：默认只看进行中的 */
+const statusFilter = ref<'' | ChannelWaApi.ConversationStatus>('open');
+const STATUS_FILTER = [...CONVERSATION_STATUS, { label: '全部状态', value: '' as const }];
+const teamView = computed(() => props.view === 'team' || listFilter.value === 'team');
+const listTitle = computed(() => {
+  if (props.accountId) {
+    const a = accounts.value.find((x) => x.id === props.accountId);
+    if (a) return a.name || a.displayPhone || a.phoneNumberId;
+  }
+  return teamView.value ? '团队会话' : '我的会话';
+});
+const accountName = (id?: number) => {
+  const a = accounts.value.find((x) => x.id === id);
+  return a ? a.name || a.displayPhone || a.phoneNumberId : '';
+};
+const PLATFORM_DOT: Record<string, string> = {
+  whatsapp: '#16A34A',
+  messenger: '#2563EB',
+  instagram: '#DB2777',
+  web: '#4F46E5',
+  youtube: '#DC2626',
+  tiktok: '#111827',
+};
+const priorityMeta = (p?: number) => PRIORITY_OPTIONS.find((o) => o.value === (p ?? 0));
+const statusLabel = (s?: string) => CONVERSATION_STATUS.find((o) => o.value === (s || 'open'))?.label;
 const live = ref(false);
 const conversations = ref<ChannelWaApi.Conversation[]>([]);
 const listLoading = ref(false);
@@ -96,6 +131,21 @@ const current = ref<ChannelWaApi.Conversation>();
 const messages = ref<ChannelWaApi.Message[]>([]);
 const chatLoading = ref(false);
 const chatBox = ref<HTMLElement>();
+/** 内部备注与会话动态，按时间穿插到聊天记录里 */
+const events = ref<ChannelWaApi.ConversationEvent[]>([]);
+type TimelineItem =
+  | { at: number; ev: ChannelWaApi.ConversationEvent; key: string; kind: 'event' }
+  | { at: number; key: string; kind: 'msg'; m: ChannelWaApi.Message };
+const toMs = (t?: number | string) => (typeof t === 'number' ? t : t ? new Date(t).getTime() : 0);
+const timeline = computed<TimelineItem[]>(() =>
+  [
+    ...messages.value.map((m) => ({ kind: 'msg' as const, m, at: toMs(m.messageTime), key: `m${m.id}` })),
+    // 只显示这批消息时间范围之后、或范围之内的记录，避免翻页前的旧备注堆在最上面
+    ...events.value
+      .filter((e) => !messages.value.length || toMs(e.createTime) >= toMs(messages.value[0]!.messageTime))
+      .map((ev) => ({ kind: 'event' as const, ev, at: toMs(ev.createTime), key: `e${ev.id}` })),
+  ].sort((a, b) => a.at - b.at),
+);
 
 /** 平台：WhatsApp 显示号码、可发模板；Facebook / Instagram 只能在客户来信后 24 小时内回复 */
 const PLATFORM_META: Record<string, { avatar: string; color: string; label: string }> = {
@@ -132,8 +182,9 @@ async function loadConversations(silent = false) {
       unreplied: listFilter.value === 'unreplied' || undefined,
       starred: listFilter.value === 'starred' || undefined,
       archived: listFilter.value === 'archived' || undefined,
-      team: listFilter.value === 'team' || undefined,
+      team: teamView.value || undefined,
       level: props.level,
+      status: statusFilter.value || undefined,
     });
     conversations.value = res.list;
   } finally {
@@ -150,8 +201,9 @@ async function openConversation(c: ChannelWaApi.Conversation) {
   current.value = c;
   chatLoading.value = true;
   try {
-    messages.value = await getWaMessages(c.id);
+    [messages.value, events.value] = await Promise.all([getWaMessages(c.id), getWaConversationEvents(c.id).catch(() => [])]);
     c.unreadCount = 0;
+    emit('changed');
     current.value = await getWaConversation(c.id);
     aiDraft.value = (await getPendingDraft('whatsapp', c.id)) ?? undefined;
     await scrollBottom();
@@ -162,14 +214,16 @@ async function openConversation(c: ChannelWaApi.Conversation) {
 
 async function refreshCurrent() {
   if (!current.value) return;
-  const latest = await getWaMessages(current.value.id);
-  const grew = latest.length !== messages.value.length || latest.at(-1)?.status !== messages.value.at(-1)?.status;
+  const [latest, evs] = await Promise.all([getWaMessages(current.value.id), getWaConversationEvents(current.value.id).catch(() => events.value)]);
+  const grew =
+    latest.length !== messages.value.length || latest.at(-1)?.status !== messages.value.at(-1)?.status || evs.length !== events.value.length;
   messages.value = latest;
+  events.value = evs;
   current.value = await getWaConversation(current.value.id);
   if (grew) await scrollBottom();
 }
 
-watch([accountId, listFilter, () => props.level], () => loadConversations());
+watch([accountId, listFilter, statusFilter, () => props.level, () => props.view], () => loadConversations());
 watch(
   () => props.accountId,
   (v) => {
@@ -381,6 +435,22 @@ async function doTransfer() {
   current.value = undefined;
   await loadConversations(true);
 }
+// ===== 会话状态、优先级（参考 Chatwoot） =====
+async function setStatus(st: ChannelWaApi.ConversationStatus) {
+  if (!current.value) return;
+  await setWaConversationStatus(current.value.id, st);
+  message.success(st === 'resolved' ? '已标记为已解决，客户再来消息时会自动回到进行中' : st === 'pending' ? '已标记为待处理' : '已重新打开');
+  current.value.status = st;
+  await Promise.all([refreshCurrent(), loadConversations(true)]);
+  emit('changed');
+}
+async function setPriority(p: number) {
+  if (!current.value) return;
+  await setWaConversationPriority(current.value.id, p);
+  current.value.priority = p;
+  await Promise.all([refreshCurrent(), loadConversations(true)]);
+}
+
 function onMenu(key: string) {
   if (!current.value) return;
   if (key === 'star') toggleStar(current.value);
@@ -503,6 +573,32 @@ async function sendText() {
     loadConversations(true);
   } finally {
     sending.value = false;
+  }
+}
+/** 输入区：回复客户 / 内部备注（只给团队看） */
+const composeMode = ref<'note' | 'reply'>('reply');
+const noteText = ref('');
+const noteSaving = ref(false);
+async function sendNote() {
+  if (!current.value || !noteText.value.trim()) return;
+  noteSaving.value = true;
+  try {
+    const ev = await addWaConversationNote(current.value.id, noteText.value.trim());
+    events.value = [...events.value, ev];
+    noteText.value = '';
+    await scrollBottom();
+  } finally {
+    noteSaving.value = false;
+  }
+}
+async function removeNote(ev: ChannelWaApi.ConversationEvent) {
+  await deleteWaConversationNote(ev.id);
+  events.value = events.value.filter((e) => e.id !== ev.id);
+}
+function onNoteKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    sendNote();
   }
 }
 function onKeydown(e: KeyboardEvent) {
@@ -699,20 +795,25 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
     <div v-else class="flex h-full gap-3">
       <!-- 会话列表 -->
       <div class="flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E7EB] bg-white">
-        <div class="flex flex-col gap-2 border-b p-3">
-          <div class="flex gap-2">
-            <Select v-if="!embedded" v-model:value="accountId" :options="accountOptions" class="min-w-0 flex-1" />
-            <span v-else class="flex-1"></span>
-            <Button v-if="waAccounts.length > 0" type="primary" @click="openNewChat">新会话</Button>
+        <div class="flex flex-col gap-2.5 px-4 pt-3.5">
+          <div class="flex items-center gap-2">
+            <h2 class="m-0 min-w-0 flex-1 truncate text-base font-semibold text-[#111827]">{{ listTitle }}</h2>
+            <Select v-model:value="statusFilter" size="small" class="w-[92px]" :options="STATUS_FILTER" aria-label="会话状态" />
+            <Tooltip v-if="waAccounts.length > 0" title="新会话">
+              <Button size="small" aria-label="新会话" @click="openNewChat"><IconifyIcon icon="lucide:plus" class="size-3.5" /></Button>
+            </Tooltip>
           </div>
-          <InputSearch v-model:value="keyword" allow-clear placeholder="号码或昵称" @search="() => loadConversations()" />
-          <div class="flex flex-wrap gap-1.5" role="group" aria-label="会话筛选">
+          <Select v-if="!embedded" v-model:value="accountId" size="small" :options="accountOptions" />
+          <InputSearch v-model:value="keyword" allow-clear placeholder="搜索客户、号码、备注名" @search="() => loadConversations()" />
+          <div class="flex gap-4 overflow-x-auto border-0 border-b border-solid border-[#E5E7EB]" role="tablist" aria-label="会话筛选">
             <button
               v-for="f in FILTER_OPTIONS"
               :key="f.value"
               type="button"
-              class="h-[26px] cursor-pointer rounded-full border border-solid px-2.5 text-xs"
-              :class="listFilter === f.value ? 'border-[#111827] bg-[#111827] font-medium text-white' : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#D1D5DB]'"
+              role="tab"
+              :aria-selected="listFilter === f.value"
+              class="-mb-px shrink-0 cursor-pointer border-0 border-b-2 border-solid bg-transparent px-0 pb-2 pt-1 text-[13px]"
+              :class="listFilter === f.value ? 'border-[#2563EB] font-semibold text-[#111827]' : 'border-transparent text-[#6B7280] hover:text-[#111827]'"
               @click="listFilter = f.value as any"
             >
               {{ f.label }}
@@ -722,27 +823,56 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         <div class="flex-1 overflow-auto">
           <Spin :spinning="listLoading">
             <div v-if="conversations.length === 0" class="p-8">
-              <Empty :description="listFilter === 'team' ? '没有同事负责的会话（需要部门数据权限才能看到下属的会话）' : '暂无会话'" />
+              <Empty
+                :description="
+                  teamView
+                    ? '没有同事负责的会话（需要部门数据权限才能看到下属的会话）'
+                    : statusFilter === 'open'
+                      ? '没有进行中的会话'
+                      : '暂无会话'
+                "
+              />
             </div>
             <div
               v-for="c in conversations"
               :key="c.id"
-              class="flex cursor-pointer gap-3 border-0 border-b border-solid border-[#F3F4F6] px-4 py-3"
+              class="flex cursor-pointer gap-2.5 border-0 border-b border-solid border-[#F3F4F6] px-4 py-3"
               :class="current?.id === c.id ? 'bg-[#EFF4FF] shadow-[inset_3px_0_0_#2563EB]' : 'hover:bg-[#F9FAFB]'"
               @click="openConversation(c)"
             >
-              <Badge :count="c.unreadCount" :offset="[-4, 4]">
-                <Avatar :src="c.avatarUrl || undefined" :class="c.avatarUrl ? '' : plat(c).avatar">{{ initials(c) }}</Avatar>
-              </Badge>
-              <div class="min-w-0 flex-1">
-                <div class="flex justify-between gap-2">
-                  <span class="truncate font-semibold text-[#111827]">
+              <Avatar :size="36" :src="c.avatarUrl || undefined" class="shrink-0" :class="c.avatarUrl ? '' : plat(c).avatar">{{ initials(c) }}</Avatar>
+              <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div class="flex items-center gap-1.5 text-[11px] text-[#6B7280]">
+                  <span class="inline-block size-2 shrink-0 rounded-sm" :style="{ background: PLATFORM_DOT[c.platform || 'whatsapp'] }"></span>
+                  <span class="min-w-0 flex-1 truncate">{{ accountName(c.accountId) || plat(c).label }}</span>
+                  <span class="shrink-0">{{ md(c.lastMessageTime) }} {{ hm(c.lastMessageTime) }}</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="min-w-0 flex-1 truncate font-semibold text-[#111827]">
                     <span v-if="c.starred" class="mr-1 text-amber-500">★</span>{{ c.remarkName || c.customerName || contact(c) }}
                   </span>
-                  <span class="shrink-0 text-xs text-[#6B7280]">{{ md(c.lastMessageTime) }} {{ hm(c.lastMessageTime) }}</span>
+                  <span
+                    v-if="c.unreadCount"
+                    class="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[#2563EB] px-1.5 text-[11px] font-semibold text-white"
+                  >
+                    {{ c.unreadCount > 99 ? '99+' : c.unreadCount }}
+                  </span>
                 </div>
-                <div class="mt-0.5 truncate text-[13px] text-[#4B5563]">
-                  <span v-if="listFilter === 'team' && c.handlerName" class="mr-1 text-[#2563EB]">[{{ c.handlerName }}]</span>{{ c.lastMessagePreview }}
+                <div class="truncate text-[13px] text-[#4B5563]">
+                  <span v-if="teamView && c.handlerName" class="mr-1 text-[#2563EB]">[{{ c.handlerName }}]</span>{{ c.lastMessagePreview }}
+                </div>
+                <div v-if="(c.priority ?? 0) > 0 || c.customerLevel || (!statusFilter && c.status && c.status !== 'open')" class="mt-0.5 flex flex-wrap gap-1">
+                  <span
+                    v-if="(c.priority ?? 0) > 0"
+                    class="rounded px-1.5 text-[11px] font-medium leading-[18px]"
+                    :style="{ color: priorityMeta(c.priority)?.color, background: '#F9FAFB', border: `1px solid ${priorityMeta(c.priority)?.color}33` }"
+                  >
+                    {{ priorityMeta(c.priority)?.label }}
+                  </span>
+                  <span v-if="c.customerLevel" class="rounded bg-[#FEF3C7] px-1.5 text-[11px] leading-[18px] text-[#92400E]">{{ levelLabel(c.customerLevel) }}</span>
+                  <span v-if="!statusFilter && c.status && c.status !== 'open'" class="rounded bg-[#F3F4F6] px-1.5 text-[11px] leading-[18px] text-[#374151]">
+                    {{ statusLabel(c.status) }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -797,7 +927,14 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               <Tooltip :title="live ? '实时推送已连接，新消息会立即出现' : '实时推送未连接，每 10 秒自动刷新'">
                 <span class="inline-block size-2 rounded-full" :class="live ? 'bg-green-500' : 'bg-gray-300'"></span>
               </Tooltip>
-              <Button size="small" @click="toggleStar(current)">{{ current.starred ? '取消收藏' : '收藏' }}</Button>
+              <Tooltip :title="current.starred ? '取消收藏' : '收藏'">
+                <Button size="small" :aria-label="current.starred ? '取消收藏' : '收藏'" @click="toggleStar(current)">
+                  <span :class="current.starred ? 'text-amber-500' : 'text-[#6B7280]'">★</span>
+                </Button>
+              </Tooltip>
+              <Button size="small" @click="openTransfer">
+                <IconifyIcon icon="lucide:user-round-plus" class="mr-1 inline size-3.5 align-[-2px]" />{{ current.handlerName || '指派' }}
+              </Button>
               <Dropdown :trigger="['click']">
                 <Button size="small">更多</Button>
                 <template #overlay>
@@ -808,59 +945,86 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   </Menu>
                 </template>
               </Dropdown>
+              <Button v-if="current.status === 'resolved'" size="small" @click="setStatus('open')">重新打开</Button>
+              <DropdownButton v-else size="small" type="primary" @click="setStatus('resolved')">
+                标记已解决
+                <template #overlay>
+                  <Menu @click="(e: any) => setStatus(e.key as any)">
+                    <MenuItem v-if="current.status === 'pending'" key="open">回到进行中</MenuItem>
+                    <MenuItem v-else key="pending">标为待处理</MenuItem>
+                  </Menu>
+                </template>
+              </DropdownButton>
             </div>
           </div>
 
           <div ref="chatBox" class="flex-1 overflow-auto bg-[#F6F7F9] px-7 py-6">
             <Spin :spinning="chatLoading">
-              <div v-for="m in messages" :key="m.id" class="mb-3 flex" :class="m.direction === 2 ? 'justify-end' : 'justify-start'">
+              <template v-for="it in timeline" :key="it.key">
+              <div v-if="it.kind === 'event' && it.ev.kind === 'activity'" class="mb-3 flex justify-center">
+                <span class="rounded-full bg-[#EEF0F3] px-3 py-1 text-xs text-[#4B5563]">{{ it.ev.content }} · {{ hm(it.ev.createTime) }}</span>
+              </div>
+              <div v-else-if="it.kind === 'event'" class="mb-3 flex justify-end">
+                <div class="max-w-[70%] rounded-[14px_4px_14px_14px] border border-solid border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5 text-sm leading-[22px] text-[#78350F]">
+                  <div class="mb-1 flex items-center gap-2 text-[11px] font-semibold text-[#92400E]">
+                    <IconifyIcon icon="lucide:lock" class="size-3" />内部备注 · 客户看不到
+                  </div>
+                  <div class="whitespace-pre-wrap break-words">{{ it.ev.content }}</div>
+                  <div class="mt-1 flex items-center justify-end gap-2 text-[11px] text-[#92400E]/80">
+                    <span>{{ it.ev.userName }} · {{ md(it.ev.createTime) }} {{ hm(it.ev.createTime) }}</span>
+                    <a v-if="String(it.ev.userId) === String(myUserId)" class="!text-[#92400E] underline" @click="removeNote(it.ev)">删除</a>
+                  </div>
+                </div>
+              </div>
+              <div v-else-if="it.kind === 'msg'" class="mb-3 flex" :class="it.m.direction === 2 ? 'justify-end' : 'justify-start'">
                 <div
                   class="max-w-[70%] px-3.5 py-2.5 text-sm leading-[22px]"
                   :class="
-                    m.direction === 2
+                    it.m.direction === 2
                       ? 'rounded-[14px_4px_14px_14px] bg-[#2563EB] text-white [&_a]:text-white [&_a]:underline'
                       : 'rounded-[4px_14px_14px_14px] border border-solid border-[#E5E7EB] bg-white text-[#111827]'
                   "
                 >
-                  <template v-if="MEDIA_LABEL[m.type]">
-                    <a v-if="isImage(m)" :href="m.fileUrl" target="_blank" rel="noopener">
-                      <img :src="m.fileUrl" class="mb-1 max-h-60 max-w-full rounded" alt="" />
+                  <template v-if="MEDIA_LABEL[it.m.type]">
+                    <a v-if="isImage(it.m)" :href="it.m.fileUrl" target="_blank" rel="noopener">
+                      <img :src="it.m.fileUrl" class="mb-1 max-h-60 max-w-full rounded" alt="" />
                     </a>
-                    <div v-else class="mb-1 flex items-center gap-2 text-xs" :class="m.direction === 2 ? 'text-white/85' : 'text-[#4B5563]'">
-                      <span>[{{ MEDIA_LABEL[m.type] }}{{ m.fileName ? `：${m.fileName}` : '' }}]</span>
-                      <a v-if="m.fileUrl" :href="m.fileUrl" target="_blank" rel="noopener">下载</a>
+                    <div v-else class="mb-1 flex items-center gap-2 text-xs" :class="it.m.direction === 2 ? 'text-white/85' : 'text-[#4B5563]'">
+                      <span>[{{ MEDIA_LABEL[it.m.type] }}{{ it.m.fileName ? `：${it.m.fileName}` : '' }}]</span>
+                      <a v-if="it.m.fileUrl" :href="it.m.fileUrl" target="_blank" rel="noopener">下载</a>
                       <Button
-                        v-else-if="m.mediaId || m.direction === 1"
+                        v-else-if="it.m.mediaId || it.m.direction === 1"
                         size="small"
                         type="link"
                         class="!h-auto !p-0 !text-xs"
-                        :loading="mediaLoading === m.id"
-                        @click="loadMedia(m)"
+                        :loading="mediaLoading === it.m.id"
+                        @click="loadMedia(it.m)"
                       >
-                        {{ m.type === 'image' || m.type === 'sticker' ? '查看' : '下载' }}
+                        {{ it.m.type === 'image' || it.m.type === 'sticker' ? '查看' : '下载' }}
                       </Button>
                     </div>
                   </template>
-                  <div v-if="m.type === 'template'" class="mb-1 text-xs" :class="m.direction === 2 ? 'text-white/85' : 'text-[#4B5563]'">[模板 {{ m.templateName }}]</div>
-                  <div class="whitespace-pre-wrap break-words">{{ m.textBody }}</div>
+                  <div v-if="it.m.type === 'template'" class="mb-1 text-xs" :class="it.m.direction === 2 ? 'text-white/85' : 'text-[#4B5563]'">[模板 {{ it.m.templateName }}]</div>
+                  <div class="whitespace-pre-wrap break-words">{{ it.m.textBody }}</div>
                   <div
-                    v-if="translations[m.id]"
+                    v-if="translations[it.m.id]"
                     class="mt-1.5 whitespace-pre-wrap break-words border-0 border-t border-dashed pt-1.5 text-[13px]"
-                    :class="m.direction === 2 ? 'border-white/40 text-white/90' : 'border-[#D1D5DB] text-[#4B5563]'"
+                    :class="it.m.direction === 2 ? 'border-white/40 text-white/90' : 'border-[#D1D5DB] text-[#4B5563]'"
                   >
-                    {{ translations[m.id] }}
+                    {{ translations[it.m.id] }}
                   </div>
-                  <div class="mt-1 flex items-center justify-end gap-1 text-[11px]" :class="m.direction === 2 ? 'text-white/80' : 'text-[#6B7280]'">
-                    <span v-if="m.aiGenerated" class="rounded px-1 font-semibold" :class="m.direction === 2 ? 'bg-white/20' : 'bg-[#EFF4FF] text-[#1D4ED8]'">AI</span>
-                    <span>{{ md(m.messageTime) }} {{ hm(m.messageTime) }}</span>
-                    <Tooltip v-if="m.direction === 2 && m.status" :title="m.errorMessage || STATUS_ICON[m.status]?.label">
-                      <span :class="m.status === 'failed' ? 'rounded bg-white px-1 font-bold text-[#B91C1C]' : m.status === 'read' ? 'font-semibold' : ''">
-                        {{ STATUS_ICON[m.status]?.text }}
+                  <div class="mt-1 flex items-center justify-end gap-1 text-[11px]" :class="it.m.direction === 2 ? 'text-white/80' : 'text-[#6B7280]'">
+                    <span v-if="it.m.aiGenerated" class="rounded px-1 font-semibold" :class="it.m.direction === 2 ? 'bg-white/20' : 'bg-[#EFF4FF] text-[#1D4ED8]'">AI</span>
+                    <span>{{ md(it.m.messageTime) }} {{ hm(it.m.messageTime) }}</span>
+                    <Tooltip v-if="it.m.direction === 2 && it.m.status" :title="it.m.errorMessage || STATUS_ICON[it.m.status]?.label">
+                      <span :class="it.m.status === 'failed' ? 'rounded bg-white px-1 font-bold text-[#B91C1C]' : it.m.status === 'read' ? 'font-semibold' : ''">
+                        {{ STATUS_ICON[it.m.status]?.text }}
                       </span>
                     </Tooltip>
                   </div>
                 </div>
               </div>
+              </template>
             </Spin>
           </div>
 
@@ -877,7 +1041,36 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 <Button v-if="aiDraft.content && current.windowOpen" size="small" type="primary" @click="useDraft">填入输入框修改后发送</Button>
               </div>
             </div>
-            <template v-if="current.windowOpen">
+            <div class="mb-2 flex items-center gap-4" role="tablist" aria-label="输入方式">
+              <button
+                v-for="t in [{ k: 'reply', label: '回复' }, { k: 'note', label: '内部备注' }]"
+                :key="t.k"
+                type="button"
+                role="tab"
+                :aria-selected="composeMode === t.k"
+                class="cursor-pointer border-0 border-b-2 border-solid bg-transparent px-0 pb-1.5 text-[13px]"
+                :class="composeMode === t.k ? (t.k === 'note' ? 'border-[#D97706] font-semibold text-[#92400E]' : 'border-[#2563EB] font-semibold text-[#111827]') : 'border-transparent text-[#6B7280]'"
+                @click="composeMode = t.k as any"
+              >
+                {{ t.label }}
+              </button>
+              <span class="flex-1"></span>
+              <span v-if="composeMode === 'note'" class="text-xs text-[#92400E]">只有团队能看到，不会发给客户</span>
+            </div>
+            <template v-if="composeMode === 'note'">
+              <Textarea
+                v-model:value="noteText"
+                :auto-size="{ minRows: 2, maxRows: 6 }"
+                :maxlength="1990"
+                class="!border-[#FDE68A] !bg-[#FFFBEB]"
+                placeholder="写给同事看的备注，例如：报价前先确认起订量。Enter 保存，Shift+Enter 换行"
+                @keydown="onNoteKeydown"
+              />
+              <div class="mt-2 flex justify-end">
+                <Button type="primary" class="!border-[#D97706] !bg-[#D97706]" :loading="noteSaving" :disabled="!noteText.trim()" @click="sendNote">添加备注</Button>
+              </div>
+            </template>
+            <template v-else-if="current.windowOpen">
               <Textarea
                 v-model:value="text"
                 :auto-size="{ minRows: 2, maxRows: 6 }"
@@ -942,11 +1135,56 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
       <!-- 客户信息栏（设计稿「会话工作台」右侧）：关联了客户时显示，窄屏隐藏 -->
       <aside
-        v-if="current?.customerId && customerStage !== undefined"
+        v-if="current"
         class="hidden w-80 shrink-0 flex-col gap-5 overflow-auto rounded-xl border border-solid border-[#E5E7EB] bg-white p-5 xl:flex"
       >
-        <div class="flex flex-col gap-1">
-          <Avatar v-if="current.avatarUrl" :size="48" :src="current.avatarUrl" class="mb-2" />
+        <!-- 联系人 -->
+        <div class="flex flex-col gap-2 border-0 border-b border-solid border-[#F3F4F6] pb-4">
+          <Avatar :size="48" :src="current.avatarUrl || undefined" :class="current.avatarUrl ? '' : plat(current).avatar">{{ initials(current) }}</Avatar>
+          <div>
+            <div class="text-base font-semibold text-[#111827]">{{ current.remarkName || contact(current) }}</div>
+            <div class="text-[13px] text-[#4B5563]">
+              {{ plat(current).label }} · {{ isWa(current) ? waNumber(current) : accountName(current.accountId) }}
+            </div>
+          </div>
+          <div v-if="!current.customerId" class="flex items-center gap-2 text-[13px] text-[#6B7280]">
+            <span>{{ current.clueName ? `线索：${current.clueName}` : '还没有关联 CRM 客户' }}</span>
+            <a v-if="current.clueId" @click="router.push(`/crm/clue/detail/${current.clueId}`)">查看</a>
+          </div>
+        </div>
+
+        <!-- 会话操作 -->
+        <section class="flex flex-col gap-3">
+          <div class="text-[13px] font-semibold text-[#111827]">会话操作</div>
+          <div class="grid grid-cols-[64px_1fr] items-center gap-x-3 gap-y-2.5 text-[13px]">
+            <span class="text-[#6B7280]">处理人</span>
+            <span class="flex items-center justify-between gap-2">
+              <span class="truncate">{{ current.handlerName || '-' }}</span>
+              <a class="shrink-0 text-xs" @click="openTransfer">转交</a>
+            </span>
+            <span class="text-[#6B7280]">状态</span>
+            <Select
+              :value="current.status || 'open'"
+              size="small"
+              :options="CONVERSATION_STATUS"
+              aria-label="会话状态"
+              @change="(v: any) => setStatus(v)"
+            />
+            <span class="text-[#6B7280]">优先级</span>
+            <Select
+              :value="current.priority ?? 0"
+              size="small"
+              :options="PRIORITY_OPTIONS.map((o) => ({ label: o.label, value: o.value }))"
+              aria-label="优先级"
+              @change="(v: any) => setPriority(Number(v))"
+            />
+            <span class="text-[#6B7280]">收件箱</span>
+            <span class="truncate">{{ accountName(current.accountId) || plat(current).label }}</span>
+          </div>
+        </section>
+
+        <template v-if="current.customerId && customerStage !== undefined">
+        <div class="flex flex-col gap-1 border-0 border-t border-solid border-[#F3F4F6] pt-4">
           <div class="text-xs text-[#6B7280]">客户</div>
           <a class="text-base font-semibold text-[#111827]" @click="router.push(`/crm/customer/detail/${current.customerId}`)">{{ customer?.name || current.customerName }}</a>
           <div class="mt-1 flex flex-wrap gap-1.5">
@@ -1027,6 +1265,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
           <Button class="flex-1" @click="router.push(`/crm/customer/detail/${current.customerId}`)">客户详情</Button>
           <Button class="flex-1 !border-[#111827] !bg-[#111827] !text-white" @click="openFollow">写跟进</Button>
         </div>
+        </template>
       </aside>
     </div>
 

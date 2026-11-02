@@ -621,6 +621,8 @@ CREATE TABLE `channel_wa_conversation` (
   `avatar_key` varchar(64) NULL COMMENT '头像来源标识，头像没换就不重复下载',
   `owner_user_id` bigint NULL COMMENT '负责人：转交后由该业务员处理；为空表示由号码所属的业务员处理',
   `remark_name` varchar(255) NULL COMMENT '备注名：业务员给客户起的名字，优先于对方昵称显示',
+  `status` varchar(16) NULL COMMENT '会话状态：open 进行中（空也算）、pending 待处理、resolved 已解决；客户再来消息时自动回到进行中',
+  `priority` int NULL COMMENT '优先级：0 无、1 低、2 中、3 高、4 紧急',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
@@ -657,6 +659,23 @@ CREATE TABLE `channel_wa_message` (
   `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'WhatsApp 消息';
+
+DROP TABLE IF EXISTS `channel_wa_conversation_event`;
+CREATE TABLE `channel_wa_conversation_event` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `conversation_id` bigint NOT NULL COMMENT '会话编号',
+  `kind` varchar(16) NOT NULL COMMENT '类型：note 内部备注（客户看不到）、activity 会话动态（指派、状态、优先级变化）',
+  `content` varchar(2000) NULL COMMENT '内容',
+  `user_id` bigint NULL COMMENT '操作人；为空表示系统',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`),
+  KEY `idx_conversation` (`conversation_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '会话内部备注与动态（只给团队看）';
 
 DROP TABLE IF EXISTS `channel_ai_deferred`;
 CREATE TABLE `channel_ai_deferred` (
