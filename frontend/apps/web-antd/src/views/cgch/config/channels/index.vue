@@ -14,12 +14,15 @@ import { IconifyIcon } from '@vben/icons';
 
 import {
   Button,
+  Dropdown,
   Input,
   InputNumber,
   InputPassword,
   message,
+  Menu,
+  MenuDivider,
+  MenuItem,
   Modal,
-  Popconfirm,
   Popover,
   Select,
   Spin,
@@ -184,7 +187,6 @@ function accountsOf(c: Channel): AccountRow[] {
   }
 }
 
-const total = computed(() => mailAccounts.value.length + waAccounts.value.length);
 
 // ===== 连接新账号 =====
 function connect(c: Channel) {
@@ -479,6 +481,127 @@ function edit(c: Channel, r: AccountRow) {
   }
 }
 
+// ===== 收件箱列表（参考 Chatwoot）：每个已接入的账号是一个收件箱 =====
+interface InboxRow extends AccountRow {
+  channel: Channel;
+}
+const KIND_LABEL: Record<Kind, string> = {
+  wa: 'WhatsApp · 扫码',
+  'wa-official': 'WhatsApp · 官方 API',
+  meta: '社媒私信',
+  mail: '邮箱',
+  im: '官网在线客服',
+  social: '视频评论',
+  lead: '询盘平台',
+  soon: '',
+};
+const inboxes = computed<InboxRow[]>(() => CHANNELS.flatMap((c) => accountsOf(c).map((r) => ({ ...r, channel: c }))));
+const stats = computed(() => [
+  { label: '收件箱', value: inboxes.value.length, color: '#111827' },
+  { label: '正常', value: inboxes.value.filter((r) => r.status.color === 'green').length, color: '#15803D' },
+  { label: '需要处理', value: inboxes.value.filter((r) => r.status.color === 'red').length, color: '#B45309' },
+  { label: '已停用', value: inboxes.value.filter((r) => r.status.color === 'gray').length, color: '#6B7280' },
+]);
+const STATUS_PILL: Record<string, string> = {
+  green: 'bg-[#DCFCE7] text-[#15803D]',
+  red: 'bg-[#FEE2E2] text-[#B91C1C]',
+  orange: 'bg-[#FEF3C7] text-[#B45309]',
+  gray: 'bg-[#F3F4F6] text-[#6B7280]',
+};
+const STATUS_DOT: Record<string, string> = { green: '#15803D', red: '#B91C1C', orange: '#B45309', gray: '#9CA3AF' };
+const channelIcon = (c: Channel) => CHANNEL_ICONS[c.key] ?? CHANNEL_ICONS[c.provider ?? ''];
+
+/** 收件箱最常用的一个操作，放在行上；其余放进「设置」菜单 */
+function primaryAction(r: InboxRow): { key: string; label: string } | undefined {
+  if (r.wa?.authType === 'evolution' && r.wa.connState === 'close') return { key: 'rescan', label: '重新扫码' };
+  if (r.mail) return { key: 'sync', label: '立即收信' };
+  if (r.wa?.platform === 'web') return { key: 'code', label: '嵌入代码' };
+  if (r.wa?.platform === 'youtube' || r.wa?.platform === 'tiktok') return { key: 'poll', label: '立即同步' };
+  if (r.wa?.authType === 'evolution' || (r.wa?.authType === 'oauth' && (r.wa.platform === 'messenger' || r.wa.platform === 'instagram')))
+    return { key: 'history', label: '同步聊天记录' };
+  return undefined;
+}
+function runAction(key: string, r: InboxRow) {
+  switch (key) {
+    case 'rescan':
+      if (r.wa) rescan(r.wa);
+      break;
+    case 'sync':
+      if (r.mail) syncNow(r.mail);
+      break;
+    case 'code':
+      imOpen.value = true;
+      break;
+    case 'poll':
+      if (r.wa) pollNow(r.wa);
+      break;
+    case 'history':
+      if (r.wa) syncHistory(r.wa);
+      break;
+    case 'guide':
+      if (r.wa) waRef.value?.showGuide(r.wa);
+      break;
+    case 'edit':
+      edit(r.channel, r);
+      break;
+    case 'assign':
+      if (r.wa) openAssign(r.wa);
+      break;
+    case 'toggle':
+      toggle(r);
+      break;
+    case 'unbind':
+      Modal.confirm({
+        title: `解绑 ${r.label}？`,
+        content: r.mail ? '解绑后已同步的邮件也会删除。' : '解绑后这个收件箱的会话与消息记录也会删除。',
+        okText: '解绑',
+        okButtonProps: { danger: true },
+        onOk: () => unbind(r),
+      });
+      break;
+  }
+}
+function menuOf(r: InboxRow) {
+  const items: { danger?: boolean; key: string; label: string }[] = []; // 解绑单独放在菜单最后
+  const main = primaryAction(r)?.key;
+  if (r.wa?.authType === 'evolution') {
+    if (main !== 'history') items.push({ key: 'history', label: '同步聊天记录' });
+    if (main !== 'rescan') items.push({ key: 'rescan', label: '重新扫码' });
+  }
+  if (r.wa && r.wa.authType !== 'oauth' && r.wa.authType !== 'evolution' && r.wa.platform !== 'web' && r.wa.platform !== 'youtube' && r.wa.platform !== 'tiktok')
+    items.push({ key: 'guide', label: '回调配置' });
+  if (r.mail || (r.wa && r.wa.authType !== 'oauth' && r.wa.authType !== 'evolution'))
+    items.push({ key: 'edit', label: r.mail?.authType === 'oauth2' ? '重新授权' : '修改配置' });
+  if (r.wa) items.push({ key: 'assign', label: assignText(r.wa) });
+  items.push({ key: 'toggle', label: (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停收信' : '停用') : '启用' });
+  return items;
+}
+
+// ===== 添加收件箱向导：先选渠道，再进入对应的连接方式 =====
+const addOpen = ref(false);
+const ADD_GROUPS: { keys: string[]; title: string }[] = [
+  { title: '即时消息', keys: ['whatsapp', 'wa-official', 'messenger', 'instagram', 'im'] },
+  { title: '邮箱', keys: ['gmail', 'outlook', 'exmail', 'qq', '163', '126', 'aliyun', '263', 'boss', 'custom'] },
+  { title: '视频评论', keys: ['youtube', 'tiktok'] },
+  { title: '询盘平台', keys: ['alibaba', 'mic'] },
+];
+const CHANNEL_DESC: Record<string, string> = {
+  whatsapp: '手机扫码或输入配对码，几分钟就能用，可同步历史聊天',
+  'wa-official': '通过 Meta 官方接口接入，可发审核通过的模板消息',
+  messenger: '授权 Facebook 主页，接收主页私信',
+  instagram: '授权专业账号，接收 Instagram 私信',
+  im: '复制一段代码到网站，访客直接发起聊天',
+  youtube: '授权频道，视频评论进会话统一回复',
+  tiktok: '授权账号，视频评论进会话统一回复',
+  alibaba: '通过留资邮箱把询盘转进系统',
+  mic: '通过留资邮箱把询盘转进系统',
+};
+const channelOf = (k: string) => CHANNELS.find((c) => c.key === k)!;
+function addConnect(c: Channel) {
+  addOpen.value = false;
+  connect(c);
+}
+
 onMounted(async () => {
   window.addEventListener('message', onOAuthMessage);
   try {
@@ -494,88 +617,110 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 
 <template>
   <div class="ch-page">
-    <div class="ch-head">
-      <div class="flex items-center gap-3">
-        <h2 class="ch-title">渠道账号</h2>
-        <span class="ch-count">
-          <IconifyIcon icon="lucide:info" class="size-4 text-gray-400" />
-          已绑定 <b>{{ total }}</b> 个账号
-        </span>
+    <div class="flex flex-wrap items-start gap-4 pb-5">
+      <div class="min-w-[260px] flex-1">
+        <h2 class="m-0 text-[22px] font-bold text-[#111827]">收件箱</h2>
+        <p class="m-0 mt-1 text-sm text-[#4B5563]">每个接入的账号是一个收件箱。客户消息进入收件箱后，按接待成员分配给业务员或 AI，在「会话」里统一处理。</p>
       </div>
       <Button @click="leadOpen = true">设置留资邮箱</Button>
+      <Button type="primary" @click="addOpen = true"><IconifyIcon icon="lucide:plus" class="mr-1 inline size-4 align-[-3px]" />添加收件箱</Button>
+    </div>
+
+    <div class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div v-for="st in stats" :key="st.label" class="rounded-xl border border-solid border-[#E5E7EB] bg-white px-4 py-3">
+        <div class="text-[13px] text-[#4B5563]">{{ st.label }}</div>
+        <div class="text-[22px] font-semibold tabular-nums" :style="{ color: st.color }">{{ st.value }}</div>
+      </div>
     </div>
 
     <Spin :spinning="loading" wrapper-class-name="ch-spin">
-      <div class="ch-table">
-        <div class="ch-row ch-row--head">
-          <div class="ch-col-name">渠道</div>
-          <div class="ch-col-status">状态</div>
-          <div class="ch-col-account">账号</div>
-          <div class="ch-col-op">操作</div>
+      <div class="flex h-full flex-col overflow-hidden rounded-xl border border-solid border-[#E5E7EB] bg-white">
+        <div class="ch-grid border-0 border-b border-solid border-[#E5E7EB] bg-[#F9FAFB] px-5 py-2.5 text-xs font-medium text-[#4B5563]">
+          <span>收件箱</span><span>渠道类型</span><span>状态</span><span>接待</span><span class="text-right">操作</span>
         </div>
-        <div class="ch-body">
-          <template v-for="c in CHANNELS" :key="c.key">
-            <div class="ch-row">
-              <div class="ch-col-name">
-                <img v-if="CHANNEL_ICONS[c.key]" :src="CHANNEL_ICONS[c.key]" :alt="c.name" class="ch-icon" />
-                <span v-else class="ch-badge" :style="{ background: c.color }" :class="{ 'is-long': c.abbr.length > 2 }">{{ c.abbr }}</span>
-                <span class="truncate">{{ c.name }}</span>
-              </div>
-              <div class="ch-col-status">
-                <span v-if="c.kind === 'lead'" class="text-xs text-gray-500">通过留资邮箱接入</span>
-                <span v-else-if="c.kind === 'soon'" class="text-xs text-gray-400">即将开放</span>
-              </div>
-              <div class="ch-col-account"></div>
-              <div class="ch-col-op">
-                <span v-if="c.kind === 'soon'" class="text-gray-300">即将开放</span>
-                <a v-else-if="c.kind === 'lead'" @click="connect(c)">设置留资邮箱</a>
-                <a v-else @click="connect(c)">连接新账号</a>
+        <div class="min-h-0 flex-1 overflow-auto">
+          <div v-if="!loading && inboxes.length === 0" class="flex flex-col items-center gap-3 py-16 text-[#6B7280]">
+            <span>还没有接入任何账号</span>
+            <Button type="primary" @click="addOpen = true">添加第一个收件箱</Button>
+          </div>
+          <div
+            v-for="r in inboxes"
+            :key="`${r.channel.key}-${r.id}`"
+            class="ch-grid items-center border-0 border-b border-solid border-[#F3F4F6] px-5 py-3"
+          >
+            <div class="flex min-w-0 items-center gap-3">
+              <img v-if="channelIcon(r.channel)" :src="channelIcon(r.channel)" :alt="r.channel.name" class="ch-icon" />
+              <span v-else class="ch-badge" :style="{ background: r.channel.color }" :class="{ 'is-long': r.channel.abbr.length > 2 }">{{ r.channel.abbr }}</span>
+              <div class="flex min-w-0 flex-col">
+                <span class="truncate font-semibold text-[#111827]">{{ r.sub || r.label }}</span>
+                <span class="truncate text-xs text-[#6B7280]">
+                  {{ r.sub ? r.label : r.channel.name }}<template v-if="r.wa?.authType === 'evolution' && historyText(r.wa)"> · {{ historyText(r.wa) }}</template>
+                </span>
               </div>
             </div>
-
-            <div v-for="r in accountsOf(c)" :key="`${c.key}-${r.id}`" class="ch-row ch-row--sub">
-              <div class="ch-col-name">
-                <IconifyIcon icon="lucide:corner-down-right" class="ml-2 size-4 text-gray-300" />
-              </div>
-              <div class="ch-col-status">
-                <Tooltip :title="r.status.tip">
-                  <span class="ch-status" :class="`is-${r.status.color}`">{{ r.status.text }}</span>
-                </Tooltip>
-              </div>
-              <div class="ch-col-account">
-                <span class="truncate">{{ r.label }}</span>
-                <span v-if="r.sub" class="ml-2 text-xs text-gray-400">{{ r.sub }}</span>
-                <span v-if="r.wa?.authType === 'evolution' && historyText(r.wa)" class="ml-3 text-xs text-[#6B7280]">{{ historyText(r.wa) }}</span>
-              </div>
-              <div class="ch-col-op ch-ops">
-                <a v-if="r.mail" :class="{ 'opacity-50': busy === `sync-${r.id}` }" @click="syncNow(r.mail)">立即收信</a>
-                <a v-if="r.wa?.platform === 'web'" @click="imOpen = true">嵌入代码</a>
-                <a v-else-if="r.wa?.platform === 'youtube' || r.wa?.platform === 'tiktok'" :class="{ 'opacity-50': busy === `poll-${r.id}` }" @click="pollNow(r.wa)">立即同步</a>
-                <template v-else-if="r.wa?.authType === 'evolution'">
-                  <a :class="{ 'opacity-50': busy === `hist-${r.id}` }" @click="syncHistory(r.wa)">同步聊天记录</a>
-                  <a @click="rescan(r.wa)">重新扫码</a>
+            <span class="text-[13px] text-[#374151]">{{ KIND_LABEL[r.channel.kind] === '邮箱' ? r.channel.name : KIND_LABEL[r.channel.kind] || r.channel.name }}</span>
+            <span>
+              <Tooltip :title="r.status.tip">
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium" :class="STATUS_PILL[r.status.color]">
+                  <span class="size-1.5 rounded-full" :style="{ background: STATUS_DOT[r.status.color] }"></span>{{ r.status.text }}
+                </span>
+              </Tooltip>
+            </span>
+            <span class="text-[13px] text-[#374151]">
+              <a v-if="r.wa" @click="openAssign(r.wa)">{{ assignText(r.wa) }}</a>
+              <span v-else class="text-[#6B7280]">-</span>
+            </span>
+            <div class="flex items-center justify-end gap-2">
+              <Button
+                v-if="primaryAction(r)"
+                size="small"
+                :loading="busy === `hist-${r.id}` || busy === `sync-${r.id}` || busy === `poll-${r.id}`"
+                class="!border-[#BFDBFE] !bg-[#EFF4FF] !text-[#1D4ED8]"
+                @click="runAction(primaryAction(r)!.key, r)"
+              >
+                {{ primaryAction(r)!.label }}
+              </Button>
+              <Dropdown :trigger="['click']">
+                <Button size="small">设置</Button>
+                <template #overlay>
+                  <Menu @click="(e: any) => runAction(String(e.key), r)">
+                    <MenuItem v-for="it in menuOf(r).filter((x) => !x.danger)" :key="it.key">{{ it.label }}</MenuItem>
+                    <MenuDivider />
+                    <MenuItem key="unbind" danger>解绑</MenuItem>
+                  </Menu>
                 </template>
-                <a
-                  v-else-if="r.wa?.authType === 'oauth' && (r.wa.platform === 'messenger' || r.wa.platform === 'instagram')"
-                  :class="{ 'opacity-50': busy === `hist-${r.id}` }"
-                  @click="syncHistory(r.wa)"
-                >同步聊天记录</a>
-                <a v-else-if="r.wa && r.wa.authType !== 'oauth'" @click="waRef?.showGuide(r.wa)">回调配置</a>
-                <a v-if="r.mail || (r.wa && r.wa.authType !== 'oauth' && r.wa.authType !== 'evolution')" @click="edit(c, r)">{{ r.mail?.authType === 'oauth2' ? '重新授权' : '修改' }}</a>
-                <a v-if="r.wa" @click="openAssign(r.wa)">{{ assignText(r.wa) }}</a>
-                <a @click="toggle(r)">{{ (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停' : '停用') : '启用' }}</a>
-                <Popconfirm
-                  :title="r.mail ? '解绑后已同步的邮件也会删除，确定吗？' : '解绑后会话与消息记录也会删除，确定吗？'"
-                  @confirm="unbind(r)"
-                >
-                  <a class="text-red-500">解绑</a>
-                </Popconfirm>
-              </div>
+              </Dropdown>
             </div>
-          </template>
+          </div>
         </div>
       </div>
     </Spin>
+
+    <Modal v-model:open="addOpen" title="添加收件箱" :footer="null" :width="860" centered>
+      <p class="mb-4 mt-0 text-sm text-[#4B5563]">选择要接入的渠道。接入后客户消息会进入「会话」统一处理。</p>
+      <div class="flex max-h-[64vh] flex-col gap-5 overflow-auto pr-1">
+        <section v-for="g in ADD_GROUPS" :key="g.title">
+          <h3 class="m-0 mb-2.5 text-[13px] font-semibold text-[#374151]">{{ g.title }}</h3>
+          <div class="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+            <button
+              v-for="k in g.keys"
+              :key="k"
+              type="button"
+              class="flex cursor-pointer items-start gap-3 rounded-xl border border-solid border-[#E5E7EB] bg-white p-3.5 text-left hover:border-[#2563EB] hover:bg-[#F8FAFF]"
+              @click="addConnect(channelOf(k))"
+            >
+              <img v-if="channelIcon(channelOf(k))" :src="channelIcon(channelOf(k))" alt="" class="ch-icon" />
+              <span v-else class="ch-badge" :style="{ background: channelOf(k).color }" :class="{ 'is-long': channelOf(k).abbr.length > 2 }">{{ channelOf(k).abbr }}</span>
+              <span class="flex min-w-0 flex-col gap-1">
+                <span class="text-sm font-semibold text-[#111827]">{{ channelOf(k).name }}</span>
+                <span class="text-xs leading-[18px] text-[#6B7280]">{{ CHANNEL_DESC[k] ?? (channelOf(k).oauth && oauthProviders.includes(channelOf(k).oauth!) ? '一键授权登录，自动收发邮件' : '填写邮箱和授权码，自动收发邮件') }}</span>
+              </span>
+            </button>
+          </div>
+        </section>
+        <p class="m-0 text-xs text-[#B45309]">扫码接入的 WhatsApp 请勿短时间内群发陌生号码，以免号码被 WhatsApp 限制。</p>
+      </div>
+    </Modal>
 
     <WaAccounts ref="waRef" headless :meta-o-auth="oauthProviders.includes('meta')" @changed="onWaChanged" />
     <LeadRules v-model:open="leadOpen" :mailboxes="mailboxes" />
@@ -677,8 +822,8 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
   display: flex;
   flex-direction: column;
   height: calc(100vh - 24px);
-  padding: 20px 16px 12px;
-  background: #fff;
+  padding: 24px 28px 16px;
+  background: #f6f7f9;
   border-radius: 12px;
 }
 
@@ -706,6 +851,12 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 
 .ch-count b {
   color: #2563EB;
+}
+
+.ch-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 210px;
+  gap: 12px;
 }
 
 .ch-spin {
