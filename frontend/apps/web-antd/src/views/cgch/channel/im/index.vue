@@ -467,13 +467,58 @@ async function loadQuick() {
   quickList.value = await getQuickReplies(quickKeyword.value.trim() || undefined);
 }
 watch(quickOpen, (v) => v && loadQuick());
-function useQuick(q: QuickReplyApi.Item) {
+function quickBody(q: QuickReplyApi.Item) {
   const name = current.value ? current.value.remarkName || current.value.profileName || '' : '';
-  const body = q.content.replaceAll('{name}', name).trim();
+  return q.content.replaceAll('{name}', name).trim();
+}
+function useQuick(q: QuickReplyApi.Item) {
+  const body = quickBody(q);
   text.value = text.value ? `${text.value.trimEnd()}\n${body}` : body;
   quickOpen.value = false;
   if (q.id) markQuickReplyUsed(q.id);
 }
+
+/** 输入框里打「/关键词」直接搜快捷回复（参考 Chatwoot），回车或点击插入 */
+const slashList = ref<QuickReplyApi.Item[]>([]);
+const slashIndex = ref(0);
+const slashOpen = computed(() => /^\/[^\n]*$/.test(text.value) && slashList.value.length > 0);
+let slashTimer: ReturnType<typeof setTimeout> | undefined;
+watch(
+  () => text.value,
+  (v) => {
+    clearTimeout(slashTimer);
+    if (!/^\/[^\n]*$/.test(v)) {
+      slashList.value = [];
+      return;
+    }
+    slashTimer = setTimeout(async () => {
+      const kw = v.slice(1).trim();
+      const list = await getQuickReplies(kw || undefined).catch(() => []);
+      if (text.value === v) {
+        slashList.value = list.slice(0, 8);
+        slashIndex.value = 0;
+      }
+    }, 200);
+  },
+);
+function useSlash(q?: QuickReplyApi.Item) {
+  if (!q) return;
+  text.value = quickBody(q);
+  slashList.value = [];
+  if (q.id) markQuickReplyUsed(q.id);
+}
+
+/** 同一客户的其他会话（其他号码、其他平台），在右侧栏快速切换 */
+const otherConversations = ref<ChannelWaApi.Conversation[]>([]);
+watch(
+  () => [current.value?.id, current.value?.customerId] as const,
+  async ([id, customerId]) => {
+    otherConversations.value = [];
+    if (!id || !customerId) return;
+    const res = await getWaConversationPage({ pageNo: 1, pageSize: 10, customerId }).catch(() => ({ list: [] as ChannelWaApi.Conversation[] }));
+    if (current.value?.id === id) otherConversations.value = res.list.filter((c) => c.id !== id);
+  },
+);
 
 // ===== AI 起草 =====
 const aiDraft = ref<ChannelAiApi.Draft>();
@@ -602,6 +647,23 @@ function onNoteKeydown(e: KeyboardEvent) {
   }
 }
 function onKeydown(e: KeyboardEvent) {
+  if (slashOpen.value && !e.isComposing) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const n = slashList.value.length;
+      slashIndex.value = (slashIndex.value + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      useSlash(slashList.value[slashIndex.value]);
+      return;
+    }
+    if (e.key === 'Escape') {
+      slashList.value = [];
+      return;
+    }
+  }
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     sendText();
@@ -1072,11 +1134,27 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               </div>
             </template>
             <template v-else-if="current.windowOpen">
+              <div v-if="slashOpen" class="mb-2 overflow-hidden rounded-lg border border-solid border-[#E5E7EB] bg-white shadow-sm" role="listbox" aria-label="快捷回复">
+                <div class="border-0 border-b border-solid border-[#F3F4F6] px-3 py-1.5 text-xs text-[#6B7280]">快捷回复 · ↑↓ 选择，回车插入，Esc 关闭</div>
+                <div
+                  v-for="(q, i) in slashList"
+                  :key="q.id"
+                  role="option"
+                  :aria-selected="i === slashIndex"
+                  class="cursor-pointer px-3 py-1.5"
+                  :class="i === slashIndex ? 'bg-[#EFF4FF]' : 'hover:bg-[#F9FAFB]'"
+                  @mouseenter="slashIndex = i"
+                  @mousedown.prevent="useSlash(q)"
+                >
+                  <div class="text-[13px] font-medium text-[#111827]">{{ q.title }}</div>
+                  <div class="truncate text-xs text-[#6B7280]">{{ q.content }}</div>
+                </div>
+              </div>
               <Textarea
                 v-model:value="text"
                 :auto-size="{ minRows: 2, maxRows: 6 }"
                 :maxlength="4096"
-                placeholder="输入消息，Enter 发送，Shift+Enter 换行；发送文件时这里的文字会作为说明"
+                placeholder="输入消息，Enter 发送，Shift+Enter 换行；输入 / 搜索快捷回复"
                 @keydown="onKeydown"
                 @change="onInputChange"
               />
@@ -1259,6 +1337,24 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
           </div>
           <div class="text-[13px] leading-5 text-[#374151]">{{ customer?.contactLastContent || '还没有跟进记录' }}</div>
           <div v-if="customer?.contactLastTime" class="text-xs text-[#6B7280]">{{ fmtDateTime(customer.contactLastTime, 'MM-DD HH:mm') }}</div>
+        </div>
+
+        <div v-if="otherConversations.length" class="flex flex-col gap-1.5">
+          <div class="text-[13px] font-semibold">这位客户的其他会话</div>
+          <button
+            v-for="o in otherConversations"
+            :key="o.id"
+            type="button"
+            class="flex cursor-pointer items-center gap-2 rounded-lg border border-solid border-[#E5E7EB] bg-white px-2.5 py-2 text-left hover:border-[#2563EB]"
+            @click="openConversation(o)"
+          >
+            <span class="inline-block size-2 shrink-0 rounded-sm" :style="{ background: PLATFORM_DOT[o.platform || 'whatsapp'] }"></span>
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate text-xs text-[#6B7280]">{{ accountName(o.accountId) || plat(o).label }} · {{ md(o.lastMessageTime) }}</span>
+              <span class="truncate text-[13px] text-[#111827]">{{ o.lastMessagePreview }}</span>
+            </span>
+            <span v-if="o.status === 'resolved'" class="shrink-0 text-[11px] text-[#6B7280]">已解决</span>
+          </button>
         </div>
 
         <div class="flex-1"></div>
