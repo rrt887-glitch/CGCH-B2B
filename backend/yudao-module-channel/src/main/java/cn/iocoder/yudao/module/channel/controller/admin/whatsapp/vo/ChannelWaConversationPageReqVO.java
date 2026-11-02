@@ -27,5 +27,7 @@ public class ChannelWaConversationPageReqVO extends PageParam {
     private Boolean team;
     /** 只看关联了这个 CRM 客户的会话（跟进日程里「去会话」用） */
     private Long customerId;
+    /** 会话状态：open 进行中（含未设置的）、pending 待处理、resolved 已解决；不填表示全部 */
+    private String status;
 
 }

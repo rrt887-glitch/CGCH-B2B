@@ -75,6 +75,52 @@ public class ChannelWaMessageController {
         return success(true);
     }
 
+    @PutMapping("/conversation/status")
+    @Operation(summary = "改会话状态：open 进行中、pending 待处理、resolved 已解决")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<Boolean> status(@RequestParam("id") Long id, @RequestParam("status") String status) {
+        whatsAppService.updateConversationStatus(getLoginUserId(), id, status);
+        return success(true);
+    }
+
+    @PutMapping("/conversation/priority")
+    @Operation(summary = "改会话优先级：0 无、1 低、2 中、3 高、4 紧急")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<Boolean> priority(@RequestParam("id") Long id, @RequestParam("priority") Integer priority) {
+        whatsAppService.updateConversationPriority(getLoginUserId(), id, priority);
+        return success(true);
+    }
+
+    @GetMapping("/conversation/counts")
+    @Operation(summary = "收件箱数量：各状态会话数、每个号码的未读")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<ChannelWaInboxCountsRespVO> counts() {
+        return success(whatsAppService.getInboxCounts(getLoginUserId()));
+    }
+
+    @GetMapping("/conversation/events")
+    @Operation(summary = "会话的内部备注和动态")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<List<ChannelWaConversationEventRespVO>> events(@RequestParam("conversationId") Long conversationId) {
+        return success(whatsAppService.getConversationEvents(getLoginUserId(), conversationId));
+    }
+
+    @PostMapping("/conversation/note")
+    @Operation(summary = "写内部备注（客户看不到）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<ChannelWaConversationEventRespVO> note(@RequestParam("conversationId") Long conversationId,
+                                                               @RequestParam("content") String content) {
+        return success(whatsAppService.addConversationNote(getLoginUserId(), conversationId, content));
+    }
+
+    @DeleteMapping("/conversation/note")
+    @Operation(summary = "删除自己写的内部备注")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<Boolean> deleteNote(@RequestParam("id") Long id) {
+        whatsAppService.deleteConversationNote(getLoginUserId(), id);
+        return success(true);
+    }
+
     @GetMapping("/message/list")
     @Operation(summary = "会话消息，时间正序；不带 beforeId 时清零未读")
     @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")

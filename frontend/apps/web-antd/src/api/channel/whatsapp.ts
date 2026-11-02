@@ -63,6 +63,31 @@ export namespace ChannelWaApi {
     /** 当前处理人及姓名（团队会话里显示） */
     handlerUserId?: number;
     handlerName?: string;
+    /** 会话状态：open 进行中（为空也算）、pending 待处理、resolved 已解决 */
+    status?: ConversationStatus;
+    /** 优先级：0 无、1 低、2 中、3 高、4 紧急 */
+    priority?: number;
+  }
+
+  export type ConversationStatus = 'open' | 'pending' | 'resolved';
+
+  /** 会话里只给团队看的记录：内部备注、会话动态 */
+  export interface ConversationEvent {
+    id: number;
+    conversationId: number;
+    kind: 'activity' | 'note';
+    content: string;
+    userId?: number;
+    userName?: string;
+    createTime: number | string;
+  }
+
+  export interface InboxCounts {
+    open: number;
+    pending: number;
+    resolved: number;
+    teamOpen: number;
+    unreadByAccount: Record<string, number>;
   }
 
   export interface Message {
@@ -104,6 +129,8 @@ export namespace ChannelWaApi {
     team?: boolean;
     /** 只看关联了这个 CRM 客户的会话 */
     customerId?: number;
+    /** 会话状态；不填表示全部 */
+    status?: ConversationStatus;
   }
 
   export interface SendReq {
@@ -143,6 +170,29 @@ export const remarkWaConversation = (id: number, name: string) =>
   requestClient.put('/channel/wa/conversation/remark', null, { params: { id, name } });
 export const transferWaConversation = (id: number, userId: number) =>
   requestClient.put(`/channel/wa/conversation/transfer?id=${id}&userId=${userId}`);
+export const setWaConversationStatus = (id: number, status: ChannelWaApi.ConversationStatus) =>
+  requestClient.put('/channel/wa/conversation/status', null, { params: { id, status } });
+export const setWaConversationPriority = (id: number, priority: number) =>
+  requestClient.put('/channel/wa/conversation/priority', null, { params: { id, priority } });
+export const getWaInboxCounts = () => requestClient.get<ChannelWaApi.InboxCounts>('/channel/wa/conversation/counts');
+export const getWaConversationEvents = (conversationId: number) =>
+  requestClient.get<ChannelWaApi.ConversationEvent[]>('/channel/wa/conversation/events', { params: { conversationId } });
+export const addWaConversationNote = (conversationId: number, content: string) =>
+  requestClient.post<ChannelWaApi.ConversationEvent>('/channel/wa/conversation/note', null, { params: { conversationId, content } });
+export const deleteWaConversationNote = (id: number) => requestClient.delete('/channel/wa/conversation/note', { params: { id } });
+/** 会话状态、优先级的显示 */
+export const CONVERSATION_STATUS: { label: string; value: ChannelWaApi.ConversationStatus }[] = [
+  { label: '进行中', value: 'open' },
+  { label: '待处理', value: 'pending' },
+  { label: '已解决', value: 'resolved' },
+];
+export const PRIORITY_OPTIONS = [
+  { label: '无', value: 0, color: '#9CA3AF' },
+  { label: '低', value: 1, color: '#6B7280' },
+  { label: '中', value: 2, color: '#2563EB' },
+  { label: '高', value: 3, color: '#B45309' },
+  { label: '紧急', value: 4, color: '#B91C1C' },
+];
 export const getWaMessages = (conversationId: number, beforeId?: number) =>
   requestClient.get<ChannelWaApi.Message[]>('/channel/wa/message/list', { params: { conversationId, beforeId } });
 export const sendWaMessage = (data: ChannelWaApi.SendReq) =>

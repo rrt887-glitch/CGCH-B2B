@@ -12,6 +12,7 @@ import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.*;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaAccountDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationDO;
+import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationEventDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaMessageDO;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaAccountMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationMapper;
@@ -68,6 +69,8 @@ public class ChannelWhatsAppService {
     private ChannelWaAccountMapper accountMapper;
     @Resource
     private ChannelWaConversationMapper conversationMapper;
+    @Resource
+    private cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationEventMapper conversationEventMapper;
     @Resource
     private ChannelWaMessageMapper messageMapper;
     @Resource
@@ -1242,6 +1245,157 @@ public class ChannelWhatsAppService {
         conversationMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaConversationDO>()
                 .eq(ChannelWaConversationDO::getId, id).set(ChannelWaConversationDO::getOwnerUserId, owner));
         log.info("[transferConversation][会话 {} 由用户 {} 转交给 {}]", id, userId, toUserId);
+        logActivity(id, userId, userName(userId) + " 把会话转交给 " + StrUtil.blankToDefault(to.getNickname(), "同事"));
+    }
+
+    // ==================== 收件箱：状态、优先级、内部备注、动态 ====================
+
+    private static final Map<String, String> STATUS_LABEL = Map.of(
+            ChannelWaConversationDO.STATUS_OPEN, "进行中", ChannelWaConversationDO.STATUS_PENDING, "待处理",
+            ChannelWaConversationDO.STATUS_RESOLVED, "已解决");
+    private static final String[] PRIORITY_LABEL = {"无", "低", "中", "高", "紧急"};
+
+    /** 改会话状态：进行中 / 待处理 / 已解决，记一条动态 */
+    public void updateConversationStatus(Long userId, Long id, String status) {
+        ChannelWaConversationDO c = validateConversation(userId, id);
+        if (!STATUS_LABEL.containsKey(status)) {
+            throw exception(AI_LLM_FAIL, "会话状态不对");
+        }
+        String old = StrUtil.blankToDefault(c.getStatus(), ChannelWaConversationDO.STATUS_OPEN);
+        if (old.equals(status)) {
+            return;
+        }
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setStatus(status));
+        String verb = ChannelWaConversationDO.STATUS_RESOLVED.equals(status) ? "把会话标记为已解决"
+                : ChannelWaConversationDO.STATUS_PENDING.equals(status) ? "把会话标记为待处理" : "重新打开了会话";
+        logActivity(id, userId, userName(userId) + " " + verb);
+    }
+
+    /** 改优先级：0 无、1 低、2 中、3 高、4 紧急 */
+    public void updateConversationPriority(Long userId, Long id, Integer priority) {
+        ChannelWaConversationDO c = validateConversation(userId, id);
+        int p = priority == null ? 0 : priority;
+        if (p < 0 || p >= PRIORITY_LABEL.length) {
+            throw exception(AI_LLM_FAIL, "优先级不对");
+        }
+        if (Objects.equals(c.getPriority() == null ? 0 : c.getPriority(), p)) {
+            return;
+        }
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setPriority(p));
+        logActivity(id, userId, userName(userId) + (p == 0 ? " 取消了优先级" : " 把优先级设为「" + PRIORITY_LABEL[p] + "」"));
+    }
+
+    /** 内部备注：只给团队看，不发给客户 */
+    public ChannelWaConversationEventRespVO addConversationNote(Long userId, Long id, String content) {
+        validateConversation(userId, id);
+        String text = StrUtil.trim(content);
+        if (StrUtil.isBlank(text)) {
+            throw exception(AI_LLM_FAIL, "请填写备注内容");
+        }
+        ChannelWaConversationEventDO e = ChannelWaConversationEventDO.builder().conversationId(id)
+                .kind(ChannelWaConversationEventDO.KIND_NOTE).content(StrUtil.maxLength(text, 1990)).userId(userId).build();
+        conversationEventMapper.insert(e);
+        channelRealtimeService.conversationChanged(id, null, "note");
+        return toEventVOs(List.of(conversationEventMapper.selectById(e.getId()))).get(0);
+    }
+
+    /** 会话的内部备注和动态（按时间正序），前端按时间穿插到聊天记录里 */
+    public List<ChannelWaConversationEventRespVO> getConversationEvents(Long userId, Long id) {
+        validateConversation(userId, id);
+        return toEventVOs(conversationEventMapper.selectRecent(id, 200));
+    }
+
+    /** 删除自己写的内部备注 */
+    public void deleteConversationNote(Long userId, Long eventId) {
+        ChannelWaConversationEventDO e = conversationEventMapper.selectById(eventId);
+        if (e == null || !ChannelWaConversationEventDO.KIND_NOTE.equals(e.getKind())) {
+            throw exception(WA_CONVERSATION_NOT_EXISTS);
+        }
+        validateConversation(userId, e.getConversationId());
+        if (!Objects.equals(e.getUserId(), userId)) {
+            throw exception(AI_LLM_FAIL, "只能删除自己写的备注");
+        }
+        conversationEventMapper.deleteById(eventId);
+    }
+
+    /** 记一条会话动态；userId 为空表示系统 */
+    public void logActivity(Long conversationId, Long userId, String content) {
+        try {
+            conversationEventMapper.insert(ChannelWaConversationEventDO.builder().conversationId(conversationId)
+                    .kind(ChannelWaConversationEventDO.KIND_ACTIVITY).content(StrUtil.maxLength(content, 1990)).userId(userId).build());
+        } catch (Exception e) {
+            log.warn("[logActivity][会话 {} 记录动态失败] {}", conversationId, e.getMessage());
+        }
+    }
+
+    /** 客户再来消息：已解决 / 待处理的会话自动回到进行中 */
+    @org.springframework.context.event.EventListener
+    public void reopenOnInbound(ChannelInboundEvent e) {
+        if ("mail".equals(e.channel()) || e.refId() == null) {
+            return;
+        }
+        try {
+            ChannelWaConversationDO c = conversationMapper.selectById(e.refId());
+            if (c == null || StrUtil.isBlank(c.getStatus()) || ChannelWaConversationDO.STATUS_OPEN.equals(c.getStatus())) {
+                return;
+            }
+            conversationMapper.updateById(new ChannelWaConversationDO().setId(c.getId()).setStatus(ChannelWaConversationDO.STATUS_OPEN));
+            logActivity(c.getId(), null, "客户发来新消息，会话回到进行中");
+        } catch (Exception ex) {
+            log.warn("[reopenOnInbound][会话 {} 重新打开失败] {}", e.refId(), ex.getMessage());
+        }
+    }
+
+    /** 收件箱数量：我的会话各状态、团队进行中、每个号码的未读（只算未归档的） */
+    public ChannelWaInboxCountsRespVO getInboxCounts(Long userId) {
+        List<Long> mine = accountMapper.selectListByUserId(userId).stream().map(ChannelWaAccountDO::getId).toList();
+        Collection<Long> accountIds = mine.isEmpty() ? List.of(-1L) : mine;
+        ChannelWaInboxCountsRespVO r = new ChannelWaInboxCountsRespVO();
+        for (String st : List.of(ChannelWaConversationDO.STATUS_OPEN, ChannelWaConversationDO.STATUS_PENDING, ChannelWaConversationDO.STATUS_RESOLVED)) {
+            ChannelWaConversationPageReqVO req = new ChannelWaConversationPageReqVO();
+            req.setStatus(st);
+            long n = conversationMapper.selectCount(conversationMapper.applyFilters(conversationMapper.mineQuery(accountIds, userId, false), req));
+            switch (st) {
+                case ChannelWaConversationDO.STATUS_OPEN -> r.setOpen(n);
+                case ChannelWaConversationDO.STATUS_PENDING -> r.setPending(n);
+                default -> r.setResolved(n);
+            }
+        }
+        Set<Long> team = teamUsers(userId);
+        if (team == null || !team.isEmpty()) {
+            List<Long> teamAccounts = team == null ? List.of() : accountMapper.selectList().stream()
+                    .filter(a -> a.getUserId() != null && team.contains(a.getUserId())).map(ChannelWaAccountDO::getId).toList();
+            ChannelWaConversationPageReqVO req = new ChannelWaConversationPageReqVO();
+            req.setStatus(ChannelWaConversationDO.STATUS_OPEN);
+            r.setTeamOpen(conversationMapper.selectCount(conversationMapper.applyFilters(conversationMapper.teamQuery(userId, team,
+                    teamAccounts.isEmpty() ? List.of(-1L) : teamAccounts, accountIds), req)));
+        }
+        ChannelWaConversationPageReqVO unread = new ChannelWaConversationPageReqVO();
+        unread.setUnreadOnly(true);
+        Map<Long, Integer> byAccount = new HashMap<>();
+        conversationMapper.selectList(conversationMapper.applyFilters(conversationMapper.mineQuery(accountIds, userId, false), unread))
+                .forEach(c -> byAccount.merge(c.getAccountId(), c.getUnreadCount() == null ? 0 : c.getUnreadCount(), Integer::sum));
+        r.setUnreadByAccount(byAccount);
+        return r;
+    }
+
+    private String userName(Long userId) {
+        if (userId == null) {
+            return "系统";
+        }
+        cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO u = adminUserApi.getUser(userId);
+        return u == null || StrUtil.isBlank(u.getNickname()) ? "同事" : u.getNickname();
+    }
+
+    private List<ChannelWaConversationEventRespVO> toEventVOs(List<ChannelWaConversationEventDO> list) {
+        Map<Long, String> names = new HashMap<>();
+        return list.stream().map(e -> {
+            ChannelWaConversationEventRespVO vo = BeanUtils.toBean(e, ChannelWaConversationEventRespVO.class);
+            if (e.getUserId() != null) {
+                vo.setUserName(names.computeIfAbsent(e.getUserId(), this::userName));
+            }
+            return vo;
+        }).toList();
     }
 
     /** 会话消息（按时间正序），并清零未读 */

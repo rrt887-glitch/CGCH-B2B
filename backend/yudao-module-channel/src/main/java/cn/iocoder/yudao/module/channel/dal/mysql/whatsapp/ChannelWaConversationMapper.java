@@ -24,14 +24,7 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
     default PageResult<ChannelWaConversationDO> selectTeamPage(cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaConversationPageReqVO req,
                                                                Long userId, Collection<Long> teamUsers, Collection<Long> teamAccounts,
                                                                Collection<Long> myAccounts) {
-        LambdaQueryWrapperX<ChannelWaConversationDO> q = new LambdaQueryWrapperX<>();
-        if (teamUsers == null) {
-            q.and(w -> w.nested(x -> x.isNotNull(ChannelWaConversationDO::getOwnerUserId).ne(ChannelWaConversationDO::getOwnerUserId, userId))
-                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).notIn(ChannelWaConversationDO::getAccountId, myAccounts)));
-        } else {
-            q.and(w -> w.in(ChannelWaConversationDO::getOwnerUserId, teamUsers)
-                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).in(ChannelWaConversationDO::getAccountId, teamAccounts)));
-        }
+        LambdaQueryWrapperX<ChannelWaConversationDO> q = teamQuery(userId, teamUsers, teamAccounts, myAccounts);
         if (req.getAccountId() != null) {
             q.eq(ChannelWaConversationDO::getAccountId, req.getAccountId());
         }
@@ -46,6 +39,26 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
      */
     default PageResult<ChannelWaConversationDO> selectPage(cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaConversationPageReqVO req,
                                                            Collection<Long> accountIds, Long userId, boolean onlyMine) {
+        LambdaQueryWrapperX<ChannelWaConversationDO> q = mineQuery(accountIds, userId, onlyMine);
+        return selectPage(req, applyFilters(q, req));
+    }
+
+    /** 团队会话的范围（不含筛选条件），参数含义同 selectTeamPage */
+    default LambdaQueryWrapperX<ChannelWaConversationDO> teamQuery(Long userId, Collection<Long> teamUsers, Collection<Long> teamAccounts,
+                                                                   Collection<Long> myAccounts) {
+        LambdaQueryWrapperX<ChannelWaConversationDO> q = new LambdaQueryWrapperX<>();
+        if (teamUsers == null) {
+            q.and(w -> w.nested(x -> x.isNotNull(ChannelWaConversationDO::getOwnerUserId).ne(ChannelWaConversationDO::getOwnerUserId, userId))
+                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).notIn(ChannelWaConversationDO::getAccountId, myAccounts)));
+        } else {
+            q.and(w -> w.in(ChannelWaConversationDO::getOwnerUserId, teamUsers)
+                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).in(ChannelWaConversationDO::getAccountId, teamAccounts)));
+        }
+        return q;
+    }
+
+    /** 我的会话的范围（不含筛选条件），参数含义同 selectPage */
+    default LambdaQueryWrapperX<ChannelWaConversationDO> mineQuery(Collection<Long> accountIds, Long userId, boolean onlyMine) {
         LambdaQueryWrapperX<ChannelWaConversationDO> q = new LambdaQueryWrapperX<>();
         q.and(w -> {
             w.nested(x -> x.in(ChannelWaConversationDO::getAccountId, accountIds)
@@ -54,7 +67,7 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
                 w.or().eq(ChannelWaConversationDO::getOwnerUserId, userId);
             }
         });
-        return selectPage(req, applyFilters(q, req));
+        return q;
     }
 
     /** 归档、收藏、未读、未回复、客户等级、关键词筛选，按收藏、最近消息排序 */
@@ -75,6 +88,11 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
             // 最后一条消息是客户发的（按消息编号判断，避免同一秒内收发时按时间分不清先后）
             q.apply("(SELECT m.direction FROM channel_wa_message m WHERE m.conversation_id = channel_wa_conversation.id"
                     + " AND m.deleted = 0 ORDER BY m.id DESC LIMIT 1) = 1");
+        }
+        if ("open".equals(req.getStatus())) {
+            q.and(w -> w.isNull(ChannelWaConversationDO::getStatus).or().eq(ChannelWaConversationDO::getStatus, "open"));
+        } else if ("pending".equals(req.getStatus()) || "resolved".equals(req.getStatus())) {
+            q.eq(ChannelWaConversationDO::getStatus, req.getStatus());
         }
         if (req.getCustomerId() != null) {
             q.eq(ChannelWaConversationDO::getCustomerId, req.getCustomerId());
