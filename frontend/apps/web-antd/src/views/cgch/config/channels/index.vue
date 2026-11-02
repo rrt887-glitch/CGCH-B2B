@@ -562,7 +562,7 @@ function runAction(key: string, r: InboxRow) {
   }
 }
 function menuOf(r: InboxRow) {
-  const items: { danger?: boolean; key: string; label: string }[] = [];
+  const items: { danger?: boolean; key: string; label: string }[] = []; // 解绑单独放在菜单最后
   const main = primaryAction(r)?.key;
   if (r.wa?.authType === 'evolution') {
     if (main !== 'history') items.push({ key: 'history', label: '同步聊天记录' });
@@ -574,7 +574,6 @@ function menuOf(r: InboxRow) {
     items.push({ key: 'edit', label: r.mail?.authType === 'oauth2' ? '重新授权' : '修改配置' });
   if (r.wa) items.push({ key: 'assign', label: assignText(r.wa) });
   items.push({ key: 'toggle', label: (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停收信' : '停用') : '启用' });
-  items.push({ key: 'unbind', label: '解绑', danger: true });
   return items;
 }
 
@@ -685,10 +684,9 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
                 <Button size="small">设置</Button>
                 <template #overlay>
                   <Menu @click="(e: any) => runAction(String(e.key), r)">
-                    <template v-for="it in menuOf(r)" :key="it.key">
-                      <MenuDivider v-if="it.danger" />
-                      <MenuItem :key="it.key" :danger="it.danger">{{ it.label }}</MenuItem>
-                    </template>
+                    <MenuItem v-for="it in menuOf(r).filter((x) => !x.danger)" :key="it.key">{{ it.label }}</MenuItem>
+                    <MenuDivider />
+                    <MenuItem key="unbind" danger>解绑</MenuItem>
                   </Menu>
                 </template>
               </Dropdown>
