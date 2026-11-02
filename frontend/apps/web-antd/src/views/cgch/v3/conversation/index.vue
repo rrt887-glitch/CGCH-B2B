@@ -38,6 +38,7 @@ const counts = ref<ChannelWaApi.InboxCounts>();
 async function loadCounts() {
   counts.value = await getWaInboxCounts().catch(() => counts.value);
 }
+const unreadOf = (id?: number) => (id === undefined ? 0 : counts.value?.unreadByAccount?.[id] ?? 0);
 let countTimer: ReturnType<typeof setInterval> | undefined;
 onBeforeUnmount(() => countTimer && clearInterval(countTimer));
 function pickView(v: 'mine' | 'team') {
@@ -136,7 +137,7 @@ onMounted(async () => {
             >
               <img :src="imIcon(a)" :alt="PLATFORM[a.platform || 'whatsapp']" class="v3-conv__icon" />
               <span class="flex-1 truncate" :title="`${PLATFORM[a.platform || 'whatsapp']} · ${imLabel(a)}`">{{ a.name || imLabel(a) }}</span>
-              <span v-if="counts?.unreadByAccount?.[a.id]" class="v3-conv__badge">{{ counts.unreadByAccount[a.id] }}</span>
+              <span v-if="unreadOf(a.id)" class="v3-conv__badge">{{ unreadOf(a.id) }}</span>
             </div>
           </div>
 
