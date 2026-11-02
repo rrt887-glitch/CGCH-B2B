@@ -1953,6 +1953,10 @@ jobs:
           call('DELETE', f"/channel/wa/conversation/note?id={note['id']}")
           assert [e['kind'] for e in call('GET', f"/channel/wa/conversation/events?conversationId={pcv['id']}")].count('note') == 0
           print('收件箱：状态、优先级、内部备注、动态、客户来信自动重新打开')
+          # 没设置昵称时 WhatsApp 用号码当昵称：不当作昵称；电脑端看不到内容的消息显示说明
+          assert evo_msg(s1['session'], 'EVONONAME1', '8615900007777@s.whatsapp.net', {}, 'placeholderMessage', push='8615900007777') == 200
+          ncv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=100')['list'] if c['waId'] == '8615900007777'), None), '无昵称客户')
+          assert not ncv.get('profileName') and '手机' in ncv['lastMessagePreview'], ncv
           # 手机端发出的消息同步进会话；系统发出的消息回显不重复
           assert evo_msg(s1['session'], 'EVOECHO1', '8615900003333@s.whatsapp.net', {'conversation': 'Sent from my phone'}, 'conversation', from_me=True) == 200
           assert evo_msg(s1['session'], ewamid, '8615900003333@s.whatsapp.net', {'conversation': 'MOQ is 300 units.'}, 'conversation', from_me=True) == 200

@@ -648,7 +648,7 @@ public class ChannelEvolutionService {
             if (key.path("fromMe").asBoolean(false)) {
                 whatsAppService.evolutionSynced(a, m, customer); // 手机上发出的消息（系统发出的按消息编号去重）
             } else {
-                whatsAppService.evolutionInbound(a, m, StrUtil.emptyToNull(d.path("pushName").asText(null)));
+                whatsAppService.evolutionInbound(a, m, pushName(d));
                 ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), ChannelWhatsAppService.waKey(customer));
                 if (conv != null && conv.getAvatarTime() == null) {
                     avatarSoon(a); // 新客户：稍后取头像
@@ -684,6 +684,15 @@ public class ChannelEvolutionService {
         return isCustomer(phone) ? phone : null;
     }
 
+    /** 对方的昵称；没设置昵称时 WhatsApp 会用号码或隐藏编号代替，这种不当作昵称 */
+    static String pushName(JsonNode d) {
+        String n = StrUtil.trim(d.path("pushName").asText(""));
+        if (n.isEmpty() || n.replaceAll("[\\s+\\-()]", "").chars().allMatch(Character::isDigit)) {
+            return null;
+        }
+        return n;
+    }
+
     /** 记录是隐藏号码联系人时返回「隐藏编号@lid」，否则 null */
     static String lidKey(JsonNode key) {
         String jid = key.path("remoteJid").asText("");
@@ -714,7 +723,7 @@ public class ChannelEvolutionService {
             }
             boolean fromMe = key.path("fromMe").asBoolean(false);
             return whatsAppService.evolutionHistory(a, m, customer, fromMe,
-                    fromMe ? null : StrUtil.emptyToNull(d.path("pushName").asText(null)));
+                    fromMe ? null : pushName(d));
         } catch (Exception e) {
             log.warn("[history][账号 {}] 聊天记录处理失败 {}", a.getId(), d, e);
             return false;
@@ -824,6 +833,8 @@ public class ChannelEvolutionService {
                 }
                 text(o, StrUtil.blankToDefault(t.path("hydratedContentText").asText(null), "[模板消息]"));
             }
+            // WhatsApp 还没把这条消息的内容同步到关联设备（常见于关联前的旧消息）
+            case "placeholderMessage" -> text(o, PLACEHOLDER_TEXT);
             case "interactiveResponseMessage" -> text(o, StrUtil.blankToDefault(
                     msg.path(type).path("body").path("text").asText(null), "[互动回复]"));
             case "protocolMessage", "senderKeyDistributionMessage", "messageContextInfo", "pollUpdateMessage",
@@ -834,6 +845,8 @@ public class ChannelEvolutionService {
         }
         return o;
     }
+
+    static final String PLACEHOLDER_TEXT = "[这条消息在电脑端看不到，请在手机 WhatsApp 上查看]";
 
     private static void text(ObjectNode o, String body) {
         o.put("type", "text");
