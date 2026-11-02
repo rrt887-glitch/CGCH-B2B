@@ -173,6 +173,12 @@ class Handler(BaseHTTPRequestHandler):
             size, page = int(body.get('offset') or 50), int(body.get('page') or 1)
             recs = db[(page - 1) * size: page * size]
             return self._json(200, {'messages': {'total': len(db), 'pages': (len(db) + size - 1) // size, 'currentPage': page, 'records': recs}})
+        if method == 'POST' and len(path) == 3 and path[:2] == ['chat', 'fetchProfilePictureUrl']:
+            if path[2] not in EVO:
+                return missing(path[2])
+            num = body.get('number', '')
+            url = 'http://127.0.0.1:18080/_pic/v/t61/4444_n.jpg?oe=2' if num.startswith('8615900004444') else None
+            return self._json(200, {'wuid': num, 'profilePictureUrl': url})
         if method == 'POST' and len(path) == 3 and path[:2] == ['chat', 'findContacts']:
             if path[2] not in EVO:
                 return missing(path[2])
