@@ -30,4 +30,16 @@ public class ChannelCreditSummaryRespVO {
     @Schema(description = "每智点对应的 token 数")
     private Integer tokensPerCredit;
 
+    @Schema(description = "是否按智点计费；关闭时只统计用量，不扣余额、不拦 AI")
+    private Boolean billingEnabled;
+
+    @Schema(description = "本月 token 用量")
+    private Long monthTokens;
+
+    @Schema(description = "本月按功能的 token 用量")
+    private Map<String, Long> monthTokensByChannel;
+
+    @Schema(description = "本月按成员的 token 用量，键为用户编号")
+    private Map<Long, Long> monthTokensByUser;
+
 }

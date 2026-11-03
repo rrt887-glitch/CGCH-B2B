@@ -183,7 +183,7 @@ onMounted(() => {
             <FormItem label="新询盘自动建线索" extra="陌生人发来邮件或 WhatsApp 时，自动在 CRM 线索里建档，负责人为这个会话的接待人（设置了接待成员时按轮流分配的结果）；同一联系人不会重复建。">
               <Switch v-model:checked="form.leadAutoCreate" />
             </FormItem>
-            <FormItem label="AI 提取公司、国家和需求" extra="用大模型从询盘内容里识别公司名、国家、联系人、产品和数量，每次消耗少量智点；关闭时只按邮箱域名和电话区号推断。">
+            <FormItem label="AI 提取公司、国家和需求" extra="用大模型从询盘内容里识别公司名、国家、联系人、产品和数量，每次会调用一次大模型；关闭时只按邮箱域名和电话区号推断。">
               <Switch v-model:checked="form.leadAiExtract" :disabled="!form.leadAutoCreate" />
             </FormItem>
 

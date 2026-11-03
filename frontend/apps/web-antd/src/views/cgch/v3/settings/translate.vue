@@ -37,7 +37,7 @@ watch(prefs, (v) => saveTranslatePrefs({ ...v }));
       </div>
     </div>
 
-    <p class="text-xs text-gray-400">翻译使用「设置 → AI 接待设置」里配置的大模型，按字数消耗少量智点；同一段文字只翻译一次。</p>
+    <p class="text-xs text-gray-400">翻译使用「设置 → AI 接待设置」里配置的大模型，按字数计入大模型用量；同一段文字只翻译一次。</p>
   </div>
 </template>
 

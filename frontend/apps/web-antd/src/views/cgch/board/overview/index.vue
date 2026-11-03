@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 /**
- * 数据看板：询盘量、回复率、AI 处理量、智点消耗、线索转化；与上一个同等周期对比。
+ * 数据看板：询盘量、回复率、AI 处理量、AI 用量、线索转化；与上一个同等周期对比。
  */
 import type { EChartsOption, EchartsUIType } from '@vben/plugins/echarts';
 
@@ -80,7 +80,7 @@ const tiles = computed(() => {
     { label: '新线索', value: c.cluesCreated.toLocaleString(), sub: `询盘自动建档 ${c.cluesFromMail + c.cluesFromWhatsApp} · 已转客户 ${c.cluesConverted}`, d: delta('cluesCreated'), tip: '本期新建的 CRM 线索；自动建档来源为邮件或 WhatsApp' },
     { label: '新客户', value: c.customersCreated.toLocaleString(), sub: `线索转客户 ${c.cluesConverted}`, d: delta('customersCreated'), tip: '本期新建的 CRM 客户' },
     { label: '订单', value: (data.value?.orders ?? 0).toLocaleString(), sub: `金额 ${fmtMoney(data.value?.orderAmount)}`, d: { text: '按下单日期统计', up: true, flat: true }, tip: '本期下单的订单数和金额（CRM → 订单管理）', neutral: true },
-    { label: '智点消耗', value: c.creditsConsumed.toLocaleString(), sub: `AI 草稿 ${c.aiDrafts} 份`, d: delta('creditsConsumed'), tip: 'AI 起草、自动回复、信息提取和知识库检索消耗的智点', neutral: true },
+    { label: 'AI 用量（千 token）', value: c.creditsConsumed.toLocaleString(), sub: `AI 草稿 ${c.aiDrafts} 份`, d: delta('creditsConsumed'), tip: 'AI 起草、自动回复、信息提取和知识库检索消耗的智点', neutral: true },
   ];
 });
 
@@ -214,7 +214,7 @@ async function renderCharts() {
     { name: 'AI 发出', color: p.s1, values: d.map((x) => x.aiOut) },
     { name: '人工发出', color: p.s2, values: d.map((x) => x.humanOut) },
   ], true));
-  renderCredit(barOption([{ name: '智点', color: p.s1, values: d.map((x) => x.credits) }], false));
+  renderCredit(barOption([{ name: '千 token', color: p.s1, values: d.map((x) => x.credits) }], false));
 }
 
 async function load() {
@@ -290,7 +290,7 @@ onMounted(async () => {
 
       <Row :gutter="16">
         <Col :xs="24" :lg="12" class="mb-4">
-          <Card title="每日智点消耗" size="small" :bordered="false">
+          <Card title="每日 AI 用量（千 token）" size="small" :bordered="false">
             <template #extra><Button type="link" size="small" @click="router.push('/v3/settings?tab=usage')">明细</Button></template>
             <EchartsUI ref="creditRef" height="220px" />
           </Card>
