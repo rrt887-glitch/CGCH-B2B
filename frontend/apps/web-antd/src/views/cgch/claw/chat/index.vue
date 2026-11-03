@@ -180,7 +180,7 @@ onMounted(() => {
                   </template>
                   <template v-else>{{ m.content }}</template>
                 </div>
-                <div v-if="m.role === 'assistant' && m.credits" class="mt-1 text-xs text-gray-400">消耗 {{ m.credits }} 智点</div>
+                <div v-if="m.role === 'assistant' && m.credits" class="mt-1 text-xs text-gray-400">约 {{ m.credits }} 千 token</div>
               </div>
             </div>
           </Spin>

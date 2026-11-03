@@ -167,7 +167,7 @@ onMounted(async () => {
             <FormItem v-if="target === 'website'" label="公司名称（可选）"><Input v-model:value="form.companyName" /></FormItem>
             <Button type="primary" block :loading="creating" @click="start">开始背调</Button>
             <div class="mt-2 text-xs text-gray-500">
-              只读取对方官网的少量公开页面（遵守 robots.txt），并结合我们与客户的往来记录；只整理企业层面的商业信息。会消耗少量智点。
+              只读取对方官网的少量公开页面（遵守 robots.txt），并结合我们与客户的往来记录；只整理企业层面的商业信息。会调用大模型。
             </div>
           </Form>
         </Card>
@@ -239,7 +239,7 @@ onMounted(async () => {
                 <div class="truncate text-xs text-gray-500">{{ src.url }}</div>
                 <div class="line-clamp-2 text-xs text-gray-500">{{ src.snippet }}</div>
               </div>
-              <div class="mt-2 text-xs text-gray-400">报告由 AI 根据以上公开页面整理，重要信息请自行核实。消耗 {{ current.credits }} 智点。</div>
+              <div class="mt-2 text-xs text-gray-400">报告由 AI 根据以上公开页面整理，重要信息请自行核实。约用 {{ current.credits }} 千 token。</div>
             </Card>
           </template>
         </Spin>

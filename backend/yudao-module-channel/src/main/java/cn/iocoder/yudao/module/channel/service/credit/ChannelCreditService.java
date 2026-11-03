@@ -21,7 +21,10 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.CREDIT_AMOUNT_ZERO;
 
 /**
- * 智点：AI 调用按 token 折算扣点。余额不足时 AI 不再调用大模型。
+ * AI 用量：每次 AI 调用按 token 记一条流水（1 点 = tokens-per-credit 个 token，默认 1000，即约千 token）。
+ * <p>
+ * 计费关闭（默认，cgch.credit.billing-enabled=false）：大模型用的是企业自己填的 API Key，费用在企业自己的大模型账户里，
+ * 这里只统计用量，不扣余额、不拦 AI、不发余额提醒。计费开启时（对外售卖）：按点扣余额，余额不足时 AI 不再调用大模型。
  */
 @Service
 public class ChannelCreditService {
@@ -37,6 +40,14 @@ public class ChannelCreditService {
     @Value("${cgch.credit.tokens-per-credit:1000}")
     private int tokensPerCredit;
 
+    /** 是否按智点计费（扣余额、余额不足时停用 AI） */
+    @Value("${cgch.credit.billing-enabled:false}")
+    private boolean billingEnabled;
+
+    public boolean billingEnabled() {
+        return billingEnabled;
+    }
+
     /** 当前租户的账户，没有则创建（余额 0） */
     public ChannelCreditAccountDO getOrCreateAccount() {
         ChannelCreditAccountDO a = channelCreditAccountMapper.selectCurrent();
@@ -47,8 +58,9 @@ public class ChannelCreditService {
         return a;
     }
 
+    /** 计费关闭时始终可用 */
     public boolean hasBalance() {
-        return getOrCreateAccount().getBalance() > 0;
+        return !billingEnabled || getOrCreateAccount().getBalance() > 0;
     }
 
     /** token → 智点，向上取整，至少 1 点 */
@@ -61,6 +73,13 @@ public class ChannelCreditService {
     public long consume(String channel, Long refId, Long userId, int tokens, String remark) {
         long credits = toCredits(tokens);
         ChannelCreditAccountDO a = getOrCreateAccount();
+        if (!billingEnabled) {
+            // 只记用量：不动余额、不发余额提醒
+            channelCreditLedgerMapper.insert(ChannelCreditLedgerDO.builder().type(ChannelCreditLedgerDO.TYPE_CONSUME)
+                    .amount(-credits).balanceAfter(a.getBalance()).channel(channel).refId(refId).userId(userId).tokens(tokens)
+                    .remark(StrUtil.maxLength(remark, 200)).build());
+            return credits;
+        }
         channelCreditAccountMapper.addBalance(a.getId(), -credits);
         long after = channelCreditAccountMapper.selectById(a.getId()).getBalance();
         channelCreditLedgerMapper.insert(ChannelCreditLedgerDO.builder().type(ChannelCreditLedgerDO.TYPE_CONSUME)
@@ -111,11 +130,20 @@ public class ChannelCreditService {
         vo.setTokensPerCredit(tokensPerCredit);
         Map<String, Long> byChannel = new LinkedHashMap<>();
         Map<Long, Long> byUser = new LinkedHashMap<>();
+        Map<String, Long> tokensByChannel = new LinkedHashMap<>();
+        Map<Long, Long> tokensByUser = new LinkedHashMap<>();
         long month = 0;
+        long monthTokens = 0;
         for (ChannelCreditLedgerDO l : channelCreditLedgerMapper.selectConsumeSince(LocalDate.now().withDayOfMonth(1).atStartOfDay())) {
             long c = -l.getAmount();
             month += c;
             byChannel.merge(StrUtil.blankToDefault(l.getChannel(), "other"), c, Long::sum);
+            long t = l.getTokens() == null ? 0 : l.getTokens();
+            monthTokens += t;
+            tokensByChannel.merge(StrUtil.blankToDefault(l.getChannel(), "other"), t, Long::sum);
+            if (l.getUserId() != null) {
+                tokensByUser.merge(l.getUserId(), t, Long::sum);
+            }
             if (l.getUserId() != null) {
                 byUser.merge(l.getUserId(), c, Long::sum);
             }
@@ -123,6 +151,10 @@ public class ChannelCreditService {
         vo.setMonthConsumed(month);
         vo.setMonthByChannel(byChannel);
         vo.setMonthByUser(byUser);
+        vo.setMonthTokens(monthTokens);
+        vo.setMonthTokensByChannel(tokensByChannel);
+        vo.setMonthTokensByUser(tokensByUser);
+        vo.setBillingEnabled(billingEnabled);
         return vo;
     }
 

@@ -91,7 +91,7 @@ const tiles = computed(() => {
     { label: 'AI 发出占比', value: pct(c.aiShare), sub: `AI 发出 ${c.mailAiOut + c.waAiOut} 条` },
     { label: '转人工', value: String(c.aiHandoff), sub: `待确认 ${c.aiPending} 份` },
     { label: '新线索', value: String(c.cluesCreated), sub: `转客户 ${c.cluesConverted}` },
-    { label: '智点消耗', value: String(c.creditsConsumed), sub: `较上期 ${change(c.creditsConsumed, p.creditsConsumed)}` },
+    { label: 'AI 用量（千 token）', value: String(c.creditsConsumed), sub: `较上期 ${change(c.creditsConsumed, p.creditsConsumed)}` },
   ];
 });
 function goto(item: ChannelReportApi.Item) {
@@ -217,7 +217,7 @@ onMounted(async () => {
               <template #title>{{ label(current) }}</template>
               <template #extra>
                 <Space>
-                  <Tag v-if="current.aiGenerated" color="blue">AI 撰写 · {{ current.credits }} 智点</Tag>
+                  <Tag v-if="current.aiGenerated" color="blue">AI 撰写</Tag>
                   <Tag v-else>模板生成</Tag>
                   <Button size="small" @click="() => { gen.type = current!.periodType; gen.date = dayjs(current!.periodStart); doGenerate(); }">重新生成</Button>
                   <Popconfirm title="确定删除这份报告？" @confirm="remove">
@@ -230,7 +230,7 @@ onMounted(async () => {
                 class="mb-3"
                 type="info"
                 show-icon
-                message="未配置大模型或智点不足，总结按模板生成。配置大模型后重新生成，可得到 AI 撰写的分析与建议。"
+                message="未配置大模型或大模型调用失败，总结按模板生成。配置大模型后重新生成，可得到 AI 撰写的分析与建议。"
               />
               <div class="whitespace-pre-wrap leading-7">{{ current.summary }}</div>
             </Card>
@@ -292,7 +292,7 @@ onMounted(async () => {
           </RadioGroup>
         </FormItem>
         <FormItem label="日期"><DatePicker v-model:value="gen.date" :allow-clear="false" class="w-full" /></FormItem>
-        <div class="text-xs text-gray-500">同一天（或同一周）已有报告时会重新生成并替换。配置了大模型时，撰写总结会消耗少量智点。</div>
+        <div class="text-xs text-gray-500">同一天（或同一周）已有报告时会重新生成并替换。配置了大模型时，撰写总结会调用一次大模型。</div>
       </Form>
     </Modal>
 

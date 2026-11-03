@@ -133,7 +133,7 @@ onMounted(load);
           :not-found-content="candidates.length ? '已成交客户都已生成过案例' : '还没有已成交的客户（在客户详情里标记成交）'"
         />
         <Button type="primary" :loading="generating" @click="generate">AI 生成案例</Button>
-        <span class="text-xs text-gray-500">会读取与该客户的全部邮件和 WhatsApp 往来，消耗少量智点</span>
+        <span class="text-xs text-gray-500">会读取与该客户的全部邮件和 WhatsApp 往来，会调用一次大模型</span>
       </div>
 
       <Empty v-if="!loading && list.length === 0" description="还没有成交案例" />

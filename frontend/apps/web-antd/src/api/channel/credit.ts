@@ -11,6 +11,11 @@ export namespace ChannelCreditApi {
     monthByChannel: Record<string, number>;
     monthByUser: Record<string, number>;
     tokensPerCredit: number;
+    /** 是否按智点计费；关闭时只统计用量 */
+    billingEnabled?: boolean;
+    monthTokens?: number;
+    monthTokensByChannel?: Record<string, number>;
+    monthTokensByUser?: Record<string, number>;
   }
 
   export interface Ledger {
