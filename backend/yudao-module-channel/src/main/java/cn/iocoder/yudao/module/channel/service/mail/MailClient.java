@@ -325,6 +325,14 @@ public final class MailClient {
                               String text, String html, String inReplyTo, String references,
                               List<Attachment> attachments)
             throws MessagingException, UnsupportedEncodingException {
+        return send(a, to, cc, subject, text, html, inReplyTo, references, attachments, null);
+    }
+
+    /** 同上，可附加邮件头（例如群发的 List-Unsubscribe） */
+    public static String send(ChannelMailAccountDO a, List<String> to, List<String> cc, String subject,
+                              String text, String html, String inReplyTo, String references,
+                              List<Attachment> attachments, java.util.Map<String, String> headers)
+            throws MessagingException, UnsupportedEncodingException {
         Session session = smtpSession(a);
         MimeMessage msg = new MimeMessage(session);
         msg.setFrom(new InternetAddress(a.getEmail(), StrUtil.blankToDefault(a.getDisplayName(), null), "UTF-8"));
@@ -337,6 +345,11 @@ public final class MailClient {
         if (StrUtil.isNotBlank(inReplyTo)) {
             msg.setHeader("In-Reply-To", inReplyTo);
             msg.setHeader("References", StrUtil.isBlank(references) ? inReplyTo : references + " " + inReplyTo);
+        }
+        if (headers != null) {
+            for (java.util.Map.Entry<String, String> h : headers.entrySet()) {
+                msg.setHeader(h.getKey(), h.getValue());
+            }
         }
         // 正文：有 HTML 时 text + html 二选一展示（alternative）
         MimeBodyPart bodyPart = new MimeBodyPart();

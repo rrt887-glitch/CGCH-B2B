@@ -1,0 +1,50 @@
+-- 邮件群发：任务与收件人两张表（已有数据库执行一次，可重复执行）
+SET NAMES utf8mb4;
+CREATE TABLE IF NOT EXISTS `channel_mail_batch` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `name` varchar(100) NOT NULL COMMENT '任务名称',
+  `subject` varchar(255) NOT NULL COMMENT '邮件主题，可用 {name} {company}',
+  `content` mediumtext NOT NULL COMMENT '邮件正文，可用 {name} {company}',
+  `content_type` varchar(8) NOT NULL DEFAULT 'text' COMMENT '正文格式：text 纯文本、html',
+  `account_ids` varchar(255) NOT NULL COMMENT '发件邮箱编号，逗号分隔，轮流发送',
+  `rate_per_minute` int NOT NULL DEFAULT 5 COMMENT '每分钟最多发几封',
+  `status` varchar(16) NOT NULL COMMENT '状态：draft 草稿、sending 发送中、done 已完成、cancelled 已取消',
+  `total` int NOT NULL DEFAULT 0 COMMENT '收件人数',
+  `next_send_time` datetime NULL COMMENT '下一封的发送时间',
+  `start_time` datetime NULL COMMENT '开始发送时间',
+  `finish_time` datetime NULL COMMENT '完成时间',
+  `user_id` bigint NOT NULL COMMENT '创建人',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`),
+  KEY `idx_status_next` (`status`, `next_send_time`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '邮件群发任务：选客户、写邮件，按速率从多个邮箱轮流发出，每封带退订链接';
+
+CREATE TABLE IF NOT EXISTS `channel_mail_batch_item` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `batch_id` bigint NOT NULL COMMENT '任务编号',
+  `customer_id` bigint NULL COMMENT 'CRM 客户编号；直接填的邮箱为空',
+  `name` varchar(255) NULL COMMENT '称呼（{name}）',
+  `company` varchar(255) NULL COMMENT '公司（{company}）',
+  `email` varchar(255) NOT NULL COMMENT '收件邮箱',
+  `account_id` bigint NULL COMMENT '发件邮箱编号',
+  `status` varchar(16) NOT NULL COMMENT '状态：pending 待发送、sent 已发送、failed 失败、invalid 邮箱无效、suppressed 已退订跳过、cancelled 已取消',
+  `reason` varchar(255) NULL COMMENT '失败或跳过原因',
+  `sent_time` datetime NULL COMMENT '发送时间',
+  `sent_ref_id` bigint NULL COMMENT '发出的邮件编号',
+  `token` varchar(32) NOT NULL COMMENT '退订链接的令牌',
+  `unsubscribed` bit(1) NULL DEFAULT b'0' COMMENT '是否通过这封邮件退订',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`),
+  KEY `idx_batch_status` (`batch_id`, `status`),
+  UNIQUE KEY `uk_token` (`token`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '邮件群发的收件人与发送结果';

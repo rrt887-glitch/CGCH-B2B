@@ -117,7 +117,7 @@ jobs:
       - name: 启动后端并检查接口
         run: |
           JAR=$(ls backend/yudao-server/target/yudao-server*.jar | grep -v original | head -1)
-          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.wa-config-id=cfg123 --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 --cgch.social.poll-ms=86400000 --cgch.oauth.evolution.base-url=http://127.0.0.1:18080/evo --cgch.oauth.evolution.api-key=evo-key --cgch.oauth.evolution.webhook-base=http://127.0.0.1:48080 --cgch.oauth.youtube.client-id=ytid --cgch.oauth.youtube.client-secret=ytsec --cgch.oauth.youtube.auth-url=http://127.0.0.1:18080/yt/auth --cgch.oauth.youtube.token-url=http://127.0.0.1:18080/yt/token --cgch.oauth.youtube.api-base=http://127.0.0.1:18080/yt/v3 --cgch.oauth.tiktok.client-id=ttid --cgch.oauth.tiktok.client-secret=ttsec --cgch.oauth.tiktok.auth-url=http://127.0.0.1:18080/tt/auth?client_key=ttid --cgch.oauth.tiktok.api-base=http://127.0.0.1:18080/tt/v1.3 --cgch.site.company-name=测试科技有限公司 '--cgch.site.company-name-en=CGCH Test Co., Ltd.' --cgch.site.contact-email=privacy@cgch.test --logging.level.cn.iocoder.yudao.module.channel.service.realtime=DEBUG --logging.level.cn.iocoder.yudao.framework.websocket=DEBUG > server.log 2>&1 &
+          nohup java -jar "$JAR" --spring.profiles.active=local --cgch.ai.whatsapp-debounce-ms=500 --cgch.ai.takeover-minute-seconds=2 --cgch.ai.deferred-interval-ms=1000 --cgch.reactivate.send-interval-ms=0 --cgch.mail-batch.tick-ms=300 --cgch.mail-batch.skip-mx-domains=batch.example --cgch.research.allowed-private-hosts=127.0.0.1 --cgch.oauth.redirect-base=http://127.0.0.1:48080 --cgch.oauth.google.client-id=gid --cgch.oauth.google.client-secret=gsec --cgch.oauth.google.auth-url=http://127.0.0.1:18080/oauth/google/authorize --cgch.oauth.google.token-url=http://127.0.0.1:18080/oauth/google/token --cgch.oauth.google.userinfo-url=http://127.0.0.1:18080/oauth/google/userinfo --cgch.oauth.google.imap-host=127.0.0.1 --cgch.oauth.google.imap-port=3143 --cgch.oauth.google.imap-ssl=false --cgch.oauth.google.smtp-host=127.0.0.1 --cgch.oauth.google.smtp-port=3025 --cgch.oauth.google.smtp-ssl=false --cgch.oauth.microsoft.client-id=mid --cgch.oauth.microsoft.client-secret=msec --cgch.oauth.microsoft.auth-url=http://127.0.0.1:18080/oauth/microsoft/authorize --cgch.oauth.microsoft.token-url=http://127.0.0.1:18080/oauth/microsoft/token --cgch.oauth.microsoft.imap-host=127.0.0.1 --cgch.oauth.microsoft.imap-port=3143 --cgch.oauth.microsoft.imap-ssl=false --cgch.oauth.microsoft.smtp-host=127.0.0.1 --cgch.oauth.microsoft.smtp-port=3025 --cgch.oauth.meta.client-id=metaid --cgch.oauth.meta.client-secret=metasec --cgch.oauth.meta.verify-token=meta-verify --cgch.oauth.meta.wa-config-id=cfg123 --cgch.oauth.meta.dialog-url=http://127.0.0.1:18080/fb/dialog --cgch.oauth.meta.api-base=http://127.0.0.1:18080 --cgch.social.poll-ms=86400000 --cgch.oauth.evolution.base-url=http://127.0.0.1:18080/evo --cgch.oauth.evolution.api-key=evo-key --cgch.oauth.evolution.webhook-base=http://127.0.0.1:48080 --cgch.oauth.youtube.client-id=ytid --cgch.oauth.youtube.client-secret=ytsec --cgch.oauth.youtube.auth-url=http://127.0.0.1:18080/yt/auth --cgch.oauth.youtube.token-url=http://127.0.0.1:18080/yt/token --cgch.oauth.youtube.api-base=http://127.0.0.1:18080/yt/v3 --cgch.oauth.tiktok.client-id=ttid --cgch.oauth.tiktok.client-secret=ttsec --cgch.oauth.tiktok.auth-url=http://127.0.0.1:18080/tt/auth?client_key=ttid --cgch.oauth.tiktok.api-base=http://127.0.0.1:18080/tt/v1.3 --cgch.site.company-name=测试科技有限公司 '--cgch.site.company-name-en=CGCH Test Co., Ltd.' --cgch.site.contact-email=privacy@cgch.test --logging.level.cn.iocoder.yudao.module.channel.service.realtime=DEBUG --logging.level.cn.iocoder.yudao.framework.websocket=DEBUG > server.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:48080/admin-api/system/tenant/get-id-by-name?name=x; then
               echo "后端已启动（${i}×5 秒）"; break
@@ -324,6 +324,48 @@ jobs:
           print('回复已送达买家邮箱，带 In-Reply-To 头与附件')
           accts = call('GET', '/channel/mail-account/list')
           assert accts[0]['email'] == 'sales@cgch.test' and 'password' not in accts[0], accts
+          def wait(fn, what, timeout=15):
+              end = time.time() + timeout
+              while time.time() < end:
+                  v = fn()
+                  if v:
+                      return v
+                  time.sleep(0.5)
+              raise AssertionError(f'等待超时：{what}')
+          # 邮件群发：验证收件人（格式、域名、退订）→ 按速率发送 → 每封带退订链接和 List-Unsubscribe → 退订后下次跳过
+          bid = call('POST', '/channel/mail-batch/create', {'name': '新品推广', 'subject': 'New models for {company}',
+              'content': 'Hi {name},\nWe launched new hair dryers.', 'contentType': 'text', 'accountIds': [aid], 'ratePerMinute': 60,
+              'emails': ['a1@batch.example', 'A1@batch.example', 'a2@batch.example; a3@batch.example', 'nobody@no-such-domain-cgch.invalid', 'bad@@x']})
+          b = call('GET', f'/channel/mail-batch/get?id={bid}')
+          st = {i['email']: i['status'] for i in b['items']}
+          assert b['status'] == 'draft' and b['total'] == 5 and st['a1@batch.example'] == 'pending' and st['a3@batch.example'] == 'pending' \
+              and st['nobody@no-such-domain-cgch.invalid'] == 'invalid' and st['bad@@x'] == 'invalid', b
+          assert b['counts'] == {'pending': 3, 'invalid': 2}, b['counts']
+          call('PUT', f'/channel/mail-batch/start?id={bid}')
+          b = wait(lambda: (lambda x: x if x['status'] == 'done' else None)(call('GET', f'/channel/mail-batch/get?id={bid}')), '群发发完', timeout=40)
+          assert b['counts'] == {'sent': 3, 'invalid': 2}, b['counts']
+          times = sorted(i['sentTime'] for i in b['items'] if i['status'] == 'sent')
+          assert times[-1] - times[0] >= 1500, f'按每分钟 60 封，三封至少间隔 2 秒：{times}'
+          time.sleep(1)
+          imap = imaplib.IMAP4('127.0.0.1', 3143); imap.login('a1@batch.example', 'pw'); imap.select('INBOX')
+          typ, data = imap.search(None, 'SUBJECT', '"New models for"')
+          got = _email.message_from_bytes(imap.fetch(data[0].split()[-1], '(RFC822)')[1][0][1]); imap.logout()
+          body = got.get_payload(decode=True).decode('utf-8')
+          lu = got['List-Unsubscribe']
+          assert got['Subject'] == 'New models for your company' and body.startswith('Hi a1,') and lu and '/admin-api/channel/mail-batch/unsubscribe?t=' in lu \
+              and lu.strip('<>') in body and got['List-Unsubscribe-Post'] == 'List-Unsubscribe=One-Click', (got['Subject'], body, lu)
+          page = urllib.request.urlopen(lu.strip('<>')).read().decode()
+          assert 'unsubscribed' in page and 'a1@batch.example' in page, page[:300]
+          assert 'Link expired' in urllib.request.urlopen(BASE + '/channel/mail-batch/unsubscribe?t=nope').read().decode()
+          bid2 = call('POST', '/channel/mail-batch/create', {'name': '第二轮', 'subject': 'Hello', 'content': 'Hi', 'accountIds': [aid],
+              'ratePerMinute': 60, 'emails': ['a1@batch.example', 'a2@batch.example']})
+          b2 = call('GET', f'/channel/mail-batch/get?id={bid2}')
+          assert {i['email']: i['status'] for i in b2['items']} == {'a1@batch.example': 'suppressed', 'a2@batch.example': 'pending'}, b2
+          call('PUT', f'/channel/mail-batch/cancel?id={bid2}')
+          b2 = call('GET', f'/channel/mail-batch/get?id={bid2}')
+          assert b2['status'] == 'cancelled' and b2['counts'] == {'suppressed': 1, 'cancelled': 1}, b2
+          assert any(x['id'] == bid for x in call('GET', '/channel/mail-batch/page?pageNo=1&pageSize=10')['list'])
+          print('邮件群发：验证收件人、按速率发送、退订链接与退订后跳过')
           print('邮箱渠道全部通过')
           PY
 

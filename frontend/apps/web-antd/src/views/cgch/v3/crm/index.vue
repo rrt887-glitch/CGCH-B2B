@@ -28,6 +28,7 @@ const groups: HubGroup[] = [
     items: [
       { key: 'customer', label: '客户列表', load: () => import('./customer.vue') },
       { key: 'agenda', label: '跟进日程', load: () => import('./agenda.vue') },
+      { key: 'mail-batch', label: '邮件群发', load: () => import('./mail-batch.vue') },
       { key: 'customer-pool', label: '公海客户', load: withProps(() => import('./customer.vue'), { pool: true }) },
       { key: 'dedup', label: '查重', load: () => import('./dedup.vue') },
     ],
