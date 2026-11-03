@@ -35,9 +35,9 @@ export const overridesPreferences = defineOverridesPreferences({
   theme: {
     /** 固定浅色：页面按浅色设计，没有切换入口（框架默认是深色，会和页面里的白底混在一起） */
     mode: 'light',
-    /** 主色 #2563EB（设计稿「风格规范」） */
-    colorPrimary: 'hsl(221 83% 53%)',
-    radius: '0.5',
+    /** 主色苹果蓝 #0071E3（设计稿「苹果风格 · 规范与动效」） */
+    colorPrimary: 'hsl(211 100% 45%)',
+    radius: '0.75',
   },
   widget: {
     globalSearch: false,

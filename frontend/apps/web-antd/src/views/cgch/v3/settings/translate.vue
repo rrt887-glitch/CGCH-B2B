@@ -56,7 +56,7 @@ watch(prefs, (v) => saveTranslatePrefs({ ...v }));
 .tr__name {
   font-size: 14px;
   font-weight: 700;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .tr__avatar {
@@ -66,8 +66,8 @@ watch(prefs, (v) => saveTranslatePrefs({ ...v }));
   width: 30px;
   height: 30px;
   font-weight: 700;
-  color: #2563EB;
-  background: #BFDBFE;
+  color: #0071E3;
+  background: #B8D7F5;
   border-radius: 50%;
 }
 
@@ -75,13 +75,13 @@ watch(prefs, (v) => saveTranslatePrefs({ ...v }));
   padding: 8px 12px;
   font-size: 14px;
   color: #1f2937;
-  background: #f3f4f6;
+  background: #f2f2f7;
   border-radius: 8px;
 }
 
 .tr__sub {
   padding-top: 6px;
   margin-top: 6px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid #e5e5ea;
 }
 </style>

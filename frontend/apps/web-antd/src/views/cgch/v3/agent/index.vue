@@ -66,7 +66,7 @@ function goStep(key: string) {
 .agent {
   display: flex;
   gap: 6px;
-  height: calc(100vh - 24px);
+  height: calc(100vh - 32px);
 }
 
 .agent__steps {
@@ -94,12 +94,12 @@ function goStep(key: string) {
 }
 
 .agent__step:hover {
-  background: #F3F4F6;
+  background: #F2F2F7;
 }
 
 .agent__step.on {
-  color: #2563EB;
-  background: #EFF4FF;
+  color: #0071E3;
+  background: #E8F2FC;
 }
 
 .agent__num {
@@ -109,15 +109,15 @@ function goStep(key: string) {
   justify-content: center;
   height: 18px;
   font-size: 11px;
-  color: #6b7280;
+  color: #86868b;
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 50%;
 }
 
 .agent__step.on .agent__num {
-  color: #2563EB;
-  border-color: #2563EB;
+  color: #0071E3;
+  border-color: #0071E3;
 }
 
 .agent__main {

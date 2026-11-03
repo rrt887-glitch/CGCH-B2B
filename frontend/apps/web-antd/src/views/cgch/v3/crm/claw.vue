@@ -48,14 +48,14 @@ function go(key: string) {
 .claw__nav {
   flex: 0 0 140px;
   padding: 14px 8px;
-  border-right: 1px solid #f0f1f3;
+  border-right: 1px solid #ebebf0;
 }
 
 .claw__title {
   padding: 0 10px 12px;
   font-size: 15px;
   font-weight: 700;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .claw__item {
@@ -65,18 +65,18 @@ function go(key: string) {
   padding: 7px 10px;
   margin-bottom: 2px;
   font-size: 13px;
-  color: #374151;
+  color: #424245;
   cursor: pointer;
   border-radius: 8px;
 }
 
 .claw__item:hover {
-  background: #F3F4F6;
+  background: #F2F2F7;
 }
 
 .claw__item.on {
-  color: #2563EB;
-  background: #EFF4FF;
+  color: #0071E3;
+  background: #E8F2FC;
 }
 
 .claw__main {
@@ -95,7 +95,7 @@ function go(key: string) {
     flex: 0 0 auto;
     gap: 4px;
     border-right: 0;
-    border-bottom: 1px solid #f0f1f3;
+    border-bottom: 1px solid #ebebf0;
   }
 
   .claw__title {

@@ -99,7 +99,7 @@ const CHANNELS: Channel[] = [
   { key: '126', name: '126 邮箱', abbr: '126', color: '#1a7f37', kind: 'mail', provider: '126' },
   { key: 'outlook', name: 'Outlook邮箱', abbr: 'O', color: '#0f6cbd', kind: 'mail', provider: 'outlook', oauth: 'microsoft' },
   { key: 'wa-official', name: 'WhatsApp Business Official API', abbr: 'B', color: '#25d366', kind: 'wa-official' },
-  { key: 'im', name: '官网IM', abbr: 'Ai', color: '#1d4ed8', kind: 'im' },
+  { key: 'im', name: '官网IM', abbr: 'Ai', color: '#0066cc', kind: 'im' },
   { key: 'alibaba', name: '阿里国际', abbr: '阿', color: '#ff6a00', kind: 'lead' },
   { key: 'mic', name: '中国制造网', abbr: 'M', color: '#c8102e', kind: 'lead' },
   { key: '263', name: '263邮箱', abbr: '263', color: '#c8102e', kind: 'mail', provider: '263' },
@@ -497,18 +497,18 @@ const KIND_LABEL: Record<Kind, string> = {
 };
 const inboxes = computed<InboxRow[]>(() => CHANNELS.flatMap((c) => accountsOf(c).map((r) => ({ ...r, channel: c }))));
 const stats = computed(() => [
-  { label: '收件箱', value: inboxes.value.length, color: '#111827' },
-  { label: '正常', value: inboxes.value.filter((r) => r.status.color === 'green').length, color: '#15803D' },
-  { label: '需要处理', value: inboxes.value.filter((r) => r.status.color === 'red').length, color: '#B45309' },
-  { label: '已停用', value: inboxes.value.filter((r) => r.status.color === 'gray').length, color: '#6B7280' },
+  { label: '收件箱', value: inboxes.value.length, color: '#1D1D1F' },
+  { label: '正常', value: inboxes.value.filter((r) => r.status.color === 'green').length, color: '#248A3D' },
+  { label: '需要处理', value: inboxes.value.filter((r) => r.status.color === 'red').length, color: '#C93400' },
+  { label: '已停用', value: inboxes.value.filter((r) => r.status.color === 'gray').length, color: '#86868B' },
 ]);
 const STATUS_PILL: Record<string, string> = {
-  green: 'bg-[#DCFCE7] text-[#15803D]',
-  red: 'bg-[#FEE2E2] text-[#B91C1C]',
-  orange: 'bg-[#FEF3C7] text-[#B45309]',
-  gray: 'bg-[#F3F4F6] text-[#6B7280]',
+  green: 'bg-[#E3F6E8] text-[#248A3D]',
+  red: 'bg-[#FFE5E5] text-[#D70015]',
+  orange: 'bg-[#FFF4E0] text-[#C93400]',
+  gray: 'bg-[#F2F2F7] text-[#86868B]',
 };
-const STATUS_DOT: Record<string, string> = { green: '#15803D', red: '#B91C1C', orange: '#B45309', gray: '#9CA3AF' };
+const STATUS_DOT: Record<string, string> = { green: '#248A3D', red: '#D70015', orange: '#C93400', gray: '#A1A1A6' };
 const channelIcon = (c: Channel) => CHANNEL_ICONS[c.key] ?? CHANNEL_ICONS[c.provider ?? ''];
 
 /** 收件箱最常用的一个操作，放在行上；其余放进「设置」菜单 */
@@ -619,46 +619,46 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
   <div class="ch-page">
     <div class="flex flex-wrap items-start gap-4 pb-5">
       <div class="min-w-[260px] flex-1">
-        <h2 class="m-0 text-[22px] font-bold text-[#111827]">收件箱</h2>
-        <p class="m-0 mt-1 text-sm text-[#4B5563]">每个接入的账号是一个收件箱。客户消息进入收件箱后，按接待成员分配给业务员或 AI，在「会话」里统一处理。</p>
+        <h2 class="m-0 text-[22px] font-bold text-[#1D1D1F]">收件箱</h2>
+        <p class="m-0 mt-1 text-sm text-[#6E6E73]">每个接入的账号是一个收件箱。客户消息进入收件箱后，按接待成员分配给业务员或 AI，在「会话」里统一处理。</p>
       </div>
       <Button @click="leadOpen = true">设置留资邮箱</Button>
       <Button type="primary" @click="addOpen = true"><IconifyIcon icon="lucide:plus" class="mr-1 inline size-4 align-[-3px]" />添加收件箱</Button>
     </div>
 
     <div class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-      <div v-for="st in stats" :key="st.label" class="rounded-xl border border-solid border-[#E5E7EB] bg-white px-4 py-3">
-        <div class="text-[13px] text-[#4B5563]">{{ st.label }}</div>
+      <div v-for="st in stats" :key="st.label" class="rounded-xl border border-solid border-[#E5E5EA] bg-white px-4 py-3">
+        <div class="text-[13px] text-[#6E6E73]">{{ st.label }}</div>
         <div class="text-[22px] font-semibold tabular-nums" :style="{ color: st.color }">{{ st.value }}</div>
       </div>
     </div>
 
     <Spin :spinning="loading" wrapper-class-name="ch-spin">
-      <div class="flex h-full flex-col overflow-hidden rounded-xl border border-solid border-[#E5E7EB] bg-white">
-        <div class="ch-grid border-0 border-b border-solid border-[#E5E7EB] bg-[#F9FAFB] px-5 py-2.5 text-xs font-medium text-[#4B5563]">
+      <div class="flex h-full flex-col overflow-hidden rounded-xl border border-solid border-[#E5E5EA] bg-white">
+        <div class="ch-grid border-0 border-b border-solid border-[#E5E5EA] bg-[#F5F5F7] px-5 py-2.5 text-xs font-medium text-[#6E6E73]">
           <span>收件箱</span><span>渠道类型</span><span>状态</span><span>接待</span><span class="text-right">操作</span>
         </div>
         <div class="min-h-0 flex-1 overflow-auto">
-          <div v-if="!loading && inboxes.length === 0" class="flex flex-col items-center gap-3 py-16 text-[#6B7280]">
+          <div v-if="!loading && inboxes.length === 0" class="flex flex-col items-center gap-3 py-16 text-[#86868B]">
             <span>还没有接入任何账号</span>
             <Button type="primary" @click="addOpen = true">添加第一个收件箱</Button>
           </div>
           <div
             v-for="r in inboxes"
             :key="`${r.channel.key}-${r.id}`"
-            class="ch-grid items-center border-0 border-b border-solid border-[#F3F4F6] px-5 py-3"
+            class="ch-grid items-center border-0 border-b border-solid border-[#F2F2F7] px-5 py-3"
           >
             <div class="flex min-w-0 items-center gap-3">
               <img v-if="channelIcon(r.channel)" :src="channelIcon(r.channel)" :alt="r.channel.name" class="ch-icon" />
               <span v-else class="ch-badge" :style="{ background: r.channel.color }" :class="{ 'is-long': r.channel.abbr.length > 2 }">{{ r.channel.abbr }}</span>
               <div class="flex min-w-0 flex-col">
-                <span class="truncate font-semibold text-[#111827]">{{ r.sub || r.label }}</span>
-                <span class="truncate text-xs text-[#6B7280]">
+                <span class="truncate font-semibold text-[#1D1D1F]">{{ r.sub || r.label }}</span>
+                <span class="truncate text-xs text-[#86868B]">
                   {{ r.sub ? r.label : r.channel.name }}<template v-if="r.wa?.authType === 'evolution' && historyText(r.wa)"> · {{ historyText(r.wa) }}</template>
                 </span>
               </div>
             </div>
-            <span class="text-[13px] text-[#374151]">{{ KIND_LABEL[r.channel.kind] === '邮箱' ? r.channel.name : KIND_LABEL[r.channel.kind] || r.channel.name }}</span>
+            <span class="text-[13px] text-[#424245]">{{ KIND_LABEL[r.channel.kind] === '邮箱' ? r.channel.name : KIND_LABEL[r.channel.kind] || r.channel.name }}</span>
             <span>
               <Tooltip :title="r.status.tip">
                 <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium" :class="STATUS_PILL[r.status.color]">
@@ -666,16 +666,16 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
                 </span>
               </Tooltip>
             </span>
-            <span class="text-[13px] text-[#374151]">
+            <span class="text-[13px] text-[#424245]">
               <a v-if="r.wa" @click="openAssign(r.wa)">{{ assignText(r.wa) }}</a>
-              <span v-else class="text-[#6B7280]">-</span>
+              <span v-else class="text-[#86868B]">-</span>
             </span>
             <div class="flex items-center justify-end gap-2">
               <Button
                 v-if="primaryAction(r)"
                 size="small"
                 :loading="busy === `hist-${r.id}` || busy === `sync-${r.id}` || busy === `poll-${r.id}`"
-                class="!border-[#BFDBFE] !bg-[#EFF4FF] !text-[#1D4ED8]"
+                class="!border-[#B8D7F5] !bg-[#E8F2FC] !text-[#0066CC]"
                 @click="runAction(primaryAction(r)!.key, r)"
               >
                 {{ primaryAction(r)!.label }}
@@ -697,28 +697,28 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
     </Spin>
 
     <Modal v-model:open="addOpen" title="添加收件箱" :footer="null" :width="860" centered>
-      <p class="mb-4 mt-0 text-sm text-[#4B5563]">选择要接入的渠道。接入后客户消息会进入「会话」统一处理。</p>
+      <p class="mb-4 mt-0 text-sm text-[#6E6E73]">选择要接入的渠道。接入后客户消息会进入「会话」统一处理。</p>
       <div class="flex max-h-[64vh] flex-col gap-5 overflow-auto pr-1">
         <section v-for="g in ADD_GROUPS" :key="g.title">
-          <h3 class="m-0 mb-2.5 text-[13px] font-semibold text-[#374151]">{{ g.title }}</h3>
+          <h3 class="m-0 mb-2.5 text-[13px] font-semibold text-[#424245]">{{ g.title }}</h3>
           <div class="grid grid-cols-2 gap-2.5 md:grid-cols-3">
             <button
               v-for="k in g.keys"
               :key="k"
               type="button"
-              class="flex cursor-pointer items-start gap-3 rounded-xl border border-solid border-[#E5E7EB] bg-white p-3.5 text-left hover:border-[#2563EB] hover:bg-[#F8FAFF]"
+              class="flex cursor-pointer items-start gap-3 rounded-xl border border-solid border-[#E5E5EA] bg-white p-3.5 text-left hover:border-[#0071E3] hover:bg-[#F4F8FD]"
               @click="addConnect(channelOf(k))"
             >
               <img v-if="channelIcon(channelOf(k))" :src="channelIcon(channelOf(k))" alt="" class="ch-icon" />
               <span v-else class="ch-badge" :style="{ background: channelOf(k).color }" :class="{ 'is-long': channelOf(k).abbr.length > 2 }">{{ channelOf(k).abbr }}</span>
               <span class="flex min-w-0 flex-col gap-1">
-                <span class="text-sm font-semibold text-[#111827]">{{ channelOf(k).name }}</span>
-                <span class="text-xs leading-[18px] text-[#6B7280]">{{ CHANNEL_DESC[k] ?? (channelOf(k).oauth && oauthProviders.includes(channelOf(k).oauth!) ? '一键授权登录，自动收发邮件' : '填写邮箱和授权码，自动收发邮件') }}</span>
+                <span class="text-sm font-semibold text-[#1D1D1F]">{{ channelOf(k).name }}</span>
+                <span class="text-xs leading-[18px] text-[#86868B]">{{ CHANNEL_DESC[k] ?? (channelOf(k).oauth && oauthProviders.includes(channelOf(k).oauth!) ? '一键授权登录，自动收发邮件' : '填写邮箱和授权码，自动收发邮件') }}</span>
               </span>
             </button>
           </div>
         </section>
-        <p class="m-0 text-xs text-[#B45309]">扫码接入的 WhatsApp 请勿短时间内群发陌生号码，以免号码被 WhatsApp 限制。</p>
+        <p class="m-0 text-xs text-[#C93400]">扫码接入的 WhatsApp 请勿短时间内群发陌生号码，以免号码被 WhatsApp 限制。</p>
       </div>
     </Modal>
 
@@ -821,9 +821,9 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 .ch-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 24px);
+  height: calc(100vh - 32px);
   padding: 24px 28px 16px;
-  background: #f6f7f9;
+  background: #f5f5f7;
   border-radius: 12px;
 }
 
@@ -838,7 +838,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .ch-count {
@@ -846,11 +846,11 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
   gap: 4px;
   align-items: center;
   font-size: 14px;
-  color: #4b5563;
+  color: #6e6e73;
 }
 
 .ch-count b {
-  color: #2563EB;
+  color: #0071E3;
 }
 
 .ch-grid {
@@ -887,13 +887,13 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
   padding: 0 12px;
   font-size: 14px;
   color: #1f2937;
-  border-bottom: 1px solid #f0f1f3;
+  border-bottom: 1px solid #ebebf0;
 }
 
 .ch-row--head {
   min-height: 42px;
-  color: #6b7280;
-  background: #f5f7fa;
+  color: #86868b;
+  background: #f5f5f7;
   border-bottom: 0;
   border-radius: 6px;
 }
@@ -901,7 +901,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 .ch-row--sub {
   min-height: 38px;
   font-size: 13px;
-  background: #fafbfc;
+  background: #f7f7f9;
 }
 
 .ch-col-name {
@@ -930,7 +930,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 }
 
 .ch-col-op a {
-  color: #2563EB;
+  color: #0071E3;
 }
 
 .ch-ops {
@@ -994,11 +994,11 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 }
 
 .ch-status.is-gray {
-  color: #9ca3af;
+  color: #a1a1a6;
 }
 
 .ch-status.is-gray::before {
-  background: #d1d5db;
+  background: #d2d2d7;
 }
 
 .ch-field {
@@ -1008,7 +1008,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 .ch-label {
   margin-bottom: 8px;
   font-size: 14px;
-  color: #374151;
+  color: #424245;
 }
 
 .ch-label i {
@@ -1028,20 +1028,20 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
   flex: 1;
   height: 1px;
   content: '';
-  background: #e5e7eb;
+  background: #e5e5ea;
 }
 
 .ch-divider a {
   display: inline-flex;
   gap: 2px;
   align-items: center;
-  color: #374151;
+  color: #424245;
 }
 
 .ch-radio {
   width: 16px;
   height: 16px;
-  border: 5px solid #2563EB;
+  border: 5px solid #0071E3;
   border-radius: 50%;
 }
 
@@ -1054,8 +1054,8 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
 
 .ch-btn-gray {
   min-width: 98px;
-  color: #2563EB;
-  background: #f3f4f6;
+  color: #0071E3;
+  background: #f2f2f7;
   border: 0;
 }
 

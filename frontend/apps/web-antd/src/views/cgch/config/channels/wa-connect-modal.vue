@@ -105,7 +105,7 @@ function switchMode() {
             </span>
           </template>
           <template v-else>
-            <IconifyIcon icon="lucide:loader-circle" class="size-10 animate-spin text-[#2563EB]" />
+            <IconifyIcon icon="lucide:loader-circle" class="size-10 animate-spin text-[#0071E3]" />
             <span class="mt-3 text-sm text-gray-500">{{ state === 'waiting' ? '等待在 Meta 窗口中完成' : '正在接入' }}</span>
           </template>
         </button>
@@ -204,7 +204,7 @@ function switchMode() {
 }
 
 .wa-connect__qr:not(:disabled):hover {
-  box-shadow: inset 0 0 0 1px #2563EB;
+  box-shadow: inset 0 0 0 1px #0071E3;
 }
 
 .wa-connect__primary {
@@ -213,14 +213,14 @@ function switchMode() {
   align-items: center;
   margin-top: 22px;
   font-size: 14px;
-  color: #2563EB;
+  color: #0071E3;
   cursor: pointer;
   background: none;
   border: 0;
 }
 
 .wa-connect__primary:disabled {
-  color: #9ca3af;
+  color: #a1a1a6;
   cursor: default;
 }
 
@@ -230,7 +230,7 @@ function switchMode() {
   align-items: center;
   margin-top: auto;
   font-size: 13px;
-  color: #2563EB;
+  color: #0071E3;
 }
 
 .wa-connect__right {
@@ -246,14 +246,14 @@ function switchMode() {
   font-size: 24px;
   font-weight: 700;
   line-height: 1.35;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .wa-connect__desc {
   margin: 12px 0 18px;
   font-size: 14px;
   line-height: 1.7;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .wa-connect__tip {
@@ -263,17 +263,17 @@ function switchMode() {
 }
 
 .wa-connect__tip.is-warn {
-  color: #b45309;
+  color: #c93400;
   background: #fff7e6;
 }
 
 .wa-connect__tip.is-info {
-  color: #1d4ed8;
+  color: #0066cc;
   background: #eef4ff;
 }
 
 .wa-connect__tip.is-error {
-  color: #b91c1c;
+  color: #d70015;
   background: #fef2f2;
 }
 
@@ -300,8 +300,8 @@ function switchMode() {
   justify-content: center;
   height: 28px;
   font-size: 13px;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: #86868b;
+  background: #f2f2f7;
   border-radius: 50%;
 }
 
@@ -310,15 +310,15 @@ function switchMode() {
   justify-content: space-between;
   margin-top: auto;
   font-size: 12px;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .wa-connect__foot a {
-  color: #2563EB;
+  color: #0071E3;
 }
 
 .wa-connect__foot a.text-gray-400 {
-  color: #9ca3af;
+  color: #a1a1a6;
 }
 
 @media (max-width: 640px) {

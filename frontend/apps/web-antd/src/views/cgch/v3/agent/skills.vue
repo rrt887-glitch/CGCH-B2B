@@ -114,7 +114,7 @@ onMounted(async () => {
   <div class="sk">
     <aside class="sk__list">
       <div v-for="s in SKILLS" :key="s.key" class="sk__item" :class="{ on: active === s.key }" @click="active = s.key">
-        <div v-if="s.hot" class="sk__robot"><IconifyIcon icon="lucide:bot-message-square" class="size-7 text-[#2563EB]" /></div>
+        <div v-if="s.hot" class="sk__robot"><IconifyIcon icon="lucide:bot-message-square" class="size-7 text-[#0071E3]" /></div>
         <div>
           <div class="font-semibold text-gray-900">{{ s.title }}</div>
           <div class="mt-0.5 text-xs text-gray-500">{{ s.desc }}</div>
@@ -282,7 +282,7 @@ onMounted(async () => {
 .sk__list {
   flex: 0 0 190px;
   padding: 52px 12px 12px;
-  border-right: 1px solid #f0f1f3;
+  border-right: 1px solid #ebebf0;
 }
 
 .sk__item {
@@ -301,7 +301,7 @@ onMounted(async () => {
 }
 
 .sk__item.on {
-  background: #f9fafb;
+  background: #f5f5f7;
   border-color: #f5c2d7;
 }
 
@@ -325,7 +325,7 @@ onMounted(async () => {
   margin: 0 0 22px;
   font-size: 15px;
   font-weight: 700;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .sk__row {
@@ -342,14 +342,14 @@ onMounted(async () => {
 .sk__name {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .sk__desc {
   margin-top: 4px;
   font-size: 13px;
   line-height: 1.6;
-  color: #4b5563;
+  color: #6e6e73;
 }
 
 .sk__tags {
@@ -365,7 +365,7 @@ onMounted(async () => {
 .sk__chip {
   padding: 1px 8px;
   font-size: 12px;
-  color: #374151;
+  color: #424245;
   background: #e9ebef;
   border-radius: 4px;
 }

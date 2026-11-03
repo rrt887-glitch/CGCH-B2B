@@ -100,7 +100,7 @@ defineExpose({ add, edit });
 .wi {
   min-height: 272px;
   padding: 48px 48px 36px;
-  background: #f9fafb;
+  background: #f5f5f7;
   border-radius: 8px;
 }
 
@@ -108,26 +108,26 @@ defineExpose({ add, edit });
   margin: 0;
   font-size: 30px;
   font-weight: 500;
-  color: #1d4ed8;
+  color: #0066cc;
 }
 
 .wi__sub {
   margin-top: 4px;
   font-size: 20px;
-  color: #1d4ed8;
+  color: #0066cc;
 }
 
 .wi__desc {
   margin: 26px 0 14px;
   font-size: 15px;
-  color: #1d4ed8;
+  color: #0066cc;
 }
 
 .wi__site {
   padding: 14px 16px;
   margin-bottom: 10px;
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 10px;
 }
 
@@ -138,7 +138,7 @@ defineExpose({ add, edit });
   padding: 8px 10px;
   margin: 10px 0 6px;
   font-size: 12px;
-  background: #f3f4f6;
+  background: #f2f2f7;
   border-radius: 6px;
 }
 
@@ -152,7 +152,7 @@ defineExpose({ add, edit });
   display: inline-block;
   padding: 4px 20px;
   font-size: 14px;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .wi__row {

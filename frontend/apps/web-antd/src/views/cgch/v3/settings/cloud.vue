@@ -75,10 +75,10 @@ function icon(f: CloudApi.File) {
   const n = f.name.toLowerCase();
   if (n.endsWith('.pdf')) return { i: 'lucide:file-text', c: '#ef4444' };
   if (/\.(xlsx?|csv)$/.test(n)) return { i: 'lucide:file-spreadsheet', c: '#16a34a' };
-  if (/\.(docx?)$/.test(n)) return { i: 'lucide:file-type', c: '#2563eb' };
+  if (/\.(docx?)$/.test(n)) return { i: 'lucide:file-type', c: '#0071e3' };
   if (/\.(png|jpe?g|webp|gif)$/.test(n)) return { i: 'lucide:image', c: '#8b5cf6' };
   if (/\.(mp4|mov)$/.test(n)) return { i: 'lucide:film', c: '#0ea5e9' };
-  return { i: 'lucide:file', c: '#6b7280' };
+  return { i: 'lucide:file', c: '#86868b' };
 }
 
 async function beforeUpload(file: File) {
@@ -245,7 +245,7 @@ onMounted(load);
 .cd__seg {
   display: inline-flex;
   padding: 4px;
-  background: #F3F4F6;
+  background: #F2F2F7;
   border: 1px solid #eceef3;
   border-radius: 14px;
 }
@@ -253,7 +253,7 @@ onMounted(load);
 .cd__seg button {
   padding: 8px 38px;
   font-size: 15px;
-  color: #4b5563;
+  color: #6e6e73;
   cursor: pointer;
   background: none;
   border: 0;
@@ -262,7 +262,7 @@ onMounted(load);
 
 .cd__seg button.on {
   font-weight: 600;
-  color: #2563EB;
+  color: #0071E3;
   background: #fff;
   box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
 }

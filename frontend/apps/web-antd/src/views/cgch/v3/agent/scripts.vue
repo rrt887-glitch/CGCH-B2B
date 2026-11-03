@@ -336,7 +336,7 @@ onMounted(() => {
   align-items: center;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .sc__no {
@@ -347,20 +347,20 @@ onMounted(() => {
   height: 18px;
   font-size: 11px;
   color: #fff;
-  background: #2563EB;
+  background: #0071E3;
   border-radius: 50%;
 }
 
 .sc__tip {
   margin: 4px 0 12px;
   font-size: 12px;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .sc__label {
   margin-bottom: 6px;
   font-size: 13px;
-  color: #374151;
+  color: #424245;
 }
 
 .sc__embed :deep(.p-5),
@@ -377,7 +377,7 @@ onMounted(() => {
 .sc__scope-card {
   padding: 12px;
   margin: 0;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 10px;
 }
 
@@ -411,18 +411,18 @@ onMounted(() => {
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .sc__col-head span {
   font-weight: 400;
-  color: #9ca3af;
+  color: #a1a1a6;
 }
 
 .sc__empty {
   padding: 30px 8px;
   font-size: 12px;
-  color: #9ca3af;
+  color: #a1a1a6;
   text-align: center;
 }
 
@@ -438,7 +438,7 @@ onMounted(() => {
 
 .sc__item:hover,
 .sc__item.on {
-  background: #EFF4FF;
+  background: #E8F2FC;
 }
 
 .sc__avatar {
@@ -449,8 +449,8 @@ onMounted(() => {
   width: 22px;
   height: 22px;
   font-size: 12px;
-  color: #2563EB;
-  background: #BFDBFE;
+  color: #0071E3;
+  background: #B8D7F5;
   border-radius: 50%;
 }
 
@@ -459,8 +459,8 @@ onMounted(() => {
   padding: 0 6px;
   margin-right: 4px;
   font-size: 11px;
-  color: #4b5563;
-  background: #e5e7eb;
+  color: #6e6e73;
+  background: #e5e5ea;
   border-radius: 4px;
 }
 </style>

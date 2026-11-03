@@ -127,9 +127,9 @@ async function openWeb() {
   justify-content: center;
   width: 28px;
   height: 28px;
-  color: #6b7280;
+  color: #86868b;
   cursor: pointer;
-  background: #f3f4f6;
+  background: #f2f2f7;
   border: 0;
   border-radius: 50%;
 }
@@ -160,7 +160,7 @@ async function openWeb() {
   justify-content: center;
   width: 42px;
   height: 42px;
-  color: #111827;
+  color: #1D1D1F;
   background: #fff;
   border-radius: 10px;
 }
@@ -195,7 +195,7 @@ async function openWeb() {
   align-items: center;
   margin-bottom: 18px;
   font-size: 14px;
-  color: #374151;
+  color: #424245;
 }
 
 .sc-steps span {
@@ -206,8 +206,8 @@ async function openWeb() {
   width: 28px;
   height: 28px;
   font-size: 13px;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: #86868b;
+  background: #f2f2f7;
   border-radius: 50%;
 }
 
@@ -240,7 +240,7 @@ async function openWeb() {
   font-size: 12px;
   font-weight: 700;
   color: #fff;
-  background: #2563EB;
+  background: #0071E3;
   border-radius: 50%;
 }
 

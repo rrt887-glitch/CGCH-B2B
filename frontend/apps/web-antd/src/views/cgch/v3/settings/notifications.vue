@@ -125,12 +125,12 @@ onMounted(load);
   padding: 12px 0;
   font-size: 14px;
   color: #1f2937;
-  border-bottom: 1px solid #f0f1f3;
+  border-bottom: 1px solid #ebebf0;
 }
 
 .nt__row--head {
   font-size: 13px;
-  color: #6b7280;
-  border-top: 1px solid #f0f1f3;
+  color: #86868b;
+  border-top: 1px solid #ebebf0;
 }
 </style>

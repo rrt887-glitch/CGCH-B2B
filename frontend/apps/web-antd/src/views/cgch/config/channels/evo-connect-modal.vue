@@ -239,14 +239,14 @@ async function copyCode() {
   margin: 0;
   font-size: 26px;
   font-weight: 700;
-  color: #111827;
+  color: #1D1D1F;
   text-align: center;
 }
 
 .evo__sub {
   margin: 10px 0 30px;
   font-size: 14px;
-  color: #4b5563;
+  color: #6e6e73;
   text-align: center;
 }
 
@@ -258,7 +258,7 @@ async function copyCode() {
 .evo__label {
   margin-bottom: 8px;
   font-size: 14px;
-  color: #374151;
+  color: #424245;
 }
 
 .evo__btn {
@@ -275,7 +275,7 @@ async function copyCode() {
   justify-content: center;
   margin-top: 26px;
   font-size: 14px;
-  color: #2563EB;
+  color: #0071E3;
 }
 
 .evo__code {
@@ -284,17 +284,17 @@ async function copyCode() {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 40px;
   font-weight: 700;
-  color: #111827;
+  color: #1D1D1F;
   text-align: center;
   letter-spacing: 6px;
   cursor: pointer;
-  background: #F3F4F6;
+  background: #F2F2F7;
   border-radius: 14px;
 }
 
 .evo__code.is-expired {
   font-size: 22px;
-  color: #9ca3af;
+  color: #a1a1a6;
   letter-spacing: 0;
   cursor: default;
 }
@@ -324,8 +324,8 @@ async function copyCode() {
   justify-content: center;
   height: 24px;
   font-size: 12px;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: #86868b;
+  background: #f2f2f7;
   border-radius: 50%;
 }
 
@@ -358,7 +358,7 @@ async function copyCode() {
   gap: 10px;
   align-items: center;
   font-size: 13px;
-  color: #6b7280;
+  color: #86868b;
   cursor: pointer;
   background: none;
   border: 0;
@@ -375,7 +375,7 @@ async function copyCode() {
   padding-top: 28px;
   font-size: 12px;
   line-height: 1.7;
-  color: #9ca3af;
+  color: #a1a1a6;
   text-align: center;
 }
 

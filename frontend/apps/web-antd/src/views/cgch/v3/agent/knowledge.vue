@@ -52,10 +52,10 @@ const KINDS = [
 ];
 const ICON: Record<string, { color: string; letter: string }> = {
   pdf: { color: '#f97316', letter: 'P' },
-  word: { color: '#2563eb', letter: 'W' },
+  word: { color: '#0071e3', letter: 'W' },
   excel: { color: '#16a34a', letter: 'X' },
   ppt: { color: '#ea580c', letter: 'P' },
-  text: { color: '#6b7280', letter: 'T' },
+  text: { color: '#86868b', letter: 'T' },
 };
 const kindOf = (ext: string) => KINDS.find((k) => k.ext?.includes(ext))?.value || 'text';
 
@@ -149,7 +149,7 @@ onMounted(() => {
         <div class="flex items-center gap-2">
           <span class="text-base font-semibold text-gray-900">{{ company.name || '未填写公司名称' }}</span>
           <span v-if="company.industry" class="kb__tag">{{ company.industry }}</span>
-          <IconifyIcon icon="lucide:pencil" class="size-3.5 cursor-pointer text-gray-400 hover:text-[#2563EB]" @click="editCompany" />
+          <IconifyIcon icon="lucide:pencil" class="size-3.5 cursor-pointer text-gray-400 hover:text-[#0071E3]" @click="editCompany" />
         </div>
         <a v-if="company.website" :href="company.website" target="_blank" class="mt-1 block text-sm text-gray-500">{{ company.website }}</a>
         <Tooltip :title="company.intro" placement="bottomLeft" :overlay-style="{ maxWidth: '560px' }">
@@ -239,14 +239,14 @@ onMounted(() => {
 
 .kb__company {
   padding-bottom: 14px;
-  border-bottom: 1px solid #f0f1f3;
+  border-bottom: 1px solid #ebebf0;
 }
 
 .kb__tag {
   padding: 0 6px;
   font-size: 11px;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: #86868b;
+  background: #f2f2f7;
   border-radius: 4px;
 }
 
@@ -256,7 +256,7 @@ onMounted(() => {
   overflow: hidden;
   -webkit-line-clamp: 1;
   font-size: 13px;
-  color: #6b7280;
+  color: #86868b;
   -webkit-box-orient: vertical;
 }
 
@@ -271,14 +271,14 @@ onMounted(() => {
 .kb__seg {
   display: inline-flex;
   padding: 3px;
-  background: #F3F4F6;
+  background: #F2F2F7;
   border-radius: 8px;
 }
 
 .kb__seg button {
   padding: 3px 12px;
   font-size: 13px;
-  color: #4b5563;
+  color: #6e6e73;
   cursor: pointer;
   background: none;
   border: 0;
@@ -286,7 +286,7 @@ onMounted(() => {
 }
 
 .kb__seg button.on {
-  color: #2563EB;
+  color: #0071E3;
   background: #fff;
   box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }

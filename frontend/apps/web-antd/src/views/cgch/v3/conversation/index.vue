@@ -112,7 +112,7 @@ onMounted(async () => {
           <div class="flex items-center gap-2 px-3 py-3">
             <Avatar :src="avatar" :size="24" />
             <span class="truncate font-semibold">会话</span>
-            <span class="ml-auto truncate text-xs text-[#6B7280]">{{ userStore.userInfo?.nickname }}</span>
+            <span class="ml-auto truncate text-xs text-[#86868B]">{{ userStore.userInfo?.nickname }}</span>
           </div>
 
           <div v-if="showIm" class="v3-conv__group">
@@ -194,7 +194,7 @@ onMounted(async () => {
 
 <style scoped>
 .v3-conv {
-  height: calc(100vh - 24px);
+  height: calc(100vh - 32px);
 }
 
 .v3-conv :deep(.ant-spin-container) {
@@ -219,9 +219,9 @@ onMounted(async () => {
 .v3-conv__side {
   flex: 0 0 212px;
   overflow: auto;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: var(--cg-shadow);
 }
 
 .v3-conv__group {
@@ -229,13 +229,16 @@ onMounted(async () => {
 }
 
 .v3-conv__item {
+  transition:
+    background-color 0.25s var(--cg-ease),
+    color 0.25s var(--cg-ease);
   display: flex;
   gap: 6px;
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
   font-size: 13px;
-  color: #374151;
+  color: #424245;
   cursor: pointer;
   border-radius: 8px;
 }
@@ -251,29 +254,29 @@ onMounted(async () => {
 .v3-conv__item--sub {
   padding-left: 14px;
   font-size: 13px;
-  color: #4b5563;
+  color: #6e6e73;
 }
 
 .v3-conv__item:hover {
-  color: #111827;
-  background: #f3f4f6;
+  color: #1D1D1F;
+  background: #f2f2f7;
 }
 
 .v3-conv__item.on {
   font-weight: 600;
-  color: #1d4ed8;
-  background: #eff4ff;
+  color: #fff;
+  background: #0071e3;
 }
 
 .v3-conv__label {
   padding: 14px 18px 6px;
   font-size: 12px;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .v3-conv__count {
   font-size: 12px;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .v3-conv__badge {
@@ -285,24 +288,33 @@ onMounted(async () => {
   line-height: 18px;
   color: #fff;
   text-align: center;
-  background: #2563eb;
+  background: #0071e3;
   border-radius: 9px;
 }
 
 .v3-conv__chip {
   padding: 2px 9px;
   font-size: 12px;
-  color: #374151;
+  color: #424245;
   cursor: pointer;
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 4px;
 }
 
 .v3-conv__chip.on {
-  color: #1d4ed8;
-  background: #eff4ff;
-  border-color: #bfdbfe;
+  color: #0066cc;
+  background: #e8f2fc;
+  border-color: #b8d7f5;
+}
+
+.v3-conv__item.on .v3-conv__count {
+  color: rgb(255 255 255 / 85%);
+}
+
+.v3-conv__item.on .v3-conv__badge {
+  color: #0071e3;
+  background: #fff;
 }
 
 .v3-conv__main {

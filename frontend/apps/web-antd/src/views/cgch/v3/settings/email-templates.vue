@@ -218,8 +218,8 @@ onMounted(load);
 
 .et__dark {
   color: #fff;
-  background: #111827;
-  border-color: #111827;
+  background: #1D1D1F;
+  border-color: #1D1D1F;
 }
 
 .et__dark:hover {
@@ -231,7 +231,7 @@ onMounted(load);
   margin-bottom: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .et__box {
@@ -243,7 +243,7 @@ onMounted(load);
 .et__seg {
   display: inline-flex;
   padding: 3px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 8px;
 }
 
@@ -253,7 +253,7 @@ onMounted(load);
   align-items: center;
   padding: 3px 10px;
   font-size: 13px;
-  color: #6b7280;
+  color: #86868b;
   cursor: pointer;
   background: none;
   border: 0;
@@ -261,7 +261,7 @@ onMounted(load);
 }
 
 .et__seg button.on {
-  color: #2563EB;
-  background: #EFF4FF;
+  color: #0071E3;
+  background: #E8F2FC;
 }
 </style>
