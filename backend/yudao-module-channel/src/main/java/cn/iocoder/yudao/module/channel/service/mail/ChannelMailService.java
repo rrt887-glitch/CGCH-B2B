@@ -282,7 +282,7 @@ public class ChannelMailService {
                         .content(fileHelper.load(att.getFileUrl())).build());
             }
             messageId = MailClient.send(credential(account), to, cc, req.getSubject(), req.getText(), req.getHtml(),
-                    original == null ? null : original.getMessageId(), null, files);
+                    original == null ? null : original.getMessageId(), null, files, req.getHeaders());
         } catch (Exception e) {
             throw exception(MAIL_SEND_FAIL, rootMessage(e));
         }

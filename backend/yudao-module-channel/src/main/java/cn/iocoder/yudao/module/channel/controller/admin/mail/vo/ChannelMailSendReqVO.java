@@ -37,4 +37,8 @@ public class ChannelMailSendReqVO {
     @Schema(description = "附件编号（先调用上传接口获得）", example = "[1, 2]")
     private List<Long> attachmentIds;
 
+    /** 附加邮件头（系统内部用，例如群发的退订头），不从请求读取 */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private java.util.Map<String, String> headers;
+
 }

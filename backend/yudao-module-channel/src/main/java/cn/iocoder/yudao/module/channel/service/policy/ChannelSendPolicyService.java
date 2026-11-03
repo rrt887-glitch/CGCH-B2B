@@ -141,6 +141,20 @@ public class ChannelSendPolicyService {
         limit(p.getMailDailyLimit(), () -> mailCount(accountId, now.minusDays(1)), "该邮箱最近 24 小时", recipients.size());
     }
 
+    /** 邮箱（或它的域名）在退订 / 黑名单里 */
+    public boolean isMailSuppressed(String email) {
+        String e = normalizeMail(email);
+        if (e.isEmpty()) {
+            return false;
+        }
+        Set<String> keys = new LinkedHashSet<>();
+        keys.add(e);
+        if (e.contains("@")) {
+            keys.add(e.substring(e.indexOf('@')));
+        }
+        return !channelSuppressionMapper.selectMatches(CHANNEL_MAIL, keys).isEmpty();
+    }
+
     public void checkWhatsApp(Long accountId, String waId, boolean automated) {
         String d = digits(waId);
         if (!d.isEmpty() && channelSuppressionMapper.selectOne(CHANNEL_WHATSAPP, d) != null) {

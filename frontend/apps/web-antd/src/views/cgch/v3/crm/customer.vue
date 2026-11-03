@@ -26,6 +26,7 @@ import {
   receiveCustomer,
 } from '#/api/crm/customer';
 import { createReactivateTask } from '#/api/channel/reactivate';
+import { batchDraftCustomers } from '#/api/channel/mail-batch';
 import type { LatestResearch } from '#/api/channel/research';
 import { createResearch, getLatestResearch } from '#/api/channel/research';
 import { requestClient } from '#/api/request';
@@ -242,6 +243,16 @@ async function oneClickWake() {
   }
 }
 
+/** 群发邮件：勾选的客户带到「邮件群发」新建页 */
+function mailToSelected() {
+  if (!selected.value.length) {
+    message.info('请先勾选要群发邮件的客户');
+    return;
+  }
+  batchDraftCustomers.value = selected.value.map((c) => ({ id: c.id, name: c.name }));
+  hubSelect('mail-batch', { new: '1' });
+}
+
 onMounted(async () => {
   if (props.pool) return;
   loadStageStats();
@@ -277,6 +288,7 @@ const me = computed(() => userStore.userInfo?.id);
       </template>
       <template #actions>
         <Button class="crm-ai-btn" :loading="busy" @click="oneClickWake"><IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5" />一键唤醒</Button>
+        <Button v-if="!pool" @click="mailToSelected"><IconifyIcon icon="lucide:send" class="mr-1 inline size-3.5" />群发邮件</Button>
         <Button v-if="!pool" class="crm-ai-btn" :loading="busy" @click="oneClickResearch">
           <IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5" />一键背调
         </Button>
