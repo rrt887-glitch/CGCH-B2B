@@ -115,11 +115,11 @@ const accountName = (id?: number) => {
 };
 const PLATFORM_DOT: Record<string, string> = {
   whatsapp: '#16A34A',
-  messenger: '#2563EB',
+  messenger: '#0071E3',
   instagram: '#DB2777',
   web: '#4F46E5',
   youtube: '#DC2626',
-  tiktok: '#111827',
+  tiktok: '#1D1D1F',
 };
 const priorityMeta = (p?: number) => PRIORITY_OPTIONS.find((o) => o.value === (p ?? 0));
 const statusLabel = (s?: string) => CONVERSATION_STATUS.find((o) => o.value === (s || 'open'))?.label;
@@ -857,10 +857,10 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
     <div v-else class="flex h-full gap-3">
       <!-- 会话列表 -->
-      <div class="flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E7EB] bg-white">
+      <div class="flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E5EA] bg-white">
         <div class="flex flex-col gap-2.5 px-4 pt-3.5">
           <div class="flex items-center gap-2">
-            <h2 class="m-0 min-w-0 flex-1 truncate text-base font-semibold text-[#111827]">{{ listTitle }}</h2>
+            <h2 class="m-0 min-w-0 flex-1 truncate text-base font-semibold text-[#1D1D1F]">{{ listTitle }}</h2>
             <Select v-model:value="statusFilter" size="small" class="w-[92px]" :options="STATUS_FILTER" aria-label="会话状态" />
             <Tooltip v-if="waAccounts.length > 0" title="新会话">
               <Button size="small" aria-label="新会话" @click="openNewChat"><IconifyIcon icon="lucide:plus" class="size-3.5" /></Button>
@@ -868,7 +868,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
           </div>
           <Select v-if="!embedded" v-model:value="accountId" size="small" :options="accountOptions" />
           <InputSearch v-model:value="keyword" allow-clear placeholder="搜索客户、号码、备注名" @search="() => loadConversations()" />
-          <div class="flex gap-4 overflow-x-auto border-0 border-b border-solid border-[#E5E7EB]" role="tablist" aria-label="会话筛选">
+          <div class="flex gap-4 overflow-x-auto border-0 border-b border-solid border-[#E5E5EA]" role="tablist" aria-label="会话筛选">
             <button
               v-for="f in FILTER_OPTIONS"
               :key="f.value"
@@ -876,7 +876,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               role="tab"
               :aria-selected="listFilter === f.value"
               class="-mb-px shrink-0 cursor-pointer border-0 border-b-2 border-solid bg-transparent px-0 pb-2 pt-1 text-[13px]"
-              :class="listFilter === f.value ? 'border-[#2563EB] font-semibold text-[#111827]' : 'border-transparent text-[#6B7280] hover:text-[#111827]'"
+              :class="listFilter === f.value ? 'border-[#0071E3] font-semibold text-[#1D1D1F]' : 'border-transparent text-[#86868B] hover:text-[#1D1D1F]'"
               @click="listFilter = f.value as any"
             >
               {{ f.label }}
@@ -899,41 +899,41 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             <div
               v-for="c in conversations"
               :key="c.id"
-              class="flex cursor-pointer gap-2.5 border-0 border-b border-solid border-[#F3F4F6] px-4 py-3"
-              :class="current?.id === c.id ? 'bg-[#EFF4FF] shadow-[inset_3px_0_0_#2563EB]' : 'hover:bg-[#F9FAFB]'"
+              class="flex cursor-pointer gap-2.5 border-0 border-b border-solid border-[#F2F2F7] px-4 py-3"
+              :class="current?.id === c.id ? 'bg-[#E8F2FC] shadow-[inset_3px_0_0_#0071E3]' : 'hover:bg-[#F5F5F7]'"
               @click="openConversation(c)"
             >
               <Avatar :size="36" :src="c.avatarUrl || undefined" class="shrink-0" :class="c.avatarUrl ? '' : plat(c).avatar">{{ initials(c) }}</Avatar>
               <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <div class="flex items-center gap-1.5 text-[11px] text-[#6B7280]">
+                <div class="flex items-center gap-1.5 text-[11px] text-[#86868B]">
                   <span class="inline-block size-2 shrink-0 rounded-sm" :style="{ background: PLATFORM_DOT[c.platform || 'whatsapp'] }"></span>
                   <span class="min-w-0 flex-1 truncate">{{ accountName(c.accountId) || plat(c).label }}</span>
                   <span class="shrink-0">{{ md(c.lastMessageTime) }} {{ hm(c.lastMessageTime) }}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <span class="min-w-0 flex-1 truncate font-semibold text-[#111827]">
+                  <span class="min-w-0 flex-1 truncate font-semibold text-[#1D1D1F]">
                     <span v-if="c.starred" class="mr-1 text-amber-500">★</span>{{ c.remarkName || c.customerName || contact(c) }}
                   </span>
                   <span
                     v-if="c.unreadCount"
-                    class="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[#2563EB] px-1.5 text-[11px] font-semibold text-white"
+                    class="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[#0071E3] px-1.5 text-[11px] font-semibold text-white"
                   >
                     {{ c.unreadCount > 99 ? '99+' : c.unreadCount }}
                   </span>
                 </div>
-                <div class="truncate text-[13px] text-[#4B5563]">
-                  <span v-if="teamView && c.handlerName" class="mr-1 text-[#2563EB]">[{{ c.handlerName }}]</span>{{ c.lastMessagePreview }}
+                <div class="truncate text-[13px] text-[#6E6E73]">
+                  <span v-if="teamView && c.handlerName" class="mr-1 text-[#0071E3]">[{{ c.handlerName }}]</span>{{ c.lastMessagePreview }}
                 </div>
                 <div v-if="(c.priority ?? 0) > 0 || c.customerLevel || (!statusFilter && c.status && c.status !== 'open')" class="mt-0.5 flex flex-wrap gap-1">
                   <span
                     v-if="(c.priority ?? 0) > 0"
                     class="rounded px-1.5 text-[11px] font-medium leading-[18px]"
-                    :style="{ color: priorityMeta(c.priority)?.color, background: '#F9FAFB', border: `1px solid ${priorityMeta(c.priority)?.color}33` }"
+                    :style="{ color: priorityMeta(c.priority)?.color, background: '#F5F5F7', border: `1px solid ${priorityMeta(c.priority)?.color}33` }"
                   >
                     {{ priorityMeta(c.priority)?.label }}
                   </span>
-                  <span v-if="c.customerLevel" class="rounded bg-[#FEF3C7] px-1.5 text-[11px] leading-[18px] text-[#92400E]">{{ levelLabel(c.customerLevel) }}</span>
-                  <span v-if="!statusFilter && c.status && c.status !== 'open'" class="rounded bg-[#F3F4F6] px-1.5 text-[11px] leading-[18px] text-[#374151]">
+                  <span v-if="c.customerLevel" class="rounded bg-[#FFF4E0] px-1.5 text-[11px] leading-[18px] text-[#A05A00]">{{ levelLabel(c.customerLevel) }}</span>
+                  <span v-if="!statusFilter && c.status && c.status !== 'open'" class="rounded bg-[#F2F2F7] px-1.5 text-[11px] leading-[18px] text-[#424245]">
                     {{ statusLabel(c.status) }}
                   </span>
                 </div>
@@ -944,10 +944,10 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
       </div>
 
       <!-- 聊天区 -->
-      <div class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E7EB] bg-white">
+      <div class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E5EA] bg-white">
         <div v-if="!current" class="flex h-full items-center justify-center"><Empty description="选择一个会话" /></div>
         <template v-else>
-          <div class="flex items-center justify-between border-0 border-b border-solid border-[#E5E7EB] px-5 py-3">
+          <div class="flex items-center justify-between border-0 border-b border-solid border-[#E5E5EA] px-5 py-3">
             <div class="flex min-w-0 items-center gap-3">
             <Avatar :size="36" :src="current.avatarUrl || undefined" :class="current.avatarUrl ? 'shrink-0' : `shrink-0 ${plat(current).avatar}`">{{ initials(current) }}</Avatar>
             <div class="min-w-0">
@@ -992,7 +992,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               </Tooltip>
               <Tooltip :title="current.starred ? '取消收藏' : '收藏'">
                 <Button size="small" :aria-label="current.starred ? '取消收藏' : '收藏'" @click="toggleStar(current)">
-                  <span :class="current.starred ? 'text-amber-500' : 'text-[#6B7280]'">★</span>
+                  <span :class="current.starred ? 'text-amber-500' : 'text-[#86868B]'">★</span>
                 </Button>
               </Tooltip>
               <Button size="small" @click="openTransfer">
@@ -1021,38 +1021,38 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             </div>
           </div>
 
-          <div ref="chatBox" class="flex-1 overflow-auto bg-[#F6F7F9] px-7 py-6">
+          <div ref="chatBox" class="flex-1 overflow-auto bg-white px-7 py-6">
             <Spin :spinning="chatLoading">
               <template v-for="it in timeline" :key="it.key">
               <div v-if="it.kind === 'event' && it.ev.kind === 'activity'" class="mb-3 flex justify-center">
-                <span class="rounded-full bg-[#EEF0F3] px-3 py-1 text-xs text-[#4B5563]">{{ it.ev.content }} · {{ hm(it.ev.createTime) }}</span>
+                <span class="rounded-full bg-[#EEF0F3] px-3 py-1 text-xs text-[#6E6E73]">{{ it.ev.content }} · {{ hm(it.ev.createTime) }}</span>
               </div>
               <div v-else-if="it.kind === 'event'" class="mb-3 flex justify-end">
-                <div class="max-w-[70%] rounded-[14px_4px_14px_14px] border border-solid border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5 text-sm leading-[22px] text-[#78350F]">
-                  <div class="mb-1 flex items-center gap-2 text-[11px] font-semibold text-[#92400E]">
+                <div class="cg-bubble max-w-[70%] rounded-[18px] bg-[rgba(255,204,0,0.18)] px-3.5 py-2.5 text-sm leading-[22px] text-[#5C3B00]">
+                  <div class="mb-1 flex items-center gap-2 text-[11px] font-semibold text-[#A05A00]">
                     <IconifyIcon icon="lucide:lock" class="size-3" />内部备注 · 客户看不到
                   </div>
                   <div class="whitespace-pre-wrap break-words">{{ it.ev.content }}</div>
-                  <div class="mt-1 flex items-center justify-end gap-2 text-[11px] text-[#92400E]/80">
+                  <div class="mt-1 flex items-center justify-end gap-2 text-[11px] text-[#A05A00]/80">
                     <span>{{ it.ev.userName }} · {{ md(it.ev.createTime) }} {{ hm(it.ev.createTime) }}</span>
-                    <a v-if="String(it.ev.userId) === String(myUserId)" class="!text-[#92400E] underline" @click="removeNote(it.ev)">删除</a>
+                    <a v-if="String(it.ev.userId) === String(myUserId)" class="!text-[#A05A00] underline" @click="removeNote(it.ev)">删除</a>
                   </div>
                 </div>
               </div>
               <div v-else-if="it.kind === 'msg'" class="mb-3 flex" :class="it.m.direction === 2 ? 'justify-end' : 'justify-start'">
                 <div
-                  class="max-w-[70%] px-3.5 py-2.5 text-sm leading-[22px]"
+                  class="cg-bubble max-w-[70%] px-3.5 py-2.5 text-[15px] leading-[21px]"
                   :class="
                     it.m.direction === 2
-                      ? 'rounded-[14px_4px_14px_14px] bg-[#2563EB] text-white [&_a]:text-white [&_a]:underline'
-                      : 'rounded-[4px_14px_14px_14px] border border-solid border-[#E5E7EB] bg-white text-[#111827]'
+                      ? 'rounded-[18px] bg-[#0071E3] text-white [&_a]:text-white [&_a]:underline'
+                      : 'rounded-[18px] bg-[#E9E9EB] text-[#1D1D1F]'
                   "
                 >
                   <template v-if="MEDIA_LABEL[it.m.type]">
                     <a v-if="isImage(it.m)" :href="it.m.fileUrl" target="_blank" rel="noopener">
                       <img :src="it.m.fileUrl" class="mb-1 max-h-60 max-w-full rounded" alt="" />
                     </a>
-                    <div v-else class="mb-1 flex items-center gap-2 text-xs" :class="it.m.direction === 2 ? 'text-white/85' : 'text-[#4B5563]'">
+                    <div v-else class="mb-1 flex items-center gap-2 text-xs" :class="it.m.direction === 2 ? 'text-white/85' : 'text-[#6E6E73]'">
                       <span>[{{ MEDIA_LABEL[it.m.type] }}{{ it.m.fileName ? `：${it.m.fileName}` : '' }}]</span>
                       <a v-if="it.m.fileUrl" :href="it.m.fileUrl" target="_blank" rel="noopener">下载</a>
                       <Button
@@ -1067,20 +1067,20 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                       </Button>
                     </div>
                   </template>
-                  <div v-if="it.m.type === 'template'" class="mb-1 text-xs" :class="it.m.direction === 2 ? 'text-white/85' : 'text-[#4B5563]'">[模板 {{ it.m.templateName }}]</div>
+                  <div v-if="it.m.type === 'template'" class="mb-1 text-xs" :class="it.m.direction === 2 ? 'text-white/85' : 'text-[#6E6E73]'">[模板 {{ it.m.templateName }}]</div>
                   <div class="whitespace-pre-wrap break-words">{{ it.m.textBody }}</div>
                   <div
                     v-if="translations[it.m.id]"
                     class="mt-1.5 whitespace-pre-wrap break-words border-0 border-t border-dashed pt-1.5 text-[13px]"
-                    :class="it.m.direction === 2 ? 'border-white/40 text-white/90' : 'border-[#D1D5DB] text-[#4B5563]'"
+                    :class="it.m.direction === 2 ? 'border-white/40 text-white/90' : 'border-[#D2D2D7] text-[#6E6E73]'"
                   >
                     {{ translations[it.m.id] }}
                   </div>
-                  <div class="mt-1 flex items-center justify-end gap-1 text-[11px]" :class="it.m.direction === 2 ? 'text-white/80' : 'text-[#6B7280]'">
-                    <span v-if="it.m.aiGenerated" class="rounded px-1 font-semibold" :class="it.m.direction === 2 ? 'bg-white/20' : 'bg-[#EFF4FF] text-[#1D4ED8]'">AI</span>
+                  <div class="mt-1 flex items-center justify-end gap-1 text-[11px]" :class="it.m.direction === 2 ? 'text-white/80' : 'text-[#86868B]'">
+                    <span v-if="it.m.aiGenerated" class="rounded px-1 font-semibold" :class="it.m.direction === 2 ? 'bg-white/20' : 'bg-[#E8F2FC] text-[#0066CC]'">AI</span>
                     <span>{{ md(it.m.messageTime) }} {{ hm(it.m.messageTime) }}</span>
                     <Tooltip v-if="it.m.direction === 2 && it.m.status" :title="it.m.errorMessage || STATUS_ICON[it.m.status]?.label">
-                      <span :class="it.m.status === 'failed' ? 'rounded bg-white px-1 font-bold text-[#B91C1C]' : it.m.status === 'read' ? 'font-semibold' : ''">
+                      <span :class="it.m.status === 'failed' ? 'rounded bg-white px-1 font-bold text-[#D70015]' : it.m.status === 'read' ? 'font-semibold' : ''">
                         {{ STATUS_ICON[it.m.status]?.text }}
                       </span>
                     </Tooltip>
@@ -1091,14 +1091,14 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             </Spin>
           </div>
 
-          <div class="border-0 border-t border-solid border-[#E5E7EB] px-5 pb-4 pt-3">
-            <div v-if="aiDraft" class="mb-3 rounded-xl border border-solid border-[#BFDBFE] bg-white p-3.5 text-sm">
-              <div class="mb-1.5 text-xs font-semibold text-[#1D4ED8]">
+          <div class="border-0 border-t border-solid border-[#E5E5EA] px-5 pb-4 pt-3">
+            <div v-if="aiDraft" class="mb-3 rounded-xl border border-solid border-[#B8D7F5] bg-white p-3.5 text-sm">
+              <div class="mb-1.5 text-xs font-semibold text-[#0066CC]">
                 <IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5 align-[-2px]" />
                 AI 已准备回复，未自动发出：{{ DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason }}
                 <span v-if="aiDraft.reasonDetail">（{{ aiDraft.reasonDetail }}）</span>
               </div>
-              <div v-if="aiDraft.content" class="line-clamp-4 whitespace-pre-wrap leading-[22px] text-[#111827]">{{ aiDraft.content }}</div>
+              <div v-if="aiDraft.content" class="line-clamp-4 whitespace-pre-wrap leading-[22px] text-[#1D1D1F]">{{ aiDraft.content }}</div>
               <div class="mt-2.5 flex justify-end gap-2">
                 <Button size="small" @click="discardDraft">不用</Button>
                 <Button v-if="aiDraft.content && current.windowOpen" size="small" type="primary" @click="useDraft">填入输入框修改后发送</Button>
@@ -1112,42 +1112,42 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 role="tab"
                 :aria-selected="composeMode === t.k"
                 class="cursor-pointer border-0 border-b-2 border-solid bg-transparent px-0 pb-1.5 text-[13px]"
-                :class="composeMode === t.k ? (t.k === 'note' ? 'border-[#D97706] font-semibold text-[#92400E]' : 'border-[#2563EB] font-semibold text-[#111827]') : 'border-transparent text-[#6B7280]'"
+                :class="composeMode === t.k ? (t.k === 'note' ? 'border-[#FF9F0A] font-semibold text-[#A05A00]' : 'border-[#0071E3] font-semibold text-[#1D1D1F]') : 'border-transparent text-[#86868B]'"
                 @click="composeMode = t.k as any"
               >
                 {{ t.label }}
               </button>
               <span class="flex-1"></span>
-              <span v-if="composeMode === 'note'" class="text-xs text-[#92400E]">只有团队能看到，不会发给客户</span>
+              <span v-if="composeMode === 'note'" class="text-xs text-[#A05A00]">只有团队能看到，不会发给客户</span>
             </div>
             <template v-if="composeMode === 'note'">
               <Textarea
                 v-model:value="noteText"
                 :auto-size="{ minRows: 2, maxRows: 6 }"
                 :maxlength="1990"
-                class="!border-[#FDE68A] !bg-[#FFFBEB]"
+                class="!border-[#FFE7A3] !bg-[#FFF8E0]"
                 placeholder="写给同事看的备注，例如：报价前先确认起订量。Enter 保存，Shift+Enter 换行"
                 @keydown="onNoteKeydown"
               />
               <div class="mt-2 flex justify-end">
-                <Button type="primary" class="!border-[#D97706] !bg-[#D97706]" :loading="noteSaving" :disabled="!noteText.trim()" @click="sendNote">添加备注</Button>
+                <Button type="primary" class="!border-[#FF9F0A] !bg-[#FF9F0A]" :loading="noteSaving" :disabled="!noteText.trim()" @click="sendNote">添加备注</Button>
               </div>
             </template>
             <template v-else-if="current.windowOpen">
-              <div v-if="slashOpen" class="mb-2 overflow-hidden rounded-lg border border-solid border-[#E5E7EB] bg-white shadow-sm" role="listbox" aria-label="快捷回复">
-                <div class="border-0 border-b border-solid border-[#F3F4F6] px-3 py-1.5 text-xs text-[#6B7280]">快捷回复 · ↑↓ 选择，回车插入，Esc 关闭</div>
+              <div v-if="slashOpen" class="mb-2 overflow-hidden rounded-lg border border-solid border-[#E5E5EA] bg-white shadow-sm" role="listbox" aria-label="快捷回复">
+                <div class="border-0 border-b border-solid border-[#F2F2F7] px-3 py-1.5 text-xs text-[#86868B]">快捷回复 · ↑↓ 选择，回车插入，Esc 关闭</div>
                 <div
                   v-for="(q, i) in slashList"
                   :key="q.id"
                   role="option"
                   :aria-selected="i === slashIndex"
                   class="cursor-pointer px-3 py-1.5"
-                  :class="i === slashIndex ? 'bg-[#EFF4FF]' : 'hover:bg-[#F9FAFB]'"
+                  :class="i === slashIndex ? 'bg-[#E8F2FC]' : 'hover:bg-[#F5F5F7]'"
                   @mouseenter="slashIndex = i"
                   @mousedown.prevent="useSlash(q)"
                 >
-                  <div class="text-[13px] font-medium text-[#111827]">{{ q.title }}</div>
-                  <div class="truncate text-xs text-[#6B7280]">{{ q.content }}</div>
+                  <div class="text-[13px] font-medium text-[#1D1D1F]">{{ q.title }}</div>
+                  <div class="truncate text-xs text-[#86868B]">{{ q.content }}</div>
                 </div>
               </div>
               <Textarea
@@ -1215,18 +1215,18 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
       <!-- 客户信息栏（设计稿「会话工作台」右侧）：关联了客户时显示，窄屏隐藏 -->
       <aside
         v-if="current"
-        class="hidden w-80 shrink-0 flex-col gap-5 overflow-auto rounded-xl border border-solid border-[#E5E7EB] bg-white p-5 xl:flex"
+        class="hidden w-80 shrink-0 flex-col gap-5 overflow-auto rounded-xl border border-solid border-[#E5E5EA] bg-white p-5 xl:flex"
       >
         <!-- 联系人 -->
-        <div class="flex flex-col gap-2 border-0 border-b border-solid border-[#F3F4F6] pb-4">
+        <div class="flex flex-col gap-2 border-0 border-b border-solid border-[#F2F2F7] pb-4">
           <Avatar :size="48" :src="current.avatarUrl || undefined" :class="current.avatarUrl ? '' : plat(current).avatar">{{ initials(current) }}</Avatar>
           <div>
-            <div class="text-base font-semibold text-[#111827]">{{ current.remarkName || contact(current) }}</div>
-            <div class="text-[13px] text-[#4B5563]">
+            <div class="text-base font-semibold text-[#1D1D1F]">{{ current.remarkName || contact(current) }}</div>
+            <div class="text-[13px] text-[#6E6E73]">
               {{ plat(current).label }} · {{ isWa(current) ? waNumber(current) : accountName(current.accountId) }}
             </div>
           </div>
-          <div v-if="!current.customerId" class="flex items-center gap-2 text-[13px] text-[#6B7280]">
+          <div v-if="!current.customerId" class="flex items-center gap-2 text-[13px] text-[#86868B]">
             <span>{{ current.clueName ? `线索：${current.clueName}` : '还没有关联 CRM 客户' }}</span>
             <a v-if="current.clueId" @click="router.push(`/crm/clue/detail/${current.clueId}`)">查看</a>
           </div>
@@ -1234,14 +1234,14 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
         <!-- 会话操作 -->
         <section class="flex flex-col gap-3">
-          <div class="text-[13px] font-semibold text-[#111827]">会话操作</div>
+          <div class="text-[13px] font-semibold text-[#1D1D1F]">会话操作</div>
           <div class="grid grid-cols-[64px_1fr] items-center gap-x-3 gap-y-2.5 text-[13px]">
-            <span class="text-[#6B7280]">处理人</span>
+            <span class="text-[#86868B]">处理人</span>
             <span class="flex items-center justify-between gap-2">
               <span class="truncate">{{ current.handlerName || '-' }}</span>
               <a class="shrink-0 text-xs" @click="openTransfer">转交</a>
             </span>
-            <span class="text-[#6B7280]">状态</span>
+            <span class="text-[#86868B]">状态</span>
             <Select
               :value="current.status || 'open'"
               size="small"
@@ -1249,7 +1249,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               aria-label="会话状态"
               @change="(v: any) => setStatus(v)"
             />
-            <span class="text-[#6B7280]">优先级</span>
+            <span class="text-[#86868B]">优先级</span>
             <Select
               :value="current.priority ?? 0"
               size="small"
@@ -1257,19 +1257,19 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               aria-label="优先级"
               @change="(v: any) => setPriority(Number(v))"
             />
-            <span class="text-[#6B7280]">收件箱</span>
+            <span class="text-[#86868B]">收件箱</span>
             <span class="truncate">{{ accountName(current.accountId) || plat(current).label }}</span>
           </div>
         </section>
 
         <template v-if="current.customerId && customerStage !== undefined">
-        <div class="flex flex-col gap-1 border-0 border-t border-solid border-[#F3F4F6] pt-4">
-          <div class="text-xs text-[#6B7280]">客户</div>
-          <a class="text-base font-semibold text-[#111827]" @click="router.push(`/crm/customer/detail/${current.customerId}`)">{{ customer?.name || current.customerName }}</a>
+        <div class="flex flex-col gap-1 border-0 border-t border-solid border-[#F2F2F7] pt-4">
+          <div class="text-xs text-[#86868B]">客户</div>
+          <a class="text-base font-semibold text-[#1D1D1F]" @click="router.push(`/crm/customer/detail/${current.customerId}`)">{{ customer?.name || current.customerName }}</a>
           <div class="mt-1 flex flex-wrap gap-1.5">
-            <span v-if="customer?.level" class="rounded bg-[#FEF3C7] px-2 py-0.5 text-xs font-medium text-[#92400E]">{{ levelLabel(customer.level) }}</span>
-            <span v-if="customer?.countryCode" class="rounded bg-[#F3F4F6] px-2 py-0.5 text-xs text-[#374151]">{{ countryName(customer.countryCode) || customer.countryCode }}</span>
-            <span v-for="t in customerTags" :key="t" class="rounded bg-[#F3F4F6] px-2 py-0.5 text-xs text-[#374151]">{{ tagName(t) || t }}</span>
+            <span v-if="customer?.level" class="rounded bg-[#FFF4E0] px-2 py-0.5 text-xs font-medium text-[#A05A00]">{{ levelLabel(customer.level) }}</span>
+            <span v-if="customer?.countryCode" class="rounded bg-[#F2F2F7] px-2 py-0.5 text-xs text-[#424245]">{{ countryName(customer.countryCode) || customer.countryCode }}</span>
+            <span v-for="t in customerTags" :key="t" class="rounded bg-[#F2F2F7] px-2 py-0.5 text-xs text-[#424245]">{{ tagName(t) || t }}</span>
             <Popover trigger="click" placement="bottomRight" :open="tagEditOpen" @open-change="openTagEdit">
               <template #content>
                 <div class="flex w-72 flex-col gap-2">
@@ -1293,7 +1293,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   <div class="text-right"><Button size="small" type="primary" @click="saveTags">保存</Button></div>
                 </div>
               </template>
-              <button type="button" class="cursor-pointer rounded border border-dashed border-[#D1D5DB] bg-white px-2 py-0.5 text-xs text-[#4B5563]">+ 标签</button>
+              <button type="button" class="cursor-pointer rounded border border-dashed border-[#D2D2D7] bg-white px-2 py-0.5 text-xs text-[#6E6E73]">+ 标签</button>
             </Popover>
           </div>
         </div>
@@ -1309,34 +1309,34 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               :title="`改为「${s.label}」`"
               @click="changeStage(s.value)"
             >
-              <span class="block h-1.5 w-full rounded-full" :class="s.done ? 'bg-[#2563EB]' : 'bg-[#E5E7EB]'"></span>
-              <span class="text-[11px]" :class="s.on ? 'font-semibold text-[#2563EB]' : 'text-[#6B7280]'">{{ s.label }}</span>
+              <span class="block h-1.5 w-full rounded-full" :class="s.done ? 'bg-[#0071E3]' : 'bg-[#E5E5EA]'"></span>
+              <span class="text-[11px]" :class="s.on ? 'font-semibold text-[#0071E3]' : 'text-[#86868B]'">{{ s.label }}</span>
             </button>
           </div>
         </div>
 
         <dl class="m-0 grid grid-cols-[72px_1fr] gap-x-3 gap-y-2.5 text-[13px]">
           <template v-if="customer?.companyName">
-            <dt class="text-[#6B7280]">公司</dt><dd class="m-0 break-words">{{ customer.companyName }}</dd>
+            <dt class="text-[#86868B]">公司</dt><dd class="m-0 break-words">{{ customer.companyName }}</dd>
           </template>
           <template v-if="customer?.email">
-            <dt class="text-[#6B7280]">邮箱</dt><dd class="m-0 break-all">{{ customer.email }}</dd>
+            <dt class="text-[#86868B]">邮箱</dt><dd class="m-0 break-all">{{ customer.email }}</dd>
           </template>
           <template v-if="customer?.mobile">
-            <dt class="text-[#6B7280]">电话</dt><dd class="m-0">{{ customer.mobile }}</dd>
+            <dt class="text-[#86868B]">电话</dt><dd class="m-0">{{ customer.mobile }}</dd>
           </template>
-          <dt class="text-[#6B7280]">下次联系</dt>
-          <dd class="m-0" :class="customer?.contactNextTime ? 'font-medium text-[#B45309]' : 'text-[#6B7280]'">{{ fmtDateTime(customer?.contactNextTime, 'MM-DD HH:mm', '未约') }}</dd>
-          <dt class="text-[#6B7280]">负责人</dt><dd class="m-0">{{ customer?.ownerUserName || '-' }}</dd>
+          <dt class="text-[#86868B]">下次联系</dt>
+          <dd class="m-0" :class="customer?.contactNextTime ? 'font-medium text-[#C93400]' : 'text-[#86868B]'">{{ fmtDateTime(customer?.contactNextTime, 'MM-DD HH:mm', '未约') }}</dd>
+          <dt class="text-[#86868B]">负责人</dt><dd class="m-0">{{ customer?.ownerUserName || '-' }}</dd>
         </dl>
 
-        <div class="flex flex-col gap-2 rounded-[10px] bg-[#F9FAFB] p-3">
+        <div class="flex flex-col gap-2 rounded-[10px] bg-[#F5F5F7] p-3">
           <div class="flex items-center justify-between">
             <span class="text-[13px] font-semibold">最近跟进</span>
             <a class="text-xs" @click="router.push(`/crm/customer/detail/${current.customerId}`)">全部记录</a>
           </div>
-          <div class="text-[13px] leading-5 text-[#374151]">{{ customer?.contactLastContent || '还没有跟进记录' }}</div>
-          <div v-if="customer?.contactLastTime" class="text-xs text-[#6B7280]">{{ fmtDateTime(customer.contactLastTime, 'MM-DD HH:mm') }}</div>
+          <div class="text-[13px] leading-5 text-[#424245]">{{ customer?.contactLastContent || '还没有跟进记录' }}</div>
+          <div v-if="customer?.contactLastTime" class="text-xs text-[#86868B]">{{ fmtDateTime(customer.contactLastTime, 'MM-DD HH:mm') }}</div>
         </div>
 
         <div v-if="otherConversations.length" class="flex flex-col gap-1.5">
@@ -1345,22 +1345,22 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             v-for="o in otherConversations"
             :key="o.id"
             type="button"
-            class="flex cursor-pointer items-center gap-2 rounded-lg border border-solid border-[#E5E7EB] bg-white px-2.5 py-2 text-left hover:border-[#2563EB]"
+            class="flex cursor-pointer items-center gap-2 rounded-lg border border-solid border-[#E5E5EA] bg-white px-2.5 py-2 text-left hover:border-[#0071E3]"
             @click="openConversation(o)"
           >
             <span class="inline-block size-2 shrink-0 rounded-sm" :style="{ background: PLATFORM_DOT[o.platform || 'whatsapp'] }"></span>
             <span class="flex min-w-0 flex-1 flex-col">
-              <span class="truncate text-xs text-[#6B7280]">{{ accountName(o.accountId) || plat(o).label }} · {{ md(o.lastMessageTime) }}</span>
-              <span class="truncate text-[13px] text-[#111827]">{{ o.lastMessagePreview }}</span>
+              <span class="truncate text-xs text-[#86868B]">{{ accountName(o.accountId) || plat(o).label }} · {{ md(o.lastMessageTime) }}</span>
+              <span class="truncate text-[13px] text-[#1D1D1F]">{{ o.lastMessagePreview }}</span>
             </span>
-            <span v-if="o.status === 'resolved'" class="shrink-0 text-[11px] text-[#6B7280]">已解决</span>
+            <span v-if="o.status === 'resolved'" class="shrink-0 text-[11px] text-[#86868B]">已解决</span>
           </button>
         </div>
 
         <div class="flex-1"></div>
         <div class="flex gap-2">
           <Button class="flex-1" @click="router.push(`/crm/customer/detail/${current.customerId}`)">客户详情</Button>
-          <Button class="flex-1 !border-[#111827] !bg-[#111827] !text-white" @click="openFollow">写跟进</Button>
+          <Button class="flex-1 !border-[#1D1D1F] !bg-[#1D1D1F] !text-white" @click="openFollow">写跟进</Button>
         </div>
         </template>
       </aside>
@@ -1370,7 +1370,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
       <div class="flex flex-col gap-3">
         <Textarea v-model:value="followForm.content" :auto-size="{ minRows: 4, maxRows: 8 }" :maxlength="2000" placeholder="这次聊了什么、客户的反馈、下一步要做什么" />
         <div class="flex flex-wrap items-center gap-2 text-sm">
-          <span class="text-[#4B5563]">下次联系</span>
+          <span class="text-[#6E6E73]">下次联系</span>
           <Segmented v-model:value="followForm.days" :options="FOLLOW_DAYS" size="small" />
         </div>
       </div>

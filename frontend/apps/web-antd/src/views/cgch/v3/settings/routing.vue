@@ -238,7 +238,7 @@ onMounted(async () => {
 }
 
 .rt__item.on {
-  background: #EFF4FF;
+  background: #E8F2FC;
   border-color: #c7d7fd;
 }
 
@@ -256,22 +256,22 @@ onMounted(async () => {
   padding: 3px 0;
   font-size: 13px;
   font-weight: 700;
-  color: #2563EB;
+  color: #0071E3;
   text-align: center;
-  background: #EFF4FF;
+  background: #E8F2FC;
   border-radius: 6px;
 }
 
 .rt__hint {
   margin-bottom: 8px;
   font-size: 13px;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .rt__field {
   padding: 4px 10px;
   font-size: 13px;
-  background: #f3f4f6;
+  background: #f2f2f7;
   border-radius: 6px;
 }
 </style>

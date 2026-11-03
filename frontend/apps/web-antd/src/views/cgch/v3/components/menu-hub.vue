@@ -80,10 +80,10 @@ function select(key: string) {
 .v3-hub {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 24px);
+  height: calc(100vh - 32px);
   overflow: hidden;
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 12px;
 }
 
@@ -100,15 +100,15 @@ function select(key: string) {
   align-items: center;
   padding: 4px 10px;
   font-size: 13px;
-  color: #4b5563;
+  color: #6e6e73;
   cursor: pointer;
-  background: #F3F4F6;
+  background: #F2F2F7;
   border: 0;
   border-radius: 8px;
 }
 
 .v3-hub__btn:hover {
-  color: #2563EB;
+  color: #0071E3;
 }
 
 .v3-hub__menu {
@@ -122,13 +122,13 @@ function select(key: string) {
 .v3-hub__menu-title {
   padding: 4px 8px 8px;
   font-size: 12px;
-  color: #9ca3af;
+  color: #a1a1a6;
 }
 
 .v3-hub__group {
   padding: 8px 8px 4px;
   font-size: 12px;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .v3-hub__item {
@@ -144,12 +144,12 @@ function select(key: string) {
 }
 
 .v3-hub__item:hover {
-  background: #F3F4F6;
+  background: #F2F2F7;
 }
 
 .v3-hub__item.on {
-  color: #2563EB;
-  background: #EFF4FF;
+  color: #0071E3;
+  background: #E8F2FC;
 }
 
 .v3-hub__body {

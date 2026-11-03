@@ -70,26 +70,26 @@ onMounted(async () => {
 <template>
   <div class="flex h-full flex-col gap-4 overflow-auto rounded-xl bg-white p-5">
     <div>
-      <h2 class="m-0 text-lg font-semibold text-[#111827]">AI 用量</h2>
-      <p class="m-0 mt-1 text-[13px] text-[#4B5563]">
+      <h2 class="m-0 text-lg font-semibold text-[#1D1D1F]">AI 用量</h2>
+      <p class="m-0 mt-1 text-[13px] text-[#6E6E73]">
         AI 用的是你在「AI 接待设置」里填的大模型 API Key，费用记在你自己的大模型账户里，这里不扣费。下面按功能、按成员统计本月用了多少 token，方便对账。
       </p>
     </div>
 
     <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-      <div class="rounded-xl border border-solid border-[#E5E7EB] p-4">
-        <div class="text-[13px] text-[#4B5563]">本月 token 用量</div>
-        <div class="text-[26px] font-semibold tabular-nums text-[#111827]">{{ fmt(summary?.monthTokens) }}</div>
+      <div class="rounded-xl border border-solid border-[#E5E5EA] p-4">
+        <div class="text-[13px] text-[#6E6E73]">本月 token 用量</div>
+        <div class="text-[26px] font-semibold tabular-nums text-[#1D1D1F]">{{ fmt(summary?.monthTokens) }}</div>
       </div>
-      <div class="rounded-xl border border-solid border-[#E5E7EB] p-4">
-        <div class="text-[13px] text-[#4B5563]">用得最多的功能</div>
-        <div class="truncate text-lg font-semibold text-[#111827]">{{ byFeature[0]?.name ?? '—' }}</div>
-        <div class="text-xs text-[#6B7280]">{{ byFeature[0] ? `${fmt(byFeature[0].tokens)} token` : '本月还没有 AI 调用' }}</div>
+      <div class="rounded-xl border border-solid border-[#E5E5EA] p-4">
+        <div class="text-[13px] text-[#6E6E73]">用得最多的功能</div>
+        <div class="truncate text-lg font-semibold text-[#1D1D1F]">{{ byFeature[0]?.name ?? '—' }}</div>
+        <div class="text-xs text-[#86868B]">{{ byFeature[0] ? `${fmt(byFeature[0].tokens)} token` : '本月还没有 AI 调用' }}</div>
       </div>
-      <div class="rounded-xl border border-solid border-[#E5E7EB] p-4">
-        <div class="text-[13px] text-[#4B5563]">用得最多的成员</div>
-        <div class="truncate text-lg font-semibold text-[#111827]">{{ byUser[0]?.name ?? '—' }}</div>
-        <div class="text-xs text-[#6B7280]">{{ byUser[0] ? `${fmt(byUser[0].tokens)} token` : '—' }}</div>
+      <div class="rounded-xl border border-solid border-[#E5E5EA] p-4">
+        <div class="text-[13px] text-[#6E6E73]">用得最多的成员</div>
+        <div class="truncate text-lg font-semibold text-[#1D1D1F]">{{ byUser[0]?.name ?? '—' }}</div>
+        <div class="text-xs text-[#86868B]">{{ byUser[0] ? `${fmt(byUser[0].tokens)} token` : '—' }}</div>
       </div>
     </div>
 
@@ -101,15 +101,15 @@ onMounted(async () => {
     />
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <section class="rounded-xl border border-solid border-[#E5E7EB] p-4">
+      <section class="rounded-xl border border-solid border-[#E5E5EA] p-4">
         <h3 class="m-0 mb-3 text-sm font-semibold">按功能（本月）</h3>
-        <div v-if="!byFeature.length" class="py-6 text-center text-sm text-[#6B7280]">暂无数据</div>
+        <div v-if="!byFeature.length" class="py-6 text-center text-sm text-[#86868B]">暂无数据</div>
         <div v-for="f in byFeature" :key="f.key" class="mb-2.5">
-          <div class="mb-1 flex justify-between text-[13px]"><span>{{ f.name }}</span><span class="tabular-nums text-[#4B5563]">{{ fmt(f.tokens) }}</span></div>
-          <div class="h-1.5 rounded-full bg-[#F3F4F6]"><div class="h-1.5 rounded-full bg-[#2563EB]" :style="{ width: `${(f.tokens / top) * 100}%` }"></div></div>
+          <div class="mb-1 flex justify-between text-[13px]"><span>{{ f.name }}</span><span class="tabular-nums text-[#6E6E73]">{{ fmt(f.tokens) }}</span></div>
+          <div class="h-1.5 rounded-full bg-[#F2F2F7]"><div class="h-1.5 rounded-full bg-[#0071E3]" :style="{ width: `${(f.tokens / top) * 100}%` }"></div></div>
         </div>
       </section>
-      <section class="rounded-xl border border-solid border-[#E5E7EB] p-4">
+      <section class="rounded-xl border border-solid border-[#E5E5EA] p-4">
         <h3 class="m-0 mb-3 text-sm font-semibold">按成员（本月）</h3>
         <Table
           size="small"
@@ -129,7 +129,7 @@ onMounted(async () => {
       </section>
     </div>
 
-    <section class="rounded-xl border border-solid border-[#E5E7EB] p-4">
+    <section class="rounded-xl border border-solid border-[#E5E5EA] p-4">
       <h3 class="m-0 mb-3 text-sm font-semibold">调用记录</h3>
       <Table
         size="small"

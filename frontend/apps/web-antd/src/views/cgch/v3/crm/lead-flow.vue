@@ -44,14 +44,14 @@ const RULES = [
 .lf__seg {
   display: inline-flex;
   padding: 3px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 8px;
 }
 
 .lf__seg button {
   padding: 4px 14px;
   font-size: 13px;
-  color: #6b7280;
+  color: #86868b;
   cursor: pointer;
   background: none;
   border: 0;
@@ -59,8 +59,8 @@ const RULES = [
 }
 
 .lf__seg button.on {
-  color: #2563EB;
-  background: #EFF4FF;
+  color: #0071E3;
+  background: #E8F2FC;
 }
 
 .lf__card {
@@ -82,7 +82,7 @@ const RULES = [
   line-height: 22px;
   color: #fff;
   text-align: center;
-  background: #2563EB;
+  background: #0071E3;
   border-radius: 50%;
 }
 
@@ -93,8 +93,8 @@ const RULES = [
   padding: 56px 0;
   margin-top: 16px;
   font-size: 14px;
-  color: #6b7280;
-  border: 1px dashed #e5e7eb;
+  color: #86868b;
+  border: 1px dashed #e5e5ea;
   border-radius: 12px;
 }
 </style>

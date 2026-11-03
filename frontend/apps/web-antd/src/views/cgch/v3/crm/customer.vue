@@ -378,9 +378,9 @@ const me = computed(() => userStore.userInfo?.id);
 
 <style scoped>
 .crm-ai-btn {
-  color: #2563EB;
-  background: #EFF4FF;
-  border-color: #BFDBFE;
+  color: #0071E3;
+  background: #E8F2FC;
+  border-color: #B8D7F5;
 }
 .crm-stage-chips {
   display: flex;
@@ -393,26 +393,26 @@ const me = computed(() => userStore.userInfo?.id);
   height: 28px;
   padding: 0 12px;
   font-size: 12px;
-  color: #374151;
+  color: #424245;
   cursor: pointer;
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 14px;
 }
 
 .crm-stage-chips button span {
   margin-left: 4px;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .crm-stage-chips button.on {
   font-weight: 500;
   color: #fff;
-  background: #111827;
-  border-color: #111827;
+  background: #1D1D1F;
+  border-color: #1D1D1F;
 }
 
 .crm-stage-chips button.on span {
-  color: #d1d5db;
+  color: #d2d2d7;
 }
 </style>

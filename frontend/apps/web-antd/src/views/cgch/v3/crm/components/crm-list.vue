@@ -360,7 +360,7 @@ defineExpose({ reload, setExtra, currentParams: params });
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .crm-list__body {
@@ -393,10 +393,10 @@ defineExpose({ reload, setExtra, currentParams: params });
   justify-content: center;
   width: 18px;
   height: 18px;
-  color: #6b7280;
+  color: #86868b;
   cursor: pointer;
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 50%;
 }
 
@@ -417,12 +417,12 @@ defineExpose({ reload, setExtra, currentParams: params });
 }
 
 .crm-rail__item:hover {
-  background: #F3F4F6;
+  background: #F2F2F7;
 }
 
 .crm-rail__item.on {
-  color: #2563EB;
-  background: #EFF4FF;
+  color: #0071E3;
+  background: #E8F2FC;
 }
 
 .crm-rail__all {
@@ -442,7 +442,7 @@ defineExpose({ reload, setExtra, currentParams: params });
 
 .crm-rail__child {
   padding-left: 26px;
-  color: #4b5563;
+  color: #6e6e73;
 }
 
 .crm-rail__sep {
@@ -453,13 +453,13 @@ defineExpose({ reload, setExtra, currentParams: params });
 
 .crm-rail__num {
   font-size: 12px;
-  color: #9ca3af;
+  color: #a1a1a6;
 }
 
 .crm-rail__caret {
   width: 7px;
   height: 7px;
-  color: #6b7280;
+  color: #86868b;
   transform: rotate(90deg);
   transition: transform 0.15s;
 }
@@ -491,16 +491,16 @@ defineExpose({ reload, setExtra, currentParams: params });
   display: inline-flex;
   align-items: center;
   padding-left: 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 6px;
 }
 
 .crm-list__range-label {
   padding-right: 4px;
   font-size: 13px;
-  color: #374151;
+  color: #424245;
   white-space: nowrap;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e5ea;
 }
 
 .crm-list__icon {
@@ -509,7 +509,7 @@ defineExpose({ reload, setExtra, currentParams: params });
   justify-content: center;
   width: 30px;
   height: 30px;
-  color: #4b5563;
+  color: #6e6e73;
   cursor: pointer;
   background: none;
   border: 0;
@@ -517,8 +517,8 @@ defineExpose({ reload, setExtra, currentParams: params });
 }
 
 .crm-list__icon:hover {
-  color: #2563EB;
-  background: #F3F4F6;
+  color: #0071E3;
+  background: #F2F2F7;
 }
 
 .crm-list__table {
@@ -528,7 +528,7 @@ defineExpose({ reload, setExtra, currentParams: params });
 
 .crm-list__table :deep(.ant-table-thead > tr > th) {
   font-weight: 400;
-  color: #6b7280;
+  color: #86868b;
   background: #f7f8fa;
 }
 

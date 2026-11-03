@@ -274,13 +274,13 @@ onMounted(() => load().catch(() => {}));
 .ho__h {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .ho__tip {
   margin: 4px 0 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: #86868b;
 }
 
 .ho__item {

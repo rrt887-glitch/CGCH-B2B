@@ -1,167 +1,182 @@
 <script lang="ts" setup>
 /**
- * 登录页框架（设计稿「登录页」）：左侧浅灰品牌区介绍产品，右侧白底放登录 / 注册 / 找回密码表单。
- * 窄屏时品牌区收起，只保留表单。
+ * 登录页框架（设计稿「苹果风格 · 登录」）：居中的 LOGO + 草根出海、一句话标题，下面是毛玻璃卡片里的登录 / 注册 / 找回密码表单。
+ * 背景两团缓慢飘动的蓝紫光晕；系统设置了「减少动态效果」时不动。
  */
 import { computed } from 'vue';
 
-import { IconifyIcon } from '@vben/icons';
 import { preferences } from '@vben/preferences';
 
 const appName = computed(() => preferences.app.name);
 const logo = computed(() => preferences.logo.source);
-
-const POINTS = [
-  { icon: 'lucide:message-circle-more', title: '全渠道一个工作台', text: 'WhatsApp、Facebook、Instagram、邮件、官网客服统一收发' },
-  { icon: 'lucide:bot', title: 'AI 先接待，人来拍板', text: '按知识库回答，价格和合同等关键问题转人工' },
-  { icon: 'lucide:chart-no-axes-combined', title: '询盘自动进 CRM', text: '识别公司、国家和需求，按阶段跟进到成交' },
-];
 </script>
 
 <template>
   <div class="cg-auth">
-    <section class="cg-auth__brand">
-      <div class="cg-auth__logo">
-        <img :src="logo" :alt="appName" />
-        <span>{{ appName }}</span>
-      </div>
-      <div class="cg-auth__pitch">
-        <h1>让 AI 数字员工<br />帮你接住每一个海外询盘</h1>
-        <p>WhatsApp、Facebook、Instagram、邮件和官网客服的询盘集中在一个工作台，AI 先接待、自动录入 CRM，业务员只处理需要人来决定的事。</p>
-        <ul>
-          <li v-for="p in POINTS" :key="p.title">
-            <span class="cg-auth__icon"><IconifyIcon :icon="p.icon" class="size-4" /></span>
-            <span class="flex flex-col gap-0.5">
-              <span class="font-semibold text-[#111827]">{{ p.title }}</span>
-              <span class="text-[13px] text-[#4B5563]">{{ p.text }}</span>
-            </span>
-          </li>
-        </ul>
-      </div>
-      <div class="cg-auth__foot">
+    <div class="cg-auth__blob cg-auth__blob--a" aria-hidden="true"></div>
+    <div class="cg-auth__blob cg-auth__blob--b" aria-hidden="true"></div>
+
+    <div class="cg-auth__col">
+      <header class="cg-auth__head cg-rise">
+        <div class="cg-auth__brand">
+          <img :src="logo" :alt="appName" />
+          <span>{{ appName }}</span>
+        </div>
+        <h1>接住每一个<br />海外询盘。</h1>
+        <p>AI 先接待，你只处理需要拍板的事。</p>
+      </header>
+
+      <section class="cg-auth__card cg-rise" style="animation-delay: 0.12s">
+        <RouterView v-slot="{ Component, route }">
+          <KeepAlive :include="['Login']">
+            <component :is="Component" :key="route.fullPath" class="w-full" />
+          </KeepAlive>
+        </RouterView>
+      </section>
+
+      <footer class="cg-auth__foot cg-rise" style="animation-delay: 0.24s">
         <a href="/privacy" target="_blank">隐私政策</a>
         <a href="/terms" target="_blank">服务条款</a>
         <span>© {{ appName }}</span>
-      </div>
-    </section>
-
-    <section class="cg-auth__form">
-      <RouterView v-slot="{ Component, route }">
-        <KeepAlive :include="['Login']">
-          <component :is="Component" :key="route.fullPath" class="w-full max-w-[380px]" />
-        </KeepAlive>
-      </RouterView>
-    </section>
+      </footer>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .cg-auth {
+  position: relative;
   display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 100vh;
+  overflow: hidden;
   font-family: var(--cg-font);
-  color: #111827;
-  background: #fff;
+  color: var(--cg-text);
+  background: var(--cg-canvas);
+}
+
+.cg-auth__blob {
+  position: absolute;
+  border-radius: 50%;
+  animation: cg-float 14s ease-in-out infinite;
+}
+
+.cg-auth__blob--a {
+  top: -180px;
+  left: -140px;
+  width: 620px;
+  height: 620px;
+  background: radial-gradient(circle, rgb(0 113 227 / 30%), rgb(0 113 227 / 0%) 65%);
+}
+
+.cg-auth__blob--b {
+  right: -120px;
+  bottom: -200px;
+  width: 560px;
+  height: 560px;
+  background: radial-gradient(circle, rgb(175 82 222 / 24%), rgb(175 82 222 / 0%) 65%);
+  animation-delay: -6s;
+}
+
+.cg-auth__col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  align-items: center;
+  width: 100%;
+  padding: 40px 16px;
+}
+
+.cg-auth__head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  text-align: center;
 }
 
 .cg-auth__brand {
   display: flex;
-  flex: 1 1 52%;
-  flex-direction: column;
-  gap: 40px;
-  padding: 56px 64px;
-  background: #f6f7f9;
-  border-right: 1px solid #e5e7eb;
-}
-
-.cg-auth__logo {
-  display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.cg-auth__logo img {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  border-radius: 10px;
-}
-
-.cg-auth__pitch {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 20px;
-  justify-content: center;
-  max-width: 520px;
-}
-
-.cg-auth__pitch h1 {
-  margin: 0;
-  font-size: 34px;
-  font-weight: 700;
-  line-height: 46px;
+  font-size: 22px;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-.cg-auth__pitch p {
+.cg-auth__brand img {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  border-radius: 13px;
+  box-shadow: 0 10px 30px rgb(0 113 227 / 25%);
+}
+
+.cg-auth__head h1 {
+  margin: 6px 0 0;
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.cg-auth__head p {
   margin: 0;
-  font-size: 16px;
-  line-height: 26px;
-  color: #4b5563;
+  font-size: 19px;
+  color: var(--cg-text-2);
 }
 
-.cg-auth__pitch ul {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 0;
-  margin: 8px 0 0;
-  list-style: none;
-}
-
-.cg-auth__pitch li {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.cg-auth__icon {
-  display: flex;
-  flex: 0 0 28px;
-  align-items: center;
-  justify-content: center;
-  height: 28px;
-  color: #1d4ed8;
-  background: #eff4ff;
-  border-radius: 8px;
+.cg-auth__card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 400px;
+  padding: 28px;
+  background: rgb(255 255 255 / 72%);
+  border-radius: 24px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 4%),
+    0 20px 50px rgb(0 0 0 / 10%);
+  backdrop-filter: saturate(180%) blur(30px);
 }
 
 .cg-auth__foot {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 20px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--cg-text-3);
 }
 
 .cg-auth__foot a {
-  color: #4b5563;
+  color: var(--cg-text-3);
 }
 
-.cg-auth__form {
-  display: flex;
-  flex: 1 1 48%;
-  align-items: center;
-  justify-content: center;
-  padding: 56px 24px;
+@keyframes cg-float {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(30px, -24px);
+  }
 }
 
-@media (max-width: 900px) {
-  .cg-auth__brand {
-    display: none;
+@media (max-width: 640px) {
+  .cg-auth__head h1 {
+    font-size: 34px;
+  }
+
+  .cg-auth__card {
+    padding: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cg-auth__blob {
+    animation: none;
   }
 }
 </style>

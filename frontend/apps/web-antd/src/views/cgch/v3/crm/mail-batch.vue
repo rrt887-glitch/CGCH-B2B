@@ -284,8 +284,8 @@ const ITEM_FILTERS = [
   <div class="flex h-full flex-col gap-4 overflow-auto rounded-xl bg-white p-5">
     <div class="flex flex-wrap items-start gap-3">
       <div class="min-w-[240px] flex-1">
-        <h2 class="m-0 text-lg font-semibold text-[#111827]">邮件群发</h2>
-        <p class="m-0 mt-1 text-[13px] text-[#4B5563]">
+        <h2 class="m-0 text-lg font-semibold text-[#1D1D1F]">邮件群发</h2>
+        <p class="m-0 mt-1 text-[13px] text-[#6E6E73]">
           给一批客户发同一封邮件：自动验证邮箱、按速率从多个邮箱轮流发出，每封带退订链接，退订的人以后不会再收到。
         </p>
       </div>
@@ -300,26 +300,26 @@ const ITEM_FILTERS = [
         <div
           v-for="b in list"
           :key="b.id"
-          class="grid cursor-pointer grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_120px_150px] items-center gap-4 rounded-xl border border-solid border-[#E5E7EB] px-4 py-3 hover:border-[#BFDBFE]"
+          class="grid cursor-pointer grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_120px_150px] items-center gap-4 rounded-xl border border-solid border-[#E5E5EA] px-4 py-3 hover:border-[#B8D7F5]"
           @click="openDetail(b)"
         >
           <div class="min-w-0">
             <div class="flex items-center gap-2">
-              <span class="truncate font-semibold text-[#111827]">{{ b.name }}</span>
+              <span class="truncate font-semibold text-[#1D1D1F]">{{ b.name }}</span>
               <Tag :color="BATCH_STATUS[b.status].color" class="m-0">{{ BATCH_STATUS[b.status].label }}</Tag>
             </div>
-            <div class="mt-0.5 truncate text-xs text-[#6B7280]">{{ b.subject }} · {{ fmtDateTime(b.createTime, 'MM-DD HH:mm') }}</div>
+            <div class="mt-0.5 truncate text-xs text-[#86868B]">{{ b.subject }} · {{ fmtDateTime(b.createTime, 'MM-DD HH:mm') }}</div>
           </div>
           <div>
             <Progress :percent="percent(b)" size="small" :status="b.status === 'sending' ? 'active' : 'normal'" :show-info="false" />
-            <div class="text-xs text-[#4B5563]">
+            <div class="text-xs text-[#6E6E73]">
               已发 {{ sentOf(b) }} / {{ b.total }}
-              <span v-if="b.counts.failed" class="ml-2 text-[#B91C1C]">失败 {{ b.counts.failed }}</span>
-              <span v-if="b.counts.invalid" class="ml-2 text-[#B45309]">无效 {{ b.counts.invalid }}</span>
-              <span v-if="b.counts.suppressed" class="ml-2 text-[#6B7280]">退订跳过 {{ b.counts.suppressed }}</span>
+              <span v-if="b.counts.failed" class="ml-2 text-[#D70015]">失败 {{ b.counts.failed }}</span>
+              <span v-if="b.counts.invalid" class="ml-2 text-[#C93400]">无效 {{ b.counts.invalid }}</span>
+              <span v-if="b.counts.suppressed" class="ml-2 text-[#86868B]">退订跳过 {{ b.counts.suppressed }}</span>
             </div>
           </div>
-          <div class="text-xs text-[#6B7280]">每分钟 {{ b.ratePerMinute }} 封</div>
+          <div class="text-xs text-[#86868B]">每分钟 {{ b.ratePerMinute }} 封</div>
           <div class="flex justify-end gap-2" @click.stop>
             <Button v-if="b.status === 'draft'" size="small" type="primary" @click="startMailBatch(b.id).then(() => load(true))">开始发送</Button>
             <Button v-if="b.status === 'sending' || b.status === 'draft'" size="small" @click="cancel(b)">取消</Button>
@@ -359,16 +359,16 @@ const ITEM_FILTERS = [
             ]"
           >
             <template #bodyCell="{ column, record }">
-              <span v-if="column.dataIndex === 'email' && !record.email" class="text-xs text-[#B45309]">没有邮箱</span>
+              <span v-if="column.dataIndex === 'email' && !record.email" class="text-xs text-[#C93400]">没有邮箱</span>
             </template>
           </Table>
         </template>
         <template v-else>
           <Textarea v-model:value="pastedEmails" :auto-size="{ minRows: 8, maxRows: 14 }" placeholder="每行一个邮箱，也可以用逗号、分号隔开" />
         </template>
-        <div class="mt-3 text-sm text-[#374151]">
+        <div class="mt-3 text-sm text-[#424245]">
           已选 <b>{{ recipientCount }}</b> 个收件人
-          <span v-if="pickedNoEmail" class="ml-2 text-xs text-[#B45309]">其中 {{ pickedNoEmail }} 位客户没有邮箱，会被跳过</span>
+          <span v-if="pickedNoEmail" class="ml-2 text-xs text-[#C93400]">其中 {{ pickedNoEmail }} 位客户没有邮箱，会被跳过</span>
         </div>
       </template>
 
@@ -382,8 +382,8 @@ const ITEM_FILTERS = [
             @change="(v: any) => useTemplate(v)"
           />
           <Input v-model:value="form.subject" :maxlength="250" placeholder="邮件主题，例如：New hair dryer models for {company}" />
-          <div v-if="form.contentType === 'html'" class="rounded-lg border border-solid border-[#E5E7EB] p-3">
-            <div class="mb-2 flex items-center justify-between text-xs text-[#6B7280]">
+          <div v-if="form.contentType === 'html'" class="rounded-lg border border-solid border-[#E5E5EA] p-3">
+            <div class="mb-2 flex items-center justify-between text-xs text-[#86868B]">
               <span>模板正文预览</span>
               <a @click="form.contentType = 'text'; form.templateId = undefined; form.content = ''">改为自己写</a>
             </div>
@@ -402,7 +402,7 @@ const ITEM_FILTERS = [
       <template v-else-if="step === 2">
         <div class="flex flex-col gap-4">
           <div>
-            <div class="mb-1.5 text-sm font-medium text-[#374151]">发件邮箱（选多个时轮流发送）</div>
+            <div class="mb-1.5 text-sm font-medium text-[#424245]">发件邮箱（选多个时轮流发送）</div>
             <Select
               v-model:value="form.accountIds"
               mode="multiple"
@@ -413,19 +413,19 @@ const ITEM_FILTERS = [
             />
           </div>
           <div>
-            <div class="mb-1.5 text-sm font-medium text-[#374151]">发送速度</div>
+            <div class="mb-1.5 text-sm font-medium text-[#424245]">发送速度</div>
             <div class="flex flex-wrap items-center gap-3">
               <Segmented v-model:value="form.ratePerMinute" :options="RATE_OPTIONS" />
-              <span class="text-sm text-[#4B5563]">或自定义每分钟</span>
+              <span class="text-sm text-[#6E6E73]">或自定义每分钟</span>
               <InputNumber v-model:value="form.ratePerMinute" :min="1" :max="60" class="w-20" />
-              <span class="text-sm text-[#4B5563]">封</span>
+              <span class="text-sm text-[#6E6E73]">封</span>
             </div>
-            <div class="mt-2 text-xs text-[#6B7280]">
+            <div class="mt-2 text-xs text-[#86868B]">
               {{ recipientCount }} 封大约需要 {{ minutes }} 分钟。发太快容易被对方邮箱判为垃圾邮件；还会受「发送策略」里每个邮箱每小时 / 每天的上限限制，达到上限会自动暂停一会儿再继续。
             </div>
           </div>
           <div>
-            <div class="mb-1.5 text-sm font-medium text-[#374151]">任务名称</div>
+            <div class="mb-1.5 text-sm font-medium text-[#424245]">任务名称</div>
             <Input v-model:value="form.name" :maxlength="100" />
           </div>
         </div>
@@ -434,17 +434,17 @@ const ITEM_FILTERS = [
       <template v-else-if="draft">
         <div class="flex flex-col gap-4">
           <div class="grid grid-cols-3 gap-3">
-            <div class="rounded-xl border border-solid border-[#E5E7EB] p-3">
-              <div class="text-xs text-[#6B7280]">将发送</div>
-              <div class="text-2xl font-semibold text-[#15803D]">{{ draft.counts.pending ?? 0 }}</div>
+            <div class="rounded-xl border border-solid border-[#E5E5EA] p-3">
+              <div class="text-xs text-[#86868B]">将发送</div>
+              <div class="text-2xl font-semibold text-[#248A3D]">{{ draft.counts.pending ?? 0 }}</div>
             </div>
-            <div class="rounded-xl border border-solid border-[#E5E7EB] p-3">
-              <div class="text-xs text-[#6B7280]">邮箱无效</div>
-              <div class="text-2xl font-semibold text-[#B45309]">{{ draft.counts.invalid ?? 0 }}</div>
+            <div class="rounded-xl border border-solid border-[#E5E5EA] p-3">
+              <div class="text-xs text-[#86868B]">邮箱无效</div>
+              <div class="text-2xl font-semibold text-[#C93400]">{{ draft.counts.invalid ?? 0 }}</div>
             </div>
-            <div class="rounded-xl border border-solid border-[#E5E7EB] p-3">
-              <div class="text-xs text-[#6B7280]">已退订跳过</div>
-              <div class="text-2xl font-semibold text-[#6B7280]">{{ draft.counts.suppressed ?? 0 }}</div>
+            <div class="rounded-xl border border-solid border-[#E5E5EA] p-3">
+              <div class="text-xs text-[#86868B]">已退订跳过</div>
+              <div class="text-2xl font-semibold text-[#86868B]">{{ draft.counts.suppressed ?? 0 }}</div>
             </div>
           </div>
           <Table
@@ -490,20 +490,20 @@ const ITEM_FILTERS = [
       <template v-if="detail">
         <div class="mb-4 grid grid-cols-5 gap-2.5">
           <div v-for="s in [
-              { k: 'sent', label: '已发送', color: '#15803D' },
-              { k: 'pending', label: '待发送', color: '#2563EB' },
-              { k: 'failed', label: '失败', color: '#B91C1C' },
-              { k: 'invalid', label: '邮箱无效', color: '#B45309' },
-              { k: 'suppressed', label: '退订跳过', color: '#6B7280' },
-            ]" :key="s.k" class="rounded-xl border border-solid border-[#E5E7EB] p-3"
+              { k: 'sent', label: '已发送', color: '#248A3D' },
+              { k: 'pending', label: '待发送', color: '#0071E3' },
+              { k: 'failed', label: '失败', color: '#D70015' },
+              { k: 'invalid', label: '邮箱无效', color: '#C93400' },
+              { k: 'suppressed', label: '退订跳过', color: '#86868B' },
+            ]" :key="s.k" class="rounded-xl border border-solid border-[#E5E5EA] p-3"
           >
-            <div class="text-xs text-[#6B7280]">{{ s.label }}</div>
+            <div class="text-xs text-[#86868B]">{{ s.label }}</div>
             <div class="text-xl font-semibold" :style="{ color: s.color }">{{ (detail.counts as any)[s.k] ?? 0 }}</div>
           </div>
         </div>
-        <div class="mb-3 flex flex-wrap items-center gap-3 text-sm text-[#4B5563]">
+        <div class="mb-3 flex flex-wrap items-center gap-3 text-sm text-[#6E6E73]">
           <Tag :color="BATCH_STATUS[detail.status].color" class="m-0">{{ BATCH_STATUS[detail.status].label }}</Tag>
-          <span>已回复 <b class="text-[#111827]">{{ detail.replied ?? 0 }}</b></span>
+          <span>已回复 <b class="text-[#1D1D1F]">{{ detail.replied ?? 0 }}</b></span>
           <span>主题：{{ detail.subject }}</span>
           <span class="flex-1"></span>
           <Button v-if="detail.status === 'draft'" size="small" type="primary" @click="startMailBatch(detail.id).then(() => openDetail(detail!)).then(() => load(true))">开始发送</Button>
@@ -526,7 +526,7 @@ const ITEM_FILTERS = [
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'email'">
               <div class="truncate">{{ record.email }}</div>
-              <div v-if="record.name" class="truncate text-xs text-[#6B7280]">{{ record.name }}</div>
+              <div v-if="record.name" class="truncate text-xs text-[#86868B]">{{ record.name }}</div>
             </template>
             <template v-else-if="column.dataIndex === 'accountId'">{{ accountEmail(record.accountId) }}</template>
             <template v-else-if="column.dataIndex === 'status'">

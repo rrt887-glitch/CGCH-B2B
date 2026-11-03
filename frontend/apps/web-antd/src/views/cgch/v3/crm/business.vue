@@ -140,7 +140,7 @@ onMounted(async () => {
               <div class="truncate font-medium text-gray-900">{{ b.name }}</div>
               <div class="mt-1 truncate text-xs text-gray-500">{{ b.customerName || '-' }}</div>
               <div class="mt-2 flex items-center justify-between text-xs">
-                <span class="font-medium text-[#2563EB]">{{ fmtMoney(b.totalPrice) }}</span>
+                <span class="font-medium text-[#0071E3]">{{ fmtMoney(b.totalPrice) }}</span>
                 <span class="text-gray-400">{{ b.dealTime ? fmtTime(b.dealTime).slice(0, 10) : '' }}</span>
               </div>
             </div>
@@ -185,13 +185,13 @@ onMounted(async () => {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .biz__switch {
   display: inline-flex;
   padding: 3px;
-  background: #F3F4F6;
+  background: #F2F2F7;
   border-radius: 8px;
 }
 
@@ -201,7 +201,7 @@ onMounted(async () => {
   align-items: center;
   padding: 3px 10px;
   font-size: 13px;
-  color: #4b5563;
+  color: #6e6e73;
   cursor: pointer;
   background: none;
   border: 0;
@@ -209,7 +209,7 @@ onMounted(async () => {
 }
 
 .biz__switch button.on {
-  color: #2563EB;
+  color: #0071E3;
   background: #fff;
   box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }
@@ -219,7 +219,7 @@ onMounted(async () => {
   align-items: center;
   width: 300px;
   margin: 0 16px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 6px;
 }
 
@@ -258,9 +258,9 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 600;
   line-height: 32px;
-  color: #1d4ed8;
+  color: #0066cc;
   text-align: center;
-  background: #eff4ff;
+  background: #e8f2fc;
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);
 }
 
@@ -273,16 +273,16 @@ onMounted(async () => {
   padding: 6px 0;
   font-size: 12px;
   font-weight: 600;
-  color: #374151;
+  color: #424245;
   text-align: center;
-  background: #f9fafb;
+  background: #f5f5f7;
 }
 
 .biz__cards {
   flex: 1;
   padding: 8px 6px;
   overflow: auto;
-  border-right: 1px solid #f0f1f3;
+  border-right: 1px solid #ebebf0;
 }
 
 .biz__card {
@@ -302,9 +302,9 @@ onMounted(async () => {
 .biz__empty {
   padding: 28px 0;
   font-size: 12px;
-  color: #9ca3af;
+  color: #a1a1a6;
   text-align: center;
-  background: #f9fafb;
+  background: #f5f5f7;
   border-radius: 8px;
 }
 </style>

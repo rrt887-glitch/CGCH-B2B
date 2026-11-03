@@ -112,7 +112,9 @@ function onUserMenu({ key }: { key: number | string }) {
 
     <main class="cgch-main">
       <RouterView v-slot="{ Component, route: r }">
-        <component :is="Component" :key="r.path" />
+        <Transition name="cg-page" appear>
+          <component :is="Component" :key="r.path" />
+        </Transition>
       </RouterView>
     </main>
 
@@ -123,56 +125,64 @@ function onUserMenu({ key }: { key: number | string }) {
 </template>
 
 <style scoped>
-/* 清爽专业：白色图标导航 + 浅灰画布（设计稿「会话工作台」左侧） */
+/* 苹果风格：毛玻璃图标导航 + 浅灰画布（设计稿「苹果风格」）；当前模块用蓝色胶囊高亮，切换带弹性过渡 */
 .cgch-shell {
-  --vben-content-height: calc(100vh - 24px);
+  --vben-content-height: calc(100vh - 32px);
 
   display: flex;
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background: var(--cg-canvas, #f6f7f9);
+  background: var(--cg-canvas, #f5f5f7);
 }
 
 .cgch-rail {
+  z-index: 10;
   display: flex;
-  flex: 0 0 72px;
+  flex: 0 0 76px;
   flex-direction: column;
   align-items: center;
-  padding: 16px 0;
-  background: #fff;
-  border-right: 1px solid #e5e7eb;
+  padding: 18px 0 16px;
+  background: rgb(246 246 248 / 78%);
+  border-right: 0.5px solid rgb(0 0 0 / 8%);
+  backdrop-filter: saturate(180%) blur(20px);
 }
 
 .cgch-rail__logo {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 16px;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 18px;
   cursor: pointer;
+  transition: transform 0.45s var(--cg-ease);
+}
+
+.cgch-rail__logo:hover {
+  transform: scale(1.06);
 }
 
 .cgch-rail__logo img {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   object-fit: contain;
   border-radius: 10px;
+  box-shadow: 0 4px 12px rgb(0 113 227 / 18%);
 }
 
 .cgch-rail__nav {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
 }
 
 .cgch-rail__bottom {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
 }
 
@@ -182,39 +192,45 @@ function onUserMenu({ key }: { key: number | string }) {
   gap: 4px;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 54px;
+  width: 60px;
+  height: 56px;
   font-size: 11px;
   line-height: 14px;
-  color: #4b5563;
+  color: #424245;
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 14px;
   transition:
-    background 0.15s,
-    color 0.15s;
+    background-color 0.25s var(--cg-ease),
+    color 0.25s var(--cg-ease),
+    transform 0.2s var(--cg-ease);
 }
 
 .cgch-rail__item:hover {
-  color: #111827;
-  background: #f3f4f6;
+  color: #1d1d1f;
+  background: rgb(0 0 0 / 5%);
+}
+
+.cgch-rail__item:active {
+  transform: scale(0.94);
 }
 
 .cgch-rail__item.is-active {
   font-weight: 600;
-  color: #2563eb;
-  background: #eff4ff;
+  color: #fff;
+  background: #0071e3;
+  box-shadow: 0 6px 16px rgb(0 113 227 / 28%);
 }
 
 .cgch-rail__item:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid #0071e3;
   outline-offset: 2px;
 }
 
 .cgch-rail__icon {
-  width: 20px;
-  height: 20px;
+  width: 21px;
+  height: 21px;
 }
 
 .cgch-rail__avatar {
@@ -223,13 +239,18 @@ function onUserMenu({ key }: { key: number | string }) {
   background: transparent;
   border: 0;
   border-radius: 50%;
+  transition: transform 0.2s var(--cg-ease);
+}
+
+.cgch-rail__avatar:active {
+  transform: scale(0.92);
 }
 
 .cgch-main {
   flex: 1;
   min-width: 0;
   height: 100vh;
-  padding: 12px;
+  padding: 16px;
   overflow: auto;
 }
 </style>

@@ -1,22 +1,29 @@
 /*
- * 草根出海 · 清爽专业：全局字体、画布底色、文字颜色、滚动条。
- * 颜色和字号见设计稿「风格规范」页；组件的主色、圆角、边框由 app.vue 的 antd 主题统一设置。
- * 字体用系统自带的中文字体（苹方 / 微软雅黑），不从外网加载，国内打开不受影响。
+ * 草根出海 · 苹果风格：全局字体、画布、文字颜色、滚动条，以及 antd 组件的统一外观与动效。
+ * 颜色、字号、圆角、动效见设计稿「苹果风格 · 规范与动效」；主色、圆角等基础值由 app.vue 的 antd 主题设置。
+ * 字体用系统自带字体（苹果设备 SF Pro + 苹方，Windows 微软雅黑），不从外网加载。
  */
 :root {
-  --cg-primary: #2563eb;
-  --cg-primary-strong: #1d4ed8;
-  --cg-primary-soft: #eff4ff;
-  --cg-text: #111827;
-  --cg-text-2: #4b5563;
-  --cg-text-3: #6b7280;
-  --cg-canvas: #f6f7f9;
+  --cg-primary: #0071e3;
+  --cg-primary-strong: #0066cc;
+  --cg-primary-soft: #e8f2fc;
+  --cg-text: #1d1d1f;
+  --cg-text-2: #6e6e73;
+  --cg-text-3: #86868b;
+  --cg-canvas: #f5f5f7;
   --cg-surface: #fff;
-  --cg-border: #e5e7eb;
-  --cg-success: #15803d;
-  --cg-warning: #b45309;
-  --cg-danger: #b91c1c;
-  --cg-font: inter, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+  --cg-border: #e5e5ea;
+  --cg-hairline: rgb(0 0 0 / 8%);
+  --cg-fill: rgb(118 118 128 / 12%);
+  --cg-fill-2: rgb(118 118 128 / 8%);
+  --cg-success: #248a3d;
+  --cg-warning: #c93400;
+  --cg-danger: #d70015;
+  --cg-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 6px 18px rgb(0 0 0 / 5%);
+  --cg-shadow-lift: 0 2px 4px rgb(0 0 0 / 4%), 0 18px 40px rgb(0 0 0 / 10%);
+  --cg-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --cg-glass: rgb(255 255 255 / 72%);
+  --cg-font: -apple-system, blinkmacsystemfont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
 }
 
 html,
@@ -25,6 +32,14 @@ body {
   color: var(--cg-text);
   background: var(--cg-canvas);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 标题收紧字距 */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
 }
 
 /* 数字列对齐 */
@@ -34,9 +49,70 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ===== 动效：页面淡入上浮、卡片悬停浮起、按下缩小 ===== */
+@keyframes cg-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.cg-rise {
+  animation: cg-rise 0.6s var(--cg-ease) both;
+}
+
+/* 聊天气泡依次浮现 */
+@keyframes cg-bubble {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.cg-bubble {
+  animation: cg-bubble 0.45s var(--cg-ease) both;
+}
+
+/* 切换页面时新页面淡入 */
+.cg-page-enter-active {
+  transition:
+    opacity 0.4s var(--cg-ease),
+    transform 0.45s var(--cg-ease);
+}
+
+.cg-page-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.cg-page-leave-active {
+  display: none;
+}
+
+.cg-lift {
+  transition:
+    transform 0.45s var(--cg-ease),
+    box-shadow 0.45s var(--cg-ease);
+}
+
+.cg-lift:hover {
+  box-shadow: var(--cg-shadow-lift);
+  transform: translateY(-3px);
+}
+
 /* 细滚动条 */
 * {
-  scrollbar-color: #d1d5db transparent;
+  scrollbar-color: #c7c7cc transparent;
   scrollbar-width: thin;
 }
 
@@ -46,7 +122,7 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #c7c7cc;
   border-radius: 4px;
 }
 
@@ -54,7 +130,6 @@ body {
   background: transparent;
 }
 
-/* 不显示滚动条两端的小箭头 */
 *::-webkit-scrollbar-button {
   display: none;
   width: 0;
@@ -65,19 +140,216 @@ body {
   background: transparent;
 }
 
-/* 表头：浅灰底、次要文字色 */
-.ant-table-wrapper .ant-table-thead > tr > th {
-  font-weight: 500;
-  color: var(--cg-text-2);
-  background: #f9fafb;
+/* ===== 按钮：胶囊形，普通按钮浅灰填充，按下轻微缩小 ===== */
+.ant-btn {
+  border-radius: 980px;
+  transition:
+    transform 0.2s var(--cg-ease),
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s,
+    filter 0.2s;
 }
 
-/* 卡片：用边框分层，不用阴影 */
+.ant-btn:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+.ant-btn-default:not(.ant-btn-dangerous, :disabled, .ant-btn-background-ghost) {
+  color: var(--cg-text);
+  background: var(--cg-fill);
+  border-color: transparent;
+}
+
+.ant-btn-default:not(.ant-btn-dangerous, :disabled, .ant-btn-background-ghost):hover {
+  color: var(--cg-text);
+  background: rgb(118 118 128 / 18%);
+  border-color: transparent;
+}
+
+.ant-btn-primary:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+
+.ant-btn-default.ant-btn-dangerous:not(:disabled) {
+  color: var(--cg-danger);
+  background: rgb(255 59 48 / 10%);
+  border-color: transparent;
+}
+
+.ant-btn-icon-only {
+  border-radius: 50%;
+}
+
+.ant-btn-link,
+.ant-btn-text {
+  border-radius: 8px;
+}
+
+/* ===== 输入：浅灰填充、无边框，聚焦时白底加蓝色光圈 ===== */
+.ant-input:not(.ant-input-borderless),
+.ant-input-affix-wrapper:not(.ant-input-affix-wrapper-borderless),
+.ant-input-number:not(.ant-input-number-borderless),
+.ant-picker:not(.ant-picker-borderless),
+.ant-select:not(.ant-select-borderless, .ant-select-customize-input) .ant-select-selector {
+  background: var(--cg-fill-2) !important;
+  border-color: transparent !important;
+  transition:
+    background-color 0.25s,
+    box-shadow 0.25s var(--cg-ease);
+}
+
+.ant-input-affix-wrapper > .ant-input {
+  background: transparent !important;
+}
+
+.ant-input:not(.ant-input-borderless):hover,
+.ant-input-affix-wrapper:not(.ant-input-affix-wrapper-borderless):hover,
+.ant-input-number:hover,
+.ant-picker:hover,
+.ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+  background: rgb(118 118 128 / 12%) !important;
+}
+
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper-focused,
+.ant-input-number-focused,
+.ant-picker-focused,
+.ant-select-focused .ant-select-selector {
+  background: #fff !important;
+  box-shadow:
+    0 0 0 4px rgb(0 113 227 / 22%),
+    inset 0 0 0 1px #0071e3 !important;
+}
+
+.ant-input-affix-wrapper-focused > .ant-input:focus {
+  box-shadow: none !important;
+}
+
+.ant-input-status-error,
+.ant-input-affix-wrapper-status-error {
+  box-shadow: inset 0 0 0 1px #ff3b30 !important;
+}
+
+/* ===== 卡片、弹窗、抽屉、下拉：大圆角、柔和阴影代替边框 ===== */
 .ant-card {
-  border: 1px solid var(--cg-border);
-  box-shadow: none;
+  border: 0 !important;
+  border-radius: 18px;
+  box-shadow: var(--cg-shadow);
 }
 
-.ant-card.ant-card-bordered {
-  border-color: var(--cg-border);
+.ant-card .ant-card-head {
+  border-bottom: 0.5px solid var(--cg-hairline);
+}
+
+.ant-card .ant-card-head-title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ant-modal .ant-modal-content {
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 18%);
+}
+
+.ant-modal .ant-modal-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.ant-drawer .ant-drawer-header {
+  border-bottom: 0.5px solid var(--cg-hairline);
+}
+
+.ant-drawer .ant-drawer-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.ant-dropdown .ant-dropdown-menu,
+.ant-select-dropdown,
+.ant-popover .ant-popover-inner,
+.ant-picker-dropdown .ant-picker-panel-container {
+  background: rgb(255 255 255 / 86%);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 6%),
+    0 12px 32px rgb(0 0 0 / 14%);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+.ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item,
+.ant-select-dropdown .ant-select-item {
+  border-radius: 8px;
+}
+
+.ant-message .ant-message-notice-content,
+.ant-notification .ant-notification-notice {
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 6%),
+    0 12px 32px rgb(0 0 0 / 14%);
+}
+
+/* ===== 表格：表头小字灰色、细分隔线 ===== */
+.ant-table-wrapper .ant-table-thead > tr > th {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cg-text-3);
+  background: transparent;
+  border-bottom: 0.5px solid var(--cg-hairline);
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th::before {
+  display: none;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  border-bottom: 0.5px solid var(--cg-hairline);
+}
+
+.ant-table-wrapper .ant-table {
+  background: transparent;
+}
+
+/* ===== 标签：胶囊形、无边框 ===== */
+.ant-tag {
+  padding-inline: 8px;
+  border-color: transparent;
+  border-radius: 980px;
+}
+
+/* ===== 分段控件：选中块浮起 ===== */
+.ant-segmented .ant-segmented-item-selected,
+.ant-segmented .ant-segmented-thumb {
+  box-shadow:
+    0 3px 8px rgb(0 0 0 / 12%),
+    0 1px 1px rgb(0 0 0 / 4%);
+}
+
+.ant-segmented .ant-segmented-thumb {
+  transition:
+    transform 0.45s var(--cg-ease),
+    width 0.45s var(--cg-ease) !important;
+}
+
+/* ===== 页面里常用的白色容器（rounded-xl 白底卡片）：圆角加大、阴影代替边框 ===== */
+.rounded-xl.bg-white {
+  border-radius: 18px;
+}
+
+.rounded-xl.border-solid.bg-white[class*='border-[#E5E5EA]']:not([class*='hover:border']) {
+  border-color: transparent;
+  box-shadow: var(--cg-shadow);
+}
+
+/* 系统设置了「减少动态效果」时不播动画 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

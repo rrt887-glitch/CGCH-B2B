@@ -123,7 +123,7 @@ function view(r: CgchCrmApi.DedupItem) {
   margin: 0 0 14px;
   font-size: 20px;
   font-weight: 700;
-  color: #111827;
+  color: #1D1D1F;
 }
 
 .dd__card {
@@ -143,14 +143,14 @@ function view(r: CgchCrmApi.DedupItem) {
 .dd__seg {
   display: inline-flex;
   padding: 3px;
-  background: #F3F4F6;
+  background: #F2F2F7;
   border-radius: 6px;
 }
 
 .dd__seg button {
   padding: 2px 10px;
   font-size: 13px;
-  color: #4b5563;
+  color: #6e6e73;
   cursor: pointer;
   background: none;
   border: 0;
@@ -158,7 +158,7 @@ function view(r: CgchCrmApi.DedupItem) {
 }
 
 .dd__seg button.on {
-  color: #111827;
+  color: #1D1D1F;
   background: #fff;
   box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }
@@ -169,7 +169,7 @@ function view(r: CgchCrmApi.DedupItem) {
   width: 330px;
   max-width: 100%;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e5e5ea;
   border-radius: 6px;
 }
 

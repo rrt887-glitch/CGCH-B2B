@@ -187,11 +187,11 @@ export const CONVERSATION_STATUS: { label: string; value: ChannelWaApi.Conversat
   { label: '已解决', value: 'resolved' },
 ];
 export const PRIORITY_OPTIONS = [
-  { label: '无', value: 0, color: '#9CA3AF' },
-  { label: '低', value: 1, color: '#6B7280' },
-  { label: '中', value: 2, color: '#2563EB' },
-  { label: '高', value: 3, color: '#B45309' },
-  { label: '紧急', value: 4, color: '#B91C1C' },
+  { label: '无', value: 0, color: '#A1A1A6' },
+  { label: '低', value: 1, color: '#86868B' },
+  { label: '中', value: 2, color: '#0071E3' },
+  { label: '高', value: 3, color: '#C93400' },
+  { label: '紧急', value: 4, color: '#D70015' },
 ];
 export const getWaMessages = (conversationId: number, beforeId?: number) =>
   requestClient.get<ChannelWaApi.Message[]>('/channel/wa/message/list', { params: { conversationId, beforeId } });
