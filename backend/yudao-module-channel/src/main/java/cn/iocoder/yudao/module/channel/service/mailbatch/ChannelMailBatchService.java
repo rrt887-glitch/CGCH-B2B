@@ -194,7 +194,7 @@ public class ChannelMailBatchService {
         if (itemMapper.selectNextPending(id) == null) {
             throw exception(MAIL_BATCH_INVALID, "没有可以发送的收件人");
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now().withNano(0); // 数据库时间精确到秒，统一按整秒计算
         batchMapper.updateById(new ChannelMailBatchDO().setId(id).setStatus(ChannelMailBatchDO.STATUS_SENDING)
                 .setStartTime(now).setNextSendTime(now));
     }
@@ -235,7 +235,7 @@ public class ChannelMailBatchService {
 
     private void sendNext(ChannelMailBatchDO b) {
         long gapMs = 60_000L / Math.max(1, Math.min(60, b.getRatePerMinute() == null ? 5 : b.getRatePerMinute()));
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now().withNano(0); // 数据库时间精确到秒，统一按整秒计算
         for (int n = 0; n < 3; n++) {
             ChannelMailBatchDO fresh = batchMapper.selectById(b.getId());
             if (fresh == null || !ChannelMailBatchDO.STATUS_SENDING.equals(fresh.getStatus())
@@ -248,14 +248,14 @@ public class ChannelMailBatchService {
                         .setFinishTime(now).setNextSendTime(null));
                 return;
             }
-            LocalDateTime next = fresh.getNextSendTime().plus(Duration.ofMillis(gapMs));
+            LocalDateTime next = ceilSecond(fresh.getNextSendTime().plus(Duration.ofMillis(gapMs)));
             if (next.isBefore(now)) {
                 next = now; // 停机后恢复：从现在起按速率发，不一次补发
             }
             try {
                 Long ref = sendOne(fresh, i);
                 itemMapper.updateById(new ChannelMailBatchItemDO().setId(i.getId()).setStatus(ChannelMailBatchItemDO.STATUS_SENT)
-                        .setSentTime(LocalDateTime.now()).setSentRefId(ref).setReason(""));
+                        .setSentTime(LocalDateTime.now().withNano(0)).setSentRefId(ref).setReason(""));
             } catch (ServiceException e) {
                 if (Objects.equals(e.getCode(), SEND_RATE_LIMITED.getCode())) {
                     // 邮箱达到发送上限：这封保留，过一会儿再发
@@ -276,6 +276,11 @@ public class ChannelMailBatchService {
                 return;
             }
         }
+    }
+
+    /** 向上取整到秒，保证两封之间至少间隔设定的时间 */
+    static LocalDateTime ceilSecond(LocalDateTime t) {
+        return t.getNano() == 0 ? t : t.withNano(0).plusSeconds(1);
     }
 
     private Long sendOne(ChannelMailBatchDO b, ChannelMailBatchItemDO i) {
