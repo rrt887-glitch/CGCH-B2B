@@ -233,49 +233,43 @@ public class ChannelMailBatchService {
         }
     }
 
+    /** 每次只发一封，下一封在这封发出后再隔设定的时间（停机恢复后也不会一下子补发） */
     private void sendNext(ChannelMailBatchDO b) {
         long gapMs = 60_000L / Math.max(1, Math.min(60, b.getRatePerMinute() == null ? 5 : b.getRatePerMinute()));
-        LocalDateTime now = LocalDateTime.now().withNano(0); // 数据库时间精确到秒，统一按整秒计算
-        for (int n = 0; n < 3; n++) {
-            ChannelMailBatchDO fresh = batchMapper.selectById(b.getId());
-            if (fresh == null || !ChannelMailBatchDO.STATUS_SENDING.equals(fresh.getStatus())
-                    || fresh.getNextSendTime() == null || fresh.getNextSendTime().isAfter(now)) {
-                return;
-            }
-            ChannelMailBatchItemDO i = itemMapper.selectNextPending(b.getId());
-            if (i == null) {
-                batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId()).setStatus(ChannelMailBatchDO.STATUS_DONE)
-                        .setFinishTime(now).setNextSendTime(null));
-                return;
-            }
-            LocalDateTime next = ceilSecond(fresh.getNextSendTime().plus(Duration.ofMillis(gapMs)));
-            if (next.isBefore(now)) {
-                next = now; // 停机后恢复：从现在起按速率发，不一次补发
-            }
-            try {
-                Long ref = sendOne(fresh, i);
-                itemMapper.updateById(new ChannelMailBatchItemDO().setId(i.getId()).setStatus(ChannelMailBatchItemDO.STATUS_SENT)
-                        .setSentTime(LocalDateTime.now().withNano(0)).setSentRefId(ref).setReason(""));
-            } catch (ServiceException e) {
-                if (Objects.equals(e.getCode(), SEND_RATE_LIMITED.getCode())) {
-                    // 邮箱达到发送上限：这封保留，过一会儿再发
-                    batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId()).setNextSendTime(now.plus(RATE_LIMIT_BACKOFF)));
-                    log.info("[sendNext][群发任务 {} 达到发送上限，{} 分钟后继续] {}", b.getId(), RATE_LIMIT_BACKOFF.toMinutes(), e.getMessage());
-                    return;
-                }
-                boolean suppressed = Objects.equals(e.getCode(), SEND_SUPPRESSED.getCode());
-                itemMapper.updateById(new ChannelMailBatchItemDO().setId(i.getId())
-                        .setStatus(suppressed ? ChannelMailBatchItemDO.STATUS_SUPPRESSED : ChannelMailBatchItemDO.STATUS_FAILED)
-                        .setReason(StrUtil.maxLength(suppressed ? "已退订或在黑名单中" : e.getMessage(), 250)));
-            } catch (Exception e) {
-                itemMapper.updateById(new ChannelMailBatchItemDO().setId(i.getId()).setStatus(ChannelMailBatchItemDO.STATUS_FAILED)
-                        .setReason(StrUtil.maxLength(StrUtil.blankToDefault(e.getMessage(), "发送失败"), 250)));
-            }
-            batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId()).setNextSendTime(next));
-            if (next.isAfter(now)) {
-                return;
-            }
+        LocalDateTime now = LocalDateTime.now();
+        ChannelMailBatchDO fresh = batchMapper.selectById(b.getId());
+        if (fresh == null || !ChannelMailBatchDO.STATUS_SENDING.equals(fresh.getStatus())
+                || fresh.getNextSendTime() == null || fresh.getNextSendTime().isAfter(now)) {
+            return;
         }
+        ChannelMailBatchItemDO i = itemMapper.selectNextPending(b.getId());
+        if (i == null) {
+            batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId()).setStatus(ChannelMailBatchDO.STATUS_DONE)
+                    .setFinishTime(now.withNano(0)).setNextSendTime(null));
+            return;
+        }
+        LocalDateTime sentAt = now.withNano(0); // 数据库时间精确到秒，统一按整秒计算
+        try {
+            Long ref = sendOne(fresh, i);
+            itemMapper.updateById(new ChannelMailBatchItemDO().setId(i.getId()).setStatus(ChannelMailBatchItemDO.STATUS_SENT)
+                    .setSentTime(sentAt).setSentRefId(ref).setReason(""));
+        } catch (ServiceException e) {
+            if (Objects.equals(e.getCode(), SEND_RATE_LIMITED.getCode())) {
+                // 邮箱达到发送上限：这封保留，过一会儿再发
+                batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId()).setNextSendTime(sentAt.plus(RATE_LIMIT_BACKOFF)));
+                log.info("[sendNext][群发任务 {} 达到发送上限，{} 分钟后继续] {}", b.getId(), RATE_LIMIT_BACKOFF.toMinutes(), e.getMessage());
+                return;
+            }
+            boolean suppressed = Objects.equals(e.getCode(), SEND_SUPPRESSED.getCode());
+            itemMapper.updateById(new ChannelMailBatchItemDO().setId(i.getId())
+                    .setStatus(suppressed ? ChannelMailBatchItemDO.STATUS_SUPPRESSED : ChannelMailBatchItemDO.STATUS_FAILED)
+                    .setReason(StrUtil.maxLength(suppressed ? "已退订或在黑名单中" : e.getMessage(), 250)));
+        } catch (Exception e) {
+            itemMapper.updateById(new ChannelMailBatchItemDO().setId(i.getId()).setStatus(ChannelMailBatchItemDO.STATUS_FAILED)
+                    .setReason(StrUtil.maxLength(StrUtil.blankToDefault(e.getMessage(), "发送失败"), 250)));
+        }
+        // 从这封发出的整秒起算，向上取整，保证两封之间至少隔设定的时间
+        batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId()).setNextSendTime(ceilSecond(sentAt.plus(Duration.ofMillis(gapMs)))));
     }
 
     /** 向上取整到秒，保证两封之间至少间隔设定的时间 */

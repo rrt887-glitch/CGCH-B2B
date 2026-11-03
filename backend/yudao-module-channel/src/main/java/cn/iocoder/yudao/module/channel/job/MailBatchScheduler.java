@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 邮件群发：定时按每个任务的速率发出下一封。间隔由 cgch.mail-batch.tick-ms 控制（默认 2 秒）。
+ * 邮件群发：定时按每个任务的速率发出下一封。间隔由 cgch.mail-batch.tick-ms 控制（默认 1 秒）。
  */
 @Component
 public class MailBatchScheduler {
@@ -14,7 +14,7 @@ public class MailBatchScheduler {
     @Resource
     private ChannelMailBatchService channelMailBatchService;
 
-    @Scheduled(initialDelayString = "${cgch.mail-batch.tick-ms:2000}", fixedDelayString = "${cgch.mail-batch.tick-ms:2000}")
+    @Scheduled(initialDelayString = "${cgch.mail-batch.tick-ms:1000}", fixedDelayString = "${cgch.mail-batch.tick-ms:1000}")
     public void run() {
         channelMailBatchService.tick();
     }
