@@ -948,10 +948,10 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         <div v-if="!current" class="flex h-full items-center justify-center"><Empty description="选择一个会话" /></div>
         <template v-else>
           <div class="flex items-center justify-between border-0 border-b border-solid border-[#E5E5EA] px-5 py-3">
-            <div class="flex min-w-0 items-center gap-3">
+            <div class="flex min-w-0 flex-1 items-center gap-3">
             <Avatar :size="36" :src="current.avatarUrl || undefined" :class="current.avatarUrl ? 'shrink-0' : `shrink-0 ${plat(current).avatar}`">{{ initials(current) }}</Avatar>
-            <div class="min-w-0">
-              <div class="text-[15px] font-semibold">
+            <div class="min-w-0 flex-1">
+              <div class="truncate whitespace-nowrap text-[17px] font-semibold tracking-tight">
                 <span v-if="current.starred" class="mr-1 text-amber-500">★</span>{{ current.remarkName || contact(current) }}
                 <span v-if="current.remarkName" class="text-sm text-gray-400">（{{ contact(current) }}）</span>
                 <Tooltip v-if="isWa(current) && hiddenNumber(current)" title="对方在 WhatsApp 上隐藏了手机号，可以照常收发消息；对方之后带上号码时会自动合并到号码会话">
@@ -960,7 +960,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 <span v-else-if="isWa(current)" class="text-sm text-gray-400">+{{ current.waId }}</span>
                 <Tag v-else :color="plat(current).color" class="ml-1">{{ plat(current).label }}</Tag>
               </div>
-              <div class="mt-1 flex gap-2">
+              <div class="mt-1 flex flex-wrap gap-1.5">
                 <Tag v-if="current.customerName" color="blue" class="cursor-pointer" @click="router.push(`/crm/customer/detail/${current.customerId}`)">
                   客户：{{ current.customerName }}
                 </Tag>
@@ -986,7 +986,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               </div>
             </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex shrink-0 items-center gap-2">
               <Tooltip :title="live ? '实时推送已连接，新消息会立即出现' : '实时推送未连接，每 10 秒自动刷新'">
                 <span class="inline-block size-2 rounded-full" :class="live ? 'bg-green-500' : 'bg-gray-300'"></span>
               </Tooltip>

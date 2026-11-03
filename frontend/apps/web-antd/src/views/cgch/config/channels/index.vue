@@ -619,7 +619,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
   <div class="ch-page">
     <div class="flex flex-wrap items-start gap-4 pb-5">
       <div class="min-w-[260px] flex-1">
-        <h2 class="m-0 text-[22px] font-bold text-[#1D1D1F]">收件箱</h2>
+        <h2 class="m-0 text-[34px] font-bold tracking-tight text-[#1D1D1F]">收件箱</h2>
         <p class="m-0 mt-1 text-sm text-[#6E6E73]">每个接入的账号是一个收件箱。客户消息进入收件箱后，按接待成员分配给业务员或 AI，在「会话」里统一处理。</p>
       </div>
       <Button @click="leadOpen = true">设置留资邮箱</Button>
@@ -629,7 +629,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
     <div class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
       <div v-for="st in stats" :key="st.label" class="rounded-xl border border-solid border-[#E5E5EA] bg-white px-4 py-3">
         <div class="text-[13px] text-[#6E6E73]">{{ st.label }}</div>
-        <div class="text-[22px] font-semibold tabular-nums" :style="{ color: st.color }">{{ st.value }}</div>
+        <div class="text-[30px] font-bold tabular-nums tracking-tight" :style="{ color: st.color }">{{ st.value }}</div>
       </div>
     </div>
 
@@ -675,7 +675,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
                 v-if="primaryAction(r)"
                 size="small"
                 :loading="busy === `hist-${r.id}` || busy === `sync-${r.id}` || busy === `poll-${r.id}`"
-                class="!border-[#B8D7F5] !bg-[#E8F2FC] !text-[#0066CC]"
+                class="!border-transparent !bg-[#E8F2FC] !text-[#0066CC]"
                 @click="runAction(primaryAction(r)!.key, r)"
               >
                 {{ primaryAction(r)!.label }}

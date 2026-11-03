@@ -334,6 +334,40 @@ h3 {
     width 0.45s var(--cg-ease) !important;
 }
 
+/* ===== 单选按钮组：做成分段控件样式 ===== */
+.ant-radio-group:has(> .ant-radio-button-wrapper) {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--cg-fill);
+  border-radius: 9px;
+}
+
+.ant-radio-group > .ant-radio-button-wrapper {
+  height: 30px;
+  padding-inline: 14px;
+  line-height: 30px;
+  color: var(--cg-text);
+  background: transparent;
+  border: 0 !important;
+  border-radius: 7px !important;
+  transition:
+    background-color 0.3s var(--cg-ease),
+    box-shadow 0.3s var(--cg-ease);
+}
+
+.ant-radio-group > .ant-radio-button-wrapper::before {
+  display: none !important;
+}
+
+.ant-radio-group > .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+  font-weight: 500;
+  color: var(--cg-text) !important;
+  background: #fff !important;
+  box-shadow:
+    0 3px 8px rgb(0 0 0 / 12%),
+    0 1px 1px rgb(0 0 0 / 4%) !important;
+}
+
 /* ===== 页面里常用的白色容器（rounded-xl 白底卡片）：圆角加大、阴影代替边框 ===== */
 .rounded-xl.bg-white {
   border-radius: 18px;
