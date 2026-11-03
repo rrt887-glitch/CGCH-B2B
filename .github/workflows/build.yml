@@ -1323,6 +1323,22 @@ jobs:
           assert subs[-1]['auth'] == 'Bearer page-token-PAGE1', '订阅要用主页令牌'
           bad_cb = urllib.request.urlopen(mcb.replace('good-code', 'bad')).read().decode()
           assert 'Facebook 授权失败' in bad_cb, bad_cb[:300]
+          # 扫码授权：电脑端拿到地址和 state，手机完成授权后电脑端轮询得知结果
+          qa = call('GET', '/channel/meta/oauth/authorize')
+          qq = urllib.parse.parse_qs(urllib.parse.urlparse(qa['url']).query)
+          assert qq['state'] == [qa['state']] and 'scope' in qq, qa
+          assert call('GET', f"/channel/meta/oauth/status?state={qa['state']}")['status'] == 'pending'
+          assert call('GET', '/channel/meta/oauth/status?state=nope')['status'] == 'expired'
+          urllib.request.urlopen(f"http://127.0.0.1:48080/admin-api/channel/meta/oauth/callback?state={qa['state']}&code=bad").read()
+          qs = call('GET', f"/channel/meta/oauth/status?state={qa['state']}")
+          assert qs['status'] == 'fail' and qs.get('message'), qs
+          urllib.request.urlopen('http://127.0.0.1:48080/admin-api/channel/meta/oauth/callback?state=forged&code=bad').read()
+          assert call('GET', '/channel/meta/oauth/status?state=forged')['status'] == 'expired', '伪造的 state 不应写入结果'
+          qb = call('GET', '/channel/meta/oauth/authorize')
+          urllib.request.urlopen(f"http://127.0.0.1:48080/admin-api/channel/meta/oauth/callback?state={qb['state']}&code=good-code").read()
+          qbs = call('GET', f"/channel/meta/oauth/status?state={qb['state']}")
+          assert qbs['status'] == 'ok' and 'CGCH Fan Page' in qbs['message'], qbs
+          print('Facebook 扫码授权：二维码地址带 state，电脑端轮询得到等待中 / 成功 / 失败 / 过期，伪造的 state 不写入结果')
           print('Facebook 登录授权：一次接入主页与关联的 Instagram，换长期令牌、订阅消息推送，令牌不外露')
 
           MHOOK = 'http://127.0.0.1:48080/admin-api/channel/meta/webhook'

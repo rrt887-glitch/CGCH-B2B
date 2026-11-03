@@ -85,6 +85,7 @@ CGCH_META_APP_ID=
 CGCH_META_APP_SECRET=
 CGCH_META_WEBHOOK_VERIFY_TOKEN=$(rand 12)
 CGCH_META_WA_CONFIG_ID=
+CGCH_META_LOGIN_CONFIG_ID=
 
 # YouTube / TikTok 视频评论（可选）
 CGCH_YOUTUBE_CLIENT_ID=
@@ -108,6 +109,7 @@ if ! grep -q '^CGCH_EVOLUTION_API_KEY=' .env; then
   printf '\n# WhatsApp 扫码接入（Evolution API，与系统部署在一起；密钥自动生成，不要修改）\nCGCH_EVOLUTION_API_KEY=%s\nEVOLUTION_DB_PASSWORD=%s\n' "$(rand 24)" "$(rand 16)" >> .env
 fi
 grep -q '^EVOLUTION_DB_PASSWORD=' .env || echo "EVOLUTION_DB_PASSWORD=$(rand 16)" >> .env
+grep -q '^CGCH_META_LOGIN_CONFIG_ID=' .env || printf '\n# Facebook 主页 / Instagram 扫码授权的登录配置编号（Meta 后台 → 企业版 Facebook 登录 → 配置）\nCGCH_META_LOGIN_CONFIG_ID=\n' >> .env
 if [ -n "${DOMAIN:-}" ]; then
   say "绑定域名 $DOMAIN（启用 HTTPS）"
   SITE="$DOMAIN"

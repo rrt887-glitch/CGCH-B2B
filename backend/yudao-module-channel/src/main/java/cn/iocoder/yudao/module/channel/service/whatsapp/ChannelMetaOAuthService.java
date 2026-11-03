@@ -63,15 +63,59 @@ public class ChannelMetaOAuthService {
         return new ChannelWaAccountDO().setApiBase(m.getApiBase()).setApiVersion(m.getApiVersion()).setAccessToken(token);
     }
 
+    private static final String RESULT_KEY = "cgch:meta-oauth:result:";
+
     /** 生成授权地址；state 记录租户和用户，10 分钟内有效、只能用一次 */
     public String authorizeUrl(Long userId) {
+        return authorize(userId).get("url");
+    }
+
+    /**
+     * 生成授权地址和 state。前端把地址做成二维码，手机扫码后在手机上完成 Facebook 授权，
+     * 电脑端用 state 轮询 {@link #status(String)} 得知结果。
+     * 业务类型的应用配置了登录配置编号时用 config_id，否则用 scope。
+     */
+    public Map<String, String> authorize(Long userId) {
         ChannelOAuthProperties.Meta m = meta();
         String state = IdUtil.fastSimpleUUID();
         stringRedisTemplate.opsForValue().set(STATE_KEY + state,
                 TenantContextHolder.getTenantId() + ":" + userId, 10, TimeUnit.MINUTES);
-        return m.getDialogUrl() + (m.getDialogUrl().contains("?") ? "&" : "?")
+        // 结果先记为「等待中」；回调处理期间 state 已被取走，靠它区分「处理中」和「已过期」
+        stringRedisTemplate.opsForValue().set(RESULT_KEY + state, "pending:", 12, TimeUnit.MINUTES);
+        String perms = StrUtil.isNotBlank(m.getLoginConfigId())
+                ? "&config_id=" + enc(m.getLoginConfigId()) + "&override_default_response_type=true"
+                : "&scope=" + enc(m.getScope());
+        String url = m.getDialogUrl() + (m.getDialogUrl().contains("?") ? "&" : "?")
                 + "client_id=" + enc(m.getClientId()) + "&redirect_uri=" + enc(redirectUri())
-                + "&response_type=code&scope=" + enc(m.getScope()) + "&state=" + state;
+                + "&response_type=code" + perms + "&state=" + state;
+        Map<String, String> r = new LinkedHashMap<>();
+        r.put("url", url);
+        r.put("state", state);
+        return r;
+    }
+
+    /** 记录授权结果，供电脑端轮询（10 分钟有效） */
+    public void saveResult(String state, boolean ok, String msg) {
+        // 只更新本系统发出过的 state，避免伪造的回调随意写入
+        if (StrUtil.isBlank(state) || !Boolean.TRUE.equals(stringRedisTemplate.hasKey(RESULT_KEY + state))) {
+            return;
+        }
+        stringRedisTemplate.opsForValue().set(RESULT_KEY + state, (ok ? "ok:" : "fail:") + StrUtil.nullToEmpty(msg),
+                10, TimeUnit.MINUTES);
+    }
+
+    /** 查询授权结果：status 为 pending（还没完成）、ok、fail，或 expired（二维码已过期） */
+    public Map<String, String> status(String state) {
+        Map<String, String> r = new LinkedHashMap<>();
+        String v = StrUtil.isBlank(state) ? null : stringRedisTemplate.opsForValue().get(RESULT_KEY + state);
+        if (v == null) {
+            r.put("status", "expired");
+        } else {
+            int i = v.indexOf(':');
+            r.put("status", v.substring(0, i));
+            r.put("message", v.substring(i + 1));
+        }
+        return r;
     }
 
     /** 授权回调，返回接入结果说明，例如「Facebook 主页 A、Instagram @b」 */

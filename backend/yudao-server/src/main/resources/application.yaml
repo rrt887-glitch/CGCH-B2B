@@ -396,6 +396,7 @@ cgch:
       client-secret: ${CGCH_META_APP_SECRET:}
       verify-token: ${CGCH_META_WEBHOOK_VERIFY_TOKEN:}
       wa-config-id: ${CGCH_META_WA_CONFIG_ID:} # WhatsApp 嵌入式注册的配置编号
+      login-config-id: ${CGCH_META_LOGIN_CONFIG_ID:} # Facebook 主页 / Instagram 授权的登录配置编号（业务类型应用必填）
     evolution: # WhatsApp 扫码接入（Evolution API，WhatsApp 网页版协议，一键安装时与系统部署在一起）
       base-url: ${CGCH_EVOLUTION_BASE_URL:}
       api-key: ${CGCH_EVOLUTION_API_KEY:}
