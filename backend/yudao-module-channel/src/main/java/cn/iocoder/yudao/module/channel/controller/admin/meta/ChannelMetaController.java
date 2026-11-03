@@ -38,6 +38,20 @@ public class ChannelMetaController {
         return success(channelMetaOAuthService.authorizeUrl(getLoginUserId()));
     }
 
+    @GetMapping("/oauth/authorize")
+    @Operation(summary = "获取 Facebook 授权地址和 state：前端显示成二维码供手机扫码，并用 state 查询结果")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
+    public CommonResult<java.util.Map<String, String>> authorize() {
+        return success(channelMetaOAuthService.authorize(getLoginUserId()));
+    }
+
+    @GetMapping("/oauth/status")
+    @Operation(summary = "查询扫码授权结果：pending / ok / fail / expired")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
+    public CommonResult<java.util.Map<String, String>> status(@RequestParam("state") String state) {
+        return success(channelMetaOAuthService.status(state));
+    }
+
     @GetMapping("/wa-signup/config")
     @Operation(summary = "WhatsApp 嵌入式注册的前端配置（应用编号、配置编号）")
     @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
@@ -64,11 +78,14 @@ public class ChannelMetaController {
         try {
             String result = channelMetaOAuthService.callback(code, state, error == null ? null
                     : (errorDescription == null ? error : errorDescription));
+            channelMetaOAuthService.saveResult(state, true, result);
             return OAuthResultPage.html("cgch-meta-oauth", true, "Facebook 授权成功", result + "。可以关闭此页面。");
         } catch (ServiceException e) {
+            channelMetaOAuthService.saveResult(state, false, e.getMessage());
             return OAuthResultPage.html("cgch-meta-oauth", false, "Facebook 授权失败", e.getMessage());
         } catch (Exception e) {
             log.warn("[callback][Facebook 授权异常]", e);
+            channelMetaOAuthService.saveResult(state, false, "服务器处理授权时出错，请稍后重试");
             return OAuthResultPage.html("cgch-meta-oauth", false, "Facebook 授权失败", "服务器处理授权时出错，请稍后重试");
         }
     }

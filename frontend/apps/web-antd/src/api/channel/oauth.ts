@@ -15,6 +15,19 @@ export function getMetaAuthorizeUrl() {
   return requestClient.get<string>('/channel/meta/oauth/authorize-url');
 }
 
+/** Facebook 扫码授权：授权地址（做成二维码）和查询结果用的 state */
+export function getMetaAuthorize() {
+  return requestClient.get<{ state: string; url: string }>('/channel/meta/oauth/authorize');
+}
+
+/** 查询扫码授权结果 */
+export function getMetaAuthorizeStatus(state: string) {
+  return requestClient.get<{ message?: string; status: 'expired' | 'fail' | 'ok' | 'pending' }>(
+    '/channel/meta/oauth/status',
+    { params: { state } },
+  );
+}
+
 export interface WaSignupConfig {
   enabled: boolean;
   /** meta：Meta 嵌入式注册（需要自己是技术服务商） */

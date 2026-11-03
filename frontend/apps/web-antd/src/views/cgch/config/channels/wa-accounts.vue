@@ -32,9 +32,10 @@ import {
 
 import type { WaSignupConfig } from '#/api/channel/oauth';
 
-import { getMetaAuthorizeUrl, getWaSignupConfig } from '#/api/channel/oauth';
+import { getWaSignupConfig } from '#/api/channel/oauth';
 import { createWaAccount, deleteWaAccount, getWaAccountList, updateWaAccount } from '#/api/channel/whatsapp';
 
+import FbConnectModal from './fb-connect-modal.vue';
 import WaConnectModal from './wa-connect-modal.vue';
 
 type Platform = 'instagram' | 'messenger' | 'whatsapp';
@@ -128,30 +129,20 @@ async function remove(row: ChannelWaApi.Account) {
 
 const guide = ref<ChannelWaApi.Account>();
 
-// ===== Facebook 登录授权 =====
-async function startMetaOAuth() {
-  const win = window.open('about:blank', 'cgch-meta-oauth', 'width=600,height=760');
-  try {
-    const url = await getMetaAuthorizeUrl();
-    if (win) {
-      win.location.href = url;
-    } else {
-      window.location.href = url;
-    }
-  } catch (error) {
-    win?.close();
-    throw error;
-  }
+// ===== Facebook 登录授权：弹出扫码窗口（也可在本机打开授权页） =====
+const fbOpen = ref(false);
+function startMetaOAuth() {
+  fbOpen.value = true;
+}
+function openFbManual() {
+  fbOpen.value = false;
+  openForm(undefined, 'messenger');
 }
 
 function onMessage(e: MessageEvent) {
   if (e.data?.type !== 'cgch-meta-oauth') return;
-  if (e.data.ok) {
-    message.success('Facebook 授权完成，已接入主页和关联的 Instagram');
-    load();
-  } else {
-    message.error('Facebook 授权失败，请查看授权窗口中的说明');
-  }
+  // 结果由扫码窗口轮询提示，这里只刷新列表
+  if (e.data.ok) load();
 }
 
 // ===== WhatsApp 官方接入（共存模式扫码 / 开通新号码） =====
@@ -200,7 +191,7 @@ defineExpose({ openForm, connect, connectOfficial, accounts, load, toggle, remov
   <Card v-if="!headless" title="WhatsApp / Facebook / Instagram" :bordered="false" class="mt-4">
     <template #extra>
       <Space>
-        <Button v-if="metaOAuth" @click="startMetaOAuth">Facebook 登录授权</Button>
+        <Button v-if="metaOAuth" @click="startMetaOAuth">扫码连接 Facebook</Button>
         <Button type="primary" @click="connectOpen = true">连接 WhatsApp</Button>
         <Button @click="openForm()">手动绑定</Button>
       </Space>
@@ -210,7 +201,7 @@ defineExpose({ openForm, connect, connectOfficial, accounts, load, toggle, remov
       class="mb-4"
       type="info"
       show-icon
-      message="点「Facebook 登录授权」，登录后勾选要接入的主页，一次即可接入这些主页的私信，以及主页关联的 Instagram 专业账号的私信。"
+      message="点「扫码连接 Facebook」，用手机扫码登录 Facebook 并勾选要接入的主页，一次即可接入这些主页的私信，以及主页关联的 Instagram 专业账号的私信。"
     />
     <Table :columns="columns" :data-source="accounts" :loading="loading" :pagination="false" row-key="id">
       <template #bodyCell="{ column, record }">
@@ -339,5 +330,6 @@ defineExpose({ openForm, connect, connectOfficial, accounts, load, toggle, remov
       </template>
     </Modal>
     <WaConnectModal v-model:open="connectOpen" :config="signupCfg" @done="load" @manual="openManual" />
+    <FbConnectModal v-model:open="fbOpen" @done="load" @manual="openFbManual" />
   </div>
 </template>

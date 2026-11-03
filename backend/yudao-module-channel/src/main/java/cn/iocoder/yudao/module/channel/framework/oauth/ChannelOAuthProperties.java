@@ -98,6 +98,11 @@ public class ChannelOAuthProperties {
          * 填写后客户可以在系统里用 Facebook 弹窗自己开通 WhatsApp 号码
          */
         private String waConfigId = "";
+        /**
+         * Facebook 主页 / Instagram 授权用的登录配置编号（企业版 Facebook 登录 → 配置，令牌类型选「用户访问口令」）；
+         * 业务类型的应用必须用它代替 scope，填写后授权页按这份配置申请权限
+         */
+        private String loginConfigId = "";
         /** Facebook JS SDK 地址（测试时可替换） */
         private String sdkUrl = "https://connect.facebook.net/en_US/sdk.js";
         /** 在 Meta 后台配置 Webhook 时填写的验证令牌 */
