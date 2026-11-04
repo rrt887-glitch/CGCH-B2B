@@ -55,7 +55,8 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.*;
 
 /**
- * 客户唤醒：找出久未联系的老客户 → AI 逐个写跟进邮件（WhatsApp 用已审核模板）→ 业务员确认 → 批量发出 → 跟踪回复。
+ * 客户唤醒：找出久未联系的老客户 → 先背调（可选）→ AI 结合背调、往来记录和产品库判断痛点、挑选推荐产品，
+ * 逐个写跟进邮件（WhatsApp 用已审核模板）→ 业务员确认（或设为自动发送）→ 批量发出 → 跟踪回复。
  */
 @Service
 @Slf4j
@@ -102,6 +103,11 @@ public class ChannelReactivateService {
     private ChannelWhatsAppService channelWhatsAppService;
     @Resource
     private cn.iocoder.yudao.module.channel.service.policy.ChannelSendPolicyService channelSendPolicyService;
+    @Resource
+    private cn.iocoder.yudao.module.channel.service.research.ChannelResearchService channelResearchService;
+
+    /** 多少天内的背调报告可以直接用，不再重新背调 */
+    private static final int RESEARCH_FRESH_DAYS = 90;
 
     /** 两次发送之间的间隔，避免短时间大量发信被邮件服务商判为垃圾邮件 */
     @Value("${cgch.reactivate.send-interval-ms:3000}")
@@ -185,6 +191,7 @@ public class ChannelReactivateService {
                 .inactiveDays(req.getInactiveDays()).channel(channel).instructions(StrUtil.maxLength(req.getInstructions(), 1000))
                 .waTemplateName(StrUtil.trimToNull(req.getWaTemplateName()))
                 .waTemplateLanguage(StrUtil.blankToDefault(req.getWaTemplateLanguage(), "en_US"))
+                .autoResearch(Boolean.TRUE.equals(req.getAutoResearch())).autoSend(Boolean.TRUE.equals(req.getAutoSend()))
                 .status(ChannelReactivateTaskDO.STATUS_GENERATING).userId(userId).build();
         channelReactivateTaskMapper.insert(task);
         for (CrmCustomerDO c : customers) {
@@ -279,6 +286,16 @@ public class ChannelReactivateService {
         for (ChannelReactivateItemDO item : channelReactivateItemMapper.selectListByTaskIdAndStatus(taskId, ChannelReactivateItemDO.STATUS_GENERATING)) {
             generateOne(task, item);
         }
+        // 自动发送：写好的内容直接确认并发出，不需要业务员逐条点
+        if (Boolean.TRUE.equals(task.getAutoSend())) {
+            List<Long> drafts = channelReactivateItemMapper.selectListByTaskIdAndStatus(taskId, ChannelReactivateItemDO.STATUS_DRAFT)
+                    .stream().map(ChannelReactivateItemDO::getId).toList();
+            if (!drafts.isEmpty() && changeStatus(drafts, "approve") > 0) {
+                channelReactivateTaskMapper.updateById(new ChannelReactivateTaskDO().setId(taskId).setStatus(ChannelReactivateTaskDO.STATUS_SENDING));
+                sendAll(taskId);
+                return;
+            }
+        }
         channelReactivateTaskMapper.updateById(new ChannelReactivateTaskDO().setId(taskId).setStatus(ChannelReactivateTaskDO.STATUS_READY));
     }
 
@@ -297,18 +314,34 @@ public class ChannelReactivateService {
             fail(item, "客户不存在");
             return;
         }
+        // 第一步：背调。用 90 天内的报告；没有且开启了「写信前先背调」时先做一次
+        cn.iocoder.yudao.module.channel.dal.dataobject.research.ChannelResearchDO research =
+                channelResearchService.latestDone(c.getId(), RESEARCH_FRESH_DAYS);
+        if (research == null && Boolean.TRUE.equals(task.getAutoResearch())) {
+            research = channelResearchService.runForCustomer(task.getUserId(), c.getId());
+            if (research != null && !cn.iocoder.yudao.module.channel.dal.dataobject.research.ChannelResearchDO.STATUS_DONE.equals(research.getStatus())) {
+                log.info("[generateOne][客户({}) 背调未完成：{}，按已有资料写信]", c.getId(), research.getReasonDetail());
+                research = null;
+            }
+        }
         try {
+            // 第二～四步：判断痛点 → 从产品库挑推荐产品 → 写单独定制的信
             LlmClient.Result r = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(), List.of(
-                    LlmClient.Message.system(systemPrompt(cfg)), LlmClient.Message.user(userPrompt(task, c, item))), 0.6);
-            String[] sb = parse(r.content());
-            String body = sb[1];
+                    LlmClient.Message.system(systemPrompt(cfg)), LlmClient.Message.user(userPrompt(task, c, item, research))), 0.6);
+            Draft d = parseDraft(r.content());
+            String body = d.body();
             if (StrUtil.isNotBlank(cfg.getMailSignature())) {
                 body = body.trim() + "\n\n" + cfg.getMailSignature().trim();
             }
             long credits = channelCreditService.consume("reactivate", item.getId(), item.getOwnerUserId(),
                     r.promptTokens() + r.completionTokens(), "客户唤醒");
+            Map<String, Object> insight = d.insight() == null ? new LinkedHashMap<>() : d.insight();
+            if (research != null) {
+                insight.put("researchId", research.getId());
+            }
             channelReactivateItemMapper.updateById(new ChannelReactivateItemDO().setId(item.getId())
-                    .setSubject(StrUtil.maxLength(sb[0], 200)).setContent(body).setCredits(credits)
+                    .setSubject(StrUtil.maxLength(d.subject(), 200)).setContent(body).setCredits(credits)
+                    .setInsight(insight.isEmpty() ? null : JsonUtils.toJsonString(insight))
                     .setStatus(ChannelReactivateItemDO.STATUS_DRAFT).setReasonDetail(""));
         } catch (Exception e) {
             fail(item, StrUtil.maxLength("AI 生成失败：" + e.getMessage(), 250));
@@ -322,13 +355,20 @@ public class ChannelReactivateService {
 
     private static String systemPrompt(ChannelAiConfigDO cfg) {
         return "你是外贸企业的销售代表「" + StrUtil.blankToDefault(cfg.getAgentName(), "Sales") + "」，要给一位很久没有联系的老客户写一封跟进邮件（客户唤醒）。\n"
-                + "要求：\n1. 用客户所在国家的常用商务语言；无法判断时用 " + StrUtil.blankToDefault(cfg.getDefaultLanguage(), "English") + "。\n"
-                + "2. 自然地提起上次的联系，表达问候，给出一个具体、对客户有价值的理由（新品、行情、样品、优惠等，只能使用提供的资料和写作要求，不得编造价格、交期、折扣）。\n"
-                + "3. 结尾提出一个简单、容易回复的问题。篇幅 80~150 词，不要写签名。\n"
-                + "4. 只输出 JSON：{\"subject\": \"邮件主题\", \"body\": \"邮件正文\"}，不要输出其他内容。";
+                + "按四步完成：\n"
+                + "1. 看清现状：根据背调报告、往来记录和客户资料，判断他现在的情况（例如最近转向别处采购、采购量下滑、询过新品没成交、合作稳定）。\n"
+                + "2. 判断痛点：他最在意的是交期、价格、新品还是认证？依据不足时选最稳妥的切入点，不要硬猜。\n"
+                + "3. 精准推荐：只能从「我方产品库」里挑 1~3 款最匹配他当下需求的产品；产品库为空时不推荐具体产品。\n"
+                + "4. 写一封只属于他的信：开头提起和他相关的具体事情，围绕痛点给出推荐理由，不要写成群发模板。\n"
+                + "写作要求：\n- 用客户所在国家的常用商务语言；无法判断时用 " + StrUtil.blankToDefault(cfg.getDefaultLanguage(), "English") + "。\n"
+                + "- 只能使用提供的资料和写作要求，不得编造价格、交期、折扣、认证；背调里标注「需核实」的内容不要当作事实写进信里。\n"
+                + "- 结尾提出一个简单、容易回复的问题。篇幅 80~150 词，不要写签名。\n"
+                + "只输出 JSON：{\"analysis\": {\"situation\": \"客户现状（中文一句话）\", \"painPoint\": \"痛点（中文）\", "
+                + "\"products\": [\"推荐的我方产品\"], \"angle\": \"这封信的切入角度（中文）\"}, \"subject\": \"邮件主题\", \"body\": \"邮件正文\"}，不要输出其他内容。";
     }
 
-    private String userPrompt(ChannelReactivateTaskDO task, CrmCustomerDO c, ChannelReactivateItemDO item) {
+    private String userPrompt(ChannelReactivateTaskDO task, CrmCustomerDO c, ChannelReactivateItemDO item,
+                              cn.iocoder.yudao.module.channel.dal.dataobject.research.ChannelResearchDO research) {
         StringBuilder sb = new StringBuilder();
         sb.append("客户名称：").append(c.getName()).append("\n");
         if (StrUtil.isNotBlank(c.getCompanyName())) {
@@ -337,26 +377,52 @@ public class ChannelReactivateService {
         if (StrUtil.isNotBlank(c.getCountryCode())) {
             sb.append("国家：").append(c.getCountryCode()).append("\n");
         }
+        if (c.getLevel() != null) {
+            sb.append("客户级别：").append(c.getLevel()).append("（1 最重要）\n");
+        }
+        if (Boolean.TRUE.equals(c.getDealStatus())) {
+            sb.append("成交情况：已成交过\n");
+        }
         if (item.getLastContactTime() != null) {
             sb.append("上次联系：").append(item.getLastContactTime().format(DAY)).append("\n");
         }
         if (StrUtil.isNotBlank(c.getContactLastContent())) {
             sb.append("上次联系内容：").append(StrUtil.maxLength(c.getContactLastContent(), 300)).append("\n");
         }
+        if (StrUtil.isNotBlank(c.getRemark())) {
+            sb.append("CRM 备注：").append(StrUtil.maxLength(c.getRemark(), 500)).append("\n");
+        }
         if (StrUtil.isNotBlank(task.getInstructions())) {
             sb.append("写作要求：").append(task.getInstructions()).append("\n");
         }
-        String company = channelAiKnowledgeMapper.selectEnabled().stream()
-                .filter(k -> ChannelAiKnowledgeDO.TYPE_COMPANY.equals(k.getType()))
+        if (research != null && StrUtil.isNotBlank(research.getReport())) {
+            sb.append("\n## 背调报告（").append(research.getCreateTime() == null ? "" : research.getCreateTime().format(DAY)).append("）\n")
+                    .append(StrUtil.maxLength(research.getReport(), 3000)).append("\n");
+        }
+        List<String> history = channelResearchService.recentHistory(c.getId());
+        if (!history.isEmpty()) {
+            sb.append("\n## 往来记录（最近）\n").append(StrUtil.maxLength(String.join("\n", history), 3000)).append("\n");
+        }
+        List<ChannelAiKnowledgeDO> knowledge = channelAiKnowledgeMapper.selectEnabled();
+        String company = knowledge.stream().filter(k -> ChannelAiKnowledgeDO.TYPE_COMPANY.equals(k.getType()))
                 .map(k -> StrUtil.nullToEmpty(k.getContent())).collect(Collectors.joining("\n"));
         if (StrUtil.isNotBlank(company)) {
-            sb.append("我方企业介绍：").append(StrUtil.maxLength(company, 1500)).append("\n");
+            sb.append("\n## 我方企业介绍\n").append(StrUtil.maxLength(company, 1500)).append("\n");
         }
+        String products = knowledge.stream().filter(k -> ChannelAiKnowledgeDO.TYPE_PRODUCT.equals(k.getType()))
+                .map(k -> "- " + StrUtil.nullToEmpty(k.getTitle()) + "：" + StrUtil.maxLength(k.getContent(), 400))
+                .collect(Collectors.joining("\n"));
+        sb.append("\n## 我方产品库\n").append(StrUtil.isBlank(products) ? "（空）" : StrUtil.maxLength(products, 4000)).append("\n");
         return sb.toString();
     }
 
-    /** 解析 {"subject","body"}；模型没按格式返回时整段作为正文 */
-    static String[] parse(String content) {
+    /** AI 写好的信：主题、正文，以及写信前的分析（可能为空） */
+    record Draft(String subject, String body, Map<String, Object> insight) {
+    }
+
+    /** 解析 {"analysis","subject","body"}；模型没按格式返回时整段作为正文 */
+    @SuppressWarnings("unchecked")
+    static Draft parseDraft(String content) {
         String s = StrUtil.nullToEmpty(content);
         int i = s.indexOf('{'), j = s.lastIndexOf('}');
         if (i >= 0 && j > i) {
@@ -365,13 +431,21 @@ public class ChannelReactivateService {
                 String subject = n.path("subject").asText("");
                 String body = n.path("body").asText("");
                 if (StrUtil.isNotBlank(body)) {
-                    return new String[]{StrUtil.blankToDefault(subject, "Following up"), body};
+                    Map<String, Object> insight = n.path("analysis").isObject()
+                            ? JSON.convertValue(n.path("analysis"), LinkedHashMap.class) : null;
+                    return new Draft(StrUtil.blankToDefault(subject, "Following up"), body, insight);
                 }
             } catch (Exception ignored) {
                 // 落到下面
             }
         }
-        return new String[]{"Following up", s.trim()};
+        return new Draft("Following up", s.trim(), null);
+    }
+
+    /** 兼容旧调用：只取主题和正文 */
+    static String[] parse(String content) {
+        Draft d = parseDraft(content);
+        return new String[]{d.subject(), d.body()};
     }
 
     // ==================== 确认与发送 ====================

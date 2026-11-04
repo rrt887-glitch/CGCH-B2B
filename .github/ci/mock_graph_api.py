@@ -561,6 +561,10 @@ class Handler(BaseHTTPRequestHandler):
                     'certifications': ['ISO 9001'] if 'ISO 9001' in data else [],
                     'companyContacts': ['sales@bluewave.example'] if 'sales@bluewave.example' in data else [],
                     'purchasingSignals': ['正在寻找 2027 年轻量吹风机 OEM 供应商'] if 'OEM suppliers' in data else [],
+                    'buyerKind': {'kind': 'trader', 'reason': '为零售连锁供货，转卖为主'},
+                    'painPoints': ['寻找更轻的新款吹风机'], 'quoteAdvice': '按 500 台起订给阶梯价',
+                    'paymentAdvice': '首单 30% 定金，余款见提单副本',
+                    'recommendedProducts': [{'name': 'HD-300 lightweight hair dryer', 'reason': '正在找轻量款'}] if 'HD-300' in data else [],
                     'talkingPoints': ['介绍轻量吹风机'], 'risks': [], 'confidence': 'medium'}, ensure_ascii=False)
             else:
                 answer = json.dumps({'companyName': None, 'summary': '资料不足', 'confidence': 'low'}, ensure_ascii=False)
@@ -568,8 +572,12 @@ class Handler(BaseHTTPRequestHandler):
             data = msgs[-1]['content'] if msgs else ''
             name = next((l.split('：', 1)[1].strip() for l in data.splitlines() if l.startswith('客户名称：')), 'there')
             subject = 'New 2027 hair dryer line' if '2027' in data else 'Checking in'
-            answer = json.dumps({'subject': subject, 'body': f'Hi {name},\n\nIt has been a while since we last talked. '
-                                 'We just launched our 2027 hair dryer line. Would you like a sample?'}, ensure_ascii=False)
+            reply = {'subject': subject, 'body': f'Hi {name},\n\nIt has been a while since we last talked. '
+                     'We just launched our 2027 hair dryer line. Would you like a sample?'}
+            if '背调报告' in data:  # 有背调时先分析现状和痛点，再从产品库推荐
+                reply['analysis'] = {'situation': '在找 2027 年轻量吹风机供应商', 'painPoint': '想要更轻的新款',
+                                     'products': ['HD-300 lightweight hair dryer'] if 'HD-300' in data else [], 'angle': '新款轻量吹风机'}
+            answer = json.dumps(reply, ensure_ascii=False)
         elif '工作报告' in system:  # AI 工作报告总结
             data = msgs[-1]['content'] if msgs else ''
             answer = '【概况】数据已收到，询盘处理正常。\n【需要关注】' + ('有转人工对话。' if '转人工对话' in data else '无') \

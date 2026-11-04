@@ -72,6 +72,10 @@ public class ChannelReactivateItemDO extends TenantBaseDO {
      */
     private String content;
     /**
+     * AI 写信前的分析（JSON）：situation 客户现状、painPoint 痛点、products 推荐产品、angle 开场角度、researchId 依据的背调
+     */
+    private String insight;
+    /**
      * 状态：generating、draft、approved、sent、failed、skipped
      */
     private String status;

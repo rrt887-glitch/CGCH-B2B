@@ -34,6 +34,8 @@ export namespace ChannelReactivateApi {
     credits?: number;
     sentTime?: string;
     replied: boolean;
+    /** AI 写信前的分析 */
+    insight?: { angle?: string; painPoint?: string; products?: string[]; researchId?: number; situation?: string };
   }
 
   export interface Task {
@@ -45,6 +47,8 @@ export namespace ChannelReactivateApi {
     waTemplateName?: string;
     waTemplateLanguage?: string;
     status: 'done' | 'generating' | 'ready' | 'sending';
+    autoResearch?: boolean;
+    autoSend?: boolean;
     createTime: string;
     total: number;
     counts: Record<ItemStatus, number>;
@@ -60,6 +64,8 @@ export namespace ChannelReactivateApi {
     instructions?: string;
     waTemplateName?: string;
     waTemplateLanguage?: string;
+    autoResearch?: boolean;
+    autoSend?: boolean;
   }
 }
 

@@ -1853,6 +1853,41 @@ jobs:
           assert len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_search'))) == n_search + 1, '企业资料有价格时不检索'
           call('PUT', '/channel/ai/agent-settings', {'skills': dict(sk['skills'], webQuote=False)})
           print('允许联网报价：只在问价且资料没有价格时检索，AI 给出市场参考价区间')
+          # ---- 背调（联网搜索 + 大模型）→ 唤醒老客户：先背调、判断痛点、从产品库推荐、自动发送 ----
+          call('POST', '/channel/ai/knowledge/save', {'type': 'product', 'title': 'HD-300 lightweight hair dryer', 'content': '2027 model, 320 g, 1600W, CE/RoHS.'})
+          bw = call('POST', '/crm/customer/create', {'name': 'Bluewave Buyer', 'ownerUserId': 1, 'companyName': 'Bluewave Home Appliances Ltd',
+                     'countryCode': 'AU', 'website': 'http://127.0.0.1:18080', 'email': 'buyer@bluewave.example'})
+          n_s0 = len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_search')))
+          sent0 = call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=1&accountId={acct}&view=sent')['total']
+          tid3 = call('POST', '/channel/reactivate/task/create', {'name': '情报唤醒', 'customerIds': [bw], 'channel': 'mail',
+                      'autoResearch': True, 'autoSend': True})
+          t3 = wait(lambda: (lambda t: t if t['status'] == 'done' else None)(call('GET', f'/channel/reactivate/task/get?id={tid3}')), '先背调再写信并自动发出', timeout=60)
+          assert t3['autoResearch'] is True and t3['autoSend'] is True and t3['counts']['sent'] == 1, t3
+          it3 = t3['items'][0]
+          rs3 = call('GET', f"/channel/research/page?pageNo=1&pageSize=5&customerId={bw}")['list']
+          assert len(rs3) == 1 and rs3[0]['status'] == 'done' and it3['insight']['researchId'] == rs3[0]['id'], (rs3, it3)
+          assert it3['insight']['painPoint'] and it3['insight']['products'] == ['HD-300 lightweight hair dryer'], it3['insight']
+          qs3 = [x['query'] for x in json.load(urllib.request.urlopen('http://127.0.0.1:18080/_search'))[n_s0:]]
+          assert len(qs3) == 3 and all('Bluewave Home Appliances Ltd' in q for q in qs3) and any('import' in q for q in qs3), qs3
+          r3 = call('GET', f"/channel/research/get?id={rs3[0]['id']}")
+          assert any(x.get('type') == 'search' for x in r3['sources']) and any(x.get('type') == 'website' for x in r3['sources']), r3['sources']
+          llm3 = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_llm'))
+          rp = next(m for m in reversed(llm3) if '背调分析师' in m['messages'][0]['content'])['messages'][1]['content']
+          assert '联网搜索结果' in rp and 'US$ 6.20' in rp, rp[:600]
+          wp = next(m for m in reversed(llm3) if '客户唤醒' in m['messages'][0]['content'])['messages'][1]['content']
+          assert '背调报告' in wp and '我方产品库' in wp and 'HD-300 lightweight hair dryer' in wp and 'Bluewave' in wp, wp[:800]
+          assert call('GET', f'/channel/mail-message/page?pageNo=1&pageSize=1&accountId={acct}&view=sent')['total'] == sent0 + 1, '自动发送应发出邮件'
+          # 已有 90 天内的背调时不重复背调；不开自动发送时停在待确认
+          tid4 = call('POST', '/channel/reactivate/task/create', {'customerIds': [bw], 'channel': 'mail', 'autoResearch': True})
+          t4 = wait(lambda: (lambda t: t if t['status'] == 'ready' else None)(call('GET', f'/channel/reactivate/task/get?id={tid4}')), '复用背调')
+          assert t4['items'][0]['status'] == 'draft' and t4['items'][0]['insight']['researchId'] == rs3[0]['id'], t4['items']
+          assert call('GET', f"/channel/research/page?pageNo=1&pageSize=5&customerId={bw}")['total'] == 1, '不应重复背调'
+          call('DELETE', f'/channel/reactivate/task/delete?id={tid4}')
+          # 只有公司名、没有官网也能背调（联网搜索 + 大模型）
+          rn = call('POST', '/channel/research/create', {'companyName': 'Bluewave Home Appliances Ltd'})
+          rnd = wait(lambda: (lambda x: x if x['status'] != 'running' else None)(call('GET', f'/channel/research/get?id={rn}')), '只填公司名的背调', timeout=30)
+          assert rnd['status'] == 'done' and rnd['report']['buyerKind']['kind'] == 'trader' and rnd['report']['paymentAdvice'], rnd
+          print('背调：联网搜索概况 / 进口记录 / 规模，大模型判断贸易商或工厂并给出报价付款建议；唤醒：先背调、判断痛点、从产品库推荐、可自动发送，背调 90 天内复用')
           cfg_k = call('GET', '/channel/ai/config/get')
           # ---- WhatsApp 扫码接入（Evolution API）：配对码 / 二维码 → 手机确认建账号 → 收发消息、状态、手机端回显、媒体、掉线重扫、删除 ----
           import urllib.error
