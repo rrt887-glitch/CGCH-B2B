@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 /**
- * 客户唤醒：筛出久未联系的老客户 → AI 逐个写跟进邮件（WhatsApp 用已审核模板）→ 业务员确认 → 批量发出 → 跟踪回复。
+ * 客户唤醒：筛出久未联系的老客户 → 先背调 → AI 判断痛点、从产品库挑推荐产品、逐个写跟进邮件（WhatsApp 用已审核模板）
+ * → 业务员确认（或自动发送）→ 批量发出 → 跟踪回复。
  */
 import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelReactivateApi } from '#/api/channel/reactivate';
@@ -29,6 +30,7 @@ import {
   Select,
   Space,
   Steps,
+  Switch,
   Table,
   Tag,
   Textarea,
@@ -89,7 +91,15 @@ const filter = reactive({ inactiveDays: 90, keyword: '', ownerUserId: undefined 
 const candidates = ref<ChannelReactivateApi.Candidate[]>([]);
 const candLoading = ref(false);
 const selected = ref<number[]>([]);
-const form = reactive({ name: '', channel: 'auto', instructions: '', waTemplateName: undefined as string | undefined, waTemplateLanguage: 'en_US' });
+const form = reactive({
+  name: '',
+  channel: 'auto',
+  instructions: '',
+  waTemplateName: undefined as string | undefined,
+  waTemplateLanguage: 'en_US',
+  autoResearch: true,
+  autoSend: false,
+});
 const templates = ref<ChannelWaApi.Template[]>([]);
 const creating = ref(false);
 
@@ -104,7 +114,7 @@ async function searchCandidates() {
 }
 async function openCreate() {
   step.value = 0;
-  Object.assign(form, { name: '', channel: 'auto', instructions: '', waTemplateName: undefined, waTemplateLanguage: 'en_US' });
+  Object.assign(form, { name: '', channel: 'auto', instructions: '', waTemplateName: undefined, waTemplateLanguage: 'en_US', autoResearch: true, autoSend: false });
   createOpen.value = true;
   await searchCandidates();
   try {
@@ -136,7 +146,7 @@ async function create() {
       inactiveDays: filter.inactiveDays,
       customerIds: selected.value,
     });
-    message.success('任务已创建，AI 正在逐个撰写');
+    message.success(form.autoResearch ? '任务已创建，AI 正在逐个背调并撰写' : '任务已创建，AI 正在逐个撰写');
     createOpen.value = false;
     await loadTasks();
     await openTask(id);
@@ -217,6 +227,12 @@ async function removeTask(id: number) {
   await loadTasks();
 }
 
+/** 打开这位客户依据的背调报告（同一页面的「深度背调」） */
+function openResearch(id: number) {
+  detailOpen.value = false;
+  router.replace({ name: 'CgchV3Crm', query: { tab: 'salesmind', sub: 'research', researchId: String(id) } });
+}
+
 // ===== 编辑 =====
 const editOpen = ref(false);
 const edit = reactive({ id: 0, subject: '', content: '', channel: 'mail' as string });
@@ -245,7 +261,7 @@ onMounted(async () => {
         class="mb-4"
         type="info"
         show-icon
-        message="选出很久没有联系的老客户，AI 会参考客户资料、上次联系内容和你的写作要求，为每位客户写一封跟进邮件；你逐条确认后再批量发出，并能看到谁回复了。"
+        message="选出很久没有联系的老客户，AI 先做背调，再结合往来记录判断每位客户的痛点、从产品库挑出最匹配的产品，写一封只属于他的跟进邮件；你可以逐条确认后发出，也可以设为自动发送，并能看到谁回复了。"
       />
       <Empty v-if="!loading && tasks.length === 0" description="还没有唤醒任务" />
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -324,7 +340,17 @@ onMounted(async () => {
               <Radio value="whatsapp">只发 WhatsApp</Radio>
             </RadioGroup>
           </FormItem>
-          <FormItem label="给 AI 的写作要求" extra="写清这次联系客户的理由，AI 只会使用这里和知识库里的信息，不会编造价格和交期。">
+          <FormItem label="先做情报" extra="没有 90 天内背调报告的客户，先用大模型做一次背调（官网、联网搜索、往来记录），再根据报告写信。每位客户多消耗一次背调的用量。">
+            <Switch v-model:checked="form.autoResearch" checked-children="写信前先背调" un-checked-children="不背调" />
+          </FormItem>
+          <FormItem label="发送方式">
+            <RadioGroup v-model:value="form.autoSend">
+              <Radio :value="false">写好后我逐条确认再发</Radio>
+              <Radio :value="true">写好后自动发送，无需确认</Radio>
+            </RadioGroup>
+            <div v-if="form.autoSend" class="mt-1 text-xs text-[#c93400]">AI 写好就会直接发给客户，建议先用少量客户试一次，确认效果后再大批量使用。</div>
+          </FormItem>
+          <FormItem label="给 AI 的写作要求（可选）" extra="写清这次联系客户的理由。不写也可以，AI 会根据背调和产品库自己找切入点；不会编造价格和交期。">
             <Textarea v-model:value="form.instructions" :rows="4" :maxlength="1000" show-count
                       placeholder="例如：介绍我们 2027 年的新款吹风机，比上一代轻 20%，可以免费寄样；询问客户今年的采购计划。" />
           </FormItem>
@@ -339,7 +365,9 @@ onMounted(async () => {
         </Form>
         <div class="mt-4 flex justify-between">
           <Button @click="step = 0">上一步</Button>
-          <Button type="primary" :loading="creating" @click="create">创建并让 AI 撰写（{{ selected.length }} 位）</Button>
+          <Button type="primary" :loading="creating" @click="create">
+            {{ form.autoSend ? '创建并自动发送' : '创建并让 AI 撰写' }}（{{ selected.length }} 位）
+          </Button>
         </div>
       </template>
     </Drawer>
@@ -358,7 +386,7 @@ onMounted(async () => {
             <div class="text-xs text-gray-500">{{ s.label }}</div>
           </div>
         </div>
-        <div v-if="task.status === 'generating'" class="mb-4"><Progress :percent="progress" size="small" /><span class="text-sm text-gray-500">AI 正在逐个撰写…</span></div>
+        <div v-if="task.status === 'generating'" class="mb-4"><Progress :percent="progress" size="small" /><span class="text-sm text-gray-500">{{ task.autoResearch ? 'AI 正在逐个背调、分析并撰写…' : 'AI 正在逐个撰写…' }}{{ task.autoSend ? '写好后自动发送' : '' }}</span></div>
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
           <Space wrap>
             <Button size="small" :disabled="!task.counts.draft" @click="approveAll">全部确认（{{ task.counts.draft }}）</Button>
@@ -391,6 +419,12 @@ onMounted(async () => {
               <Tag :color="record.channel === 'mail' ? 'blue' : 'green'">{{ record.channel === 'mail' ? '邮件' : 'WhatsApp' }}</Tag>
             </template>
             <template v-else-if="column.key === 'content'">
+              <div v-if="record.insight && (record.insight.situation || record.insight.painPoint)" class="mb-1 rounded-[10px] bg-[#F5F5F7] px-2 py-1 text-xs leading-5 text-gray-600">
+                <div v-if="record.insight.situation"><b>现状</b> {{ record.insight.situation }}</div>
+                <div v-if="record.insight.painPoint"><b>痛点</b> {{ record.insight.painPoint }}</div>
+                <div v-if="record.insight.products?.length"><b>推荐</b> {{ record.insight.products.join('、') }}</div>
+                <a v-if="record.insight.researchId" @click="openResearch(record.insight.researchId)">查看背调</a>
+              </div>
               <div v-if="record.subject" class="truncate font-medium">{{ record.subject }}</div>
               <div class="line-clamp-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{{ record.content }}</div>
               <div v-if="record.reasonDetail" class="text-xs text-red-500">{{ record.reasonDetail }}</div>

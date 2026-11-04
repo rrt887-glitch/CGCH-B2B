@@ -16,6 +16,17 @@ export namespace ChannelResearchApi {
     purchasingSignals?: string[];
     talkingPoints?: string[];
     risks?: string[];
+    /** 贸易商还是终端工厂 */
+    buyerKind?: { kind?: 'end_user' | 'trader' | 'unknown'; reason?: string };
+    /** 最近在哪采购、买什么、买多少 */
+    purchasing?: { basis?: string; products?: string[]; suppliers?: string[]; volume?: string };
+    creditSignals?: string[];
+    painPoints?: string[];
+    recommendedProducts?: { name: string; reason?: string }[];
+    quoteAdvice?: string;
+    paymentAdvice?: string;
+    /** 大模型自身了解的公开信息（需核实） */
+    modelKnowledge?: string[];
     confidence?: 'high' | 'low' | 'medium';
   }
 
@@ -31,7 +42,7 @@ export namespace ChannelResearchApi {
     userId?: number;
     createTime: string;
     report?: Report;
-    sources?: { snippet: string; title: string; url: string }[];
+    sources?: { snippet: string; title: string; type?: 'search' | 'website'; url: string }[];
   }
 
   export interface CreateReq {

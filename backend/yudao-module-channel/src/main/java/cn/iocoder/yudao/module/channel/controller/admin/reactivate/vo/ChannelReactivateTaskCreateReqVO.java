@@ -23,5 +23,9 @@ public class ChannelReactivateTaskCreateReqVO {
     private String waTemplateName;
     @Schema(description = "WhatsApp 模板语言", example = "en_US")
     private String waTemplateLanguage;
+    @Schema(description = "写信前先背调（没有 90 天内背调报告的客户先做一次背调）", example = "true")
+    private Boolean autoResearch;
+    @Schema(description = "写好后自动发送，不需要逐条确认", example = "false")
+    private Boolean autoSend;
 
 }

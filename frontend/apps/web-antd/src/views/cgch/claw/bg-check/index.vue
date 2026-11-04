@@ -1,12 +1,14 @@
 <script lang="ts" setup>
 /**
- * 深度背调：输入客户官网（或选择客户 / 线索），AI 读取官网公开页面并结合往来记录，整理成背调报告。
+ * 深度背调：输入客户官网或公司名（或选择客户 / 线索），用后台配置的大模型做背调：
+ * 读取官网公开页面、联网搜索公开信息（配置了联网搜索时）、结合往来记录，资料不足时补充大模型自身了解的信息（标注需核实）。
+ * 报告回答：对方是贸易商还是终端工厂、最近在哪采购买多少、规模与信用、该给什么价、要不要预付款、推荐哪些产品。
  * 可从 CRM 跳转过来：?customerId=1 或 ?clueId=2
  */
 import { fmtDateTime } from '#/utils/datetime';
 import type { ChannelResearchApi } from '#/api/channel/research';
 
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
@@ -104,10 +106,19 @@ async function open(id: number) {
 onBeforeUnmount(() => timer && clearInterval(timer));
 const rep = computed(() => current.value?.report);
 const sections = computed(() => [
+  { key: 'painPoints', title: '可能的痛点', tip: '交期、价格、新品还是认证' },
   { key: 'purchasingSignals', title: '采购信号', tip: '他们可能向我们采购什么' },
   { key: 'talkingPoints', title: '沟通切入点', tip: '跟进时可以聊的话题' },
+  { key: 'creditSignals', title: '付款与信用线索', tip: '成立年限、规模、负面信息' },
   { key: 'risks', title: '风险提示', tip: '需要注意或核实的地方' },
+  { key: 'modelKnowledge', title: 'AI 了解的信息（需核实）', tip: '大模型自身掌握的公开信息，未经资料验证' },
 ] as const);
+const BUYER_KIND: Record<string, { color: string; label: string }> = {
+  trader: { color: 'purple', label: '贸易商' },
+  end_user: { color: 'cyan', label: '终端工厂 / 自用' },
+  unknown: { color: 'default', label: '类型待定' },
+};
+const SOURCE_TYPE: Record<string, string> = { website: '官网', search: '联网搜索' };
 
 async function apply() {
   if (!current.value) return;
@@ -120,6 +131,15 @@ async function remove() {
   current.value = undefined;
   await loadList();
 }
+
+// 从客户唤醒等页面跳过来时打开指定的背调
+watch(
+  () => route.query.researchId,
+  (v) => {
+    const id = Number(v);
+    if (id && id !== current.value?.id) open(id);
+  },
+);
 
 onMounted(async () => {
   customers.value = (await getCustomerSimpleList()) as any;
@@ -161,13 +181,13 @@ onMounted(async () => {
               <Select v-model:value="form.clueId" show-search :filter-option="false" placeholder="搜索线索名称"
                       :options="clues.map((c) => ({ value: c.id, label: c.name }))" @search="searchClues" @focus="searchClues('')" />
             </FormItem>
-            <FormItem :label="target === 'website' ? '官网' : '官网（不填则用客户资料里的官网或企业邮箱域名）'">
+            <FormItem :label="target === 'website' ? '官网（没有可不填，只填公司名）' : '官网（不填则用客户资料里的官网或企业邮箱域名）'">
               <Input v-model:value="form.website" placeholder="example.com" />
             </FormItem>
-            <FormItem v-if="target === 'website'" label="公司名称（可选）"><Input v-model:value="form.companyName" /></FormItem>
+            <FormItem v-if="target === 'website'" label="公司名称"><Input v-model:value="form.companyName" placeholder="官网和公司名至少填一个" /></FormItem>
             <Button type="primary" block :loading="creating" @click="start">开始背调</Button>
             <div class="mt-2 text-xs text-gray-500">
-              只读取对方官网的少量公开页面（遵守 robots.txt），并结合我们与客户的往来记录；只整理企业层面的商业信息。会调用大模型。
+              用后台配置的大模型背调：读取对方官网少量公开页面（遵守 robots.txt）、联网搜索公开信息（需在智能体设置里配置联网搜索），并结合往来记录；只整理企业层面的商业信息。
             </div>
           </Form>
         </Card>
@@ -199,6 +219,7 @@ onMounted(async () => {
               <template #title>
                 <Space>
                   <span>{{ rep.companyName || current.companyName || '背调报告' }}</span>
+                  <Tag v-if="rep.buyerKind?.kind" :color="BUYER_KIND[rep.buyerKind.kind]?.color">{{ BUYER_KIND[rep.buyerKind.kind]?.label ?? rep.buyerKind.kind }}</Tag>
                   <Tag v-if="rep.businessType">{{ BUSINESS_TYPE[rep.businessType] ?? rep.businessType }}</Tag>
                   <Tag v-if="rep.countryCode">{{ rep.countryCode.toUpperCase() }}</Tag>
                   <Tag v-if="rep.confidence" :color="CONFIDENCE[rep.confidence]?.color">{{ CONFIDENCE[rep.confidence]?.label }}</Tag>
@@ -217,6 +238,19 @@ onMounted(async () => {
                 <DescriptionsItem label="官网">
                   <a v-if="current.website" :href="current.website" target="_blank" rel="noopener noreferrer">{{ current.website }}</a>
                 </DescriptionsItem>
+                <DescriptionsItem label="贸易商还是终端工厂">
+                  {{ rep.buyerKind?.kind ? BUYER_KIND[rep.buyerKind.kind]?.label ?? rep.buyerKind.kind : '—' }}
+                  <span v-if="rep.buyerKind?.reason" class="text-gray-500">：{{ rep.buyerKind.reason }}</span>
+                </DescriptionsItem>
+                <DescriptionsItem label="最近采购">
+                  <template v-if="rep.purchasing && (rep.purchasing.suppliers?.length || rep.purchasing.products?.length || rep.purchasing.volume)">
+                    <div v-if="rep.purchasing.suppliers?.length">采购来源：{{ rep.purchasing.suppliers.join('、') }}</div>
+                    <div v-if="rep.purchasing.products?.length">采购品类：{{ rep.purchasing.products.join('、') }}</div>
+                    <div v-if="rep.purchasing.volume">采购量：{{ rep.purchasing.volume }}</div>
+                    <div v-if="rep.purchasing.basis" class="text-xs text-gray-500">依据：{{ rep.purchasing.basis }}</div>
+                  </template>
+                  <template v-else>—</template>
+                </DescriptionsItem>
                 <DescriptionsItem label="主营产品">{{ rep.mainProducts?.join('、') || '—' }}</DescriptionsItem>
                 <DescriptionsItem label="市场">{{ rep.markets?.join('、') || '—' }}</DescriptionsItem>
                 <DescriptionsItem label="规模线索">{{ rep.scale || '—' }}</DescriptionsItem>
@@ -224,6 +258,20 @@ onMounted(async () => {
                 <DescriptionsItem label="公司公开联系方式">{{ rep.companyContacts?.join('；') || '—' }}</DescriptionsItem>
               </Descriptions>
             </Card>
+            <div v-if="rep && (rep.quoteAdvice || rep.paymentAdvice || rep.recommendedProducts?.length)" class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <Card title="报价建议" size="small" :bordered="false">
+                <div class="text-sm leading-6">{{ rep.quoteAdvice || '资料不足，暂无建议' }}</div>
+              </Card>
+              <Card title="付款建议" size="small" :bordered="false">
+                <div class="text-sm leading-6">{{ rep.paymentAdvice || '资料不足，暂无建议' }}</div>
+              </Card>
+              <Card title="推荐我方产品" size="small" :bordered="false">
+                <ul v-if="rep.recommendedProducts?.length" class="list-disc pl-5 text-sm leading-6">
+                  <li v-for="(p, i) in rep.recommendedProducts" :key="i"><b>{{ p.name }}</b><span v-if="p.reason" class="text-gray-500">：{{ p.reason }}</span></li>
+                </ul>
+                <div v-else class="text-sm text-gray-400">知识库里没有匹配的产品</div>
+              </Card>
+            </div>
             <div v-if="rep" class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
               <Card v-for="s in sections" :key="s.key" :title="s.title" size="small" :bordered="false">
                 <div class="mb-2 text-xs text-gray-500">{{ s.tip }}</div>
@@ -235,11 +283,12 @@ onMounted(async () => {
             </div>
             <Card v-if="current.sources?.length" title="参考来源" size="small" :bordered="false">
               <div v-for="src in current.sources" :key="src.url" class="border-b py-2 last:border-b-0">
+                <Tag v-if="src.type" class="mr-1" :color="src.type === 'search' ? 'blue' : 'default'">{{ SOURCE_TYPE[src.type] ?? src.type }}</Tag>
                 <a :href="src.url" target="_blank" rel="noopener noreferrer" class="text-sm">{{ src.title || src.url }}</a>
                 <div class="truncate text-xs text-gray-500">{{ src.url }}</div>
                 <div class="line-clamp-2 text-xs text-gray-500">{{ src.snippet }}</div>
               </div>
-              <div class="mt-2 text-xs text-gray-400">报告由 AI 根据以上公开页面整理，重要信息请自行核实。约用 {{ current.credits }} 千 token。</div>
+              <div class="mt-2 text-xs text-gray-400">报告由 AI 根据以上公开资料整理，判断和建议仅供参考，重要信息请自行核实。约用 {{ current.credits }} 千 token。</div>
             </Card>
           </template>
         </Spin>

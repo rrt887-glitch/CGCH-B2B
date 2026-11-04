@@ -56,6 +56,14 @@ public class ChannelReactivateTaskDO extends TenantBaseDO {
      */
     private String status;
     /**
+     * 写信前先背调：没有 90 天内背调报告的客户，先用大模型做一次背调，再根据报告写信
+     */
+    private Boolean autoResearch;
+    /**
+     * 写好后自动发送，不需要业务员逐条确认
+     */
+    private Boolean autoSend;
+    /**
      * 创建人
      */
     private Long userId;

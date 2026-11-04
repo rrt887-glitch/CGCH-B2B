@@ -112,6 +112,8 @@ public class ChannelReactivateController {
         m.put("waTemplateName", t.getWaTemplateName());
         m.put("waTemplateLanguage", t.getWaTemplateLanguage());
         m.put("status", t.getStatus());
+        m.put("autoResearch", Boolean.TRUE.equals(t.getAutoResearch()));
+        m.put("autoSend", Boolean.TRUE.equals(t.getAutoSend()));
         m.put("userId", t.getUserId());
         m.put("createTime", t.getCreateTime() == null ? null : t.getCreateTime().format(TIME));
         List<ChannelReactivateItemDO> items = channelReactivateService.items(t.getId());
@@ -140,6 +142,7 @@ public class ChannelReactivateController {
                 x.put("recipient", i.getRecipient());
                 x.put("subject", i.getSubject());
                 x.put("content", i.getContent());
+                x.put("insight", i.getInsight() == null ? null : cn.iocoder.yudao.framework.common.util.json.JsonUtils.parseTree(i.getInsight()));
                 x.put("status", i.getStatus());
                 x.put("reasonDetail", i.getReasonDetail());
                 x.put("credits", i.getCredits());

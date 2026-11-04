@@ -20,6 +20,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationM
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaMessageMapper;
 import cn.iocoder.yudao.module.channel.service.ai.ChannelAiService;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
+import cn.iocoder.yudao.module.channel.service.ai.WebSearchClient;
 import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
 import cn.iocoder.yudao.module.channel.service.lead.LeadInference;
 import cn.iocoder.yudao.module.channel.service.mail.HtmlText;
@@ -47,8 +48,11 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.*;
 
 /**
- * 深度背调：读取客户官网的公开页面 + 我方与客户的往来记录 → AI 整理成背调报告（企业概况、主营产品、
- * 采购信号、沟通切入点、风险提示），可一键补充到 CRM 客户 / 线索。只收集企业层面的公开商业信息。
+ * 深度背调：用后台配置的大模型给客户做背调。资料来源：
+ * 客户官网的公开页面、我方与客户的往来记录、联网搜索的公开结果（在智能体里配置了联网搜索时），
+ * 以及大模型自身掌握的公开知识（单独列出、标注需核实）。
+ * 报告包括企业概况、客户类型（贸易商 / 终端工厂）、采购情况、规模、痛点、推荐我方产品、报价与付款建议、风险提示，
+ * 可一键补充到 CRM 客户 / 线索。只收集企业层面的公开商业信息。
  */
 @Service
 @Slf4j
@@ -117,8 +121,8 @@ public class ChannelResearchService {
         if (site == null && clue != null) {
             site = StrUtil.blankToDefault(StrUtil.trimToNull(clue.getWebsite()), LeadInference.websiteFromEmail(clue.getEmail()));
         }
-        if (site == null && customer == null && clue == null) {
-            throw exception(RESEARCH_INVALID, "请填写官网，或选择一个客户 / 线索");
+        if (site == null && customer == null && clue == null && StrUtil.isBlank(companyName)) {
+            throw exception(RESEARCH_INVALID, "请填写官网或公司名称，或选择一个客户 / 线索");
         }
         if (site != null) {
             try {
@@ -147,6 +151,51 @@ public class ChannelResearchService {
     private void fail(Long id, String reason) {
         channelResearchMapper.updateById(new ChannelResearchDO().setId(id).setStatus(ChannelResearchDO.STATUS_FAILED)
                 .setReasonDetail(StrUtil.maxLength(reason, 250)));
+    }
+
+    /**
+     * 同步为客户做一次背调（客户唤醒写信前调用），返回完成或失败的记录。
+     * 官网取客户资料里的官网或企业邮箱域名，没有时只靠往来记录、联网搜索和大模型知识。
+     */
+    public ChannelResearchDO runForCustomer(Long userId, Long customerId) {
+        CrmCustomerDO c = crmCustomerMapper.selectById(customerId);
+        if (c == null) {
+            return null;
+        }
+        String site = StrUtil.blankToDefault(StrUtil.trimToNull(c.getWebsite()), LeadInference.websiteFromEmail(c.getEmail()));
+        if (site != null) {
+            try {
+                site = WebsiteFetcher.normalize(site).toString();
+            } catch (WebsiteFetcher.FetchException e) {
+                site = null;
+            }
+        }
+        ChannelResearchDO r = ChannelResearchDO.builder()
+                .companyName(StrUtil.maxLength(StrUtil.blankToDefault(c.getCompanyName(), c.getName()), 200)).website(site)
+                .customerId(customerId).status(ChannelResearchDO.STATUS_RUNNING).credits(0L).userId(userId).build();
+        channelResearchMapper.insert(r);
+        try {
+            run(r.getId());
+        } catch (Exception e) {
+            fail(r.getId(), "背调失败：" + e.getMessage());
+        }
+        return channelResearchMapper.selectById(r.getId());
+    }
+
+    /** 客户最近一次完成的背调；maxAgeDays 天以前的不算 */
+    public ChannelResearchDO latestDone(Long customerId, int maxAgeDays) {
+        if (customerId == null) {
+            return null;
+        }
+        return channelResearchMapper.selectOne(new LambdaQueryWrapperX<ChannelResearchDO>()
+                .eq(ChannelResearchDO::getCustomerId, customerId).eq(ChannelResearchDO::getStatus, ChannelResearchDO.STATUS_DONE)
+                .ge(ChannelResearchDO::getCreateTime, java.time.LocalDateTime.now().minusDays(maxAgeDays))
+                .orderByDesc(ChannelResearchDO::getId).last("LIMIT 1"));
+    }
+
+    /** 与客户的最近往来摘要（邮件、WhatsApp） */
+    public List<String> recentHistory(Long customerId) {
+        return customerId == null ? List.of() : history(new ChannelResearchDO().setCustomerId(customerId));
     }
 
     private void run(Long id) {
@@ -180,18 +229,24 @@ public class ChannelResearchService {
         }
         // 2. 我方往来记录
         List<String> history = history(r);
-        if (pages.isEmpty() && history.isEmpty()) {
+        // 3. 联网搜索公开信息（配置了联网搜索时）：企业概况、采购与进口记录、规模
+        List<WebSearchClient.Hit> hits = search(cfg, r);
+        if (pages.isEmpty() && history.isEmpty() && hits.isEmpty() && StrUtil.isBlank(r.getCompanyName())) {
             fail(id, StrUtil.blankToDefault(siteNote, "没有可用的资料：官网无法访问，也没有往来记录"));
             return;
         }
-        // 3. AI 整理
+        // 4. 大模型整理（资料不足时可补充自身掌握的公开知识，单独标注）
         try {
             LlmClient.Result res = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(), List.of(
-                    LlmClient.Message.system(systemPrompt()), LlmClient.Message.user(userPrompt(r, pages, history, siteNote))), 0.2);
+                    LlmClient.Message.system(systemPrompt()), LlmClient.Message.user(userPrompt(r, pages, history, hits, siteNote))), 0.2);
             JsonNode report = parseReport(res.content());
             long credits = channelCreditService.consume("research", id, r.getUserId(), res.promptTokens() + res.completionTokens(), "深度背调");
-            List<Map<String, String>> sources = pages.stream().map(p -> Map.of("url", p.url(), "title", StrUtil.nullToEmpty(p.title()),
-                    "snippet", StrUtil.maxLength(p.text(), SNIPPET))).collect(Collectors.toList());
+            List<Map<String, String>> sources = new ArrayList<>();
+            pages.forEach(p -> sources.add(Map.of("url", p.url(), "title", StrUtil.nullToEmpty(p.title()),
+                    "snippet", StrUtil.maxLength(p.text(), SNIPPET), "type", "website")));
+            Set<String> seen = sources.stream().map(x -> x.get("url")).collect(Collectors.toSet());
+            hits.stream().filter(h -> seen.add(h.url())).forEach(h -> sources.add(Map.of("url", h.url(), "title", StrUtil.nullToEmpty(h.title()),
+                    "snippet", StrUtil.maxLength(h.content(), SNIPPET), "type", "search")));
             String name = StrUtil.blankToDefault(report.path("companyName").asText(null), r.getCompanyName());
             channelResearchMapper.updateById(new ChannelResearchDO().setId(id).setStatus(ChannelResearchDO.STATUS_DONE)
                     .setReport(report.toString()).setSources(JsonUtils.toJsonString(sources)).setCredits(credits)
@@ -199,6 +254,38 @@ public class ChannelResearchService {
         } catch (Exception e) {
             fail(id, "AI 整理失败：" + e.getMessage());
         }
+    }
+
+    /** 联网搜索：按公司名（没有时用官网域名）查概况、采购 / 进口记录、规模，最多 3 次，去重后最多 12 条 */
+    private List<WebSearchClient.Hit> search(ChannelAiConfigDO cfg, ChannelResearchDO r) {
+        if (StrUtil.isBlank(cfg.getSearchApiKey())) {
+            return List.of();
+        }
+        String host = null;
+        if (r.getWebsite() != null) {
+            try {
+                host = StrUtil.removePrefix(URI.create(r.getWebsite()).getHost(), "www.");
+            } catch (Exception ignored) {
+                // 忽略
+            }
+        }
+        String who = StrUtil.isNotBlank(r.getCompanyName()) ? "\"" + r.getCompanyName() + "\"" : host;
+        if (StrUtil.isBlank(who)) {
+            return List.of();
+        }
+        String site = host != null && StrUtil.isNotBlank(r.getCompanyName()) ? " " + host : "";
+        List<String> queries = List.of(who + site + " company profile products",
+                who + " importer shipments suppliers import records",
+                who + " employees revenue company size");
+        Map<String, WebSearchClient.Hit> out = new LinkedHashMap<>();
+        for (String q : queries) {
+            for (WebSearchClient.Hit h : WebSearchClient.search(cfg.getSearchBaseUrl(), cfg.getSearchApiKey(), q)) {
+                if (out.size() < 12) {
+                    out.putIfAbsent(StrUtil.blankToDefault(h.url(), h.title()), h);
+                }
+            }
+        }
+        return new ArrayList<>(out.values());
     }
 
     /** 与该客户 / 线索的最近往来（邮件和 WhatsApp 各取最近几条摘要） */
@@ -238,19 +325,30 @@ public class ChannelResearchService {
     }
 
     private static String systemPrompt() {
-        return "你是外贸企业的客户背调分析师。根据提供的「客户官网公开页面」和「我方与客户的往来记录」，"
-                + "为业务员整理一份客户背调报告，帮助判断客户类型和跟进方向。\n"
-                + "规则：\n1. 只使用提供的资料，资料里没有的写 null 或空数组，不要猜测或编造（尤其是规模、营收、成立时间）。\n"
-                + "2. 只整理企业层面的商业信息；联系方式只记录官网公开的公司邮箱、电话、地址，不记录员工个人信息。\n"
-                + "3. 用简体中文撰写，公司名、产品名保留原文。\n"
-                + "4. 只输出 JSON，字段：companyName, countryCode（ISO 二字码）, summary（2~4 句概况）, "
+        return "你是外贸企业的客户背调分析师。根据提供的「客户官网公开页面」「联网搜索结果」和「我方与客户的往来记录」，"
+                + "为业务员整理一份客户背调报告：判断对方是谁（贸易商还是终端工厂）、最近在哪采购、买多少、规模和付款信用如何，"
+                + "以及该给什么价、要不要预付款、推荐我方哪些产品。\n"
+                + "规则：\n1. 事实只能来自提供的资料；资料里没有的写 null 或空数组，不要编造（尤其是规模、营收、成立时间、采购量）。\n"
+                + "2. 如果你本身了解这家公司的公开信息，可以写进 modelKnowledge，每条注明「需核实」，不要混进其他字段。\n"
+                + "3. 判断类字段（buyerKind、painPoints、quoteAdvice、paymentAdvice、recommendedProducts）是你的分析，要写出依据；依据不足时明确说明。\n"
+                + "4. 只整理企业层面的商业信息；联系方式只记录官网公开的公司邮箱、电话、地址，不记录员工个人信息。\n"
+                + "5. 用简体中文撰写，公司名、产品名保留原文。\n"
+                + "6. 只输出 JSON，字段：companyName, countryCode（ISO 二字码）, summary（2~4 句概况）, "
                 + "businessType（manufacturer/brand/distributor/wholesaler/retailer/e-commerce/trading/other 之一）, "
+                + "buyerKind（{\"kind\": \"trader\" 贸易商/转卖 | \"end_user\" 终端工厂/自用 | \"unknown\", \"reason\": 依据}）, "
                 + "mainProducts（数组）, markets（数组）, scale（规模线索，原文依据）, certifications（数组）, "
-                + "companyContacts（数组，官网公开的公司联系方式）, purchasingSignals（数组：他们可能向我们采购什么、依据是什么）, "
-                + "talkingPoints（数组：业务员跟进时的切入点）, risks（数组：需要注意的风险或疑点）, confidence（high/medium/low）。";
+                + "companyContacts（数组，官网公开的公司联系方式）, "
+                + "purchasing（{\"suppliers\": 最近的供应商或采购来源数组, \"products\": 采购的品类数组, \"volume\": 采购量或频率线索, \"basis\": 依据}）, "
+                + "creditSignals（数组：付款能力与信用线索，如成立年限、规模、负面信息）, "
+                + "purchasingSignals（数组：他们可能向我们采购什么、依据是什么）, painPoints（数组：对方可能的痛点，如交期、价格、新品、认证）, "
+                + "recommendedProducts（数组：[{\"name\": 我方产品名, \"reason\": 推荐理由}]，只能从「我方企业与产品」里挑）, "
+                + "quoteAdvice（报价策略建议）, paymentAdvice（付款方式建议，如是否要求预付款、比例）, "
+                + "talkingPoints（数组：业务员跟进时的切入点）, risks（数组：需要注意的风险或疑点）, "
+                + "modelKnowledge（数组：你自身了解的公开信息，每条注明需核实）, confidence（high/medium/low）。";
     }
 
-    private String userPrompt(ChannelResearchDO r, List<WebsiteFetcher.Page> pages, List<String> history, String siteNote) {
+    private String userPrompt(ChannelResearchDO r, List<WebsiteFetcher.Page> pages, List<String> history,
+                              List<WebSearchClient.Hit> hits, String siteNote) {
         StringBuilder sb = new StringBuilder();
         sb.append("背调对象：").append(StrUtil.blankToDefault(r.getCompanyName(), "（未知）"))
                 .append("；官网：").append(StrUtil.blankToDefault(r.getWebsite(), "（无）")).append("\n");
@@ -262,7 +360,7 @@ public class ChannelResearchService {
                 .map(k -> StrUtil.nullToEmpty(k.getTitle()) + "：" + StrUtil.maxLength(k.getContent(), 300))
                 .collect(Collectors.joining("\n"));
         if (StrUtil.isNotBlank(ours)) {
-            sb.append("\n## 我方企业与产品（用于判断采购信号）\n").append(StrUtil.maxLength(ours, 2000)).append("\n");
+            sb.append("\n## 我方企业与产品（用于判断采购信号、推荐产品）\n").append(StrUtil.maxLength(ours, 3000)).append("\n");
         }
         if (!pages.isEmpty()) {
             sb.append("\n## 客户官网公开页面\n");
@@ -270,8 +368,17 @@ public class ChannelResearchService {
                 sb.append("### ").append(p.title()).append("（").append(p.url()).append("）\n").append(p.text()).append("\n\n");
             }
         }
+        if (!hits.isEmpty()) {
+            sb.append("\n## 联网搜索结果（公开网页摘要，可能包含同名公司，注意甄别）\n");
+            for (WebSearchClient.Hit h : hits) {
+                sb.append("- ").append(h.title()).append("（").append(h.url()).append("）：").append(h.content()).append("\n");
+            }
+        }
         if (!history.isEmpty()) {
             sb.append("\n## 我方与客户的往来记录（最近）\n").append(String.join("\n", history)).append("\n");
+        }
+        if (pages.isEmpty() && hits.isEmpty() && history.isEmpty()) {
+            sb.append("\n（没有官网、搜索结果和往来记录，只能依据你自身了解的公开信息，请全部写进 modelKnowledge 并注明需核实，其他事实字段留空。）\n");
         }
         return sb.toString();
     }
