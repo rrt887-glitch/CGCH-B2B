@@ -48,7 +48,22 @@ public final class WebSearchClient {
         return text != null && HAS_PRICE.matcher(text).find();
     }
 
+    /** 搜索；连接被断开等网络异常时重试一次 */
     public static List<Hit> search(String baseUrl, String apiKey, String query) {
+        try {
+            return searchOnce(baseUrl, apiKey, query);
+        } catch (java.io.IOException e) {
+            log.info("[search][联网搜索网络异常，重试一次] {}", e.getMessage());
+            try {
+                return searchOnce(baseUrl, apiKey, query);
+            } catch (Exception e2) {
+                log.warn("[search][联网搜索异常] {}", e2.getMessage());
+                return List.of();
+            }
+        }
+    }
+
+    private static List<Hit> searchOnce(String baseUrl, String apiKey, String query) throws java.io.IOException {
         String url = StrUtil.removeSuffix(StrUtil.blankToDefault(StrUtil.trim(baseUrl), DEFAULT_BASE_URL), "/") + "/search";
         try {
             String body = JSON.writeValueAsString(Map.of("api_key", apiKey, "query", StrUtil.maxLength(query, 380),
@@ -69,6 +84,11 @@ public final class WebSearchClient {
                 }
             }
             return out;
+        } catch (java.io.IOException e) {
+            throw e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
         } catch (Exception e) {
             log.warn("[search][联网搜索异常] {}", e.getMessage());
             return List.of();
