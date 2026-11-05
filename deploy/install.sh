@@ -124,10 +124,17 @@ fi
 cat > docker-compose.yml <<EOF
 # 由 install.sh 生成，升级时会被覆盖；个性化配置请写在 .env 中
 name: cgch
+# 容器输出日志每个最多 3 个 × 20MB，避免长期运行占满磁盘
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
 services:
   mysql:
     image: ${REGISTRY}/cgch-mysql:${VERSION}
     restart: unless-stopped
+    logging: *logging
     environment:
       MYSQL_ROOT_PASSWORD: \${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ruoyi-vue-pro
@@ -144,6 +151,7 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
+    logging: *logging
     command: ["sh", "-c", "exec redis-server --requirepass \"\$\$REDIS_PASSWORD\" --appendonly yes"]
     environment:
       REDIS_PASSWORD: \${REDIS_PASSWORD}
@@ -153,6 +161,7 @@ services:
   backend:
     image: ${REGISTRY}/cgch-backend:${VERSION}
     restart: unless-stopped
+    logging: *logging
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_started }
@@ -170,6 +179,7 @@ services:
   evolution-db:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_DB: evolution
       POSTGRES_USER: evolution
@@ -184,6 +194,7 @@ services:
   evolution:
     image: \${EVOLUTION_IMAGE:-evoapicloud/evolution-api:v2.3.7}
     restart: unless-stopped
+    logging: *logging
     depends_on:
       evolution-db: { condition: service_healthy }
     environment:
@@ -222,6 +233,7 @@ services:
   web:
     image: ${REGISTRY}/cgch-web:${VERSION}
     restart: unless-stopped
+    logging: *logging
     depends_on: [backend]
     environment:
       CGCH_SITE: \${CGCH_SITE}
@@ -264,6 +276,8 @@ say "检查数据库升级"
 docker compose exec -T mysql cgch-migrate </dev/null || die "数据库升级失败，请把上面的输出发给技术支持"
 say "启动服务"
 docker compose up -d --remove-orphans
+# 清理升级后不再使用的旧镜像（只删没有容器在用、也没有标签的镜像），避免每次升级多占 1~2GB 磁盘
+docker image prune -f >/dev/null 2>&1 || true
 
 wait_backend() {
   for i in $(seq 1 90); do
