@@ -64,3 +64,8 @@ UPDATE `system_menu` m
 -- 其他位置引用了这两个模块页面的菜单
 UPDATE `system_menu` SET `status` = 1
  WHERE `deleted` = b'0' AND (`component` LIKE 'fms/%' OR `component` LIKE 'cms/%');
+
+-- 停用没有前端页面的菜单（EAM、CMS、FMS 及示例页），避免空白页和控制台报错
+UPDATE `system_menu` SET `status` = 1
+WHERE `id` IN (1637, 12940, 1894, 83, 349)
+   OR `component` LIKE 'eam/%' OR `component` LIKE 'cms/%' OR `component` LIKE 'fms/%';

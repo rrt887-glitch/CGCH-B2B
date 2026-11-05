@@ -118,4 +118,22 @@ public class CrmCustomerCreateReqBO {
      */
     private LocalDateTime contactNextTime;
 
+
+    // ========== 外贸字段：线索转客户时一并带过去 ==========
+
+    /** 国家（ISO 二字码） */
+    private String countryCode;
+    /** 公司名称 */
+    private String companyName;
+    /** 官网 */
+    private String website;
+    /** WhatsApp 号码 */
+    private String whatsapp;
+    /** 客户分组 */
+    private Long groupId;
+    /** 标签 */
+    private java.util.List<Long> tagIds;
+    /** 是否由 AI 托管 */
+    private Boolean aiHosted;
+
 }

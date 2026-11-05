@@ -32,7 +32,7 @@ public class ChannelAssistantController {
     private ChannelAssistantService channelAssistantService;
 
     @PostMapping("/ask")
-    @Operation(summary = "提问；不传 chatId 时新建会话。返回回答、查询步骤与消耗智点")
+    @Operation(summary = "提问；不传 chatId 时新建会话。返回回答、查询步骤与 AI 用量")
     @PreAuthorize("@ss.hasPermission('channel:assistant')")
     public CommonResult<ChannelAssistantService.Reply> ask(@RequestBody Map<String, Object> req) {
         Object chatId = req.get("chatId");

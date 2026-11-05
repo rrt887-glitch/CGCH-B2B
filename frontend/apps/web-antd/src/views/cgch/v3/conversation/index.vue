@@ -322,4 +322,58 @@ onMounted(async () => {
   min-width: 0;
   height: 100%;
 }
+
+/* 窄屏：左侧导航改成顶部一行可横向滑动的标签，下面是会话区（会话区内部再按列表 / 聊天切换） */
+@media (max-width: 1023px) {
+  .v3-conv__body {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .v3-conv__side {
+    display: flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+    padding: 6px;
+    overflow: auto hidden;
+    border-radius: 14px;
+  }
+
+  .v3-conv__side > div:first-child,
+  .v3-conv__label {
+    display: none;
+  }
+
+  .v3-conv__group {
+    display: flex;
+    flex: none;
+    gap: 4px;
+    padding: 0;
+  }
+
+  .v3-conv__side > .flex-wrap {
+    flex-wrap: nowrap;
+    padding: 0 0 0 6px;
+  }
+
+  .v3-conv__item {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .v3-conv__item--sub span.flex-1 {
+    max-width: 140px;
+  }
+
+  .v3-conv__chip {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .v3-conv__main {
+    flex: 1;
+    min-height: 0;
+  }
+}
 </style>

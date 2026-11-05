@@ -9,6 +9,7 @@ import { nextTick, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
+import { MarkdownIt } from '@vben/plugins/markmap';
 
 import { Button, Card, Empty, message, Popconfirm, Spin, Tag, Textarea, Tooltip } from 'ant-design-vue';
 
@@ -33,6 +34,16 @@ const SUGGESTIONS = [
 ];
 
 const router = useRouter();
+
+// 助手回答按 Markdown 显示（表格、列表、加粗）；html: false 会把回答里的原始 HTML 当作文字，不会执行
+const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const defaultLink = md.renderer.rules.link_open ?? ((tokens: any, idx: number, options: any, _env: any, self: any) => self.renderToken(tokens, idx, options));
+md.renderer.rules.link_open = (tokens: any, idx: number, options: any, env: any, self: any) => {
+  tokens[idx]!.attrSet('target', '_blank');
+  tokens[idx]!.attrSet('rel', 'noopener noreferrer');
+  return defaultLink(tokens, idx, options, env, self);
+};
+const renderMd = (text: string) => md.render(text || '');
 const chats = ref<ChannelAssistantApi.Chat[]>([]);
 const chatId = ref<number>();
 const msgs = ref<(ChannelAssistantApi.Message & { error?: boolean; pending?: boolean })[]>([]);
@@ -168,8 +179,11 @@ onMounted(() => {
                   </Tooltip>
                 </div>
                 <div
-                  class="whitespace-pre-wrap rounded-lg px-3 py-2 leading-6"
-                  :class="m.role === 'user' ? 'bg-blue-500 text-white' : m.error ? 'bg-red-50 text-red-600' : 'bg-gray-100 dark:bg-gray-800'"
+                  class="rounded-lg px-3 py-2 leading-6"
+                  :class="[
+                    m.role === 'user' ? 'bg-blue-500 text-white' : m.error ? 'bg-red-50 text-red-600' : 'bg-gray-100 dark:bg-gray-800',
+                    m.role === 'assistant' && !m.pending && !m.error ? 'cg-md' : 'whitespace-pre-wrap',
+                  ]"
                 >
                   <template v-if="m.pending">
                     <Spin size="small" class="mr-2" />{{ waited < 8 ? '正在查询 CRM 和消息数据…' : `正在整理回答…已等待 ${waited} 秒` }}
@@ -178,6 +192,8 @@ onMounted(() => {
                     查询失败：{{ m.content }}
                     <a v-if="m.content.includes('大模型')" class="ml-1" @click="router.push({ path: '/v3/settings', query: { tab: 'ai' } })">去配置大模型 →</a>
                   </template>
+                  <!-- eslint-disable-next-line vue/no-v-html -->
+                  <div v-else-if="m.role === 'assistant'" v-html="renderMd(m.content)"></div>
                   <template v-else>{{ m.content }}</template>
                 </div>
                 <div v-if="m.role === 'assistant' && m.credits" class="mt-1 text-xs text-gray-400">约 {{ m.credits }} 千 token</div>
@@ -195,3 +211,58 @@ onMounted(() => {
     </div>
   </Page>
 </template>
+
+<style scoped>
+/* 助手回答的 Markdown：表格加边框、列表缩进、段落间距 */
+.cg-md :deep(p) {
+  margin: 0 0 8px;
+}
+
+.cg-md :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.cg-md :deep(ul),
+.cg-md :deep(ol) {
+  padding-left: 20px;
+  margin: 4px 0 8px;
+}
+
+.cg-md :deep(table) {
+  display: block;
+  max-width: 100%;
+  margin: 6px 0 10px;
+  overflow-x: auto;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+
+.cg-md :deep(th),
+.cg-md :deep(td) {
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  border: 0.5px solid #d2d2d7;
+}
+
+.cg-md :deep(th) {
+  font-weight: 600;
+  background: #f5f5f7;
+}
+
+.cg-md :deep(code) {
+  padding: 1px 5px;
+  font-size: 12px;
+  background: rgb(118 118 128 / 12%);
+  border-radius: 4px;
+}
+
+.cg-md :deep(h1),
+.cg-md :deep(h2),
+.cg-md :deep(h3),
+.cg-md :deep(h4) {
+  margin: 8px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+</style>

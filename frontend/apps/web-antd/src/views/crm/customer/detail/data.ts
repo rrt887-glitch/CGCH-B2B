@@ -71,6 +71,25 @@ export function useDetailBaseSchema(): DescriptionItemSchema[] {
       label: '客户名称',
     },
     {
+      field: 'companyName',
+      label: '公司名称',
+    },
+    {
+      field: 'countryCode',
+      label: '国家/地区',
+      render: (val) => (val ? String(val).toUpperCase() : ''),
+    },
+    {
+      field: 'website',
+      label: '官网',
+      render: (val) =>
+        val ? h('a', { href: /^https?:\/\//i.test(val) ? val : `https://${val}`, target: '_blank', rel: 'noopener noreferrer' }, val) : '',
+    },
+    {
+      field: 'whatsapp',
+      label: 'WhatsApp',
+    },
+    {
       field: 'source',
       label: '客户来源',
       render: (val) =>
