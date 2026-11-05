@@ -110,7 +110,8 @@ export function lockCustomer(id: number, lockStatus: boolean) {
 
 /** 领取公海客户 */
 export function receiveCustomer(ids: number[]) {
-  return requestClient.put('/crm/customer/receive', { ids: ids.join(',') });
+  // 后端按网址参数读取 ids（@RequestParam），不能放在请求体里
+  return requestClient.put('/crm/customer/receive', undefined, { params: { ids: ids.join(',') } });
 }
 
 /** 分配公海给对应负责人 */

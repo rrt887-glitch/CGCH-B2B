@@ -1634,6 +1634,12 @@ jobs:
           assert (tc['name'], tc['companyName'], tc['countryCode'], tc['website'], tc['whatsapp'], tc['remark']) == \
                  ('Transform Lead', 'Transform Co Ltd', 'DE', 'https://transform.example', '+4915100000777', 'from expo'), tc
           print('跟进列表兼容只填必填项的记录；线索转客户保留公司名、国家、官网、WhatsApp')
+          # 放入公海 → 领取（ids 走网址参数，与前端一致）
+          call('PUT', f'/crm/customer/put-pool?id={tcid}')
+          assert not call('GET', f'/crm/customer/get?id={tcid}').get('ownerUserId'), '放入公海后没有负责人'
+          call('PUT', f'/crm/customer/receive?ids={tcid}')
+          assert call('GET', f'/crm/customer/get?id={tcid}')['ownerUserId'] == 1, '领取后负责人是自己'
+          print('公海：放入公海后可再领取')
           # 经营分析：按业务员的线索 / 客户 / 跟进 / 订单，按平台的询盘，按国家的线索和客户
           ba = call('GET', '/channel/dashboard/overview?days=30')
           me = next((u for u in ba['users'] if u['userId'] == 1), None)

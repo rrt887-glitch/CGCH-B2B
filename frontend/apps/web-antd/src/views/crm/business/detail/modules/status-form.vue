@@ -9,6 +9,7 @@ import { message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import { updateBusinessStatus } from '#/api/crm/business';
+import { DEFAULT_STATUSES, getBusinessStatusSimpleList } from '#/api/crm/business/status';
 import { $t } from '#/locales';
 
 import { useStatusFormSchema } from '../data';
@@ -65,7 +66,15 @@ const [Modal, modalApi] = useVbenModal({
     if (!data || !data.id) {
       return;
     }
-    data.status = data.endStatus === null ? data.statusId : -data.endStatus;
+    // 已结束的商机用结束状态的负数；处于和结束状态同名的阶段（如「赢单」）时也显示为对应的结束状态
+    if (data.endStatus == null) {
+      data.status = data.statusId;
+      const stage = (await getBusinessStatusSimpleList(data.statusTypeId ?? 0).catch(() => [])).find((x) => x.id === data.statusId);
+      const end = stage && DEFAULT_STATUSES.find((x) => x.name === stage.name);
+      if (end) data.status = -end.endStatus;
+    } else {
+      data.status = -data.endStatus;
+    }
     formData.value = data;
     modalApi.lock();
     try {

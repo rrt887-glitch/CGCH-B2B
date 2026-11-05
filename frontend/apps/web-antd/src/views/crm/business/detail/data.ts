@@ -121,13 +121,18 @@ export function useStatusFormSchema(
           const statusList = await getBusinessStatusSimpleList(
             formData.value?.statusTypeId ?? 0,
           );
-          const statusOptions = statusList.map((item) => ({
-            label: `${item.name}(赢单率：${item.percent}%)`,
-            value: item.id,
-          }));
+          // 结束状态（赢单 / 输单 / 无效）用负数作选项值，避免和阶段编号 1、2、3 撞值；
+          // 阶段里已有同名的「赢单」等时不重复列出，统一用结束状态
+          const endNames = new Set(DEFAULT_STATUSES.map((item) => item.name));
+          const statusOptions = statusList
+            .filter((item) => !endNames.has(item.name))
+            .map((item) => ({
+              label: `${item.name}(赢单率：${item.percent}%)`,
+              value: item.id,
+            }));
           const options = DEFAULT_STATUSES.map((item) => ({
             label: `${item.name}(赢单率：${item.percent}%)`,
-            value: item.endStatus,
+            value: -item.endStatus,
           }));
           statusOptions.push(...options);
           return {
