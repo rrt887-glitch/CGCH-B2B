@@ -88,7 +88,7 @@ onMounted(loadSums);
 
 <template>
   <div class="h-full">
-    <FormModal @success="refresh" />
+    <FormModal term="订单" @success="refresh" />
     <CrmList
       ref="listRef"
       title="订单管理"

@@ -90,26 +90,48 @@ public class CrmFollowUpRecordController {
     @Operation(summary = "获得跟进记录分页")
     public CommonResult<PageResult<CrmFollowUpRecordRespVO>> getFollowUpRecordPage(@Valid CrmFollowUpRecordPageReqVO pageReqVO) {
         PageResult<CrmFollowUpRecordDO> pageResult = followUpRecordService.getFollowUpRecordPage(pageReqVO);
-        // 1.1 查询联系人和商机
+        // 1.1 查询联系人和商机（系统自动写的跟进记录可能没有联系人、商机和创建人）
         Map<Long, CrmContactDO> contactMap = contactService.getContactMap(
-                convertSetByFlatMap(pageResult.getList(), item -> item.getContactIds().stream()));
+                convertSetByFlatMap(pageResult.getList(), item -> idsOf(item.getContactIds()).stream()));
         Map<Long, CrmBusinessDO> businessMap = businessService.getBusinessMap(
-                convertSetByFlatMap(pageResult.getList(), item -> item.getBusinessIds().stream()));
+                convertSetByFlatMap(pageResult.getList(), item -> idsOf(item.getBusinessIds()).stream()));
         // 1.2 查询用户
         Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
-                convertSet(pageResult.getList(), item -> Long.valueOf(item.getCreator())));
+                pageResult.getList().stream().map(item -> userIdOf(item.getCreator())).filter(java.util.Objects::nonNull)
+                        .collect(java.util.stream.Collectors.toSet()));
         // 2. 拼接数据
         PageResult<CrmFollowUpRecordRespVO> voPageResult = BeanUtils.toBean(pageResult, CrmFollowUpRecordRespVO.class, record -> {
             // 2.1 设置联系人和商机信息
             record.setBusinesses(new ArrayList<>()).setContacts(new ArrayList<>());
-            record.getContactIds().forEach(id -> MapUtils.findAndThen(contactMap, id, contact ->
+            idsOf(record.getContactIds()).forEach(id -> MapUtils.findAndThen(contactMap, id, contact ->
                     record.getContacts().add(new CrmBusinessRespVO().setId(contact.getId()).setName(contact.getName()))));
-            record.getBusinessIds().forEach(id -> MapUtils.findAndThen(businessMap, id, business ->
+            idsOf(record.getBusinessIds()).forEach(id -> MapUtils.findAndThen(businessMap, id, business ->
                     record.getBusinesses().add(new CrmBusinessRespVO().setId(business.getId()).setName(business.getName()))));
-            // 2.2 设置用户信息
-            MapUtils.findAndThen(userMap, Long.valueOf(record.getCreator()), user -> record.setCreatorName(user.getNickname()));
+            // 2.2 设置用户信息；没有创建人的是系统自动记录
+            Long uid = userIdOf(record.getCreator());
+            if (uid == null) {
+                record.setCreatorName("系统");
+            } else {
+                MapUtils.findAndThen(userMap, uid, user -> record.setCreatorName(user.getNickname()));
+            }
         });
         return success(voPageResult);
+    }
+
+    private static java.util.List<Long> idsOf(java.util.List<Long> ids) {
+        return ids == null ? java.util.List.of() : ids;
+    }
+
+    /** 创建人是用户编号字符串；系统写入的记录可能为空 */
+    private static Long userIdOf(String creator) {
+        if (creator == null || creator.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.valueOf(creator.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
 }

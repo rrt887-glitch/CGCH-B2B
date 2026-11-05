@@ -53,7 +53,7 @@ public class ChannelAiConfigVO {
     @Schema(description = "新询盘自动建 CRM 线索", example = "true")
     private Boolean leadAutoCreate;
 
-    @Schema(description = "建档时用 AI 提取公司、国家、需求产品（消耗智点）", example = "true")
+    @Schema(description = "建档时用 AI 提取公司、国家、需求产品（会产生 AI 用量）", example = "true")
     private Boolean leadAiExtract;
 
     @Schema(description = "是否每天自动生成 AI 工作报告")

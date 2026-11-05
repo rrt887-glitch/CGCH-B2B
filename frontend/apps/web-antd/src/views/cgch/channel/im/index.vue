@@ -128,6 +128,15 @@ const conversations = ref<ChannelWaApi.Conversation[]>([]);
 const listLoading = ref(false);
 
 const current = ref<ChannelWaApi.Conversation>();
+// 窄屏（小于 1024px）只显示一栏：没选会话时显示列表，选了会话显示聊天，聊天顶部有返回按钮
+const narrowMq = typeof window === 'undefined' ? undefined : window.matchMedia('(max-width: 1023px)');
+const narrow = ref(!!narrowMq?.matches);
+const onNarrow = (e: MediaQueryListEvent) => (narrow.value = e.matches);
+narrowMq?.addEventListener('change', onNarrow);
+onBeforeUnmount(() => narrowMq?.removeEventListener('change', onNarrow));
+function backToList() {
+  current.value = undefined;
+}
 const messages = ref<ChannelWaApi.Message[]>([]);
 const chatLoading = ref(false);
 const chatBox = ref<HTMLElement>();
@@ -857,7 +866,10 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
     <div v-else class="flex h-full gap-3">
       <!-- 会话列表 -->
-      <div class="flex w-80 shrink-0 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E5EA] bg-white">
+      <div
+        class="flex shrink-0 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E5EA] bg-white"
+        :class="narrow ? (current ? 'hidden' : 'w-full') : 'w-80'"
+      >
         <div class="flex flex-col gap-2.5 px-4 pt-3.5">
           <div class="flex items-center gap-2">
             <h2 class="m-0 min-w-0 flex-1 truncate text-base font-semibold text-[#1D1D1F]">{{ listTitle }}</h2>
@@ -944,11 +956,17 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
       </div>
 
       <!-- 聊天区 -->
-      <div class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E5EA] bg-white">
+      <div
+        class="min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E5EA] bg-white"
+        :class="narrow && !current ? 'hidden' : 'flex'"
+      >
         <div v-if="!current" class="flex h-full items-center justify-center"><Empty description="选择一个会话" /></div>
         <template v-else>
-          <div class="flex items-center justify-between border-0 border-b border-solid border-[#E5E5EA] px-5 py-3">
+          <div class="flex items-center justify-between border-0 border-b border-solid border-[#E5E5EA] px-5 py-3" :class="narrow ? 'flex-wrap gap-2 !px-3' : ''">
             <div class="flex min-w-0 flex-1 items-center gap-3">
+            <Button v-if="narrow" type="text" shape="circle" size="small" class="shrink-0" aria-label="返回会话列表" @click="backToList">
+              <IconifyIcon icon="lucide:chevron-left" class="size-5" />
+            </Button>
             <Avatar :size="36" :src="current.avatarUrl || undefined" :class="current.avatarUrl ? 'shrink-0' : `shrink-0 ${plat(current).avatar}`">{{ initials(current) }}</Avatar>
             <div class="min-w-0 flex-1">
               <div class="truncate whitespace-nowrap text-[17px] font-semibold tracking-tight">

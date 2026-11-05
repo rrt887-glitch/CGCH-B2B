@@ -216,7 +216,7 @@ public class ChannelAiReportService {
                 .append(pct(c.getReplyRate())).append("，AI 发出消息占 ").append(pct(c.getAiShare())).append("。\n");
         sb.append("【AI 处理】生成回复 ").append(c.getAiDrafts()).append(" 份，已发出 ").append(c.getAiSent())
                 .append("，待人工确认 ").append(c.getAiPending()).append("，转人工 ").append(c.getAiHandoff())
-                .append("；消耗智点 ").append(c.getCreditsConsumed()).append("。\n");
+                .append("；AI 用量（千 token）").append(c.getCreditsConsumed()).append("。\n");
         if (!pending.isEmpty()) {
             sb.append("【待确认原因】");
             pending.forEach((k, v) -> sb.append(REASON.getOrDefault(k, k)).append(" ").append(v).append("；"));
@@ -251,7 +251,7 @@ public class ChannelAiReportService {
         m.put("转人工对话", handoffs.stream().map(h -> h.get("customer") + "：" + h.get("question")).toList());
         m.put("知识库没有资料的问题", gaps.stream().map(g -> String.valueOf(g.get("question"))).toList());
         return "字段说明：inquiries 新询盘，replyRate 回复率，aiShare AI 发出占比，aiDrafts AI 回复数，aiSent 已发出，"
-                + "aiPending 待确认，aiHandoff 转人工，creditsConsumed 消耗智点，cluesCreated 新线索，cluesConverted 转客户。\n"
+                + "aiPending 待确认，aiHandoff 转人工，creditsConsumed AI 用量（千 token），cluesCreated 新线索，cluesConverted 转客户。\n"
                 + JsonUtils.toJsonString(m);
     }
 

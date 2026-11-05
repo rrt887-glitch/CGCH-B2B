@@ -12,7 +12,28 @@ import { getCustomerSimpleList } from '#/api/crm/customer';
 import { getSimpleUserList } from '#/api/system/user';
 
 /** 新增/修改的表单 */
-export function useFormSchema(): VbenFormSchema[] {
+/**
+ * 新增 / 编辑表单。term 是页面上的叫法：CRM「订单管理」里叫「订单」，原合同模块叫「合同」，
+ * 标签和占位提示里的「合同」会换成 term。
+ */
+export function useFormSchema(term = '合同'): VbenFormSchema[] {
+  const schema = contractFormSchema();
+  if (term === '合同') return schema;
+  const swap = (v: unknown) => (typeof v === 'string' ? v.replaceAll('合同', term) : v);
+  return schema.map((item) => {
+    const props = item.componentProps;
+    return {
+      ...item,
+      label: swap(item.label) as string,
+      componentProps:
+        props && typeof props === 'object' && 'placeholder' in props
+          ? { ...props, placeholder: swap((props as Record<string, unknown>).placeholder) }
+          : props,
+    } as VbenFormSchema;
+  });
+}
+
+function contractFormSchema(): VbenFormSchema[] {
   const userStore = useUserStore();
   return [
     {

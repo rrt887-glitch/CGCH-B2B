@@ -80,7 +80,7 @@ const tiles = computed(() => {
     { label: '新线索', value: c.cluesCreated.toLocaleString(), sub: `询盘自动建档 ${c.cluesFromMail + c.cluesFromWhatsApp} · 已转客户 ${c.cluesConverted}`, d: delta('cluesCreated'), tip: '本期新建的 CRM 线索；自动建档来源为邮件或 WhatsApp' },
     { label: '新客户', value: c.customersCreated.toLocaleString(), sub: `线索转客户 ${c.cluesConverted}`, d: delta('customersCreated'), tip: '本期新建的 CRM 客户' },
     { label: '订单', value: (data.value?.orders ?? 0).toLocaleString(), sub: `金额 ${fmtMoney(data.value?.orderAmount)}`, d: { text: '按下单日期统计', up: true, flat: true }, tip: '本期下单的订单数和金额（CRM → 订单管理）', neutral: true },
-    { label: 'AI 用量（千 token）', value: c.creditsConsumed.toLocaleString(), sub: `AI 草稿 ${c.aiDrafts} 份`, d: delta('creditsConsumed'), tip: 'AI 起草、自动回复、信息提取和知识库检索消耗的智点', neutral: true },
+    { label: 'AI 用量（千 token）', value: c.creditsConsumed.toLocaleString(), sub: `AI 草稿 ${c.aiDrafts} 份`, d: delta('creditsConsumed'), tip: 'AI 起草、自动回复、信息提取和知识库检索使用的 token 总量（千 token）', neutral: true },
   ];
 });
 

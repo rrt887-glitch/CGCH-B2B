@@ -5,7 +5,7 @@
  */
 import type { ChannelAiApi } from '#/api/channel/ai';
 
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -117,11 +117,21 @@ function openForm(row?: ChannelAiApi.Knowledge) {
     { id: undefined, type: active.value, title: '', content: '', enabled: true, sort: 0, category: hasCategory.value ? category.value : undefined },
     row ?? {},
   );
+  contentError.value = '';
   open.value = true;
 }
+/** 内容为空时在输入框下方常驻提示，开始输入后消失 */
+const contentError = ref('');
+watch(
+  () => form.content,
+  (v) => {
+    if (v?.trim()) contentError.value = '';
+  },
+);
 async function save() {
   if (!form.content?.trim()) {
-    message.warning(`请填写${tab.value.contentLabel}`);
+    contentError.value = `请填写${tab.value.contentLabel}`;
+    message.warning(contentError.value);
     return;
   }
   saving.value = true;
@@ -227,7 +237,7 @@ onMounted(async () => {
         <FormItem v-if="hasCategory" label="分类">
           <Select v-model:value="form.category" allow-clear class="w-48" placeholder="不分类" :options="MATERIAL_CATEGORIES" />
         </FormItem>
-        <FormItem :label="tab.contentLabel" required>
+        <FormItem :label="tab.contentLabel" required :validate-status="contentError ? 'error' : undefined" :help="contentError || undefined">
           <Textarea v-model:value="form.content" :rows="10" show-count :maxlength="8000" />
         </FormItem>
         <FormItem label="排序（越小越靠前）"><InputNumber v-model:value="form.sort" :min="0" /></FormItem>

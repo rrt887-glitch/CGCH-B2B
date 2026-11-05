@@ -19,12 +19,14 @@ import { ProductEditTable } from '#/views/crm/product/components';
 
 import { useFormSchema } from '../data';
 
+/** term：页面上的叫法，CRM「订单管理」里传「订单」 */
+const props = withDefaults(defineProps<{ term?: string }>(), { term: '合同' });
 const emit = defineEmits(['success']);
 const formData = ref<CrmContractApi.Contract>();
 const getTitle = computed(() => {
   return formData.value?.id
-    ? $t('ui.actionTitle.edit', ['合同'])
-    : $t('ui.actionTitle.create', ['合同']);
+    ? $t('ui.actionTitle.edit', [props.term])
+    : $t('ui.actionTitle.create', [props.term]);
 });
 
 /** 更新产品列表 */
@@ -58,7 +60,7 @@ const [Form, formApi] = useVbenForm({
   },
   wrapperClass: 'grid-cols-3',
   layout: 'vertical',
-  schema: useFormSchema(),
+  schema: useFormSchema(props.term),
   showDefaultActions: false,
 });
 

@@ -57,13 +57,16 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '客户名称',
       component: 'ApiSelect',
       rules: 'required',
+      // 选项地址放在静态属性里，带入的客户才能显示名称而不是编号
+      componentProps: {
+        api: getCustomerSimpleList,
+        labelField: 'name',
+        valueField: 'id',
+        placeholder: '请选择客户',
+      },
       dependencies: {
         triggerFields: ['id', 'customerId'],
         componentProps: (_values, actions) => ({
-          api: getCustomerSimpleList,
-          labelField: 'name',
-          valueField: 'id',
-          placeholder: '请选择客户',
           onChange: () => {
             actions.setFieldValue('contractId', undefined);
             actions.setFieldValue('planId', undefined);

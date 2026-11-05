@@ -99,7 +99,7 @@ public class ChannelAssistantTools {
                 prop("inactive_days", "integer", "超过多少天未联系算久未联系，默认 30"));
         tool(tools, "search_messages", "在邮件和 WhatsApp 消息中按关键词搜索",
                 prop("keyword", "string", "关键词，必填"), prop("days", "integer", "只看最近多少天，默认 30"));
-        tool(tools, "get_stats", "查看询盘量、回复率、AI 处理量、线索、智点消耗等统计",
+        tool(tools, "get_stats", "查看询盘量、回复率、AI 处理量、线索、AI 用量（千 token）等统计",
                 prop("days", "integer", "最近多少天，默认 30"));
         tool(tools, "pending_drafts", "列出 AI 已起草但还等业务员确认或处理的回复，以及原因");
         return tools;
@@ -320,7 +320,7 @@ public class ChannelAssistantTools {
         m.put("current", vo.getCurrent());
         m.put("previous", vo.getPrevious());
         m.put("fieldNotes", "inquiries 新询盘，replyRate 回复率(0~1)，aiShare AI 发出占比，aiHandoff 转人工，aiPending 待确认草稿，"
-                + "cluesCreated 新线索，cluesConverted 转客户，creditsConsumed 智点消耗");
+                + "cluesCreated 新线索，cluesConverted 转客户，creditsConsumed AI 用量（单位：千 token，站内不扣费）");
         return m;
     }
 
@@ -351,7 +351,7 @@ public class ChannelAssistantTools {
         }
         return Map.of("count", out.size(), "drafts", out,
                 "reasonNotes", "handoff 需人工处理，forbidden 含违禁词，human_active 业务员在跟进，not_hosted 未开启 AI 托管，"
-                        + "draft_mode 只起草模式，window_closed WhatsApp 窗口关闭，manual 手动起草，no_credit 智点不足");
+                        + "draft_mode 只起草模式，window_closed WhatsApp 窗口关闭，manual 手动起草，no_credit AI 用量额度不足");
     }
 
 }
