@@ -66,7 +66,9 @@ const [Modal, modalApi] = useVbenModal({
     if (!data || !data.id) {
       return;
     }
-    // 已结束的商机用结束状态的负数；处于和结束状态同名的阶段（如「赢单」）时也显示为对应的结束状态
+    // 先交给表单：阶段下拉的选项要按这个商机的阶段组加载
+    formData.value = data;
+    // 已结束的商机用结束状态的负数；处于和结束状态同名的阶段（如预置的「赢单」）时也显示为对应的结束状态
     if (data.endStatus == null) {
       data.status = data.statusId;
       const stage = (await getBusinessStatusSimpleList(data.statusTypeId ?? 0).catch(() => [])).find((x) => x.id === data.statusId);
@@ -75,7 +77,6 @@ const [Modal, modalApi] = useVbenModal({
     } else {
       data.status = -data.endStatus;
     }
-    formData.value = data;
     modalApi.lock();
     try {
       // 设置到 values
