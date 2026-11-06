@@ -116,7 +116,8 @@ export function useStatusFormSchema(
       label: '商机阶段',
       component: 'Select',
       dependencies: {
-        triggerFields: [''],
+        // 打开弹窗、填入商机编号后再加载选项：此时才知道商机属于哪个阶段组
+        triggerFields: ['id'],
         async componentProps() {
           const statusList = await getBusinessStatusSimpleList(
             formData.value?.statusTypeId ?? 0,
