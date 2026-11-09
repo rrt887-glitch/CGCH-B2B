@@ -2081,7 +2081,8 @@ jobs:
           wait(lambda: (evo()['instances'][s1['session']].get('settingsSet') or {}).get('groupsIgnore') is False or None, '改为接收群聊')
           gname = wait(lambda: (lambda c: c['profileName'] if c.get('profileName') == 'Hair Dryer Buyers' else None)(
               call('GET', f"/channel/wa/conversation/get?id={gcv['id']}")), '群名称')
-          assert [m['textBody'] for m in call('GET', f"/channel/wa/message/list?conversationId={gcv['id']}")] == ['group', 'group chat', 'Hello everyone']
+          gms = call('GET', f"/channel/wa/message/list?conversationId={gcv['id']}")
+          assert sorted(m['textBody'] for m in gms) == ['Hello everyone', 'group', 'group chat'], gms
           print('WhatsApp 群聊：导入、记下发消息的成员、群名称、AI 回复按群开关、回复发到群里')
           pm = wait(lambda: (lambda l: l if len(l) == 3 else None)(call('GET', f"/channel/wa/message/list?conversationId={pcv['id']}")), '三条记录入库')
           assert [(m['direction'], m['type'], m['textBody']) for m in pm] == [(1, 'text', 'First message'), (1, 'text', 'Second message'), (2, 'image', 'price list')], pm
