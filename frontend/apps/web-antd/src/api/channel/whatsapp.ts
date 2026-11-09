@@ -86,7 +86,8 @@ export namespace ChannelWaApi {
     open: number;
     pending: number;
     resolved: number;
-    teamOpen: number;
+    /** 能看到同事数据时才有（超级管理员）；业务员没有 */
+    teamOpen?: number;
     unreadByAccount: Record<string, number>;
   }
 
