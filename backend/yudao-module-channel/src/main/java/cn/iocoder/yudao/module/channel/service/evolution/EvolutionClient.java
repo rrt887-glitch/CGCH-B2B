@@ -112,7 +112,7 @@ public final class EvolutionClient {
         if (StrUtil.isNotBlank(number)) {
             body.put("number", number);
         }
-        body.put("groupsIgnore", true);
+        body.put("groupsIgnore", false); // 接收群聊消息（群聊的 AI 回复默认关闭，按群手动开启）
         body.put("rejectCall", false);
         body.put("alwaysOnline", false);
         body.put("readMessages", false);
@@ -233,6 +233,43 @@ public final class EvolutionClient {
             String url = x.path("profilePicUrl").asText("");
             if (!jid.isEmpty() && url.startsWith("http")) {
                 map.put(jid, url);
+            }
+        });
+        return map;
+    }
+
+    /**
+     * 已有实例改为接收群聊消息（早期创建的实例设置了忽略群聊，Evolution 会直接丢弃群消息）。
+     * 读出当前设置，只改 groupsIgnore 后整体写回；本来就接收时不改。返回是否做了修改。
+     */
+    public static boolean allowGroups(ChannelOAuthProperties.Evolution c, String name) {
+        JsonNode cur = call(c, "GET", "/settings/find/" + enc(name), null, 30);
+        if (!cur.path("groupsIgnore").asBoolean(false)) {
+            return false;
+        }
+        ObjectNode body = JSON.createObjectNode();
+        body.put("rejectCall", cur.path("rejectCall").asBoolean(false));
+        if (cur.hasNonNull("msgCall")) {
+            body.put("msgCall", cur.path("msgCall").asText(""));
+        }
+        body.put("groupsIgnore", false);
+        body.put("alwaysOnline", cur.path("alwaysOnline").asBoolean(false));
+        body.put("readMessages", cur.path("readMessages").asBoolean(false));
+        body.put("readStatus", cur.path("readStatus").asBoolean(false));
+        body.put("syncFullHistory", cur.path("syncFullHistory").asBoolean(true));
+        call(c, "POST", "/settings/set/" + enc(name), body, 30);
+        return true;
+    }
+
+    /** 号码所在的群聊：群编号（xxx@g.us）→ 群名称 */
+    public static java.util.Map<String, String> groups(ChannelOAuthProperties.Evolution c, String name) {
+        JsonNode r = call(c, "GET", "/group/fetchAllGroups/" + enc(name) + "?getParticipants=false", null, 60);
+        java.util.Map<String, String> map = new java.util.HashMap<>();
+        (r.isArray() ? r : r.path("groups")).forEach(x -> {
+            String jid = x.path("id").asText("");
+            String subject = StrUtil.trim(x.path("subject").asText(""));
+            if (jid.endsWith("@g.us") && !subject.isEmpty()) {
+                map.put(jid, subject);
             }
         });
         return map;

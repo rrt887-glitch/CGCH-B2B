@@ -87,6 +87,15 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      */
     private String remarkName;
     /**
+     * WhatsApp 群聊是否由 AI 自动回复：群聊默认不回复，需要的群手动开启；私聊不使用这个字段
+     */
+    private Boolean aiEnabled;
+
+    /** 是否 WhatsApp 群聊（客户编号是「群编号@g.us」） */
+    public static boolean isGroup(String waId) {
+        return waId != null && waId.endsWith("@g.us");
+    }
+    /**
      * 会话状态：open 进行中（为空也算进行中）、pending 待处理、resolved 已解决；客户再来消息时自动回到进行中
      */
     private String status;

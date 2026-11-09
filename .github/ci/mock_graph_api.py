@@ -166,6 +166,21 @@ class Handler(BaseHTTPRequestHandler):
             EVO_SENT.append(rec)
             return self._json(201, {'key': {'remoteJid': body.get('number', '') + '@s.whatsapp.net', 'fromMe': True, 'id': f'EVOOUT{len(EVO_SENT)}'},
                                     'status': 'PENDING', 'messageType': 'conversation'})
+        # 实例设置（早期实例忽略群聊，系统会改成接收）与群列表
+        if len(path) == 3 and path[0] == 'settings' and path[1] in ('find', 'set'):
+            if path[2] not in EVO:
+                return missing(path[2])
+            i = EVO[path[2]]
+            if path[1] == 'find':
+                return self._json(200, {'rejectCall': False, 'groupsIgnore': i.get('groupsIgnore', i['body'].get('groupsIgnore', False)),
+                                        'alwaysOnline': False, 'readMessages': False, 'readStatus': False, 'syncFullHistory': True})
+            i['groupsIgnore'] = body.get('groupsIgnore')
+            i['settingsSet'] = body
+            return self._json(201, {'settings': {'instanceName': path[2], 'settings': body}})
+        if method == 'GET' and len(path) == 3 and path[:2] == ['group', 'fetchAllGroups']:
+            if path[2] not in EVO:
+                return missing(path[2])
+            return self._json(200, EVO[path[2]].get('groups', []))
         if method == 'POST' and len(path) == 3 and path[:2] == ['chat', 'findMessages']:
             if path[2] not in EVO:
                 return missing(path[2])

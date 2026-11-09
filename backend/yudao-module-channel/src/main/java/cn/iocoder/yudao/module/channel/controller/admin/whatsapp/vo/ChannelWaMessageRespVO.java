@@ -16,6 +16,10 @@ public class ChannelWaMessageRespVO {
     private String mediaId;
     private String mimeType;
     private String fileName;
+    /** 群聊里发这条消息的成员（号码或隐藏编号@lid） */
+    private String senderWaId;
+    /** 群聊里发这条消息的成员昵称 */
+    private String senderName;
     private String fileUrl;
     private Long fileSize;
     private String templateName;

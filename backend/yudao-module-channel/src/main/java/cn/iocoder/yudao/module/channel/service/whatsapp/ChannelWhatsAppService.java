@@ -694,6 +694,7 @@ public class ChannelWhatsAppService {
                 .accountId(a.getId()).direction(ChannelWaMessageDO.DIRECTION_IN)
                 .waMessageId(wamid).type(type).status(ChannelWaMessageDO.STATUS_RECEIVED).messageTime(time).build();
         fillBody(msg, m, type);
+        fillSender(msg, m);
         ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), from);
         if (conv == null) {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
@@ -718,6 +719,16 @@ public class ChannelWhatsAppService {
         conversationMapper.updateById(upd);
         if (!"reaction".equals(type)) { // 表情回应不需要回复
             eventPublisher.publishEvent(new ChannelInboundEvent("whatsapp", conv.getId(), msg.getId(), a.getTenantId()));
+        }
+    }
+
+    /** 群聊消息：记下是群里哪位成员发的 */
+    private static void fillSender(ChannelWaMessageDO msg, JsonNode m) {
+        if (m.hasNonNull("sender")) {
+            msg.setSenderWaId(StrUtil.maxLength(m.path("sender").asText(), 60));
+        }
+        if (m.hasNonNull("sender_name")) {
+            msg.setSenderName(StrUtil.maxLength(m.path("sender_name").asText(), 100));
         }
     }
 
@@ -775,6 +786,7 @@ public class ChannelWhatsAppService {
             msg.setAiGenerated(false);
         }
         fillBody(msg, m, type);
+        fillSender(msg, m);
         ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), waId);
         if (conv == null) {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
@@ -1221,6 +1233,16 @@ public class ChannelWhatsAppService {
         conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setArchived(archived));
     }
 
+    /** 群聊的 AI 自动回复开关：群聊默认不回复，需要的群手动开启 */
+    public void setGroupAiEnabled(Long userId, Long id, boolean enabled) {
+        ChannelWaConversationDO c = validateConversation(userId, id);
+        if (!ChannelWaConversationDO.isGroup(c.getWaId())) {
+            throw exception(AI_LLM_FAIL, "只有群聊需要单独开启 AI 回复，私聊按 AI 接待设置自动回复");
+        }
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setAiEnabled(enabled));
+        logActivity(id, userId, enabled ? "开启了这个群的 AI 自动回复" : "关闭了这个群的 AI 自动回复");
+    }
+
     public void starConversation(Long userId, Long id, boolean starred) {
         validateConversation(userId, id);
         conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setStarred(starred));
@@ -1462,6 +1484,8 @@ public class ChannelWhatsAppService {
                     return u == null ? null : u.getNickname();
                 }));
             }
+            vo.setGroup(ChannelWaConversationDO.isGroup(c.getWaId()));
+            vo.setAiEnabled(Boolean.TRUE.equals(c.getAiEnabled()));
             vo.setWindowOpen(windowOpen(c));
             vo.setWindowExpireTime(c.getLastInboundTime() == null || c.isWeb() ? null : c.getLastInboundTime().plusHours(WINDOW_HOURS));
             return vo;
@@ -1506,7 +1530,7 @@ public class ChannelWhatsAppService {
      * 业务员录入的号码常带分隔符，所以数据库里只按最后 4 位粗筛，再在内存里精确比对。
      */
     private Long findCustomerId(String waId) {
-        if (StrUtil.length(waId) < 8) {
+        if (StrUtil.length(waId) < 8 || ChannelWaConversationDO.isGroup(waId)) { // 群聊不对应某一个客户
             return null;
         }
         String tail = waId.substring(waId.length() - 4);
@@ -1524,6 +1548,9 @@ public class ChannelWhatsAppService {
 
     /** 会话的客户编号：号码只保留数字；隐藏了手机号的联系人保留「隐藏编号@lid」 */
     public static String waKey(String s) {
+        if (s != null && s.endsWith("@g.us")) {
+            return s.trim().toLowerCase(); // 群聊：「群编号@g.us」
+        }
         return s != null && s.endsWith("@lid") ? digits(s) + "@lid" : digits(s);
     }
 

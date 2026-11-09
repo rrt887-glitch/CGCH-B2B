@@ -41,6 +41,9 @@ public class ChannelAiInboundListener {
     @Resource
     private cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService channelNotifyService;
 
+    @Resource
+    private cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationMapper waConversationMapper;
+
     @Value("${cgch.ai.whatsapp-debounce-ms:3000}")
     private long whatsappDebounceMs;
 
@@ -66,6 +69,17 @@ public class ChannelAiInboundListener {
                             }
                         } catch (Exception ex) {
                             log.warn("[onInbound][mail {}] 平台询盘解析失败: {}", e.refId(), ex.getMessage());
+                        }
+                    }
+                    // 0.8 WhatsApp 群聊：不建线索、不提醒；AI 只在手动开启了的群里回复
+                    if (!"mail".equals(e.channel())) {
+                        cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationDO conv =
+                                waConversationMapper.selectById(e.refId());
+                        if (conv != null && cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationDO.isGroup(conv.getWaId())) {
+                            if (Boolean.TRUE.equals(conv.getAiEnabled())) {
+                                aiService.handleWhatsAppInbound(e.refId(), e.messageId());
+                            }
+                            return;
                         }
                     }
                     // 1. 线索自动建档（失败不影响 AI 回复）

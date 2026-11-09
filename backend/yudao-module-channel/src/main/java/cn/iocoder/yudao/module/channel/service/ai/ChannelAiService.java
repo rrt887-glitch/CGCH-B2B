@@ -547,6 +547,9 @@ public class ChannelAiService {
         List<LlmClient.Message> list = new ArrayList<>();
         for (ChannelWaMessageDO t : whatsAppService.getRecentMessagesInternal(conversationId, WA_HISTORY)) {
             String text = StrUtil.blankToDefault(t.getTextBody(), "[" + t.getType() + "]");
+            if (t.getDirection() == ChannelWaMessageDO.DIRECTION_IN && StrUtil.isNotBlank(t.getSenderName())) {
+                text = t.getSenderName() + "：" + text; // 群聊：标出是哪位成员说的
+            }
             if (list.size() > 0 && list.get(list.size() - 1).role().equals(t.getDirection() == ChannelWaMessageDO.DIRECTION_IN ? "user" : "assistant")) {
                 LlmClient.Message last = list.remove(list.size() - 1); // 连续同一方的消息合并
                 list.add(new LlmClient.Message(last.role(), last.content() + "\n" + text));
@@ -809,7 +812,8 @@ public class ChannelAiService {
         ChannelAgentSettings.Opening opening = ChannelAgentSettings.opening(cfg);
         boolean auto = ChannelAiConfigDO.MODE_AUTO.equals(cfg.getWaMode()) && !Decision.DRAFT.equals(wt.action());
         boolean firstContact = recent.stream().noneMatch(x -> x.getDirection() == ChannelWaMessageDO.DIRECTION_OUT);
-        if (auto && firstContact && opening.isEnabled() && StrUtil.isNotBlank(opening.getGreeting()) && whatsAppService.isWindowOpen(conv)) {
+        boolean group = ChannelWaConversationDO.isGroup(conv.getWaId());
+        if (auto && firstContact && !group && opening.isEnabled() && StrUtil.isNotBlank(opening.getGreeting()) && whatsAppService.isWindowOpen(conv)) {
             sendQuietly(account.getUserId(), conversationId, opening.getGreeting().trim()); // 固定开场白：新客户先收到问候
             sendOpeningFiles(account.getUserId(), conversationId, opening.getFileIds());
         }

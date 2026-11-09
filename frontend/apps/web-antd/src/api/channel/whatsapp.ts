@@ -58,6 +58,10 @@ export namespace ChannelWaApi {
     /** 转交后的处理人；为空表示号码所属业务员 */
     ownerUserId?: number;
     remarkName?: string;
+    /** WhatsApp 群聊 */
+    group?: boolean;
+    /** 群聊是否由 AI 自动回复（默认关闭） */
+    aiEnabled?: boolean;
     /** 客户等级：1 A 类 … 4 D 类 */
     customerLevel?: number;
     /** 当前处理人及姓名（团队会话里显示） */
@@ -101,6 +105,10 @@ export namespace ChannelWaApi {
     mediaId?: string;
     mimeType?: string;
     fileName?: string;
+    /** 群聊里发这条消息的成员（号码或隐藏编号@lid） */
+    senderWaId?: string;
+    /** 群聊里发这条消息的成员昵称 */
+    senderName?: string;
     fileUrl?: string;
     fileSize?: number;
     templateName?: string;
@@ -167,6 +175,9 @@ export const archiveWaConversation = (id: number, archived: boolean) =>
   requestClient.put(`/channel/wa/conversation/archive?id=${id}&archived=${archived}`);
 export const starWaConversation = (id: number, starred: boolean) =>
   requestClient.put(`/channel/wa/conversation/star?id=${id}&starred=${starred}`);
+/** 群聊的 AI 自动回复开关（群聊默认关闭） */
+export const setWaGroupAi = (id: number, enabled: boolean) =>
+  requestClient.put(`/channel/wa/conversation/group-ai?id=${id}&enabled=${enabled}`);
 export const remarkWaConversation = (id: number, name: string) =>
   requestClient.put('/channel/wa/conversation/remark', null, { params: { id, name } });
 export const transferWaConversation = (id: number, userId: number) =>
