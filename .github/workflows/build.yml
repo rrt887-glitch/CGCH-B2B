@@ -831,6 +831,29 @@ jobs:
           other = call('GET', f'/channel/dashboard/overview?days=30&userId={uid}')['current']
           assert other['cluesCreated'] == 1 and other['inquiries'] == 0, '管理员可按业务员筛选'
           print('看板数据权限：仅本人角色只看到自己的线索与消息，不能查看他人；管理员可看全部或按人筛选')
+          # ---- 两种账号：超级管理员添加的「业务员」能用日常功能，不能改公司设置，看不到团队会话 ----
+          sid = call('POST', '/system/user/create', {'username': 'sales3', 'nickname': '业务员小李', 'password': 'Sales3pass'})
+          call('POST', '/system/permission/assign-user-role', {'userId': sid, 'roleIds': [300]})
+          lg3s = json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/login', method='POST',
+                 headers={'tenant-id': '1', 'Content-Type': 'application/json'},
+                 data=json.dumps({'username': 'sales3', 'password': 'Sales3pass'}).encode())))
+          assert lg3s['code'] == 0, lg3s
+          H3 = dict(H, Authorization='Bearer ' + lg3s['data']['accessToken'])
+          def call3(path):
+              return json.load(urllib.request.urlopen(urllib.request.Request(BASE + path, headers=H3)))
+          perms3 = set(call3('/system/auth/get-permission-info')['data']['permissions'])
+          for p in ['crm:customer:query', 'crm:customer:create', 'crm:clue:update', 'crm:contract:create', 'channel:wa-message:send',
+                    'channel:mail-message:send', 'channel:wa-account:create', 'channel:dashboard:query', 'channel:ai:draft']:
+              assert p in perms3, f'业务员应有 {p}'
+          for p in ['channel:ai:config', 'channel:ai:knowledge', 'channel:cloud:manage', 'crm:customer:export', 'crm:customer:distribute',
+                    'crm:product:create', 'system:user:create', 'system:role:update']:
+              assert p not in perms3, f'业务员不应有 {p}'
+          assert call3('/crm/customer/page?pageNo=1&pageSize=1&sceneType=1')['code'] == 0
+          assert call3('/system/user/page?pageNo=1&pageSize=1')['code'] != 0, '业务员不能管理成员'
+          c3 = call3('/channel/wa/conversation/counts')
+          assert c3['code'] == 0 and c3['data'].get('teamOpen') is None, c3
+          assert call('GET', '/channel/wa/conversation/counts').get('teamOpen') is not None, '超级管理员有团队会话'
+          print('两种账号：业务员有日常功能、没有公司设置和成员管理，看不到团队会话；超级管理员可看团队会话')
 
           # ---- AI 工作报告 ----
           today = time.strftime('%Y-%m-%d')

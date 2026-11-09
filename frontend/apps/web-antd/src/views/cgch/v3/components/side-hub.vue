@@ -10,6 +10,7 @@ import type { HubGroup } from './types';
 import { computed, defineAsyncComponent, markRaw, provide } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
+import { useAccess } from '@vben/access';
 import { IconifyIcon } from '@vben/icons';
 
 import { Dropdown, Spin } from 'ant-design-vue';
@@ -19,7 +20,13 @@ const props = defineProps<{ groups: HubGroup[]; menuLabel?: string }>();
 const route = useRoute();
 const router = useRouter();
 
-const items = computed(() => props.groups.flatMap((g) => g.items));
+// 没有权限的项不显示（例如业务员看不到「成员」「AI 接待设置」）
+const { hasAccessByCodes } = useAccess();
+const allowed = (it: { codes?: string[] }) => !it.codes?.length || hasAccessByCodes(it.codes);
+const visibleGroups = computed(() =>
+  props.groups.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter((g) => g.items.length > 0),
+);
+const items = computed(() => visibleGroups.value.flatMap((g) => g.items));
 const activeKey = computed(() => {
   const k = String(route.query.tab || '');
   return items.value.some((i) => i.key === k) ? k : items.value[0]?.key;
@@ -46,7 +53,7 @@ provide('cgchHubSelect', select);
 <template>
   <div class="side-hub">
     <aside class="side-hub__menu">
-      <template v-for="(g, gi) in groups" :key="gi">
+      <template v-for="(g, gi) in visibleGroups" :key="gi">
         <div v-if="gi > 0 && !g.label" class="side-hub__sep"></div>
         <div v-if="g.label" class="side-hub__group">{{ g.label }}</div>
         <div
@@ -70,7 +77,7 @@ provide('cgchHubSelect', select);
           </button>
           <template #overlay>
             <div class="side-hub__pop">
-              <template v-for="(g, gi) in groups" :key="gi">
+              <template v-for="(g, gi) in visibleGroups" :key="gi">
                 <div v-if="g.label" class="side-hub__group">{{ g.label }}</div>
                 <div
                   v-for="it in g.items"
