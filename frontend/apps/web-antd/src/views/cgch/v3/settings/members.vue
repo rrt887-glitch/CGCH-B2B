@@ -63,7 +63,7 @@ async function load() {
 const open = ref(false);
 const saving = ref(false);
 const form = reactive({ id: undefined as number | undefined, username: '', nickname: '', password: '', mobile: '', email: '', role: 'sales' as 'admin' | 'sales' });
-function openForm(row?: Row) {
+function openForm(row?: any) {
   Object.assign(form, {
     id: row?.id,
     username: row?.username ?? '',
@@ -107,7 +107,7 @@ async function save() {
   }
 }
 
-async function toggleStatus(row: Row, on: boolean) {
+async function toggleStatus(row: any, on: boolean) {
   if (row.id === myId.value) return message.warning('不能停用自己的账号');
   await updateUserStatus(row.id!, on ? 0 : 1);
   row.status = on ? 0 : 1;
@@ -118,7 +118,7 @@ async function toggleStatus(row: Row, on: boolean) {
 const pwdOpen = ref(false);
 const pwdRow = ref<Row>();
 const pwd = ref('');
-function openPwd(row: Row) {
+function openPwd(row: any) {
   pwdRow.value = row;
   pwd.value = '';
   pwdOpen.value = true;
@@ -130,7 +130,7 @@ async function savePwd() {
   pwdOpen.value = false;
 }
 
-function remove(row: Row) {
+function remove(row: any) {
   if (row.id === myId.value) return message.warning('不能删除自己的账号');
   Modal.confirm({
     title: `删除成员「${row.nickname}」？`,
