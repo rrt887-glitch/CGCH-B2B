@@ -120,7 +120,13 @@ onMounted(async () => {
               <span class="flex-1">我的会话</span>
               <span class="v3-conv__count">{{ counts?.open ?? '' }}</span>
             </div>
-            <div class="v3-conv__item" :class="{ on: selected.kind === 'im' && !selected.id && view === 'team' }" @click="pickView('team')">
+            <!-- 团队会话只有能看到别人数据的成员（超级管理员）才有；业务员只看自己的 -->
+            <div
+              v-if="counts?.teamOpen != null"
+              class="v3-conv__item"
+              :class="{ on: selected.kind === 'im' && !selected.id && view === 'team' }"
+              @click="pickView('team')"
+            >
               <span class="flex-1">团队会话</span>
               <span class="v3-conv__count">{{ counts?.teamOpen || '' }}</span>
             </div>

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-/** 设置：AI 用量、AI 接待设置（大模型、自动回复模式）、成员与部门、云盘文件、消息模板、邮件模板、快捷回复、消息分流、通知、翻译，通过左侧常驻菜单切换（窄屏收起为「设置菜单」按钮） */
+/** 设置：AI 用量、AI 接待设置（大模型、自动回复模式，只有超级管理员可见）、成员（超级管理员添加业务员）、云盘文件、消息模板、邮件模板、快捷回复、消息分流、通知、翻译，通过左侧常驻菜单切换（窄屏收起为「设置菜单」按钮） */
 import type { HubGroup } from '../components/types';
 
 import SideHub from '../components/side-hub.vue';
@@ -11,8 +11,8 @@ const groups: HubGroup[] = [
     label: '设置',
     items: [
       { key: 'usage', label: 'AI 用量', load: () => import('#/views/cgch/config/credits/entry.vue') },
-      { key: 'ai', label: 'AI 接待设置', load: () => import('#/views/cgch/agent/profile/index.vue') },
-      { key: 'members', label: '成员与部门', load: () => import('#/views/system/user/index.vue') },
+      { key: 'ai', label: 'AI 接待设置', load: () => import('#/views/cgch/agent/profile/index.vue'), codes: ['channel:ai:config'] },
+      { key: 'members', label: '成员', load: () => import('./members.vue'), codes: ['system:user:create'] },
       { key: 'cloud', label: '云盘文件', load: () => import('./cloud.vue') },
       { key: 'templates', label: '消息模板', load: () => import('#/views/cgch/config/templates/index.vue') },
       { key: 'emailTemplates', label: '邮件模板', load: () => import('./email-templates.vue') },

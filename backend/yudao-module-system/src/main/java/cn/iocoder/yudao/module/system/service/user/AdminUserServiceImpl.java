@@ -151,6 +151,9 @@ public class AdminUserServiceImpl implements AdminUserService {
         user.setStatus(CommonStatusEnum.ENABLE.getStatus()); // 默认开启
         user.setPassword(encodePassword(registerReqVO.getPassword())); // 加密密码
         userMapper.insert(user);
+        // 3. 自己注册的账号默认是「业务员」（只看自己的数据）；没有这个角色时不分配
+        roleService.getRoleList().stream().filter(r -> "cgch_sales".equals(r.getCode())).findFirst()
+                .ifPresent(r -> permissionService.assignUserRole(user.getId(), java.util.Set.of(r.getId())));
         return user;
     }
 

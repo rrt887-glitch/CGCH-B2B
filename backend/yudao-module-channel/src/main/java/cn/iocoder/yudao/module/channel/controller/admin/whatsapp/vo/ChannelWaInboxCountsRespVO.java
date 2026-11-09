@@ -16,7 +16,7 @@ public class ChannelWaInboxCountsRespVO {
     @Schema(description = "我的会话：已解决")
     private long resolved;
     @Schema(description = "团队会话：进行中（主管可见范围内同事负责的）")
-    private long teamOpen;
+    private Long teamOpen;
     @Schema(description = "每个号码的未读消息数：号码编号 → 未读条数")
     private Map<Long, Integer> unreadByAccount;
 
