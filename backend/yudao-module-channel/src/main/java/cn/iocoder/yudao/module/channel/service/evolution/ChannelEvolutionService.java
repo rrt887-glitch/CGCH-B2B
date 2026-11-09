@@ -318,6 +318,13 @@ public class ChannelEvolutionService {
     /** 从 Evolution 数据库拉取聊天记录入库（不计未读、不触发 AI），返回新导入的条数 */
     public int syncHistory(ChannelWaAccountDO a) {
         requireEnabled();
+        try {
+            if (EvolutionClient.allowGroups(cfg(), a.getPhoneNumberId())) {
+                log.info("[syncHistory][账号 {} 改为接收群聊消息]", a.getId());
+            }
+        } catch (Exception e) {
+            log.info("[syncHistory][账号 {} 修改群聊设置失败] {}", a.getId(), e.getMessage());
+        }
         java.util.List<JsonNode> all = new java.util.ArrayList<>();
         try {
             for (int page = 1; all.size() < HISTORY_MAX; page++) {
@@ -341,6 +348,7 @@ public class ChannelEvolutionService {
                 n++;
             }
         }
+        refreshGroupNames(a);
         log.info("[syncHistory][账号 {} 从 Evolution 拉取 {} 条，可入库 {} 条，隐藏号码无法导入 {} 条]", a.getId(), all.size(), n, noNumber);
         whatsAppService.accountMapperInternal().updateById(new ChannelWaAccountDO().setId(a.getId())
                 .setHistorySyncTime(java.time.LocalDateTime.now()).setHistoryFetched(all.size())
@@ -414,6 +422,53 @@ public class ChannelEvolutionService {
                 log.info("[avatarSoon][账号 {} 获取头像失败] {}", a.getId(), e.getMessage());
             }
         }, 90, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    // ==================== 群名称 ====================
+
+    private final java.util.Set<Long> groupNamePending = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** 新群来消息后稍等一会儿取群名称，同一号码合并成一次 */
+    void groupNamesSoon(ChannelWaAccountDO a) {
+        if (a.getId() == null || !groupNamePending.add(a.getId())) {
+            return;
+        }
+        historyExecutor.schedule(() -> {
+            groupNamePending.remove(a.getId());
+            try {
+                TenantUtils.execute(a.getTenantId(), () -> refreshGroupNames(a));
+            } catch (Exception e) {
+                log.info("[groupNamesSoon][账号 {} 获取群名称失败] {}", a.getId(), e.getMessage());
+            }
+        }, 20, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    /** 更新群聊会话的名称（群名改了也会跟着更新）；返回更新的群数 */
+    public int refreshGroupNames(ChannelWaAccountDO a) {
+        if (!enabled() || !a.isEvolution()) {
+            return 0;
+        }
+        java.util.List<ChannelWaConversationDO> groups = conversationMapper.selectList(new LambdaQueryWrapperX<ChannelWaConversationDO>()
+                .eq(ChannelWaConversationDO::getAccountId, a.getId()).likeLeft(ChannelWaConversationDO::getWaId, "@g.us"));
+        if (groups.isEmpty()) {
+            return 0;
+        }
+        java.util.Map<String, String> names;
+        try {
+            names = EvolutionClient.groups(cfg(), a.getPhoneNumberId());
+        } catch (Exception e) {
+            log.info("[refreshGroupNames][账号 {} 读取群列表失败] {}", a.getId(), e.getMessage());
+            return 0;
+        }
+        int n = 0;
+        for (ChannelWaConversationDO c : groups) {
+            String name = names.get(c.getWaId());
+            if (name != null && !name.equals(c.getProfileName())) {
+                conversationMapper.updateById(new ChannelWaConversationDO().setId(c.getId()).setProfileName(StrUtil.maxLength(name, 200)));
+                n++;
+            }
+        }
+        return n;
     }
 
     /**
@@ -502,7 +557,7 @@ public class ChannelEvolutionService {
         if (StrUtil.isBlank(waId)) {
             return "";
         }
-        return waId.endsWith("@lid") ? waId : waId + "@s.whatsapp.net";
+        return waId.endsWith("@lid") || waId.endsWith("@g.us") ? waId : waId + "@s.whatsapp.net";
     }
 
     private static byte[] downloadImage(String url) throws Exception {
@@ -635,7 +690,7 @@ public class ChannelEvolutionService {
             JsonNode key = d.path("key");
             String customer = contact(key);
             if (customer == null) {
-                return; // 群聊、状态、频道
+                return; // 状态、频道
             }
             String lid = lidKey(key);
             if (lid != null && !lid.equals(customer)) {
@@ -645,14 +700,23 @@ public class ChannelEvolutionService {
             if (!isCustomer(customer) || m == null) {
                 return;
             }
-            if (key.path("fromMe").asBoolean(false)) {
+            boolean group = ChannelWaConversationDO.isGroup(customer);
+            boolean fromMe = key.path("fromMe").asBoolean(false);
+            if (group && !fromMe) {
+                putSender(m, d);
+            }
+            if (fromMe) {
                 whatsAppService.evolutionSynced(a, m, customer); // 手机上发出的消息（系统发出的按消息编号去重）
             } else {
-                whatsAppService.evolutionInbound(a, m, pushName(d));
-                ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), ChannelWhatsAppService.waKey(customer));
-                if (conv != null && conv.getAvatarTime() == null) {
-                    avatarSoon(a); // 新客户：稍后取头像
-                }
+                // 群聊的会话名是群名称（另外获取），不用发消息成员的昵称
+                whatsAppService.evolutionInbound(a, m, group ? null : pushName(d));
+            }
+            ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), ChannelWhatsAppService.waKey(customer));
+            if (conv != null && conv.getAvatarTime() == null && !fromMe) {
+                avatarSoon(a); // 新客户：稍后取头像
+            }
+            if (group && conv != null && StrUtil.isBlank(conv.getProfileName())) {
+                groupNamesSoon(a); // 新群：稍后取群名称
             }
         } catch (Exception e) {
             log.warn("[upsert][账号 {}] 消息处理失败 {}", a.getId(), d, e);
@@ -662,10 +726,14 @@ public class ChannelEvolutionService {
     /** 一条历史消息入库；返回是否是可入库的私聊消息 */
     /**
      * 会话的客户编号：普通联系人是号码（纯数字）；隐藏了手机号的联系人（@lid）有真实号码时用号码，
-     * 没有时用「隐藏编号@lid」（可以照常收发消息，对方以后带上真实号码时会合并到号码会话）。群聊等返回 null。
+     * 没有时用「隐藏编号@lid」（可以照常收发消息，对方以后带上真实号码时会合并到号码会话）；
+     * 群聊用「群编号@g.us」。状态、频道等返回 null。
      */
     static String contact(JsonNode key) {
         String jid = key.path("remoteJid").asText("");
+        if (jid.endsWith("@g.us")) {
+            return jid.trim().toLowerCase(); // 群聊：会话编号就是「群编号@g.us」
+        }
         if (jid.endsWith("@lid")) {
             String alt = StrUtil.blankToDefault(key.path("remoteJidAlt").asText(null), key.path("senderPn").asText(""));
             if (alt.endsWith("@s.whatsapp.net")) {
@@ -682,6 +750,23 @@ public class ChannelEvolutionService {
         }
         String phone = EvolutionClient.digits(jid);
         return isCustomer(phone) ? phone : null;
+    }
+
+    /** 群聊消息：在消息里记下是群里哪位成员发的（号码优先，没有号码时用隐藏编号@lid）和昵称 */
+    static void putSender(ObjectNode m, JsonNode d) {
+        JsonNode key = d.path("key");
+        String alt = StrUtil.blankToDefault(key.path("participantAlt").asText(null), key.path("participantPn").asText(""));
+        String p = key.path("participant").asText("");
+        String sender = alt.endsWith("@s.whatsapp.net") ? EvolutionClient.digits(alt)
+                : p.endsWith("@lid") ? EvolutionClient.digits(p) + "@lid"
+                : p.endsWith("@s.whatsapp.net") ? EvolutionClient.digits(p) : null;
+        if (sender != null) {
+            m.put("sender", sender);
+        }
+        String name = pushName(d);
+        if (name != null) {
+            m.put("sender_name", name);
+        }
     }
 
     /** 对方的昵称；没设置昵称时 WhatsApp 会用号码或隐藏编号代替，这种不当作昵称 */
@@ -711,7 +796,7 @@ public class ChannelEvolutionService {
             JsonNode key = d.path("key");
             String customer = contact(key);
             if (customer == null) {
-                return false; // 群聊、状态、频道
+                return false; // 状态、频道
             }
             String lid = lidKey(key);
             if (lid != null && !lid.equals(customer)) {
@@ -722,8 +807,12 @@ public class ChannelEvolutionService {
                 return false;
             }
             boolean fromMe = key.path("fromMe").asBoolean(false);
+            boolean group = ChannelWaConversationDO.isGroup(customer);
+            if (group && !fromMe) {
+                putSender(m, d);
+            }
             return whatsAppService.evolutionHistory(a, m, customer, fromMe,
-                    fromMe ? null : pushName(d));
+                    fromMe || group ? null : pushName(d));
         } catch (Exception e) {
             log.warn("[history][账号 {}] 聊天记录处理失败 {}", a.getId(), d, e);
             return false;
@@ -751,6 +840,9 @@ public class ChannelEvolutionService {
     static boolean isCustomer(String id) {
         if (id == null) {
             return false;
+        }
+        if (id.endsWith("@g.us")) {
+            return id.length() > 10;
         }
         String d = id.endsWith("@lid") ? id.substring(0, id.length() - 4) : id;
         return d.length() >= 6 && d.chars().allMatch(Character::isDigit);

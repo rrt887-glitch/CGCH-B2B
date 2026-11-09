@@ -51,6 +51,14 @@ public class ChannelWaMessageController {
         return success(true);
     }
 
+    @PutMapping("/conversation/group-ai")
+    @Operation(summary = "群聊的 AI 自动回复开关（群聊默认关闭）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:send')")
+    public CommonResult<Boolean> groupAi(@RequestParam("id") Long id, @RequestParam("enabled") Boolean enabled) {
+        whatsAppService.setGroupAiEnabled(getLoginUserId(), id, Boolean.TRUE.equals(enabled));
+        return success(true);
+    }
+
     @PutMapping("/conversation/star")
     @Operation(summary = "收藏 / 取消收藏")
     @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")

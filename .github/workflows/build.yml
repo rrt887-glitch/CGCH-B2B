@@ -1987,7 +1987,7 @@ jobs:
           s1 = call('POST', '/channel/evolution/session', {'number': '+86 138-0000-2222'})
           assert s1['status'] == 'connecting' and s1['pairingCode'] == 'ABCD1234' and s1['session'].startswith('cgch-1-1-'), s1
           b1 = evo()['instances'][s1['session']]['body']
-          assert b1['integration'] == 'WHATSAPP-BAILEYS' and b1['number'] == '8613800002222' and b1['qrcode'] is True and b1['groupsIgnore'] is True, b1
+          assert b1['integration'] == 'WHATSAPP-BAILEYS' and b1['number'] == '8613800002222' and b1['qrcode'] is True and b1['groupsIgnore'] is False, b1
           assert b1['webhook']['url'] == 'http://127.0.0.1:48080/admin-api/channel/evolution/webhook' and b1['webhook']['enabled'] \
               and set(b1['webhook']['events']) == {'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'MESSAGES_SET'} and b1['webhook']['headers']['x-cgch-token'], b1
           p1 = call('GET', f"/channel/evolution/session?session={s1['session']}")
@@ -2003,10 +2003,12 @@ jobs:
           ea = next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == p1['accountId'])
           assert ea['authType'] == 'evolution' and ea['connState'] == 'open' and ea['name'] == 'Evo Biz' and ea['phoneNumberId'] == s1['session'] \
               and ea['enabled'] and ea['platform'] == 'whatsapp', ea
-          # 收消息：私聊入库；群消息忽略；@lid 联系人按真实号码归到同一会话
+          # 收消息：私聊入库；群聊单独成会话（记下发消息的成员）；@lid 联系人按真实号码归到同一会话
+          evo_state(s1['session'], groups=[{'id': '1203630@g.us', 'subject': 'Hair Dryer Buyers'}])
           assert evo_msg(s1['session'], 'EVOIN1', '8615900003333@s.whatsapp.net', {'conversation': 'Hi, what is the MOQ?'}, 'conversation') == 200
           assert evo_msg(s1['session'], 'EVOIN1', '8615900003333@s.whatsapp.net', {'conversation': 'Hi, what is the MOQ?'}, 'conversation') == 200
-          assert evo_msg(s1['session'], 'EVOGRP1', '1203630@g.us', {'conversation': 'group chat'}, 'conversation') == 200
+          assert evo_msg(s1['session'], 'EVOGRP1', '1203630@g.us', {'conversation': 'group chat'}, 'conversation', push='Group Member',
+                         participant='77001100@lid', participantAlt='8615900009999@s.whatsapp.net') == 200
           assert evo_msg(s1['session'], 'EVOIN2', '99887766@lid', {'conversation': 'Also need samples'}, 'conversation',
                          remoteJidAlt='8615900003333@s.whatsapp.net') == 200
           ecv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
@@ -2014,7 +2016,21 @@ jobs:
           assert ecv['profileName'] == 'Evo Buyer' and ecv['windowOpen'], ecv
           ems = call('GET', f"/channel/wa/message/list?conversationId={ecv['id']}")
           assert sorted((m['direction'], m['textBody']) for m in ems) == [(1, 'Also need samples'), (1, 'Hi, what is the MOQ?')], ems
-          assert not [c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c['accountId'] == ea['id'] and c['waId'] != '8615900003333'], '群消息不进会话'
+          gcv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
+                                   if c['accountId'] == ea['id'] and c['waId'] == '1203630@g.us'), None), '群聊会话')
+          assert gcv['group'] is True and gcv['aiEnabled'] is False and not gcv.get('customerId') and not gcv.get('clueId'), gcv
+          assert gcv.get('profileName') != 'Group Member', '群聊的会话名不是发消息成员的昵称'
+          gm = call('GET', f"/channel/wa/message/list?conversationId={gcv['id']}")
+          assert [(m['textBody'], m['senderName'], m['senderWaId']) for m in gm] == [('group chat', 'Group Member', '8615900009999')], gm
+          assert sorted(c['waId'] for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c['accountId'] == ea['id']) \
+              == ['1203630@g.us', '8615900003333'], '私聊与群聊各一个会话'
+          # 群聊的 AI 自动回复：默认关闭，按群开启；私聊不能用这个开关；回复发到群里
+          call('PUT', f"/channel/wa/conversation/group-ai?id={gcv['id']}&enabled=true")
+          assert call('GET', f"/channel/wa/conversation/get?id={gcv['id']}")['aiEnabled'] is True
+          assert call('PUT', f"/channel/wa/conversation/group-ai?id={ecv['id']}&enabled=true", ok=False)['code'] != 0, '私聊不用群开关'
+          call('PUT', f"/channel/wa/conversation/group-ai?id={gcv['id']}&enabled=false")
+          call('POST', '/channel/wa/message/send', {'conversationId': gcv['id'], 'text': 'Hello everyone'})
+          assert evo()['sent'][-1]['number'] == '1203630@g.us', evo()['sent'][-1]
           # 发消息
           es = call('POST', '/channel/wa/message/send', {'conversationId': ecv['id'], 'text': 'MOQ is 300 units.'})
           last = evo()['sent'][-1]
@@ -2056,10 +2072,17 @@ jobs:
               {'remoteJid': '8615900005555@s.whatsapp.net', 'pushName': 'Pulled Buyer', 'profilePicUrl': 'http://127.0.0.1:18080/_pic/v/t61/5555_n.jpg?oe=1&sig=a'},
               {'remoteJid': '55443322@lid', 'pushName': 'Hidden Number', 'profilePicUrl': None},
           ])
+          evo_state(s1['session'], groupsIgnore=True)  # 早期创建的实例忽略群聊：同步时改为接收
           assert call('POST', f"/channel/wa-account/sync-history?id={ea['id']}") == -1, '扫码号码在后台同步'
           pcv = wait(lambda: next((c for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list']
                                    if c['accountId'] == ea['id'] and c['waId'] == '8615900005555'), None), '从 Evolution 拉取聊天记录')
           assert pcv['profileName'] == 'Pulled Buyer' and not pcv.get('unreadCount'), pcv
+          # 群聊：同步时改为接收群消息，取到群名称；关联时同步过来的群聊记录也已入库
+          wait(lambda: (evo()['instances'][s1['session']].get('settingsSet') or {}).get('groupsIgnore') is False or None, '改为接收群聊')
+          gname = wait(lambda: (lambda c: c['profileName'] if c.get('profileName') == 'Hair Dryer Buyers' else None)(
+              call('GET', f"/channel/wa/conversation/get?id={gcv['id']}")), '群名称')
+          assert [m['textBody'] for m in call('GET', f"/channel/wa/message/list?conversationId={gcv['id']}")] == ['group', 'group chat', 'Hello everyone']
+          print('WhatsApp 群聊：导入、记下发消息的成员、群名称、AI 回复按群开关、回复发到群里')
           pm = wait(lambda: (lambda l: l if len(l) == 3 else None)(call('GET', f"/channel/wa/message/list?conversationId={pcv['id']}")), '三条记录入库')
           assert [(m['direction'], m['type'], m['textBody']) for m in pm] == [(1, 'text', 'First message'), (1, 'text', 'Second message'), (2, 'image', 'price list')], pm
           assert len(call('GET', f"/channel/wa/message/list?conversationId={hcv['id']}")) == 2, '已有的聊天记录不重复导入'
@@ -2300,7 +2323,7 @@ jobs:
           call('DELETE', f"/channel/wa-account/delete?id={ea['id']}")
           assert s2['session'] in evo()['deleted'], evo()['deleted']
           call('PUT', '/channel/ai/config/save', dict(cfg_k, llmApiKey=''))
-          print('WhatsApp 扫码接入：配对码、二维码、手机确认建账号、收发消息、已读回执、手机端回显、群消息忽略、媒体收发、主动发起、掉线重扫、放弃连接、删除')
+          print('WhatsApp 扫码接入：配对码、二维码、手机确认建账号、收发消息、已读回执、手机端回显、群聊、媒体收发、主动发起、掉线重扫、放弃连接、删除')
           # ---- YouTube / TikTok 视频评论：授权绑定 → 拉取评论进会话（首次只导入历史）→ 回复评论 ----
           def mock_post(path, body):
               urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18080' + path, data=json.dumps(body).encode(), method='POST',
@@ -2539,7 +2562,7 @@ jobs:
               except urllib.error.HTTPError as e:
                   return {'_status': e.code, **json.loads(e.read() or b'{}')}
           def create(name, number=None):
-              b = {'instanceName': name, 'integration': 'WHATSAPP-BAILEYS', 'qrcode': True, 'groupsIgnore': True, 'rejectCall': False,
+              b = {'instanceName': name, 'integration': 'WHATSAPP-BAILEYS', 'qrcode': True, 'groupsIgnore': False, 'rejectCall': False,
                    'alwaysOnline': False, 'readMessages': False, 'readStatus': False, 'syncFullHistory': False,
                    'webhook': {'enabled': True, 'url': 'http://127.0.0.1:18999/hook', 'byEvents': False, 'base64': False,
                                'headers': {'x-cgch-token': 'tok-' + name}, 'events': ['CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'MESSAGES_SET']}}
@@ -2566,6 +2589,17 @@ jobs:
               time.sleep(1)
           assert any(t == 'tok-cgch-1-1-ci' and e.get('event') == 'connection.update' for t, e in GOT), GOT[:3]
           print('推送格式：', json.dumps(GOT[0][1], ensure_ascii=False)[:300])
+          # 实例设置：读出后只改 groupsIgnore 再整体写回（已有实例改为接收群聊）
+          se = call('GET', '/settings/find/cgch-1-1-ci')
+          print('实例设置：', json.dumps(se, ensure_ascii=False)[:300])
+          assert 'groupsIgnore' in se and se['groupsIgnore'] is False, se
+          body = {k: se[k] for k in ('rejectCall', 'groupsIgnore', 'alwaysOnline', 'readMessages', 'readStatus', 'syncFullHistory') if k in se}
+          if se.get('msgCall') is not None:
+              body['msgCall'] = se['msgCall']
+          body['groupsIgnore'] = True
+          ss = call('POST', '/settings/set/cgch-1-1-ci', body)
+          print('改设置：', json.dumps(ss, ensure_ascii=False)[:300])
+          assert '_status' not in ss and call('GET', '/settings/find/cgch-1-1-ci')['groupsIgnore'] is True, ss
           ct = call('POST', '/chat/findContacts/cgch-1-1-ci', {'where': {}})
           print('联系人（头像来源）：', json.dumps(ct, ensure_ascii=False)[:300])
           assert isinstance(ct, list), ct
@@ -2587,7 +2621,7 @@ jobs:
                   break
               time.sleep(1)
           assert 'does not exist' in json.dumps(call('GET', '/instance/connectionState/cgch-1-1-ci')), '删除后实例应不存在'
-          print('Evolution API 实机检查通过：建实例、二维码、状态、实例信息、推送格式与校验头、删除')
+          print('Evolution API 实机检查通过：建实例、二维码、状态、实例信息、实例设置读写、推送格式与校验头、删除')
           PY
       - name: Evolution 日志
         if: always()

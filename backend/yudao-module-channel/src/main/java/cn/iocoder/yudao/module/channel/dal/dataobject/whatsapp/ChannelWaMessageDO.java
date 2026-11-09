@@ -73,6 +73,14 @@ public class ChannelWaMessageDO extends TenantBaseDO {
      */
     private String fileName;
     /**
+     * 群聊里发这条消息的成员（号码或「隐藏编号@lid」）；私聊为空
+     */
+    private String senderWaId;
+    /**
+     * 群聊里发这条消息的成员昵称
+     */
+    private String senderName;
+    /**
      * 已保存到本地文件存储的地址；收到的媒体在首次查看时下载
      */
     private String fileUrl;

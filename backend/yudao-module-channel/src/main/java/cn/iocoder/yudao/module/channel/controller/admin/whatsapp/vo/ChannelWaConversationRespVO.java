@@ -36,6 +36,10 @@ public class ChannelWaConversationRespVO {
     private Long ownerUserId;
     @Schema(description = "备注名")
     private String remarkName;
+    @Schema(description = "是否 WhatsApp 群聊")
+    private Boolean group;
+    @Schema(description = "群聊是否由 AI 自动回复（群聊默认关闭）")
+    private Boolean aiEnabled;
     @Schema(description = "当前处理人（转交后的负责人，否则为号码所属业务员）")
     private Long handlerUserId;
     @Schema(description = "当前处理人姓名")

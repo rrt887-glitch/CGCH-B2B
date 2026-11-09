@@ -34,6 +34,7 @@ import {
   Select,
   Space,
   Spin,
+  Switch,
   Tag,
   Textarea,
   Tooltip,
@@ -66,6 +67,7 @@ import {
   sendWaMedia,
   sendWaMessage,
   remarkWaConversation,
+  setWaGroupAi,
   starWaConversation,
   templateParamCount,
   transferWaConversation,
@@ -397,6 +399,23 @@ async function changeStage(v: number) {
   await requestClient.put(`/crm/customer/update-stage?id=${id}&stage=${v}`);
   customerStage.value = v;
   message.success(`客户阶段已改为「${stageLabel(v)}」`);
+}
+
+// ===== 群聊的 AI 自动回复开关 =====
+const groupAiSaving = ref(false);
+async function toggleGroupAi(on: boolean) {
+  const c = current.value;
+  if (!c) return;
+  groupAiSaving.value = true;
+  try {
+    await setWaGroupAi(c.id, on);
+    c.aiEnabled = on;
+    const row = conversations.value.find((x) => x.id === c.id);
+    if (row) row.aiEnabled = on;
+    message.success(on ? '已开启：AI 会按「AI 接待设置」回复这个群的消息' : '已关闭：AI 不再回复这个群');
+  } finally {
+    groupAiSaving.value = false;
+  }
 }
 
 // ===== 会话整理：收藏、归档、备注名、转交 =====
@@ -848,7 +867,8 @@ const initials = (c: ChannelWaApi.Conversation) => (c.profileName || c.waId).sli
 /** 隐藏了手机号的 WhatsApp 联系人：waId 是「隐藏编号@lid」，不是号码 */
 const hiddenNumber = (c?: { waId?: string }) => !!c?.waId?.endsWith('@lid');
 /** 隐藏号码联系人很多时用隐藏编号末 4 位区分 */
-const waNumber = (c: ChannelWaApi.Conversation) => (hiddenNumber(c) ? `隐藏号码联系人 ·${c.waId.replace('@lid', '').slice(-4)}` : `+${c.waId}`);
+const waNumber = (c: ChannelWaApi.Conversation) =>
+  c.group ? 'WhatsApp 群聊' : hiddenNumber(c) ? `隐藏号码联系人 ·${c.waId.replace('@lid', '').slice(-4)}` : `+${c.waId}`;
 const contact = (c: ChannelWaApi.Conversation) =>
   c.profileName ||
   (isWa(c) ? waNumber(c) : c.platform === 'web' ? `官网访客 ${c.waId.slice(-4).toUpperCase()}` : `${plat(c).label} 用户`);
@@ -924,7 +944,9 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 </div>
                 <div class="flex items-center gap-1.5">
                   <span class="min-w-0 flex-1 truncate font-semibold text-[#1D1D1F]">
-                    <span v-if="c.starred" class="mr-1 text-amber-500">★</span>{{ c.remarkName || c.customerName || contact(c) }}
+                    <span v-if="c.starred" class="mr-1 text-amber-500">★</span>
+                    <IconifyIcon v-if="c.group" icon="lucide:users" class="mr-0.5 inline size-3.5 align-[-2px] text-[#6E6E73]" />{{ c.remarkName || c.customerName || contact(c) }}
+                    <span v-if="c.group && c.aiEnabled" class="ml-1 rounded bg-[#E8F2FC] px-1 text-[10px] text-[#0071E3]">AI</span>
                   </span>
                   <span
                     v-if="c.unreadCount"
@@ -975,6 +997,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 <Tooltip v-if="isWa(current) && hiddenNumber(current)" title="对方在 WhatsApp 上隐藏了手机号，可以照常收发消息；对方之后带上号码时会自动合并到号码会话">
                   <span class="text-sm text-gray-400">隐藏号码</span>
                 </Tooltip>
+                <Tag v-else-if="current.group" color="green" class="ml-1">群聊</Tag>
                 <span v-else-if="isWa(current)" class="text-sm text-gray-400">+{{ current.waId }}</span>
                 <Tag v-else :color="plat(current).color" class="ml-1">{{ plat(current).label }}</Tag>
               </div>
@@ -985,6 +1008,11 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 <Tag v-else-if="current.clueName" color="cyan" class="cursor-pointer" @click="router.push(`/crm/clue/detail/${current.clueId}`)">
                   线索：{{ current.clueName }}
                 </Tag>
+                <!-- 群聊：AI 自动回复默认关闭，在这里按群开启 -->
+                <span v-else-if="current.group" class="inline-flex items-center gap-1.5 text-xs text-[#6E6E73]">
+                  AI 自动回复
+                  <Switch size="small" :checked="!!current.aiEnabled" :loading="groupAiSaving" @change="(v: any) => toggleGroupAi(!!v)" />
+                </span>
                 <Tag v-else>未关联客户</Tag>
                 <!-- 窄屏没有右侧客户栏时，阶段和标签在这里改 -->
                 <span v-if="current.customerId && customerStage !== undefined" class="contents xl:hidden">
@@ -1066,6 +1094,10 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                       : 'rounded-[18px] bg-[#E9E9EB] text-[#1D1D1F]'
                   "
                 >
+                  <!-- 群聊：标出是群里哪位成员发的 -->
+                  <div v-if="current?.group && it.m.direction !== 2 && (it.m.senderName || it.m.senderWaId)" class="mb-0.5 text-xs font-semibold text-[#0071E3]">
+                    {{ it.m.senderName || (it.m.senderWaId?.endsWith('@lid') ? '群成员' : `+${it.m.senderWaId}`) }}
+                  </div>
                   <template v-if="MEDIA_LABEL[it.m.type]">
                     <a v-if="isImage(it.m)" :href="it.m.fileUrl" target="_blank" rel="noopener">
                       <img :src="it.m.fileUrl" class="mb-1 max-h-60 max-w-full rounded" alt="" />
@@ -1244,7 +1276,17 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               {{ plat(current).label }} · {{ isWa(current) ? waNumber(current) : accountName(current.accountId) }}
             </div>
           </div>
-          <div v-if="!current.customerId" class="flex items-center gap-2 text-[13px] text-[#86868B]">
+          <!-- 群聊：AI 自动回复按群手动开启 -->
+          <div v-if="current.group" class="flex flex-col gap-1.5 rounded-[10px] bg-[#F5F5F7] p-3">
+            <div class="flex items-center justify-between text-[13px] font-semibold text-[#1D1D1F]">
+              AI 自动回复这个群
+              <Switch :checked="!!current.aiEnabled" :loading="groupAiSaving" @change="(v: any) => toggleGroupAi(!!v)" />
+            </div>
+            <div class="text-xs leading-5 text-[#86868B]">
+              群聊默认不由 AI 回复。开启后，群里有新消息时 AI 会按「AI 接待设置」回复（设为「AI 起草」时只生成草稿）。群聊不会自动建线索。
+            </div>
+          </div>
+          <div v-else-if="!current.customerId" class="flex items-center gap-2 text-[13px] text-[#86868B]">
             <span>{{ current.clueName ? `线索：${current.clueName}` : '还没有关联 CRM 客户' }}</span>
             <a v-if="current.clueId" @click="router.push(`/crm/clue/detail/${current.clueId}`)">查看</a>
           </div>

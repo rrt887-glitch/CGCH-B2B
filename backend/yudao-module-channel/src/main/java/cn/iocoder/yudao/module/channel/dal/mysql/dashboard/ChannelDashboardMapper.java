@@ -34,10 +34,11 @@ public interface ChannelDashboardMapper {
     List<Map<String, Object>> waStats(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
                                       @Param("accountIds") Collection<Long> accountIds);
 
-    /** 每个有来信的会话：首条来信时间、最后一条回复时间，用于计算回复率 */
+    /** 每个有来信的会话：首条来信时间、最后一条回复时间，用于计算询盘数和回复率（不含 WhatsApp 群聊） */
     @Select("<script>SELECT conversation_id AS c, MIN(CASE WHEN direction = 1 THEN message_time END) AS first_in, "
             + "MAX(CASE WHEN direction = 2 THEN message_time END) AS last_out "
             + "FROM channel_wa_message WHERE deleted = 0 AND message_time &gt;= #{start} AND message_time &lt; #{end}"
+            + " AND conversation_id NOT IN (SELECT g.id FROM channel_wa_conversation g WHERE g.wa_id LIKE '%@g.us')"
             + ACCOUNTS + " GROUP BY conversation_id HAVING first_in IS NOT NULL</script>")
     List<Map<String, Object>> waConversations(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
                                               @Param("accountIds") Collection<Long> accountIds);
