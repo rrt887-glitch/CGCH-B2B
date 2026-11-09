@@ -25,6 +25,8 @@ import Form from '../modules/form.vue';
 import { useDetailSchema } from './data';
 import Info from './modules/info.vue';
 
+import { crmBackTarget } from '../../_shared/back';
+
 const route = useRoute();
 const router = useRouter();
 const tabs = useTabs();
@@ -69,8 +71,10 @@ async function getContactDetail() {
 
 /** 返回列表页 */
 function handleBack() {
+  // 回到进入详情前的新版列表（保留筛选和搜索），而不是旧版列表
+  const target = crmBackTarget(router, 'customer');
   tabs.closeCurrentTab();
-  router.push({ name: 'CrmContact' });
+  router.push(target);
 }
 
 /** 编辑联系人 */

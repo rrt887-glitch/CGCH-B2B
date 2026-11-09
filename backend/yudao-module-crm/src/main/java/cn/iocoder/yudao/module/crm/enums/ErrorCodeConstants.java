@@ -16,6 +16,8 @@ public interface ErrorCodeConstants {
     ErrorCode CONTRACT_UPDATE_AUDIT_STATUS_FAIL_NOT_PROCESS = new ErrorCode(1_020_000_003, "更新合同审核状态失败，原因：合同不是审核中状态");
     ErrorCode CONTRACT_NO_EXISTS = new ErrorCode(1_020_000_004, "生成合同序列号重复，请重试");
     ErrorCode CONTRACT_DELETE_FAIL = new ErrorCode(1_020_000_005, "删除合同失败，原因：有被回款所使用");
+    ErrorCode CONTRACT_END_BEFORE_START = new ErrorCode(1_020_000_009, "结束日期不能早于开始日期");
+    ErrorCode CONTRACT_RELATION_CUSTOMER_MISMATCH = new ErrorCode(1_020_000_010, "所选{}不属于这个客户，请重新选择");
 
     // ========== 线索管理 1-020-001-000 ==========
     ErrorCode CLUE_NOT_EXISTS = new ErrorCode(1_020_001_000, "线索不存在");

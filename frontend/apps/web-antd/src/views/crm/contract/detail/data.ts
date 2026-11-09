@@ -16,7 +16,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     },
     {
       field: 'totalPrice',
-      label: '合同金额（元）',
+      label: '订单金额（元）',
       render: (val) => erpPriceInputFormatter(val) as string,
     },
     {
@@ -41,11 +41,11 @@ export function useDetailBaseSchema(): DescriptionItemSchema[] {
   return [
     {
       field: 'no',
-      label: '合同编号',
+      label: '订单编号',
     },
     {
       field: 'name',
-      label: '合同名称',
+      label: '订单名称',
     },
     {
       field: 'customerName',
@@ -57,7 +57,7 @@ export function useDetailBaseSchema(): DescriptionItemSchema[] {
     },
     {
       field: 'totalPrice',
-      label: '合同金额（元）',
+      label: '订单金额（元）',
       render: (val) => erpPriceInputFormatter(val) as string,
     },
     {
@@ -67,12 +67,12 @@ export function useDetailBaseSchema(): DescriptionItemSchema[] {
     },
     {
       field: 'startTime',
-      label: '合同开始时间',
+      label: '订单开始时间',
       render: (val) => formatDateTime(val) as string,
     },
     {
       field: 'endTime',
-      label: '合同结束时间',
+      label: '订单结束时间',
       render: (val) => formatDateTime(val) as string,
     },
     {
@@ -89,7 +89,7 @@ export function useDetailBaseSchema(): DescriptionItemSchema[] {
     },
     {
       field: 'auditStatus',
-      label: '合同状态',
+      label: '订单状态',
       render: (val) =>
         h(DictTag, {
           type: DICT_TYPE.CRM_AUDIT_STATUS,

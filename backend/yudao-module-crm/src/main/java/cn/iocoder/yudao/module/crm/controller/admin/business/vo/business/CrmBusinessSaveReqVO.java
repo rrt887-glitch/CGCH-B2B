@@ -5,6 +5,7 @@ import cn.iocoder.yudao.module.crm.framework.operatelog.core.SysAdminUserParseFu
 import com.mzt.logapi.starter.annotation.DiffLogField;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -25,7 +26,7 @@ public class CrmBusinessSaveReqVO {
 
     @Schema(description = "商机名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "李四")
     @DiffLogField(name = "商机名称")
-    @NotNull(message = "商机名称不能为空")
+    @NotBlank(message = "商机名称不能为空")
     private String name;
 
     @Schema(description = "客户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "10299")

@@ -27,6 +27,8 @@ import { useDetailSchema } from './data';
 import BusinessDetailsInfo from './modules/info.vue';
 import UpStatusForm from './modules/status-form.vue';
 
+import { crmBackTarget } from '../../_shared/back';
+
 const route = useRoute();
 const router = useRouter();
 const tabs = useTabs();
@@ -76,8 +78,10 @@ async function getBusinessDetail() {
 
 /** 返回列表页 */
 function handleBack() {
+  // 回到进入详情前的新版列表（保留筛选和搜索），而不是旧版列表
+  const target = crmBackTarget(router, 'business');
   tabs.closeCurrentTab();
-  router.push({ name: 'CrmBusiness' });
+  router.push(target);
 }
 
 /** 编辑商机 */

@@ -1640,6 +1640,29 @@ jobs:
           call('PUT', f'/crm/customer/receive?ids={tcid}')
           assert call('GET', f'/crm/customer/get?id={tcid}')['ownerUserId'] == 1, '领取后负责人是自己'
           print('公海：放入公海后可再领取')
+          # 客户按公司名称也能搜到；名称只有空格不能保存
+          assert any(x['id'] == tcid for x in call('GET', '/crm/customer/page?pageNo=1&pageSize=10&name=Transform%20Co')['list']), '按公司名称搜索'
+          blank = call('PUT', '/crm/customer/update', dict(tc, name='   '), ok=False)
+          assert blank['code'] != 0 and '不能为空' in blank['msg'], blank
+          # 订单：新建为草稿可编辑；结束日期不能早于开始；商机 / 签约人必须属于所选客户
+          day = 86400000
+          od = {'name': 'QA Order', 'customerId': tcid, 'ownerUserId': 1, 'orderDate': now_ms(0), 'discountPercent': 0,
+                'startTime': now_ms(10), 'endTime': now_ms(20), 'products': []}
+          oid = call('POST', '/crm/contract/create', od)
+          o = call('GET', f'/crm/contract/get?id={oid}')
+          assert o['auditStatus'] == 0, o
+          call('PUT', '/crm/contract/update', dict(od, id=oid, name='QA Order 2'))
+          assert call('GET', f'/crm/contract/get?id={oid}')['name'] == 'QA Order 2'
+          assert any(x['id'] == oid for x in call('GET', '/crm/contract/page?pageNo=1&pageSize=50&auditStatus=0')['list']), '「未提交」里能找到'
+          bad_dt = call('PUT', '/crm/contract/update', dict(od, id=oid, endTime=now_ms(9)), ok=False)
+          assert '结束日期不能早于开始日期' in bad_dt['msg'], bad_dt
+          other_biz = call('POST', '/crm/business/create', {'name': 'Other customer deal', 'customerId': cid, 'ownerUserId': 1, 'statusTypeId': 1,
+                           'dealTime': now_ms(30), 'discountPercent': 0, 'products': []})
+          bad_rel = call('PUT', '/crm/contract/update', dict(od, id=oid, businessId=other_biz), ok=False)
+          assert '不属于这个客户' in bad_rel['msg'], bad_rel
+          call('DELETE', f'/crm/contract/delete?id={oid}')
+          call('DELETE', f'/crm/business/delete?id={other_biz}')
+          print('客户按公司名称搜索、名称不能只有空格；订单新建为草稿可编辑、日期与关联客户校验')
           # 经营分析：按业务员的线索 / 客户 / 跟进 / 订单，按平台的询盘，按国家的线索和客户
           ba = call('GET', '/channel/dashboard/overview?days=30')
           me = next((u for u in ba['users'] if u['userId'] == 1), None)

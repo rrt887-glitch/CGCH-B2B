@@ -13,6 +13,7 @@ import cn.iocoder.yudao.module.crm.framework.operatelog.core.SysAreaParseFunctio
 import com.mzt.logapi.starter.annotation.DiffLogField;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -33,7 +34,7 @@ public class CrmClueSaveReqVO {
 
     @Schema(description = "线索名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "线索xxx")
     @DiffLogField(name = "线索名称")
-    @NotEmpty(message = "线索名称不能为空")
+    @NotBlank(message = "线索名称不能为空")
     private String name;
 
     @Schema(description = "最后跟进时间")

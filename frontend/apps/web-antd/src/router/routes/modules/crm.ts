@@ -42,7 +42,7 @@ const routes: RouteRecordRaw[] = [
         path: 'contract/detail/:id',
         name: 'CrmContractDetail',
         meta: {
-          title: '合同详情',
+          title: '订单详情',
           activePath: '/crm/contract',
         },
         component: () => import('#/views/crm/contract/detail/index.vue'),

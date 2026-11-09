@@ -27,6 +27,8 @@ import Form from '../modules/form.vue';
 import { useDetailSchema } from './data';
 import ContractDetailsInfo from './modules/info.vue';
 
+import { crmBackTarget } from '../../_shared/back';
+
 const props = defineProps<{ id?: number }>();
 
 const route = useRoute();
@@ -73,8 +75,10 @@ async function loadContractDetail() {
 
 /** 返回列表页 */
 function handleBack() {
+  // 回到进入详情前的新版列表（保留筛选和搜索），而不是旧版列表
+  const target = crmBackTarget(router, 'order');
   tabs.closeCurrentTab();
-  router.push({ name: 'CrmContract' });
+  router.push(target);
 }
 
 /** 编辑合同 */
@@ -96,7 +100,7 @@ onMounted(() => {
 
 <template>
   <Page auto-content-height :title="contract?.name" :loading="loading">
-    <FormModal @success="loadContractDetail" />
+    <FormModal term="订单" @success="loadContractDetail" />
     <TransferModal @success="loadContractDetail" />
     <template #extra>
       <TableAction

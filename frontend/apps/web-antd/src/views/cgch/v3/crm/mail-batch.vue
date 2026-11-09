@@ -281,9 +281,9 @@ const ITEM_FILTERS = [
 </script>
 
 <template>
-  <div class="flex h-full flex-col gap-4 overflow-auto rounded-xl bg-white p-5">
+  <div class="flex h-full flex-col gap-4 overflow-auto rounded-xl bg-white p-3 sm:p-5">
     <div class="flex flex-wrap items-start gap-3">
-      <div class="min-w-[240px] flex-1">
+      <div class="min-w-0 flex-1 basis-[240px]">
         <h2 class="m-0 text-lg font-semibold text-[#1D1D1F]">邮件群发</h2>
         <p class="m-0 mt-1 text-[13px] text-[#6E6E73]">
           给一批客户发同一封邮件：自动验证邮箱、按速率从多个邮箱轮流发出，每封带退订链接，退订的人以后不会再收到。
@@ -300,7 +300,7 @@ const ITEM_FILTERS = [
         <div
           v-for="b in list"
           :key="b.id"
-          class="grid cursor-pointer grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_120px_150px] items-center gap-4 rounded-xl border border-solid border-[#E5E5EA] px-4 py-3 hover:border-[#B8D7F5]"
+          class="grid cursor-pointer grid-cols-1 items-center gap-2 rounded-xl sm:gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_120px_150px] border border-solid border-[#E5E5EA] px-4 py-3 hover:border-[#B8D7F5]"
           @click="openDetail(b)"
         >
           <div class="min-w-0">
@@ -320,7 +320,7 @@ const ITEM_FILTERS = [
             </div>
           </div>
           <div class="text-xs text-[#86868B]">每分钟 {{ b.ratePerMinute }} 封</div>
-          <div class="flex justify-end gap-2" @click.stop>
+          <div class="flex flex-wrap gap-2 md:justify-end" @click.stop>
             <Button v-if="b.status === 'draft'" size="small" type="primary" @click="startMailBatch(b.id).then(() => load(true))">开始发送</Button>
             <Button v-if="b.status === 'sending' || b.status === 'draft'" size="small" @click="cancel(b)">取消</Button>
             <Button v-else size="small" danger @click="remove(b)">删除</Button>
@@ -330,7 +330,7 @@ const ITEM_FILTERS = [
     </Spin>
 
     <!-- 新建 -->
-    <Drawer v-model:open="createOpen" title="新建邮件群发" :width="760" destroy-on-close>
+    <Drawer v-model:open="createOpen" title="新建邮件群发" width="min(760px, 100vw)" destroy-on-close>
       <Steps :current="step" size="small" class="mb-6" :items="[{ title: '选收件人' }, { title: '写邮件' }, { title: '发送设置' }, { title: '确认发送' }]" />
 
       <template v-if="step === 0">
@@ -433,7 +433,7 @@ const ITEM_FILTERS = [
 
       <template v-else-if="draft">
         <div class="flex flex-col gap-4">
-          <div class="grid grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div class="rounded-xl border border-solid border-[#E5E5EA] p-3">
               <div class="text-xs text-[#86868B]">将发送</div>
               <div class="text-2xl font-semibold text-[#248A3D]">{{ draft.counts.pending ?? 0 }}</div>
@@ -486,9 +486,9 @@ const ITEM_FILTERS = [
     </Drawer>
 
     <!-- 详情 -->
-    <Drawer v-model:open="detailOpen" :title="detail?.name" :width="820">
+    <Drawer v-model:open="detailOpen" :title="detail?.name" width="min(820px, 100vw)">
       <template v-if="detail">
-        <div class="mb-4 grid grid-cols-5 gap-2.5">
+        <div class="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
           <div v-for="s in [
               { k: 'sent', label: '已发送', color: '#248A3D' },
               { k: 'pending', label: '待发送', color: '#0071E3' },
