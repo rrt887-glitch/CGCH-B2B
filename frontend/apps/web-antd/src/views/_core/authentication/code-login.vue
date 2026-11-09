@@ -29,7 +29,11 @@ const CODE_LENGTH = 4;
 const loginRef = ref();
 
 /** 获取租户列表，并默认选中 */
-const tenantList = ref<AuthApi.TenantResult[]>([]); // 租户列表
+const tenantList = ref<AuthApi.TenantResult[]>([]);
+/** 当前网址已对应到某家公司（租户） */
+const websiteMatched = ref(false);
+/** 租户列表加载完成前不显示下拉，避免一闪而过 */
+const tenantLoaded = ref(false); // 租户列表
 async function fetchTenantList() {
   if (!tenantEnable) {
     return;
@@ -42,6 +46,7 @@ async function fetchTenantList() {
     // 选中租户：域名 > store 中的租户 > 首个租户
     let tenantId: null | number = null;
     const websiteTenant = await websiteTenantPromise;
+    websiteMatched.value = !!websiteTenant?.id;
     if (websiteTenant?.id) {
       tenantId = websiteTenant.id;
     }
@@ -59,6 +64,8 @@ async function fetchTenantList() {
     loginRef.value.getFormApi().setFieldValue('tenantId', tenantId?.toString());
   } catch (error) {
     console.error('获取租户列表失败:', error);
+  } finally {
+    tenantLoaded.value = true;
   }
 }
 
@@ -84,6 +91,8 @@ const formSchema = computed((): VbenFormSchema[] => {
       dependencies: {
         triggerFields: ['tenantId'],
         if: tenantEnable,
+        // 只有一家公司、或网址已对应到某家公司时自动选好，不显示下拉；没选上时才显示让用户选
+        show: (values) => tenantLoaded.value && (!values.tenantId || (tenantList.value.length > 1 && !websiteMatched.value)),
         trigger(values) {
           if (values.tenantId) {
             accessStore.setTenantId(Number(values.tenantId));
