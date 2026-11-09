@@ -23,6 +23,8 @@ import Form from '../modules/form.vue';
 import { useDetailSchema } from './data';
 import Info from './modules/info.vue';
 
+import { crmBackTarget } from '../../_shared/back';
+
 const route = useRoute();
 const router = useRouter();
 const tabs = useTabs();
@@ -67,8 +69,10 @@ async function getClueDetail() {
 
 /** 返回列表页 */
 function handleBack() {
+  // 回到进入详情前的新版列表（保留筛选和搜索），而不是旧版列表
+  const target = crmBackTarget(router, 'lead');
   tabs.closeCurrentTab();
-  router.push({ name: 'CrmClue' });
+  router.push(target);
 }
 
 /** 编辑线索 */

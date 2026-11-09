@@ -37,6 +37,8 @@ import DistributeForm from './modules/distribute-form.vue';
 import Info from './modules/info.vue';
 import Timeline from './modules/timeline.vue';
 
+import { crmBackTarget } from '../../_shared/back';
+
 const route = useRoute();
 const router = useRouter();
 const tabs = useTabs();
@@ -86,8 +88,10 @@ async function loadCustomerDetail() {
 
 /** 返回列表页 */
 function handleBack() {
+  // 回到进入详情前的新版列表（保留筛选和搜索），而不是旧版列表
+  const target = crmBackTarget(router, 'customer');
   tabs.closeCurrentTab();
-  router.push({ name: 'CrmCustomer' });
+  router.push(target);
 }
 
 /** 编辑客户 */

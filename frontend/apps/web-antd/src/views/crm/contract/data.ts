@@ -89,6 +89,16 @@ function contractFormSchema(): VbenFormSchema[] {
         valueField: 'id',
         placeholder: '请选择客户',
       },
+      dependencies: {
+        triggerFields: ['customerId'],
+        // 换了客户就清空上一个客户的商机和签约联系人，避免关联到别的客户
+        componentProps: (_values, actions) => ({
+          onChange: () => {
+            actions.setFieldValue('businessId', undefined);
+            actions.setFieldValue('signContactId', undefined);
+          },
+        }),
+      },
     },
     {
       fieldName: 'businessId',
@@ -154,6 +164,17 @@ function contractFormSchema(): VbenFormSchema[] {
         format: 'YYYY-MM-DD',
         valueFormat: 'x',
         placeholder: '请选择合同结束时间',
+      },
+      dependencies: {
+        triggerFields: ['startTime', 'endTime'],
+        rules: (values) =>
+          z
+            .any()
+            .optional()
+            .refine(
+              (v) => !v || !values.startTime || Number(v) >= Number(values.startTime),
+              '结束日期不能早于开始日期',
+            ),
       },
     },
     {

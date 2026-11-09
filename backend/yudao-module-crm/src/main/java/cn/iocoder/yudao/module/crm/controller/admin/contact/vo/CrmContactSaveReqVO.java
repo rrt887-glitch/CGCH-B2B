@@ -6,6 +6,7 @@ import cn.iocoder.yudao.module.crm.framework.operatelog.core.*;
 import com.mzt.logapi.starter.annotation.DiffLogField;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -22,7 +23,7 @@ public class CrmContactSaveReqVO {
     private Long id;
 
     @Schema(description = "姓名", example = "芋艿")
-    @NotNull(message = "姓名不能为空")
+    @NotBlank(message = "姓名不能为空")
     @DiffLogField(name = "姓名")
     private String name;
 

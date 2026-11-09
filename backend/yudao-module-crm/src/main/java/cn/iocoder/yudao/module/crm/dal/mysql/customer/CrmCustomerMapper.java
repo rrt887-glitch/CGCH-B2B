@@ -58,9 +58,13 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
                     CrmCustomerDO::getId, ownerUserId, pageReqVO.getSceneType());
         }
         // 拼接自身的查询条件
-        query.selectAll(CrmCustomerDO.class)
-                .likeIfPresent(CrmCustomerDO::getName, pageReqVO.getName())
-                .eqIfPresent(CrmCustomerDO::getMobile, pageReqVO.getMobile())
+        query.selectAll(CrmCustomerDO.class);
+        // 名称搜索同时匹配客户名称和公司名称
+        if (cn.hutool.core.util.StrUtil.isNotBlank(pageReqVO.getName())) {
+            String kw = pageReqVO.getName().trim();
+            query.and(w -> w.like(CrmCustomerDO::getName, kw).or().like(CrmCustomerDO::getCompanyName, kw));
+        }
+        query.eqIfPresent(CrmCustomerDO::getMobile, pageReqVO.getMobile())
                 .eqIfPresent(CrmCustomerDO::getIndustryId, pageReqVO.getIndustryId())
                 .eqIfPresent(CrmCustomerDO::getLevel, pageReqVO.getLevel())
                 .eqIfPresent(CrmCustomerDO::getSource, pageReqVO.getSource())

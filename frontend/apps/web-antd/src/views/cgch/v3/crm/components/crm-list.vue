@@ -130,6 +130,27 @@ const tableColumns = computed(() =>
 );
 const scrollX = computed(() => tableColumns.value.reduce((s, c) => s + (c.width || 140), 0) + (props.selectable ? 48 : 0));
 
+// 记住本次会话里的搜索词、左侧筛选和页码：从详情页返回列表时恢复（只存在本标签页的会话存储里）
+const STATE_KEY = `cgch-crm-list:${props.storageKey}`;
+try {
+  const saved = JSON.parse(sessionStorage.getItem(STATE_KEY) || 'null');
+  if (saved) {
+    keyword.value = saved.keyword ?? '';
+    railKey.value = saved.railKey ?? 'all';
+    page.no = saved.pageNo ?? 1;
+    page.size = saved.pageSize ?? page.size;
+  }
+} catch {
+  // 浏览器禁止存储时不恢复
+}
+function saveState() {
+  try {
+    sessionStorage.setItem(STATE_KEY, JSON.stringify({ keyword: keyword.value, railKey: railKey.value, pageNo: page.no, pageSize: page.size }));
+  } catch {
+    // 忽略
+  }
+}
+
 function params() {
   const p: Record<string, any> = { ...props.baseParams, ...railFilter.value, ...extra.value, pageNo: page.no, pageSize: page.size };
   if (keyword.value.trim()) p[props.searchField] = keyword.value.trim();
@@ -143,6 +164,7 @@ function params() {
 }
 
 async function load() {
+  saveState();
   loading.value = true;
   try {
     const r = await props.fetch(params());

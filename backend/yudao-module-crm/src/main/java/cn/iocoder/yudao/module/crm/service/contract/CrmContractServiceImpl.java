@@ -15,6 +15,8 @@ import cn.iocoder.yudao.module.crm.controller.admin.contract.vo.contract.CrmCont
 import cn.iocoder.yudao.module.crm.controller.admin.contract.vo.contract.CrmContractTransferReqVO;
 import cn.iocoder.yudao.module.crm.dal.dataobject.contract.CrmContractConfigDO;
 import cn.iocoder.yudao.module.crm.dal.dataobject.contract.CrmContractDO;
+import cn.iocoder.yudao.module.crm.dal.dataobject.contact.CrmContactDO;
+import cn.iocoder.yudao.module.crm.dal.dataobject.business.CrmBusinessDO;
 import cn.iocoder.yudao.module.crm.dal.dataobject.contract.CrmContractProductDO;
 import cn.iocoder.yudao.module.crm.dal.mysql.contract.CrmContractMapper;
 import cn.iocoder.yudao.module.crm.dal.mysql.contract.CrmContractProductMapper;
@@ -112,7 +114,9 @@ public class CrmContractServiceImpl implements CrmContractService {
         }
 
         // 2.1 插入合同
-        CrmContractDO contract = BeanUtils.toBean(createReqVO, CrmContractDO.class).setNo(no);
+        // 新建的订单 / 合同是草稿（未提交），才能继续编辑、提交审核
+        CrmContractDO contract = BeanUtils.toBean(createReqVO, CrmContractDO.class).setNo(no)
+                .setAuditStatus(CrmAuditStatusEnum.DRAFT.getStatus());
         calculateTotalPrice(contract, contractProducts);
         contractMapper.insert(contract);
         // 2.2 插入合同关联商品
@@ -186,6 +190,10 @@ public class CrmContractServiceImpl implements CrmContractService {
      * @param reqVO 请求
      */
     private void validateRelationDataExists(CrmContractSaveReqVO reqVO) {
+        // 0. 结束日期不能早于开始日期
+        if (reqVO.getStartTime() != null && reqVO.getEndTime() != null && reqVO.getEndTime().isBefore(reqVO.getStartTime())) {
+            throw exception(CONTRACT_END_BEFORE_START);
+        }
         // 1. 校验客户
         if (reqVO.getCustomerId() != null) {
             customerService.validateCustomer(reqVO.getCustomerId());
@@ -196,11 +204,20 @@ public class CrmContractServiceImpl implements CrmContractService {
         }
         // 3. 如果有关联商机，则需要校验存在
         if (reqVO.getBusinessId() != null) {
-            businessService.validateBusiness(reqVO.getBusinessId());
+            CrmBusinessDO business = businessService.validateBusiness(reqVO.getBusinessId());
+            if (reqVO.getCustomerId() != null && business.getCustomerId() != null
+                    && !business.getCustomerId().equals(reqVO.getCustomerId())) {
+                throw exception(CONTRACT_RELATION_CUSTOMER_MISMATCH, "商机");
+            }
         }
-        // 4. 校验签约相关字段
+        // 4. 校验签约相关字段（客户签约人必须是这个客户的联系人）
         if (reqVO.getSignContactId() != null) {
             contactService.validateContact(reqVO.getSignContactId());
+            CrmContactDO contact = contactService.getContact(reqVO.getSignContactId());
+            if (reqVO.getCustomerId() != null && contact != null && contact.getCustomerId() != null
+                    && !contact.getCustomerId().equals(reqVO.getCustomerId())) {
+                throw exception(CONTRACT_RELATION_CUSTOMER_MISMATCH, "客户签约人");
+            }
         }
         if (reqVO.getSignUserId() != null) {
             adminUserApi.validateUser(reqVO.getSignUserId());
