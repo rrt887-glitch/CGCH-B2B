@@ -12,6 +12,7 @@ import { getDeptList } from '#/api/system/dept';
 import { getSimplePostList } from '#/api/system/post';
 import { getSimpleRoleList } from '#/api/system/role';
 import { getRangePickerDefaultProps } from '#/utils';
+import { PASSWORD_REGEX, PASSWORD_TIP } from '#/utils/password';
 
 /** 新增/修改的表单 */
 export function useFormSchema(): VbenFormSchema[] {
@@ -37,7 +38,10 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '用户密码',
       fieldName: 'password',
       component: 'InputPassword',
-      rules: 'required',
+      componentProps: {
+        placeholder: PASSWORD_TIP,
+      },
+      rules: z.string({ message: '请输入用户密码' }).regex(PASSWORD_REGEX, PASSWORD_TIP),
       dependencies: {
         triggerFields: ['id'],
         show: (values) => !values.id,
@@ -151,8 +155,7 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
         rules(values) {
           return z
             .string({ message: '请输入新密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .regex(PASSWORD_REGEX, PASSWORD_TIP)
             .refine(
               (value) => value !== values.oldPassword,
               '新旧密码不能相同',
@@ -174,8 +177,7 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
         rules(values) {
           return z
             .string({ message: '请输入确认密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .min(1, '请输入确认密码')
             .refine(
               (value) => value === values.newPassword,
               '新密码和确认密码不一致',

@@ -15,6 +15,7 @@ import { Button, Form, FormItem, Input, InputPassword, message, Modal, Radio, Ra
 
 import { assignUserRole, getUserRoleList } from '#/api/system/permission';
 import { createUser, deleteUser, getUserPage, resetUserPassword, updateUser, updateUserStatus } from '#/api/system/user';
+import { isStrongPassword, PASSWORD_TIP } from '#/utils/password';
 
 defineOptions({ name: 'CgchV3Members' });
 
@@ -78,7 +79,7 @@ function openForm(row?: any) {
 async function save() {
   if (!form.nickname.trim()) return message.warning('请填写姓名');
   if (!/^[a-zA-Z0-9]{4,30}$/.test(form.username)) return message.warning('登录账号为 4~30 位字母或数字');
-  if (!form.id && form.password.length < 4) return message.warning('请设置至少 4 位的登录密码');
+  if (!form.id && !isStrongPassword(form.password)) return message.warning(PASSWORD_TIP);
   if (form.id === myId.value && form.role !== 'admin') return message.warning('不能把自己改成业务员，请让其他超级管理员操作');
   saving.value = true;
   try {
@@ -124,7 +125,7 @@ function openPwd(row: any) {
   pwdOpen.value = true;
 }
 async function savePwd() {
-  if (pwd.value.length < 4) return message.warning('请设置至少 4 位的新密码');
+  if (!isStrongPassword(pwd.value)) return message.warning(PASSWORD_TIP);
   await resetUserPassword(pwdRow.value!.id!, pwd.value);
   message.success('密码已重置');
   pwdOpen.value = false;
@@ -206,7 +207,7 @@ onMounted(load);
         <FormItem label="登录账号" required extra="4~30 位字母或数字，添加后不能修改">
           <Input v-model:value="form.username" :maxlength="30" :disabled="!!form.id" placeholder="例如：zhangsan" />
         </FormItem>
-        <FormItem v-if="!form.id" label="登录密码" required><InputPassword v-model:value="form.password" :maxlength="64" /></FormItem>
+        <FormItem v-if="!form.id" label="登录密码" required :extra="PASSWORD_TIP"><InputPassword v-model:value="form.password" :maxlength="64" /></FormItem>
         <FormItem label="角色">
           <RadioGroup v-model:value="form.role" :disabled="form.id === myId">
             <Radio value="sales">业务员（只看自己负责的客户和会话）</Radio>
@@ -222,7 +223,8 @@ onMounted(load);
     </Modal>
 
     <Modal v-model:open="pwdOpen" :title="`重置「${pwdRow?.nickname}」的密码`" ok-text="确定" @ok="savePwd">
-      <InputPassword v-model:value="pwd" class="mt-3" :maxlength="64" placeholder="新密码，至少 4 位" />
+      <InputPassword v-model:value="pwd" class="mt-3" :maxlength="64" placeholder="新密码" />
+      <div class="mt-1 text-xs text-[#6E6E73]">{{ PASSWORD_TIP }}。重置后，这个账号因输错密码造成的临时锁定也会一并解除。</div>
     </Modal>
   </div>
 </template>

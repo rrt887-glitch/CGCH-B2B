@@ -16,6 +16,7 @@ import { message } from 'ant-design-vue';
 
 import { sendSmsCode, smsResetPassword } from '#/api';
 import { getTenantByWebsite, getTenantSimpleList } from '#/api/core/auth';
+import { PASSWORD_REGEX, PASSWORD_TIP } from '#/utils/password';
 
 defineOptions({ name: 'ForgetPassword' });
 
@@ -170,7 +171,9 @@ const formSchema = computed((): VbenFormSchema[] => {
           strengthText: () => $t('authentication.passwordStrength'),
         };
       },
-      rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
+      rules: z
+        .string({ message: $t('authentication.passwordTip') })
+        .regex(PASSWORD_REGEX, { message: PASSWORD_TIP }),
     },
     {
       component: 'VbenInputPassword',

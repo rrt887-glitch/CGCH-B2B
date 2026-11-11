@@ -854,6 +854,34 @@ jobs:
           assert c3['code'] == 0 and c3['data'].get('teamOpen') is None, c3
           assert call('GET', '/channel/wa/conversation/counts').get('teamOpen') is not None, '超级管理员有团队会话'
           print('两种账号：业务员有日常功能、没有公司设置和成员管理，看不到团队会话；超级管理员可看团队会话')
+          # ---- 密码规则：新密码至少 8 位、字母加数字；连续输错 5 次锁定 15 分钟；管理员重置密码可解锁 ----
+          def rawreq(method, path, body, headers=None):
+              req = urllib.request.Request(BASE + path, method=method, headers=headers or H, data=json.dumps(body).encode())
+              return json.load(urllib.request.urlopen(req))
+          def login_as(u, p):
+              return rawreq('POST', '/system/auth/login', {'username': u, 'password': p},
+                            {'tenant-id': '1', 'Content-Type': 'application/json'})
+          for bad in ['abc123', 'abcdefgh', '12345678']:
+              r = rawreq('POST', '/system/user/create', {'username': 'weakpw', 'nickname': '弱密码', 'password': bad})
+              assert r['code'] != 0 and '字母和数字' in r['msg'], (bad, r)
+          lid = call('POST', '/system/user/create', {'username': 'locktest', 'nickname': '锁定测试', 'password': 'Lock1test'})
+          r = rawreq('PUT', '/system/user/update-password', {'id': lid, 'password': 'short1'})
+          assert r['code'] != 0 and '字母和数字' in r['msg'], r
+          codes = [login_as('locktest', 'Wrong1pass')['code'] for _ in range(5)]
+          assert codes == [1002000000, 1002000000, 1002000003, 1002000003, 1002000002], codes
+          r = login_as('locktest', 'Lock1test')
+          assert r['code'] == 1002000002 and '分钟' in r['msg'], f'锁定期间密码正确也不能登录: {r}'
+          r = login_as('LockTest', 'Lock1test')
+          assert r['code'] == 1002000002, f'锁定不区分账号大小写: {r}'
+          call('PUT', '/system/user/update-password', {'id': lid, 'password': 'Lock2test'})
+          r = login_as('locktest', 'Lock2test')
+          assert r['code'] == 0, f'管理员重置密码后应立即解锁: {r}'
+          assert login_as('nobodyhere', 'Wrong1pass')['code'] == 1002000000, '不存在的账号也按普通失败提示'
+          r = login_as('locktest', 'Wrong1pass'); assert r['code'] == 1002000000, r
+          assert login_as('locktest', 'Lock2test')['code'] == 0
+          assert [login_as('locktest', 'Wrong1pass')['code'] for _ in range(2)] == [1002000000, 1002000000], '登录成功后失败次数清零'
+          call('DELETE', f'/system/user/delete?id={lid}')
+          print('密码规则：弱密码被拒绝；连续输错 5 次锁定，锁定期间正确密码也不能登录；管理员重置密码解锁；登录成功清零')
 
           # ---- AI 工作报告 ----
           today = time.strftime('%Y-%m-%d')

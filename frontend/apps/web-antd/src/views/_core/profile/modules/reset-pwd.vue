@@ -7,6 +7,7 @@ import { message } from 'ant-design-vue';
 
 import { useVbenForm, z } from '#/adapter/form';
 import { updateUserPassword } from '#/api/system/user/profile';
+import { PASSWORD_REGEX, PASSWORD_TIP } from '#/utils/password';
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {
@@ -18,9 +19,9 @@ const [Form, formApi] = useVbenForm({
       fieldName: 'oldPassword',
       label: '旧密码',
       rules: z
-        .string({ message: '请输入密码' })
-        .min(5, '密码长度不能少于 5 个字符')
-        .max(20, '密码长度不能超过 20 个字符'),
+        .string({ message: '请输入旧密码' })
+        .min(1, '请输入旧密码')
+        .max(64, '密码长度不能超过 64 个字符'),
     },
     {
       component: 'InputPassword',
@@ -28,8 +29,7 @@ const [Form, formApi] = useVbenForm({
         rules(values) {
           return z
             .string({ message: '请输入新密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .regex(PASSWORD_REGEX, PASSWORD_TIP)
             .refine(
               (value) => value !== values.oldPassword,
               '新旧密码不能相同',
@@ -47,8 +47,7 @@ const [Form, formApi] = useVbenForm({
         rules(values) {
           return z
             .string({ message: '请输入确认密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .min(1, '请输入确认密码')
             .refine(
               (value) => value === values.newPassword,
               '新密码和确认密码不一致',
