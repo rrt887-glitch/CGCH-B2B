@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.system.controller.admin.user.vo.user;
 
+import cn.iocoder.yudao.module.system.enums.PasswordPolicy;
+import jakarta.validation.constraints.Pattern;
 import cn.hutool.core.util.ObjectUtil;
 import cn.iocoder.yudao.framework.common.validation.Mobile;
 import cn.iocoder.yudao.module.system.framework.operatelog.core.DeptParseFunction;
@@ -10,7 +12,6 @@ import com.mzt.logapi.starter.annotation.DiffLogField;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.Data;
-import org.hibernate.validator.constraints.Length;
 
 import java.util.Set;
 
@@ -67,7 +68,7 @@ public class UserSaveReqVO {
     // ========== 仅【创建】时，需要传递的字段 ==========
 
     @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "123456")
-    @Length(min = 4, max = 16, message = "密码长度为 4-16 位")
+    @Pattern(regexp = PasswordPolicy.REGEX, message = PasswordPolicy.MESSAGE)
     private String password;
 
     @AssertTrue(message = "密码不能为空")

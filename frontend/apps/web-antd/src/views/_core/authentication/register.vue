@@ -17,6 +17,7 @@ import {
   getTenantSimpleList,
 } from '#/api/core/auth';
 import { useAuthStore } from '#/store';
+import { PASSWORD_REGEX, PASSWORD_TIP } from '#/utils/password';
 
 defineOptions({ name: 'Register' });
 
@@ -161,7 +162,9 @@ const formSchema = computed((): VbenFormSchema[] => {
           strengthText: () => $t('authentication.passwordStrength'),
         };
       },
-      rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
+      rules: z
+        .string({ message: $t('authentication.passwordTip') })
+        .regex(PASSWORD_REGEX, { message: PASSWORD_TIP }),
     },
     {
       component: 'VbenInputPassword',

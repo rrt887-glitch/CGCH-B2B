@@ -31,6 +31,10 @@ import com.anji.captcha.model.vo.CaptchaVO;
 import com.anji.captcha.service.CaptchaService;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.yudao.module.system.enums.PasswordPolicy;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import java.util.concurrent.TimeUnit;
 import jakarta.validation.Validator;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +60,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     @Resource
     private AdminUserService userService;
     @Resource
+    private StringRedisTemplate stringRedisTemplate;
+    @Resource
     private LoginLogService loginLogService;
     @Resource
     private OAuth2TokenService oauth2TokenService;
@@ -80,16 +86,20 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     @Override
     public AdminUserDO authenticate(String username, String password) {
         final LoginLogTypeEnum logTypeEnum = LoginLogTypeEnum.LOGIN_USERNAME;
+        // 连续输错过多，先锁定一段时间（账号不存在也计数，避免借此探测哪些账号存在）
+        String failKey = loginFailKey(username);
+        validateNotLocked(failKey);
         // 校验账号是否存在
         AdminUserDO user = userService.getUserByUsername(username);
         if (user == null) {
             createLoginLog(null, username, logTypeEnum, LoginResultEnum.BAD_CREDENTIALS);
-            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+            throw loginFailed(failKey);
         }
         if (!userService.isPasswordMatch(password, user.getPassword())) {
             createLoginLog(user.getId(), username, logTypeEnum, LoginResultEnum.BAD_CREDENTIALS);
-            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+            throw loginFailed(failKey);
         }
+        clearLoginFailures(failKey);
         // 校验是否禁用
         validateUserStatus(user, username, logTypeEnum);
         return user;
@@ -310,4 +320,60 @@ public class AdminAuthServiceImpl implements AdminAuthService {
 
         userService.updateUserPassword(userByMobile.getId(), reqVO.getPassword());
     }
+
+    // ========== 登录失败锁定 ==========
+
+    private static String loginFailKey(String username) {
+        return PasswordPolicy.loginFailKey(TenantContextHolder.getTenantId(), username);
+    }
+
+    private void validateNotLocked(String failKey) {
+        if (stringRedisTemplate == null) {
+            return;
+        }
+        try {
+            String v = stringRedisTemplate.opsForValue().get(failKey);
+            if (v != null && Integer.parseInt(v) >= PasswordPolicy.MAX_LOGIN_FAILURES) {
+                Long ttl = stringRedisTemplate.getExpire(failKey, TimeUnit.MINUTES);
+                long minutes = ttl == null || ttl < 1 ? 1 : ttl;
+                throw exception(AUTH_LOGIN_LOCKED, minutes);
+            }
+        } catch (NumberFormatException | org.springframework.dao.DataAccessException e) {
+            log.warn("[validateNotLocked][读取登录失败次数异常] {}", e.getMessage());
+        }
+    }
+
+    /** 记一次失败；达到上限时直接提示已锁定，否则提示还剩几次 */
+    private RuntimeException loginFailed(String failKey) {
+        if (stringRedisTemplate == null) {
+            return exception(AUTH_LOGIN_BAD_CREDENTIALS);
+        }
+        try {
+            Long n = stringRedisTemplate.opsForValue().increment(failKey);
+            stringRedisTemplate.expire(failKey, PasswordPolicy.LOCK_MINUTES, TimeUnit.MINUTES);
+            long count = n == null ? 1 : n;
+            if (count >= PasswordPolicy.MAX_LOGIN_FAILURES) {
+                return exception(AUTH_LOGIN_LOCKED, PasswordPolicy.LOCK_MINUTES);
+            }
+            long left = PasswordPolicy.MAX_LOGIN_FAILURES - count;
+            if (left <= 2) {
+                return exception(AUTH_LOGIN_BAD_CREDENTIALS_LEFT, left);
+            }
+        } catch (org.springframework.dao.DataAccessException e) {
+            log.warn("[loginFailed][记录登录失败次数异常] {}", e.getMessage());
+        }
+        return exception(AUTH_LOGIN_BAD_CREDENTIALS);
+    }
+
+    private void clearLoginFailures(String failKey) {
+        if (stringRedisTemplate == null) {
+            return;
+        }
+        try {
+            stringRedisTemplate.delete(failKey);
+        } catch (org.springframework.dao.DataAccessException e) {
+            log.warn("[clearLoginFailures][清除登录失败次数异常] {}", e.getMessage());
+        }
+    }
+
 }

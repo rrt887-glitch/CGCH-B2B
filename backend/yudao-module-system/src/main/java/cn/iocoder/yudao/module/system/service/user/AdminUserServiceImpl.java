@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.system.service.user;
 
+import cn.iocoder.yudao.module.system.enums.PasswordPolicy;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjUtil;
@@ -72,6 +73,8 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     @Resource
     private AdminUserMapper userMapper;
+    @Resource
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
 
     @Resource
     private DeptService deptService;
@@ -252,6 +255,8 @@ public class AdminUserServiceImpl implements AdminUserService {
         updateObj.setId(id);
         updateObj.setPassword(encodePassword(password)); // 加密密码
         userMapper.updateById(updateObj);
+        // 管理员重置密码后，顺便解除因输错密码造成的临时锁定
+        unlockLogin(user);
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("user", user);
@@ -636,6 +641,18 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     private String encodePassword(String password) {
         return passwordEncoder.encode(password);
+    }
+
+
+    private void unlockLogin(AdminUserDO user) {
+        if (stringRedisTemplate == null || user == null) {
+            return;
+        }
+        try {
+            stringRedisTemplate.delete(PasswordPolicy.loginFailKey(user.getTenantId(), user.getUsername()));
+        } catch (org.springframework.dao.DataAccessException e) {
+            log.warn("[unlockLogin][解除登录锁定异常] {}", e.getMessage());
+        }
     }
 
 }
