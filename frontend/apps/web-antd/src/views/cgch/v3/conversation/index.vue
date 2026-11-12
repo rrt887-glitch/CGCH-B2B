@@ -15,7 +15,11 @@ import { useUserStore } from '@vben/stores';
 import { Avatar, Badge, Empty, Spin } from 'ant-design-vue';
 
 import { getMailAccountList } from '#/api/channel/mail';
-import { getWaAccountList, getWaConversationPage, getWaInboxCounts } from '#/api/channel/whatsapp';
+import {
+  getWaAccountList,
+  getWaConversationPage,
+  getWaInboxCounts,
+} from '#/api/channel/whatsapp';
 import MailWorkbench from '#/views/cgch/channel/mail/index.vue';
 import ImWorkbench from '#/views/cgch/channel/im/index.vue';
 import { CHANNEL_ICONS } from '#/assets/channel-icons';
@@ -27,6 +31,7 @@ const router = useRouter();
 const userStore = useUserStore();
 
 const loading = ref(true);
+const filtersOpen = ref(false);
 const waAccounts = ref<ChannelWaApi.Account[]>([]);
 const mailAccounts = ref<ChannelMailApi.Account[]>([]);
 
@@ -38,7 +43,8 @@ const counts = ref<ChannelWaApi.InboxCounts>();
 async function loadCounts() {
   counts.value = await getWaInboxCounts().catch(() => counts.value);
 }
-const unreadOf = (id?: number) => (id === undefined ? 0 : counts.value?.unreadByAccount?.[id] ?? 0);
+const unreadOf = (id?: number) =>
+  id === undefined ? 0 : (counts.value?.unreadByAccount?.[id] ?? 0);
 let countTimer: ReturnType<typeof setInterval> | undefined;
 onBeforeUnmount(() => countTimer && clearInterval(countTimer));
 function pickView(v: 'mine' | 'team') {
@@ -59,37 +65,72 @@ const grade = ref('');
 /** 客户等级 A–D 对应 crm_customer_level 字典值 1–4 */
 const LEVEL: Record<string, number> = { A: 1, B: 2, C: 3, D: 4 };
 
-const PLATFORM: Record<string, string> = { whatsapp: 'WhatsApp', messenger: 'Facebook', instagram: 'Instagram', web: '官网IM', youtube: 'YouTube', tiktok: 'TikTok' };
-const imLabel = (a: ChannelWaApi.Account) => a.displayPhone || a.name || a.phoneNumberId;
+const PLATFORM: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  messenger: 'Facebook',
+  instagram: 'Instagram',
+  web: '官网IM',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+};
+const imLabel = (a: ChannelWaApi.Account) =>
+  a.displayPhone || a.name || a.phoneNumberId;
 /** 账号前面的渠道图标（与原网站一致） */
-const IM_ICON: Record<string, string> = { whatsapp: 'whatsapp', messenger: 'messenger', instagram: 'instagram', web: 'im', youtube: 'youtube', tiktok: 'tiktok' };
-const imIcon = (a: ChannelWaApi.Account) => CHANNEL_ICONS[IM_ICON[a.platform || 'whatsapp'] ?? 'whatsapp'];
-const mailIcon = (m: ChannelMailApi.Account) => CHANNEL_ICONS[m.provider || 'custom'] ?? CHANNEL_ICONS.custom;
+const IM_ICON: Record<string, string> = {
+  whatsapp: 'whatsapp',
+  messenger: 'messenger',
+  instagram: 'instagram',
+  web: 'im',
+  youtube: 'youtube',
+  tiktok: 'tiktok',
+};
+const imIcon = (a: ChannelWaApi.Account) =>
+  CHANNEL_ICONS[IM_ICON[a.platform || 'whatsapp'] ?? 'whatsapp'];
+const mailIcon = (m: ChannelMailApi.Account) =>
+  CHANNEL_ICONS[m.provider || 'custom'] ?? CHANNEL_ICONS.custom;
 /** 自己没有号码时，可能有同事转交过来的会话 */
 const hasTransferred = ref(false);
-const showIm = computed(() => waAccounts.value.length > 0 || hasTransferred.value);
+const showIm = computed(
+  () => waAccounts.value.length > 0 || hasTransferred.value,
+);
 const hasAny = computed(() => showIm.value || mailAccounts.value.length > 0);
-const viewKey = computed(() => `${selected.value.kind}-${selected.value.id ?? 'all'}-${view.value}`);
+const viewKey = computed(
+  () => `${selected.value.kind}-${selected.value.id ?? 'all'}-${view.value}`,
+);
 
 function pick(kind: 'im' | 'mail', id?: number) {
   openId.value = undefined;
   selected.value = { kind, id };
+  filtersOpen.value = false;
 }
 
-const avatar = computed(() => userStore.userInfo?.avatar || preferences.app.defaultAvatar);
+const avatar = computed(
+  () => userStore.userInfo?.avatar || preferences.app.defaultAvatar,
+);
 
 onMounted(async () => {
   try {
-    [waAccounts.value, mailAccounts.value] = await Promise.all([getWaAccountList(), getMailAccountList()]);
+    [waAccounts.value, mailAccounts.value] = await Promise.all([
+      getWaAccountList(),
+      getMailAccountList(),
+    ]);
     if (waAccounts.value.length === 0) {
-      hasTransferred.value = (await getWaConversationPage({ pageNo: 1, pageSize: 1 }).catch(() => ({ total: 0 }))).total > 0;
+      hasTransferred.value =
+        (
+          await getWaConversationPage({ pageNo: 1, pageSize: 1 }).catch(() => ({
+            total: 0,
+          }))
+        ).total > 0;
     }
   } finally {
     loading.value = false;
   }
   // 从看板、通知跳转过来：?channel=mail|whatsapp&ref=编号
   const refId = Number(route.query.ref);
-  if (route.query.channel === 'mail' || (!showIm.value && mailAccounts.value.length)) {
+  if (
+    route.query.channel === 'mail' ||
+    (!showIm.value && mailAccounts.value.length)
+  ) {
     selected.value = { kind: 'mail' };
   }
   if (refId) openId.value = refId;
@@ -99,7 +140,25 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="v3-conv">
+  <div class="v3-conv" @keydown.esc="filtersOpen = false">
+    <div class="inbox-toolbar">
+      <button
+        type="button"
+        :aria-expanded="filtersOpen"
+        @click="filtersOpen = !filtersOpen"
+      >
+        收件箱与筛选 {{ filtersOpen ? '⌃' : '⌄' }}</button
+      ><span
+        >{{
+          selected.kind === 'mail'
+            ? '邮件'
+            : view === 'team'
+              ? '团队会话'
+              : '我的会话'
+        }}
+        · {{ grade ? `${grade} 类客户` : '全部等级' }}</span
+      >
+    </div>
     <Spin :spinning="loading" wrapper-class-name="h-full">
       <div v-if="!loading && !hasAny" class="v3-conv__empty">
         <Empty description="还没有接入任何渠道账号">
@@ -108,15 +167,23 @@ onMounted(async () => {
       </div>
 
       <div v-else class="v3-conv__body">
-        <aside class="v3-conv__side">
+        <aside v-show="filtersOpen" class="v3-conv__side">
           <div class="flex items-center gap-2 px-3 py-3">
             <Avatar :src="avatar" :size="24" />
             <span class="truncate font-semibold">会话</span>
-            <span class="ml-auto truncate text-xs text-[#86868B]">{{ userStore.userInfo?.nickname }}</span>
+            <span class="ml-auto truncate text-xs text-[#86868B]">{{
+              userStore.userInfo?.nickname
+            }}</span>
           </div>
 
           <div v-if="showIm" class="v3-conv__group">
-            <div class="v3-conv__item" :class="{ on: selected.kind === 'im' && !selected.id && view === 'mine' }" @click="pickView('mine')">
+            <div
+              class="v3-conv__item"
+              :class="{
+                on: selected.kind === 'im' && !selected.id && view === 'mine',
+              }"
+              @click="pickView('mine')"
+            >
               <span class="flex-1">我的会话</span>
               <span class="v3-conv__count">{{ counts?.open ?? '' }}</span>
             </div>
@@ -124,7 +191,9 @@ onMounted(async () => {
             <div
               v-if="counts?.teamOpen != null"
               class="v3-conv__item"
-              :class="{ on: selected.kind === 'im' && !selected.id && view === 'team' }"
+              :class="{
+                on: selected.kind === 'im' && !selected.id && view === 'team',
+              }"
               @click="pickView('team')"
             >
               <span class="flex-1">团队会话</span>
@@ -139,17 +208,35 @@ onMounted(async () => {
               :key="`im-${a.id}`"
               class="v3-conv__item v3-conv__item--sub"
               :class="{ on: selected.kind === 'im' && selected.id === a.id }"
-              @click="view = 'mine'; pick('im', a.id)"
+              @click="
+                view = 'mine';
+                pick('im', a.id);
+              "
             >
-              <img :src="imIcon(a)" :alt="PLATFORM[a.platform || 'whatsapp']" class="v3-conv__icon" />
-              <span class="flex-1 truncate" :title="`${PLATFORM[a.platform || 'whatsapp']} · ${imLabel(a)}`">{{ a.name || imLabel(a) }}</span>
-              <span v-if="unreadOf(a.id)" class="v3-conv__badge">{{ unreadOf(a.id) }}</span>
+              <img
+                :src="imIcon(a)"
+                :alt="PLATFORM[a.platform || 'whatsapp']"
+                class="v3-conv__icon"
+              />
+              <span
+                class="flex-1 truncate"
+                :title="`${PLATFORM[a.platform || 'whatsapp']} · ${imLabel(a)}`"
+                >{{ a.name || imLabel(a) }}</span
+              >
+              <span v-if="unreadOf(a.id)" class="v3-conv__badge">{{
+                unreadOf(a.id)
+              }}</span>
             </div>
           </div>
 
           <div v-if="mailAccounts.length" class="v3-conv__label">邮箱</div>
           <div class="v3-conv__group">
-            <div v-if="mailAccounts.length" class="v3-conv__item" :class="{ on: selected.kind === 'mail' && !selected.id }" @click="pick('mail')">
+            <div
+              v-if="mailAccounts.length"
+              class="v3-conv__item"
+              :class="{ on: selected.kind === 'mail' && !selected.id }"
+              @click="pick('mail')"
+            >
               全部邮件
             </div>
             <div
@@ -160,8 +247,14 @@ onMounted(async () => {
               @click="pick('mail', m.id)"
             >
               <img :src="mailIcon(m)" alt="" class="v3-conv__icon" />
-              <span class="flex-1 truncate" :title="m.email">{{ m.email }}</span>
-              <Badge v-if="m.unrepliedCount" :count="m.unrepliedCount" size="small" />
+              <span class="flex-1 truncate" :title="m.email">{{
+                m.email
+              }}</span>
+              <Badge
+                v-if="m.unrepliedCount"
+                :count="m.unrepliedCount"
+                size="small"
+              />
             </div>
           </div>
 
@@ -191,7 +284,13 @@ onMounted(async () => {
             :view="view"
             @changed="loadCounts"
           />
-          <MailWorkbench v-else :key="viewKey" embedded :account-id="selected.id" :open-id="openId" />
+          <MailWorkbench
+            v-else
+            :key="viewKey"
+            embedded
+            :account-id="selected.id"
+            :open-id="openId"
+          />
         </section>
       </div>
     </Spin>
@@ -264,7 +363,7 @@ onMounted(async () => {
 }
 
 .v3-conv__item:hover {
-  color: #1D1D1F;
+  color: #1d1d1f;
   background: #f2f2f7;
 }
 
@@ -381,5 +480,53 @@ onMounted(async () => {
     flex: 1;
     min-height: 0;
   }
+}
+</style>
+
+<style scoped>
+.v3-conv {
+  position: relative;
+  height: 100%;
+  padding-top: 42px;
+}
+.inbox-toolbar {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 34px;
+  padding: 0 6px;
+}
+.inbox-toolbar button {
+  border: 0;
+  background: #ffffff9e;
+  border-radius: 99px;
+  padding: 5px 14px;
+  color: #007aff;
+  cursor: pointer;
+}
+.inbox-toolbar span {
+  font-size: 12px;
+  color: #86868b;
+}
+.v3-conv__side {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  width: 240px;
+  max-height: calc(100% - 42px);
+  z-index: 20;
+  border: 1px solid #e5e5ea;
+  box-shadow: 0 15px 45px #0002;
+}
+.v3-conv__body {
+  gap: 0;
+}
+.v3-conv__main {
+  height: 100%;
+  border-radius: 22px;
+  overflow: hidden;
+  background: white;
 }
 </style>

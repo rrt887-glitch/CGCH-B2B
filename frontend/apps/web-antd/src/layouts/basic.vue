@@ -21,6 +21,9 @@ const userStore = useUserStore();
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
 const route = useRoute();
+const appleWorkspace = computed(() =>
+  ['/v3/dashboard', '/v3/conversation'].includes(route.path),
+);
 
 interface NavItem {
   key: string;
@@ -30,18 +33,40 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { key: 'dashboard', label: '看板', icon: 'lucide:chart-no-axes-combined', path: '/v3/dashboard' },
-  { key: 'conversation', label: '会话', icon: 'lucide:message-circle-more', path: '/v3/conversation' },
-  { key: 'crm', label: 'CRM', icon: 'lucide:user-round-search', path: '/v3/crm' },
+  {
+    key: 'dashboard',
+    label: '看板',
+    icon: 'lucide:chart-no-axes-combined',
+    path: '/v3/dashboard',
+  },
+  {
+    key: 'conversation',
+    label: '会话',
+    icon: 'lucide:message-circle-more',
+    path: '/v3/conversation',
+  },
+  {
+    key: 'crm',
+    label: 'CRM',
+    icon: 'lucide:user-round-search',
+    path: '/v3/crm',
+  },
   { key: 'agent', label: '智能体', icon: 'lucide:bot', path: '/v3/agent' },
   { key: 'channel', label: '渠道', icon: 'lucide:cable', path: '/v3/channel' },
 ];
-const SETTINGS: NavItem = { key: 'settings', label: '设置', icon: 'lucide:settings', path: '/v3/settings' };
+const SETTINGS: NavItem = {
+  key: 'settings',
+  label: '设置',
+  icon: 'lucide:settings',
+  path: '/v3/settings',
+};
 
 /** 当前所在模块：按路径前缀判断，CRM 的客户/线索详情等页面也算 CRM */
 const activeKey = computed(() => {
   const p = route.path;
-  const hit = [...NAV, SETTINGS].find((n) => p === n.path || p.startsWith(`${n.path}/`));
+  const hit = [...NAV, SETTINGS].find(
+    (n) => p === n.path || p.startsWith(`${n.path}/`),
+  );
   if (hit) return hit.key;
   if (p.startsWith('/crm')) return 'crm';
   if (p.startsWith('/system') || p.startsWith('/profile')) return 'settings';
@@ -52,8 +77,12 @@ function go(item: NavItem) {
   if (route.path !== item.path) router.push(item.path);
 }
 
-const avatar = computed(() => userStore.userInfo?.avatar || preferences.app.defaultAvatar);
-const nickname = computed(() => userStore.userInfo?.nickname || userStore.userInfo?.username || '');
+const avatar = computed(
+  () => userStore.userInfo?.avatar || preferences.app.defaultAvatar,
+);
+const nickname = computed(
+  () => userStore.userInfo?.nickname || userStore.userInfo?.username || '',
+);
 
 function onUserMenu({ key }: { key: number | string }) {
   if (key === 'profile') router.push({ name: 'Profile' });
@@ -62,10 +91,16 @@ function onUserMenu({ key }: { key: number | string }) {
 </script>
 
 <template>
-  <div class="cgch-shell">
+  <div class="cgch-shell" :class="{ 'is-apple': appleWorkspace }">
     <aside class="cgch-rail">
-      <div class="cgch-rail__logo" title="草根出海" @click="router.push('/v3/dashboard')">
-        <img src="/brand/logo.png" alt="草根出海" />
+      <div
+        class="cgch-rail__logo"
+        title="草根出海"
+        @click="router.push('/v3/dashboard')"
+      >
+        <img src="/brand/logo.png" alt="草根出海" /><b v-if="appleWorkspace"
+          >草根出海</b
+        >
       </div>
       <nav class="cgch-rail__nav">
         <button
@@ -77,7 +112,9 @@ function onUserMenu({ key }: { key: number | string }) {
           @click="go(item)"
         >
           <IconifyIcon :icon="item.icon" class="cgch-rail__icon" />
-          <span>{{ item.label }}</span>
+          <span>{{
+            appleWorkspace && item.key === 'dashboard' ? '今天' : item.label
+          }}</span>
         </button>
       </nav>
       <div class="cgch-rail__bottom">
@@ -93,14 +130,23 @@ function onUserMenu({ key }: { key: number | string }) {
         <Dropdown placement="topLeft" :trigger="['click']">
           <Tooltip :title="nickname" placement="right">
             <button type="button" class="cgch-rail__avatar">
-              <Avatar :src="avatar" :size="34">{{ nickname.slice(0, 1) }}</Avatar>
+              <Avatar :src="avatar" :size="34">{{
+                nickname.slice(0, 1)
+              }}</Avatar
+              ><span v-if="appleWorkspace" class="rail-name">{{
+                nickname
+              }}</span>
             </button>
           </Tooltip>
           <template #overlay>
             <Menu @click="onUserMenu">
               <div class="px-3 py-2 text-xs text-gray-500">
-                <div class="text-sm font-medium text-gray-800">{{ nickname }}</div>
-                <div v-if="userStore.userInfo?.email">{{ userStore.userInfo?.email }}</div>
+                <div class="text-sm font-medium text-gray-800">
+                  {{ nickname }}
+                </div>
+                <div v-if="userStore.userInfo?.email">
+                  {{ userStore.userInfo?.email }}
+                </div>
               </div>
               <MenuItem key="profile">个人中心</MenuItem>
               <MenuItem key="logout">退出登录</MenuItem>
@@ -118,7 +164,10 @@ function onUserMenu({ key }: { key: number | string }) {
       </RouterView>
     </main>
 
-    <AuthenticationLoginExpiredModal v-model:open="accessStore.loginExpired" :avatar="avatar">
+    <AuthenticationLoginExpiredModal
+      v-model:open="accessStore.loginExpired"
+      :avatar="avatar"
+    >
       <LoginForm />
     </AuthenticationLoginExpiredModal>
   </div>
@@ -252,5 +301,113 @@ function onUserMenu({ key }: { key: number | string }) {
   height: 100vh;
   padding: 16px;
   overflow: auto;
+}
+</style>
+
+<style scoped>
+.is-apple {
+  gap: 14px;
+  padding: 14px 16px;
+  background:
+    radial-gradient(ellipse at 5% 0%, #dcecff, transparent 40%),
+    radial-gradient(ellipse at 95% 95%, #f7e1ee, transparent 38%), #f2f2f7;
+}
+.is-apple .cgch-rail {
+  flex-basis: 220px;
+  align-items: stretch;
+  padding: 18px 10px 12px;
+  border: 1px solid #ffffffcc;
+  border-radius: 22px;
+  background: #ffffff9e;
+  box-shadow: 0 8px 30px #0000000a;
+  backdrop-filter: blur(30px) saturate(180%);
+}
+.is-apple .cgch-rail__logo {
+  width: auto;
+  justify-content: flex-start;
+  gap: 10px;
+  margin: 0 8px 28px;
+}
+.is-apple .cgch-rail__logo img {
+  width: 29px;
+  height: 29px;
+}
+.is-apple .cgch-rail__logo b {
+  font-size: 15px;
+  white-space: nowrap;
+}
+.is-apple .cgch-rail__nav {
+  align-items: stretch;
+  gap: 9px;
+}
+.is-apple .cgch-rail__item {
+  width: 100%;
+  height: 38px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 11px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.is-apple .cgch-rail__item.is-active {
+  color: #1d1d1f;
+  background: #78788024;
+  box-shadow: none;
+}
+.is-apple .cgch-rail__icon {
+  width: 18px;
+  height: 18px;
+  color: #007aff;
+}
+.is-apple .cgch-rail__bottom {
+  align-items: stretch;
+}
+.is-apple .cgch-rail__avatar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+}
+.rail-name {
+  font-size: 12px;
+}
+.is-apple .cgch-main {
+  height: 100%;
+  padding: 0;
+  min-height: 0;
+}
+.is-apple {
+  --vben-content-height: calc(100vh - 28px);
+}
+@media (width <= 1200px) {
+  .is-apple .cgch-rail {
+    flex-basis: 172px;
+  }
+}
+@media (width <= 760px) {
+  .is-apple {
+    padding: 8px;
+    gap: 8px;
+  }
+  .is-apple .cgch-rail {
+    flex-basis: 56px;
+    padding: 12px 4px;
+  }
+  .is-apple .cgch-rail__item {
+    justify-content: center;
+    padding: 0;
+  }
+  .is-apple .cgch-rail__item span,
+  .is-apple .cgch-rail__logo b,
+  .rail-name {
+    display: none;
+  }
+  .is-apple .cgch-rail__logo {
+    margin: 0 auto 20px;
+  }
+  .is-apple .cgch-rail__avatar {
+    padding: 5px;
+  }
 }
 </style>
