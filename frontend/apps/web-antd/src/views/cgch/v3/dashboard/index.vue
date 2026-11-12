@@ -2,7 +2,6 @@
 /**
  * 看板 · 数据分析：流量占比、AI 接待表现、商业转化，以及 AI 需要人工支持的事项。
  */
-import AppleToday from './apple-today.vue';
 import type { Dayjs } from 'dayjs';
 
 import type { ChannelDashboardV3Api } from '#/api/channel/dashboard';
@@ -10,14 +9,7 @@ import type { ChannelDashboardV3Api } from '#/api/channel/dashboard';
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import {
-  Empty,
-  Modal,
-  RangePicker,
-  Segmented,
-  Spin,
-  Tooltip,
-} from 'ant-design-vue';
+import { Empty, Modal, RangePicker, Segmented, Spin, Tooltip } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import { getDashboardV3 } from '#/api/channel/dashboard';
@@ -33,57 +25,26 @@ const TABS = [
   { label: '经营分析', value: 'business' },
   { label: '客户概览', value: 'customers' },
 ];
-const BusinessAnalysis = defineAsyncComponent(
-  () => import('#/views/cgch/board/overview/index.vue'),
-);
-const CustomerOverview = defineAsyncComponent(
-  () => import('#/views/cgch/board/customer-overview/index.vue'),
-);
-const tab = ref(
-  TABS.some((t) => t.value === route.query.tab)
-    ? String(route.query.tab)
-    : 'data',
-);
-watch(tab, (v) =>
-  router.replace({
-    query: { ...route.query, tab: v === 'data' ? undefined : v },
-  }),
-);
+const BusinessAnalysis = defineAsyncComponent(() => import('#/views/cgch/board/overview/index.vue'));
+const CustomerOverview = defineAsyncComponent(() => import('#/views/cgch/board/customer-overview/index.vue'));
+const tab = ref(TABS.some((t) => t.value === route.query.tab) ? String(route.query.tab) : 'data');
+watch(tab, (v) => router.replace({ query: { ...route.query, tab: v === 'data' ? undefined : v } }));
 const range = ref<[Dayjs, Dayjs]>([dayjs(), dayjs()]);
 const loading = ref(false);
-const detailsOpen = ref(false);
-function preset(days: number) {
-  range.value = [dayjs().subtract(days - 1, 'day'), dayjs()];
-  load();
-}
-const pendingCount = computed(
-  () =>
-    (data.value?.support.im.length ?? 0) +
-    (data.value?.support.mail.length ?? 0),
-);
 const data = ref<ChannelDashboardV3Api.Overview>();
 
 async function load() {
   loading.value = true;
   try {
-    data.value = await getDashboardV3(
-      range.value[0].format('YYYY-MM-DD'),
-      range.value[1].format('YYYY-MM-DD'),
-    );
+    data.value = await getDashboardV3(range.value[0].format('YYYY-MM-DD'), range.value[1].format('YYYY-MM-DD'));
   } finally {
     loading.value = false;
   }
 }
 
-const pct = (v?: null | number) =>
-  v === null || v === undefined
-    ? '—'
-    : `${(v * 100).toFixed(v * 100 >= 10 || v === 0 ? 0 : 1)}%`;
-const pct2 = (v?: null | number) =>
-  v === null || v === undefined ? '—' : `${(v * 100).toFixed(2)}%`;
-const updated = computed(() =>
-  data.value ? dayjs(data.value.updateTime).format('MM-DD HH:mm') : '',
-);
+const pct = (v?: null | number) => (v === null || v === undefined ? '—' : `${(v * 100).toFixed(v * 100 >= 10 || v === 0 ? 0 : 1)}%`);
+const pct2 = (v?: null | number) => (v === null || v === undefined ? '—' : `${(v * 100).toFixed(2)}%`);
+const updated = computed(() => (data.value ? dayjs(data.value.updateTime).format('MM-DD HH:mm') : ''));
 
 // ===== 流量占比 =====
 const SEGMENTS = [
@@ -96,14 +57,8 @@ const total = computed(() => data.value?.traffic.total ?? 0);
 const share = (n: number) => (total.value ? n / total.value : 0);
 const segs = computed(() => {
   const t = data.value?.traffic;
-  const list: { color: string; key: string; label: string; value: number }[] =
-    SEGMENTS.map((s) => ({ ...s, value: share(t?.counts[s.key] ?? 0) }));
-  list.push({
-    key: 'unclassified',
-    label: '未分类咨询',
-    color: '#e4e8f2',
-    value: share(t?.unclassified ?? 0),
-  });
+  const list: { color: string; key: string; label: string; value: number }[] = SEGMENTS.map((s) => ({ ...s, value: share(t?.counts[s.key] ?? 0) }));
+  list.push({ key: 'unclassified', label: '未分类咨询', color: '#e4e8f2', value: share(t?.unclassified ?? 0) });
   return list;
 });
 /** 环形图：每段的 stroke-dasharray */
@@ -115,11 +70,7 @@ const arcs = computed(() => {
     .filter((s) => s.value > 0)
     .map((s) => {
       const len = s.value * CIRC;
-      const a = {
-        color: s.color,
-        dash: `${len} ${CIRC - len}`,
-        offset: -offset,
-      };
+      const a = { color: s.color, dash: `${len} ${CIRC - len}`, offset: -offset };
       offset += len;
       return a;
     });
@@ -131,29 +82,22 @@ const SPARK = 'M0 26 C 10 26, 14 4, 24 4 S 36 24, 46 24 L 120 24';
 
 // ===== 客户阶段漏斗：到达某阶段 = 当前阶段在它及之后的客户数 =====
 const funnel = computed(() => {
-  const counts = new Map(
-    (data.value?.stages ?? []).map((s) => [s.stage, s.count]),
-  );
+  const counts = new Map((data.value?.stages ?? []).map((s) => [s.stage, s.count]));
   const opts = stageOptions();
   const rows = opts.map((o) => ({
     label: String(o.label),
     value: Number(o.value),
     current: counts.get(Number(o.value)) ?? 0,
-    reached: [...counts.entries()]
-      .filter(([k]) => k >= Number(o.value))
-      .reduce((a, [, n]) => a + n, 0),
+    reached: [...counts.entries()].filter(([k]) => k >= Number(o.value)).reduce((a, [, n]) => a + n, 0),
   }));
   const top = rows[0]?.reached || 0;
   return rows.map((r, i) => ({
     ...r,
     width: top ? Math.max(4, (r.reached / top) * 100) : 4,
-    conv:
-      i > 0 && rows[i - 1]!.reached ? r.reached / rows[i - 1]!.reached : null,
+    conv: i > 0 && rows[i - 1]!.reached ? r.reached / rows[i - 1]!.reached : null,
   }));
 });
-const funnelTotal = computed(() =>
-  (data.value?.stages ?? []).reduce((a, s) => a + s.count, 0),
-);
+const funnelTotal = computed(() => (data.value?.stages ?? []).reduce((a, s) => a + s.count, 0));
 
 // ===== 需要支持 =====
 const supportTab = ref<'im' | 'mail'>('im');
@@ -168,14 +112,9 @@ const SUPPORT_TYPES = [
 ];
 const supportType = ref('all');
 const supportList = computed(() => data.value?.support[supportTab.value] ?? []);
-const typeCount = (k: string) =>
-  k === 'all'
-    ? supportList.value.length
-    : supportList.value.filter((i) => i.type === k).length;
+const typeCount = (k: string) => (k === 'all' ? supportList.value.length : supportList.value.filter((i) => i.type === k).length);
 const shownSupport = computed(() =>
-  supportType.value === 'all'
-    ? supportList.value
-    : supportList.value.filter((i) => i.type === supportType.value),
+  supportType.value === 'all' ? supportList.value : supportList.value.filter((i) => i.type === supportType.value),
 );
 const REASON_TEXT: Record<string, string> = {
   handoff: '转人工',
@@ -185,10 +124,7 @@ const REASON_TEXT: Record<string, string> = {
   window_closed: '超过 24 小时窗口',
 };
 function openItem(i: ChannelDashboardV3Api.SupportItem) {
-  router.push({
-    path: '/v3/conversation',
-    query: { channel: i.channel, ref: String(i.refId) },
-  });
+  router.push({ path: '/v3/conversation', query: { channel: i.channel, ref: String(i.refId) } });
 }
 
 onMounted(load);
@@ -196,408 +132,204 @@ onMounted(load);
 
 <template>
   <div class="v3-dash">
-    <div class="mb-2 px-1">
-      <Segmented v-model:value="tab" :options="TABS" />
-    </div>
+    <div class="mb-2 px-1"><Segmented v-model:value="tab" :options="TABS" /></div>
     <BusinessAnalysis v-if="tab === 'business'" />
     <CustomerOverview v-else-if="tab === 'customers'" />
     <template v-else>
-      <div class="v3-dash__bar">
-        <div class="today-heading">
-          <small>{{ dayjs().format('MM 月 DD 日') }}</small>
-          <h1>
-            你好，{{
-              pendingCount
-                ? `有 ${pendingCount} 件事等你处理`
-                : '开始今天的工作'
-            }}
-          </h1>
-        </div>
-        <div class="range-presets">
-          <button @click="preset(1)">今天</button
-          ><button @click="preset(7)">近 7 天</button
-          ><button @click="preset(30)">近 30 天</button>
-        </div>
-        <RangePicker
-          v-model:value="range"
-          :allow-clear="false"
-          size="small"
-          format="MM月DD日"
-          :disabled-date="(d: Dayjs) => d.isAfter(dayjs(), 'day')"
-          class="ml-3 w-56"
-          @change="load"
-        />
-        <span class="ml-auto text-xs text-gray-500">
-          数据更新于：{{ updated }}
-          <a class="ml-1" @click="load">刷新</a>
-        </span>
+    <div class="v3-dash__bar">
+      <span class="text-[28px] font-bold tracking-tight">数据分析</span>
+      <RangePicker
+        v-model:value="range"
+        :allow-clear="false"
+        size="small"
+        format="MM月DD日"
+        :disabled-date="(d: Dayjs) => d.isAfter(dayjs(), 'day')"
+        class="ml-3 w-56"
+        @change="load"
+      />
+      <span class="ml-auto text-xs text-gray-500">
+        数据更新于：{{ updated }}
+        <a class="ml-1" @click="load">刷新</a>
+      </span>
+    </div>
+
+    <Spin :spinning="loading">
+      <div class="v3-dash__cards">
+        <!-- 流量占比 -->
+        <section class="v3-card">
+          <div class="v3-card__title">流量占比 <span>来的是什么客户</span></div>
+          <div class="flex items-center gap-6 py-2">
+            <svg viewBox="0 0 140 140" class="size-36 shrink-0">
+              <circle cx="70" cy="70" :r="RADIUS" fill="none" stroke="#eef1f7" stroke-width="20" />
+              <circle
+                v-for="(a, i) in arcs"
+                :key="i"
+                cx="70"
+                cy="70"
+                :r="RADIUS"
+                fill="none"
+                :stroke="a.color"
+                stroke-width="20"
+                :stroke-dasharray="a.dash"
+                :stroke-dashoffset="a.offset"
+                transform="rotate(-90 70 70)"
+              />
+              <text x="70" y="70" text-anchor="middle" class="v3-donut__num">{{ pct(data?.traffic.effectiveRate ?? (total ? 0 : null)) }}</text>
+              <text x="70" y="88" text-anchor="middle" class="v3-donut__label">有效流量</text>
+            </svg>
+            <ul class="space-y-1 text-sm">
+              <li v-for="s in segs.slice(0, 4)" :key="s.key" class="flex items-center gap-2">
+                <span class="inline-block size-2 rounded-full" :style="{ background: s.color }"></span>
+                <span class="w-16 text-gray-600">{{ s.label }}</span>
+                <span>{{ total ? pct(s.value) : '0%' }}</span>
+              </li>
+            </ul>
+          </div>
+          <div class="v3-card__foot">
+            <span class="border-b border-dashed border-gray-300">未分类咨询 {{ total ? pct(share(data?.traffic.unclassified ?? 0)) : '0%' }}</span>
+            <span class="mx-3 text-gray-300">|</span>
+            <a class="text-gray-600" @click="trendOpen = true">有效流量趋势 →</a>
+          </div>
+        </section>
+
+        <!-- AI 接待表现 -->
+        <section class="v3-card v3-card--wide">
+          <div class="v3-card__title">AI 接待表现 <span>AI 干了多少，干得怎么样</span></div>
+          <div class="grid grid-cols-[1fr_2fr] gap-3">
+            <div class="v3-tile flex flex-col justify-between">
+              <div>
+                <div class="v3-tile__label">AI 回复总数</div>
+                <div class="v3-tile__value">{{ data?.ai.replies ?? 0 }}<small>条</small></div>
+              </div>
+              <div>
+                <div class="v3-tile__label">AI 完成任务数</div>
+                <div class="v3-tile__value">{{ data?.ai.tasks ?? 0 }}<small>个</small></div>
+              </div>
+              <div>
+                <div class="v3-tile__label">AI CRM 字段录入次数</div>
+                <div class="v3-tile__value">{{ data?.ai.crmWrites ?? 0 }}<small>次</small></div>
+              </div>
+            </div>
+            <div class="flex flex-col gap-3">
+              <div
+                v-for="m in [
+                  { label: 'AI 1 小时回复率', tip: '客户首条来信后 1 小时内由 AI 回复的咨询占比', v: data?.ai.replyIn1hRate },
+                  { label: 'AI 首响后 24 小时客户首回率', tip: 'AI 首次回复后 24 小时内客户再次来信的咨询占比', v: data?.ai.customerBack24hRate },
+                  { label: 'AI 多轮沟通率', tip: 'AI 与客户来回沟通两轮及以上的咨询占比', v: data?.ai.multiRoundRate },
+                ]"
+                :key="m.label"
+                class="v3-tile flex items-center justify-between"
+              >
+                <div>
+                  <Tooltip :title="m.tip"><div class="v3-tile__label">{{ m.label }}</div></Tooltip>
+                  <div class="v3-tile__value">{{ pct(m.v) }}</div>
+                </div>
+                <svg viewBox="0 0 120 30" class="h-8 w-32"><path :d="SPARK" fill="none" stroke="#0071E3" stroke-width="1.5" /></svg>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 商业转化 -->
+        <section class="v3-card">
+          <div class="v3-card__title">商业转化 <span>最终带来了多少生意</span></div>
+          <div class="flex flex-col gap-3">
+            <div class="v3-tile flex items-center justify-between">
+              <div>
+                <div class="v3-tile__label">新增线索量</div>
+                <div class="v3-tile__value">
+                  {{ data?.business.clues ?? 0 }}
+                  <small
+                    v-if="data && data.business.cluesChange !== null && data.business.cluesChange !== undefined"
+                    :class="data.business.cluesChange >= 0 ? 'text-green-600' : 'text-red-500'"
+                  >
+                    {{ data.business.cluesChange >= 0 ? '+' : '' }}{{ (data.business.cluesChange * 100).toFixed(1) }}%
+                  </small>
+                </div>
+              </div>
+              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#0071E3" stroke-width="1.5" /></svg>
+            </div>
+            <div class="v3-tile flex items-center justify-between">
+              <div>
+                <div class="v3-tile__label">询盘 → 报价</div>
+                <div class="v3-tile__value">{{ pct2(data?.business.inquiryToQuoteRate ?? 0) }}</div>
+              </div>
+              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#0071E3" stroke-width="1.5" /></svg>
+            </div>
+            <div class="v3-tile flex items-center justify-between">
+              <div>
+                <div class="v3-tile__label">商机 → 赢单</div>
+                <div class="v3-tile__value">{{ pct2(data?.business.businessToWinRate ?? 0) }}</div>
+              </div>
+              <svg viewBox="0 0 120 30" class="h-8 w-32"><path d="M0 18 L120 18" fill="none" stroke="#0071E3" stroke-width="1.5" /></svg>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <Spin :spinning="loading"
-        ><AppleToday
-          :data="data"
-          @open="openItem"
-          @details="detailsOpen = true"
-      /></Spin>
-      <details
-        :open="detailsOpen"
-        @toggle="detailsOpen = ($event.target as HTMLDetailsElement).open"
-      >
-        <summary class="details-toggle">详细分析与全部待办</summary>
-        <Spin :spinning="loading">
-          <div class="v3-dash__cards">
-            <!-- 流量占比 -->
-            <section class="v3-card">
-              <div class="v3-card__title">
-                流量占比 <span>来的是什么客户</span>
-              </div>
-              <div class="flex items-center gap-6 py-2">
-                <svg viewBox="0 0 140 140" class="size-36 shrink-0">
-                  <circle
-                    cx="70"
-                    cy="70"
-                    :r="RADIUS"
-                    fill="none"
-                    stroke="#eef1f7"
-                    stroke-width="20"
-                  />
-                  <circle
-                    v-for="(a, i) in arcs"
-                    :key="i"
-                    cx="70"
-                    cy="70"
-                    :r="RADIUS"
-                    fill="none"
-                    :stroke="a.color"
-                    stroke-width="20"
-                    :stroke-dasharray="a.dash"
-                    :stroke-dashoffset="a.offset"
-                    transform="rotate(-90 70 70)"
-                  />
-                  <text
-                    x="70"
-                    y="70"
-                    text-anchor="middle"
-                    class="v3-donut__num"
-                  >
-                    {{ pct(data?.traffic.effectiveRate ?? (total ? 0 : null)) }}
-                  </text>
-                  <text
-                    x="70"
-                    y="88"
-                    text-anchor="middle"
-                    class="v3-donut__label"
-                  >
-                    有效流量
-                  </text>
-                </svg>
-                <ul class="space-y-1 text-sm">
-                  <li
-                    v-for="s in segs.slice(0, 4)"
-                    :key="s.key"
-                    class="flex items-center gap-2"
-                  >
-                    <span
-                      class="inline-block size-2 rounded-full"
-                      :style="{ background: s.color }"
-                    ></span>
-                    <span class="w-16 text-gray-600">{{ s.label }}</span>
-                    <span>{{ total ? pct(s.value) : '0%' }}</span>
-                  </li>
-                </ul>
-              </div>
-              <div class="v3-card__foot">
-                <span class="border-b border-dashed border-gray-300"
-                  >未分类咨询
-                  {{
-                    total ? pct(share(data?.traffic.unclassified ?? 0)) : '0%'
-                  }}</span
-                >
-                <span class="mx-3 text-gray-300">|</span>
-                <a class="text-gray-600" @click="trendOpen = true"
-                  >有效流量趋势 →</a
-                >
-              </div>
-            </section>
-
-            <!-- AI 接待表现 -->
-            <section class="v3-card v3-card--wide">
-              <div class="v3-card__title">
-                AI 接待表现 <span>AI 干了多少，干得怎么样</span>
-              </div>
-              <div class="grid grid-cols-[1fr_2fr] gap-3">
-                <div class="v3-tile flex flex-col justify-between">
-                  <div>
-                    <div class="v3-tile__label">AI 回复总数</div>
-                    <div class="v3-tile__value">
-                      {{ data?.ai.replies ?? 0 }}<small>条</small>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="v3-tile__label">AI 完成任务数</div>
-                    <div class="v3-tile__value">
-                      {{ data?.ai.tasks ?? 0 }}<small>个</small>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="v3-tile__label">AI CRM 字段录入次数</div>
-                    <div class="v3-tile__value">
-                      {{ data?.ai.crmWrites ?? 0 }}<small>次</small>
-                    </div>
-                  </div>
-                </div>
-                <div class="flex flex-col gap-3">
-                  <div
-                    v-for="m in [
-                      {
-                        label: 'AI 1 小时回复率',
-                        tip: '客户首条来信后 1 小时内由 AI 回复的咨询占比',
-                        v: data?.ai.replyIn1hRate,
-                      },
-                      {
-                        label: 'AI 首响后 24 小时客户首回率',
-                        tip: 'AI 首次回复后 24 小时内客户再次来信的咨询占比',
-                        v: data?.ai.customerBack24hRate,
-                      },
-                      {
-                        label: 'AI 多轮沟通率',
-                        tip: 'AI 与客户来回沟通两轮及以上的咨询占比',
-                        v: data?.ai.multiRoundRate,
-                      },
-                    ]"
-                    :key="m.label"
-                    class="v3-tile flex items-center justify-between"
-                  >
-                    <div>
-                      <Tooltip :title="m.tip"
-                        ><div class="v3-tile__label">
-                          {{ m.label }}
-                        </div></Tooltip
-                      >
-                      <div class="v3-tile__value">{{ pct(m.v) }}</div>
-                    </div>
-                    <svg viewBox="0 0 120 30" class="h-8 w-32">
-                      <path
-                        :d="SPARK"
-                        fill="none"
-                        stroke="#0071E3"
-                        stroke-width="1.5"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <!-- 商业转化 -->
-            <section class="v3-card">
-              <div class="v3-card__title">
-                商业转化 <span>最终带来了多少生意</span>
-              </div>
-              <div class="flex flex-col gap-3">
-                <div class="v3-tile flex items-center justify-between">
-                  <div>
-                    <div class="v3-tile__label">新增线索量</div>
-                    <div class="v3-tile__value">
-                      {{ data?.business.clues ?? 0 }}
-                      <small
-                        v-if="
-                          data &&
-                          data.business.cluesChange !== null &&
-                          data.business.cluesChange !== undefined
-                        "
-                        :class="
-                          data.business.cluesChange >= 0
-                            ? 'text-green-600'
-                            : 'text-red-500'
-                        "
-                      >
-                        {{ data.business.cluesChange >= 0 ? '+' : ''
-                        }}{{ (data.business.cluesChange * 100).toFixed(1) }}%
-                      </small>
-                    </div>
-                  </div>
-                  <svg viewBox="0 0 120 30" class="h-8 w-32">
-                    <path
-                      d="M0 18 L120 18"
-                      fill="none"
-                      stroke="#0071E3"
-                      stroke-width="1.5"
-                    />
-                  </svg>
-                </div>
-                <div class="v3-tile flex items-center justify-between">
-                  <div>
-                    <div class="v3-tile__label">询盘 → 报价</div>
-                    <div class="v3-tile__value">
-                      {{ pct2(data?.business.inquiryToQuoteRate ?? 0) }}
-                    </div>
-                  </div>
-                  <svg viewBox="0 0 120 30" class="h-8 w-32">
-                    <path
-                      d="M0 18 L120 18"
-                      fill="none"
-                      stroke="#0071E3"
-                      stroke-width="1.5"
-                    />
-                  </svg>
-                </div>
-                <div class="v3-tile flex items-center justify-between">
-                  <div>
-                    <div class="v3-tile__label">商机 → 赢单</div>
-                    <div class="v3-tile__value">
-                      {{ pct2(data?.business.businessToWinRate ?? 0) }}
-                    </div>
-                  </div>
-                  <svg viewBox="0 0 120 30" class="h-8 w-32">
-                    <path
-                      d="M0 18 L120 18"
-                      fill="none"
-                      stroke="#0071E3"
-                      stroke-width="1.5"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <!-- 客户阶段漏斗 -->
-          <section class="v3-card mt-3">
-            <div class="v3-card__title">
-              客户阶段
-              <span
-                >当前
-                {{
-                  funnelTotal
-                }}
-                个客户走到了哪一步（不含公海，不受日期影响）</span
-              >
+      <!-- 客户阶段漏斗 -->
+      <section class="v3-card mt-3">
+        <div class="v3-card__title">客户阶段 <span>当前 {{ funnelTotal }} 个客户走到了哪一步（不含公海，不受日期影响）</span></div>
+        <div v-if="!funnelTotal" class="py-4 text-center text-sm text-gray-400">还没有客户</div>
+        <div v-else class="flex flex-col gap-2">
+          <div v-for="r in funnel" :key="r.value" class="flex items-center gap-3 text-sm">
+            <span class="w-14 shrink-0 text-gray-600">{{ r.label }}</span>
+            <div class="h-6 flex-1 rounded bg-gray-50">
+              <div class="flex h-6 items-center rounded bg-[#0071E3]/80 px-2 text-xs text-white" :style="{ width: `${r.width}%` }">{{ r.reached }}</div>
             </div>
-            <div
-              v-if="!funnelTotal"
-              class="py-4 text-center text-sm text-gray-400"
-            >
-              还没有客户
-            </div>
-            <div v-else class="flex flex-col gap-2">
-              <div
-                v-for="r in funnel"
-                :key="r.value"
-                class="flex items-center gap-3 text-sm"
-              >
-                <span class="w-14 shrink-0 text-gray-600">{{ r.label }}</span>
-                <div class="h-6 flex-1 rounded bg-gray-50">
-                  <div
-                    class="flex h-6 items-center rounded bg-[#0071E3]/80 px-2 text-xs text-white"
-                    :style="{ width: `${r.width}%` }"
-                  >
-                    {{ r.reached }}
-                  </div>
-                </div>
-                <span class="w-28 shrink-0 text-xs text-gray-500"
-                  >当前 {{ r.current
-                  }}<template v-if="r.conv !== null">
-                    · 转化 {{ pct(r.conv) }}</template
-                  ></span
-                >
-              </div>
-            </div>
-          </section>
-
-          <!-- 需要支持 -->
-          <section class="v3-support">
-            <div class="v3-support__tabs">
-              <button
-                type="button"
-                :class="{ on: supportTab === 'im' }"
-                @click="supportTab = 'im'"
-              >
-                会话需要支持 <span>({{ data?.support.im.length ?? 0 }})</span>
-              </button>
-              <button
-                type="button"
-                :class="{ on: supportTab === 'mail' }"
-                @click="supportTab = 'mail'"
-              >
-                邮件需要支持 <span>({{ data?.support.mail.length ?? 0 }})</span>
-              </button>
-              <span class="ml-auto pr-4 text-xs text-gray-500"
-                >查看全部 {{ supportList.length }} 个 ›</span
-              >
-            </div>
-            <div class="flex flex-wrap gap-2 px-5 py-4">
-              <button
-                v-for="t in SUPPORT_TYPES"
-                :key="t.key"
-                type="button"
-                class="v3-chip"
-                :class="{ on: supportType === t.key }"
-                @click="supportType = t.key"
-              >
-                {{ t.label }} <span>{{ typeCount(t.key) }}</span>
-              </button>
-            </div>
-            <div v-if="shownSupport.length" class="divide-y px-5 pb-4">
-              <div
-                v-for="i in shownSupport"
-                :key="i.draftId"
-                class="flex cursor-pointer items-center gap-4 py-3 hover:bg-gray-50"
-                @click="openItem(i)"
-              >
-                <div class="min-w-0 flex-1">
-                  <div class="font-medium">
-                    {{ i.contact || '客户' }}
-                    <span v-if="i.subject" class="text-gray-500"
-                      >· {{ i.subject }}</span
-                    >
-                  </div>
-                  <div class="truncate text-sm text-gray-500">
-                    {{ i.question || i.detail || '—' }}
-                  </div>
-                </div>
-                <span
-                  class="rounded bg-orange-50 px-2 py-0.5 text-xs text-orange-600"
-                  >{{ REASON_TEXT[i.reason] ?? i.reason }}</span
-                >
-                <span class="w-32 text-right text-xs text-gray-400">{{
-                  i.time ? dayjs(i.time).format('MM-DD HH:mm') : ''
-                }}</span>
-              </div>
-            </div>
-            <div v-else class="py-16">
-              <Empty
-                :image="Empty.PRESENTED_IMAGE_SIMPLE"
-                description="AI 与客户对话时，需要人工支持的事项将显示于此"
-              />
-            </div>
-          </section>
-        </Spin>
-      </details>
-
-      <Modal
-        v-model:open="trendOpen"
-        title="有效流量趋势 · 近 7 天"
-        :footer="null"
-        :width="640"
-      >
-        <div class="flex h-48 items-end gap-3 px-2 pt-4">
-          <div
-            v-for="d in data?.trend ?? []"
-            :key="d.date"
-            class="flex flex-1 flex-col items-center gap-1"
-          >
-            <span class="text-xs text-gray-500">{{
-              d.total ? pct(d.rate) : '—'
-            }}</span>
-            <div
-              class="w-full rounded-t bg-blue-500/80"
-              :style="{ height: `${(d.rate ?? 0) * 120 + 2}px` }"
-            ></div>
-            <span class="text-xs text-gray-500">{{ d.date.slice(5) }}</span>
+            <span class="w-28 shrink-0 text-xs text-gray-500">当前 {{ r.current }}<template v-if="r.conv !== null"> · 转化 {{ pct(r.conv) }}</template></span>
           </div>
         </div>
-      </Modal>
+      </section>
+
+      <!-- 需要支持 -->
+      <section class="v3-support">
+        <div class="v3-support__tabs">
+          <button type="button" :class="{ on: supportTab === 'im' }" @click="supportTab = 'im'">
+            会话需要支持 <span>({{ data?.support.im.length ?? 0 }})</span>
+          </button>
+          <button type="button" :class="{ on: supportTab === 'mail' }" @click="supportTab = 'mail'">
+            邮件需要支持 <span>({{ data?.support.mail.length ?? 0 }})</span>
+          </button>
+          <span class="ml-auto pr-4 text-xs text-gray-500">查看全部 {{ supportList.length }} 个 ›</span>
+        </div>
+        <div class="flex flex-wrap gap-2 px-5 py-4">
+          <button
+            v-for="t in SUPPORT_TYPES"
+            :key="t.key"
+            type="button"
+            class="v3-chip"
+            :class="{ on: supportType === t.key }"
+            @click="supportType = t.key"
+          >
+            {{ t.label }} <span>{{ typeCount(t.key) }}</span>
+          </button>
+        </div>
+        <div v-if="shownSupport.length" class="divide-y px-5 pb-4">
+          <div v-for="i in shownSupport" :key="i.draftId" class="flex cursor-pointer items-center gap-4 py-3 hover:bg-gray-50" @click="openItem(i)">
+            <div class="min-w-0 flex-1">
+              <div class="font-medium">{{ i.contact || '客户' }} <span v-if="i.subject" class="text-gray-500">· {{ i.subject }}</span></div>
+              <div class="truncate text-sm text-gray-500">{{ i.question || i.detail || '—' }}</div>
+            </div>
+            <span class="rounded bg-orange-50 px-2 py-0.5 text-xs text-orange-600">{{ REASON_TEXT[i.reason] ?? i.reason }}</span>
+            <span class="w-32 text-right text-xs text-gray-400">{{ i.time ? dayjs(i.time).format('MM-DD HH:mm') : '' }}</span>
+          </div>
+        </div>
+        <div v-else class="py-16">
+          <Empty :image="Empty.PRESENTED_IMAGE_SIMPLE" description="AI 与客户对话时，需要人工支持的事项将显示于此" />
+        </div>
+      </section>
+    </Spin>
+
+    <Modal v-model:open="trendOpen" title="有效流量趋势 · 近 7 天" :footer="null" :width="640">
+      <div class="flex h-48 items-end gap-3 px-2 pt-4">
+        <div v-for="d in data?.trend ?? []" :key="d.date" class="flex flex-1 flex-col items-center gap-1">
+          <span class="text-xs text-gray-500">{{ d.total ? pct(d.rate) : '—' }}</span>
+          <div class="w-full rounded-t bg-blue-500/80" :style="{ height: `${(d.rate ?? 0) * 120 + 2}px` }"></div>
+          <span class="text-xs text-gray-500">{{ d.date.slice(5) }}</span>
+        </div>
+      </div>
+    </Modal>
     </template>
   </div>
 </template>
@@ -709,7 +441,7 @@ onMounted(load);
 .v3-donut__num {
   font-size: 22px;
   font-weight: 700;
-  fill: #1d1d1f;
+  fill: #1D1D1F;
 }
 
 .v3-donut__label {
@@ -747,7 +479,7 @@ onMounted(load);
 
 .v3-support__tabs button.on {
   font-weight: 600;
-  color: #1d1d1f;
+  color: #1D1D1F;
   border-bottom-color: #0071e3;
 }
 
@@ -770,52 +502,11 @@ onMounted(load);
 .v3-chip.on {
   font-weight: 500;
   color: #fff;
-  background: #1d1d1f;
-  border-color: #1d1d1f;
+  background: #1D1D1F;
+  border-color: #1D1D1F;
 }
 
 .v3-chip.on span {
   color: #d2d2d7;
-}
-</style>
-
-<style scoped>
-.today-heading small {
-  color: #86868b;
-  font-size: 12px;
-}
-.today-heading h1 {
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -1px;
-  margin: 5px 0;
-}
-.v3-dash__bar {
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 14px 0 20px;
-}
-.range-presets {
-  display: flex;
-  border-radius: 10px;
-  background: #e5e5eb;
-  padding: 3px;
-  margin-left: auto;
-}
-.range-presets button {
-  border: 0;
-  background: transparent;
-  border-radius: 8px;
-  padding: 5px 10px;
-  cursor: pointer;
-}
-.range-presets button:hover {
-  background: white;
-}
-.details-toggle {
-  padding: 20px 4px;
-  color: #007aff;
-  cursor: pointer;
-  font-size: 13px;
 }
 </style>
