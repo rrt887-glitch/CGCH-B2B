@@ -1811,8 +1811,8 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   {{ inputTranslation }}
                 </div>
               </div>
-              <div class="mt-2 flex justify-between">
-                <Space>
+              <div class="im-send-tools mt-2 flex justify-between">
+                <Space wrap>
                   <Button :loading="fileSending" @click="pickAndSend"
                     >发送文件</Button
                   >
@@ -2484,6 +2484,30 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 @media (prefers-reduced-motion: reduce) {
   .apple-im .im-contact {
     transition: none;
+  }
+}
+</style>
+
+<style scoped>
+.im-send-tools {
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+}
+.im-send-tools > :last-child {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.im-send-tools :deep(.ant-space) {
+  max-width: 100%;
+}
+@media (width <= 760px) {
+  .im-send-tools :deep(.ant-btn) {
+    min-height: 44px;
+  }
+  .im-composer [role='tablist'] {
+    flex-wrap: wrap;
+    gap: 10px;
   }
 }
 </style>

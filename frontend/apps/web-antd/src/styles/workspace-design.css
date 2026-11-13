@@ -1,5 +1,34 @@
 /* Product skin from the approved OpenDesign reference. All selectors stay within
    the workspace; permissions, forms and API-backed components remain native. */
+@media (width <= 760px) {
+  .cgch-shell.is-apple .agent {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    min-width: 0;
+    width: 100%;
+  }
+  .cgch-shell.is-apple .agent__steps {
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .cgch-shell.is-apple .agent__main {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .cgch-shell.is-apple .agent__main .ps {
+    padding: 0;
+    min-width: 0;
+  }
+  .cgch-shell.is-apple .agent__main .ps__card {
+    padding: 12px;
+  }
+  .cgch-shell.is-apple .agent__test {
+    display: none;
+  }
+}
 .mail-mobile-back {
   display: none;
 }
