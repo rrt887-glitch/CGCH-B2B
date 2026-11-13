@@ -13,7 +13,7 @@ WhatsApp、Facebook、Instagram、邮箱、官网在线客服等多渠道询盘�
 | `frontend/apps/web-antd/src/views/cgch/` | 草根出海的页面（`v3/` 是看板、会话、CRM、智能体、渠道、设置六个主入口） |
 | `deploy/` | 生产部署：一键安装脚本 `install.sh`、Caddy 配置、镜像 Dockerfile |
 | `docker-compose.yml` | 本地开发用 MySQL 8 与 Redis 7 |
-| `docs/` | 部署说明 `DEPLOY.md`、各平台开发者应用配置 `PLATFORM-APPS.md` |
+| `docs/` | 部署说明 `DEPLOY.md`、各平台开发者应用配置 `PLATFORM-APPS.md`、多家客户（开户、账号、进入客户后台）`SAAS.md` |
 
 ## 本地开发
 

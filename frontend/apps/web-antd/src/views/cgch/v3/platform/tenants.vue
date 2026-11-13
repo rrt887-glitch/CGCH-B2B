@@ -51,7 +51,7 @@ async function load() {
   }
 }
 
-function expired(row: TenantConsoleRow) {
+function expired(row: any) {
   return row.expireTime && dayjs(row.expireTime).isBefore(dayjs());
 }
 
@@ -70,7 +70,7 @@ const form = reactive({
   packageId: DEFAULT_PACKAGE_ID as number | undefined,
   status: 0,
 });
-function openForm(row?: TenantConsoleRow) {
+function openForm(row?: any) {
   const defaultPkg = packages.value.find((p) => p.id === DEFAULT_PACKAGE_ID)?.id ?? packages.value[0]?.id;
   Object.assign(form, {
     id: row?.id,
@@ -125,7 +125,7 @@ async function save() {
   }
 }
 
-async function toggleStatus(row: TenantConsoleRow, on: boolean) {
+async function toggleStatus(row: any, on: boolean) {
   await updateTenant({
     id: row.id, name: row.name, contactName: row.contactName || row.name, contactMobile: row.contactMobile,
     status: on ? 0 : 1, packageId: row.packageId, accountCount: row.accountCount, expireTime: dayjs(row.expireTime).valueOf(),
@@ -139,7 +139,7 @@ const enterOpen = ref(false);
 const enterRow = ref<TenantConsoleRow>();
 const reason = ref('');
 const entering = ref(false);
-function openEnter(row: TenantConsoleRow) {
+function openEnter(row: any) {
   enterRow.value = row;
   reason.value = '';
   enterOpen.value = true;
@@ -163,7 +163,7 @@ async function doEnter() {
 const logOpen = ref(false);
 const logRow = ref<TenantConsoleRow>();
 const logs = ref<TenantVisitLog[]>([]);
-async function openLogs(row?: TenantConsoleRow) {
+async function openLogs(row?: any) {
   logRow.value = row;
   const r = await getVisitLogPage({ pageNo: 1, pageSize: 50, visitTenantId: row?.id });
   logs.value = r.list ?? [];
