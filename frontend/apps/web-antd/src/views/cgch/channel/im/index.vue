@@ -114,6 +114,8 @@ const POLL_MS_LIVE = 60_000; // 实时推送连上后只做兜底刷新
 
 const accounts = ref<ChannelWaApi.Account[]>([]);
 const accountId = ref<number | undefined>(props.accountId);
+// Watch sources are evaluated synchronously during setup.
+const text = ref('');
 const keyword = ref('');
 /** 列表筛选：全部、未读、未回复（客户最后发言）、收藏、已归档 */
 type ListFilter =
@@ -773,7 +775,6 @@ function useTranslation() {
 }
 
 // ===== 发送文本 =====
-const text = ref('');
 const sending = ref(false);
 async function sendText() {
   if (!current.value || !text.value.trim()) return;
