@@ -97,10 +97,21 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
         if (req.getCustomerId() != null) {
             q.eq(ChannelWaConversationDO::getCustomerId, req.getCustomerId());
         }
-        if (req.getLevel() != null) {
+        if (req.getLevels() != null && !req.getLevels().isEmpty()) {
+            String levels = req.getLevels().stream().filter(java.util.Objects::nonNull)
+                    .filter(n -> n >= 1 && n <= 4).distinct().map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(","));
+            if (!levels.isEmpty()) q.inSql(ChannelWaConversationDO::getCustomerId,
+                    "SELECT id FROM crm_customer WHERE deleted = 0 AND level IN (" + levels + ")");
+        } else if (req.getLevel() != null) {
             q.inSql(ChannelWaConversationDO::getCustomerId,
                     "SELECT id FROM crm_customer WHERE deleted = 0 AND level = " + req.getLevel().intValue());
         }
+        if (req.getGroup() != null) {
+            if (req.getGroup()) q.likeLeft(ChannelWaConversationDO::getWaId, "@g.us");
+            else q.and(w -> w.isNull(ChannelWaConversationDO::getWaId).or().notLikeLeft(ChannelWaConversationDO::getWaId, "@g.us"));
+        }
+        if (Boolean.TRUE.equals(req.getHighPriority())) q.ge(ChannelWaConversationDO::getPriority, 3);
         if (StrUtil.isNotBlank(req.getKeyword())) {
             String kw = req.getKeyword().trim();
             q.and(w -> w.like(ChannelWaConversationDO::getWaId, kw).or()
