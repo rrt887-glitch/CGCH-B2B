@@ -88,6 +88,7 @@ import {
   sendWaMessage,
   remarkWaConversation,
   setWaGroupAi,
+  setWaTeamPublic,
   starWaConversation,
   templateParamCount,
   transferWaConversation,
@@ -525,6 +526,28 @@ async function toggleGroupAi(on: boolean) {
   }
 }
 
+// ===== 公开给团队：负责人或管理员开关；同事查看公开的会话时只能看、写内部备注 =====
+const readOnly = computed(() => current.value?.canHandle === false);
+const teamPublicSaving = ref(false);
+async function toggleTeamPublic(on: boolean) {
+  const c = current.value;
+  if (!c || readOnly.value) return;
+  teamPublicSaving.value = true;
+  try {
+    await setWaTeamPublic(c.id, on);
+    c.teamPublic = on;
+    const row = conversations.value.find((x) => x.id === c.id);
+    if (row) row.teamPublic = on;
+    message.success(
+      on
+        ? '已公开给团队：本公司成员可在「团队会话」里查看（不能回复客户）'
+        : '已取消公开，团队成员不再能看到',
+    );
+  } finally {
+    teamPublicSaving.value = false;
+  }
+}
+
 // ===== 会话整理：收藏、归档、备注名、转交 =====
 async function toggleStar(c: ChannelWaApi.Conversation) {
   await starWaConversation(c.id, !c.starred);
@@ -600,6 +623,7 @@ function onMenu(key: string) {
   else if (key === 'archive') toggleArchive(current.value);
   else if (key === 'remark') openRemark();
   else if (key === 'transfer') openTransfer();
+  else if (key === 'team-public') toggleTeamPublic(!current.value.teamPublic);
 }
 
 // ===== 快捷回复：选中后插入输入框，{name} 换成客户称呼 =====
@@ -796,6 +820,14 @@ async function sendText() {
 }
 /** 输入区：回复客户 / 内部备注（只给团队看） */
 const composeMode = ref<'note' | 'reply'>('reply');
+// 查看同事公开给团队的会话：不能回复客户，只能写内部备注
+watch(
+  readOnly,
+  (v) => {
+    composeMode.value = v ? 'note' : 'reply';
+  },
+  { immediate: true },
+);
 const noteText = ref('');
 const noteSaving = ref(false);
 async function sendNote() {
@@ -1220,7 +1252,9 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   </span>
                 </div>
                 <div class="truncate text-[13px] text-[#6E6E73]">
-                  <span
+                  <span v-if="c.teamPublic" class="mr-1 text-[#A05A00]"
+                    >[已公开]</span
+                  ><span
                     v-if="teamView && c.handlerName"
                     class="mr-1 text-[#0071E3]"
                     >[{{ c.handlerName }}]</span
@@ -1422,13 +1456,16 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   >
                 </Button>
               </Tooltip>
-              <Button size="small" @click="openTransfer">
+              <Tag v-if="readOnly" color="orange" class="m-0"
+                >同事公开 · 只能查看</Tag
+              >
+              <Button v-if="!readOnly" size="small" @click="openTransfer">
                 <IconifyIcon
                   icon="lucide:user-round-plus"
                   class="mr-1 inline size-3.5 align-[-2px]"
                 />{{ current.handlerName || '指派' }}
               </Button>
-              <Dropdown :trigger="['click']">
+              <Dropdown v-if="!readOnly" :trigger="['click']">
                 <Button size="small">更多</Button>
                 <template #overlay>
                   <Menu @click="(e: any) => onMenu(String(e.key))">
@@ -1437,11 +1474,15 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                     }}</MenuItem>
                     <MenuItem key="remark">设置备注名</MenuItem>
                     <MenuItem key="transfer">转交给同事</MenuItem>
+                    <MenuItem key="team-public">{{
+                      current.teamPublic ? '取消公开给团队' : '公开给团队'
+                    }}</MenuItem>
                   </Menu>
                 </template>
               </Dropdown>
+              <template v-if="readOnly"></template>
               <Button
-                v-if="current.status === 'resolved'"
+                v-else-if="current.status === 'resolved'"
                 size="small"
                 @click="setStatus('open')"
                 >重新打开</Button
@@ -1708,10 +1749,12 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               aria-label="输入方式"
             >
               <button
-                v-for="t in [
-                  { k: 'reply', label: '回复' },
-                  { k: 'note', label: '内部备注' },
-                ]"
+                v-for="t in readOnly
+                  ? [{ k: 'note', label: '内部备注' }]
+                  : [
+                      { k: 'reply', label: '回复' },
+                      { k: 'note', label: '内部备注' },
+                    ]"
                 :key="t.k"
                 type="button"
                 role="tab"
@@ -1926,6 +1969,27 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               }}
             </div>
           </div>
+          <!-- 公开给团队：负责人或管理员打开后，本公司全部成员都能在「团队会话」里查看 -->
+          <div class="flex flex-col gap-1.5 rounded-[10px] bg-[#F5F5F7] p-3">
+            <div
+              class="flex items-center justify-between text-[13px] font-semibold text-[#1D1D1F]"
+            >
+              公开给团队
+              <Switch
+                :checked="!!current.teamPublic"
+                :disabled="readOnly"
+                :loading="teamPublicSaving"
+                @change="(v: any) => toggleTeamPublic(!!v)"
+              />
+            </div>
+            <div class="text-xs leading-5 text-[#86868B]">
+              {{
+                readOnly
+                  ? '这是同事公开给团队的会话：你可以查看消息、写内部备注，回复客户和转交由负责人处理。'
+                  : '打开后，本公司全部成员都能在「团队会话」里看到这个会话（只能看、写内部备注，不能回复客户）。'
+              }}
+            </div>
+          </div>
           <!-- 群聊：AI 自动回复按群手动开启 -->
           <div
             v-if="current.group"
@@ -1937,6 +2001,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               AI 自动回复这个群
               <Switch
                 :checked="!!current.aiEnabled"
+                :disabled="readOnly"
                 :loading="groupAiSaving"
                 @change="(v: any) => toggleGroupAi(!!v)"
               />

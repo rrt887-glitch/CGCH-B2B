@@ -18,6 +18,8 @@ import cn.iocoder.yudao.framework.tenant.core.service.TenantFrameworkService;
 import cn.iocoder.yudao.framework.tenant.core.service.TenantFrameworkServiceImpl;
 import cn.iocoder.yudao.framework.tenant.core.web.TenantContextWebFilter;
 import cn.iocoder.yudao.framework.tenant.core.web.TenantVisitContextInterceptor;
+import cn.iocoder.yudao.framework.tenant.core.web.TenantVisitGuard;
+import org.springframework.beans.factory.ObjectProvider;
 import cn.iocoder.yudao.framework.web.config.WebProperties;
 import cn.iocoder.yudao.framework.web.core.handler.GlobalExceptionHandler;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
@@ -93,8 +95,9 @@ public class YudaoTenantAutoConfiguration {
 
     @Bean
     public TenantVisitContextInterceptor tenantVisitContextInterceptor(TenantProperties tenantProperties,
-                                                                       SecurityFrameworkService securityFrameworkService) {
-        return new TenantVisitContextInterceptor(tenantProperties, securityFrameworkService);
+                                                                       SecurityFrameworkService securityFrameworkService,
+                                                                       ObjectProvider<TenantVisitGuard> visitGuardProvider) {
+        return new TenantVisitContextInterceptor(tenantProperties, securityFrameworkService, visitGuardProvider);
     }
 
     @Bean

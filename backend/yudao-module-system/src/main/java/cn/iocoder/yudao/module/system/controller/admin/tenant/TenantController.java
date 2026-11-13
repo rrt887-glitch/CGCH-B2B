@@ -7,7 +7,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
-import cn.iocoder.yudao.framework.tenant.core.aop.TenantIgnore;
+import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantConsoleRespVO;
 import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantPageReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantRespVO;
 import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantSaveReqVO;
@@ -17,7 +17,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
-import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -41,10 +40,12 @@ public class TenantController {
     @Resource
     private TenantService tenantService;
 
+    // 下面三个接口原来不用登录就能访问（登录页用来选公司）。改成多家客户共用一个网址后，登录只填账号，
+    // 这些接口会把客户名单暴露给任何访客，所以改为只有平台运营（有租户查询权限）登录后才能用。
+
     @GetMapping("/get-id-by-name")
-    @PermitAll
-    @TenantIgnore
-    @Operation(summary = "使用租户名，获得租户编号", description = "登录界面，根据用户的租户名，获得租户编号")
+    @PreAuthorize("@ss.hasPermission('system:tenant:query')")
+    @Operation(summary = "使用租户名，获得租户编号（仅平台运营）")
     @Parameter(name = "name", description = "租户名", required = true, example = "1024")
     public CommonResult<Long> getTenantIdByName(@RequestParam("name") String name) {
         TenantDO tenant = tenantService.getTenantByName(name);
@@ -52,19 +53,24 @@ public class TenantController {
     }
 
     @GetMapping({ "simple-list" })
-    @PermitAll
-    @TenantIgnore
-    @Operation(summary = "获取租户精简信息列表", description = "只包含被开启的租户，用于【首页】功能的选择租户选项")
+    @PreAuthorize("@ss.hasPermission('system:tenant:query')")
+    @Operation(summary = "获取租户精简信息列表（仅平台运营）", description = "只包含被开启的租户")
     public CommonResult<List<TenantRespVO>> getTenantSimpleList() {
         List<TenantDO> list = tenantService.getTenantListByStatus(CommonStatusEnum.ENABLE.getStatus());
         return success(convertList(list, tenantDO ->
                 new TenantRespVO().setId(tenantDO.getId()).setName(tenantDO.getName())));
     }
 
+    @GetMapping("/console-page")
+    @Operation(summary = "客户管理列表（仅平台运营）：开户信息、管理员账号、已用账号数，不含客户业务数据")
+    @PreAuthorize("@ss.hasPermission('system:tenant:query')")
+    public CommonResult<PageResult<TenantConsoleRespVO>> getTenantConsolePage(@Valid TenantPageReqVO pageVO) {
+        return success(tenantService.getTenantConsolePage(pageVO));
+    }
+
     @GetMapping("/get-by-website")
-    @PermitAll
-    @TenantIgnore
-    @Operation(summary = "使用域名，获得租户信息", description = "登录界面，根据用户的域名，获得租户信息")
+    @PreAuthorize("@ss.hasPermission('system:tenant:query')")
+    @Operation(summary = "使用域名，获得租户信息（仅平台运营）")
     @Parameter(name = "website", description = "域名", required = true, example = "www.iocoder.cn")
     public CommonResult<TenantRespVO> getTenantByWebsite(
             @RequestParam("website") @Pattern(regexp = "^[a-zA-Z0-9.-]+(:\\d{1,5})?$", message = "网站域名格式不正确") String website) {

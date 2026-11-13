@@ -46,6 +46,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/cgch/v3/settings/index.vue'),
         meta: { title: '设置' },
       },
+      {
+        // 平台运营：开户、账号数、到期、停用，进入客户后台（只有平台账号能看到入口，接口也按平台权限校验）
+        name: 'CgchV3PlatformTenants',
+        path: 'platform/tenants',
+        component: () => import('#/views/cgch/v3/platform/tenants.vue'),
+        meta: { title: '客户管理' },
+      },
     ],
   },
 ];

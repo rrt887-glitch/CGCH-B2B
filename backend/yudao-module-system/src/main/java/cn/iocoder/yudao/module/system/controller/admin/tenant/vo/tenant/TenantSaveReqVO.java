@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant;
 
+import cn.iocoder.yudao.module.system.enums.LoginAccountPolicy;
 import cn.iocoder.yudao.module.system.enums.PasswordPolicy;
 import cn.hutool.core.util.ObjectUtil;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -52,9 +53,9 @@ public class TenantSaveReqVO {
 
     // ========== 仅【创建】时，需要传递的字段 ==========
 
-    @Schema(description = "用户账号", requiredMode = Schema.RequiredMode.REQUIRED, example = "yudao")
-    @Pattern(regexp = "^[a-zA-Z0-9]{4,30}$", message = "用户账号由 数字、字母 组成")
-    @Size(min = 4, max = 30, message = "用户账号长度为 4-30 个字符")
+    @Schema(description = "管理员登录账号（邮箱或手机号，全平台唯一）", requiredMode = Schema.RequiredMode.REQUIRED, example = "boss@example.com")
+    @Pattern(regexp = LoginAccountPolicy.LOGIN_REGEX, message = LoginAccountPolicy.LOGIN_MESSAGE)
+    @Size(min = 4, max = LoginAccountPolicy.MAX_LENGTH, message = "用户账号长度为 4-64 个字符")
     private String username;
 
     @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "123456")

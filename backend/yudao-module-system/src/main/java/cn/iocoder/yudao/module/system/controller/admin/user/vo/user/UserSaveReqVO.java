@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.system.controller.admin.user.vo.user;
 
+import cn.iocoder.yudao.module.system.enums.LoginAccountPolicy;
 import cn.iocoder.yudao.module.system.enums.PasswordPolicy;
 import jakarta.validation.constraints.Pattern;
 import cn.hutool.core.util.ObjectUtil;
@@ -22,10 +23,10 @@ public class UserSaveReqVO {
     @Schema(description = "用户编号", example = "1024")
     private Long id;
 
-    @Schema(description = "用户账号", requiredMode = Schema.RequiredMode.REQUIRED, example = "yudao")
+    @Schema(description = "用户账号（邮箱或手机号，全平台唯一）", requiredMode = Schema.RequiredMode.REQUIRED, example = "sales@example.com")
     @NotBlank(message = "用户账号不能为空")
-    @Pattern(regexp = "^[a-zA-Z0-9]{4,30}$", message = "用户账号由 数字、字母 组成")
-    @Size(min = 4, max = 30, message = "用户账号长度为 4-30 个字符")
+    @Pattern(regexp = LoginAccountPolicy.LOGIN_REGEX, message = LoginAccountPolicy.LOGIN_MESSAGE)
+    @Size(min = 4, max = LoginAccountPolicy.MAX_LENGTH, message = "用户账号长度为 4-64 个字符")
     @DiffLogField(name = "用户账号")
     private String username;
 

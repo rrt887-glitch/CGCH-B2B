@@ -12,7 +12,9 @@ import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.framework.tenant.config.TenantProperties;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.yudao.module.system.api.tenant.TenantCreatedEvent;
 import cn.iocoder.yudao.module.system.controller.admin.permission.vo.role.RoleSaveReqVO;
+import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantConsoleRespVO;
 import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantPageReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantSaveReqVO;
 import cn.iocoder.yudao.module.system.convert.tenant.TenantConvert;
@@ -20,7 +22,9 @@ import cn.iocoder.yudao.module.system.dal.dataobject.permission.MenuDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.permission.RoleDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.tenant.TenantDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.tenant.TenantPackageDO;
+import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.dal.mysql.tenant.TenantMapper;
+import cn.iocoder.yudao.module.system.enums.permission.DataScopeEnum;
 import cn.iocoder.yudao.module.system.enums.permission.RoleCodeEnum;
 import cn.iocoder.yudao.module.system.enums.permission.RoleTypeEnum;
 import cn.iocoder.yudao.module.system.service.permission.MenuService;
@@ -33,10 +37,13 @@ import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -73,6 +80,8 @@ public class TenantServiceImpl implements TenantService {
     private MenuService menuService;
     @Resource
     private PermissionService permissionService;
+    @Resource
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     public List<Long> getTenantIdList() {
@@ -104,6 +113,8 @@ public class TenantServiceImpl implements TenantService {
         validTenantWebsiteDuplicate(createReqVO.getWebsites(), null);
         // 校验套餐被禁用
         TenantPackageDO tenantPackage = tenantPackageService.validTenantPackage(createReqVO.getPackageId());
+        // 「成员」角色的权限以平台里的「业务员」角色为模板（在平台租户里读取），再与套餐取交集
+        Set<Long> memberTemplateMenuIds = getMemberTemplateMenuIds();
 
         // 创建租户
         TenantDO tenant = BeanUtils.toBean(createReqVO, TenantDO.class);
@@ -114,10 +125,66 @@ public class TenantServiceImpl implements TenantService {
             Long roleId = createRole(tenantPackage);
             // 创建用户，并分配角色
             Long userId = createUser(roleId, createReqVO);
+            // 创建「成员」角色：客户管理员给自己的员工开账号时选它，只看自己的数据
+            createMemberRole(tenantPackage, memberTemplateMenuIds);
             // 修改租户的管理员
             tenantMapper.updateById(new TenantDO().setId(tenant.getId()).setContactUserId(userId));
+            // 通知其他模块准备新公司的初始数据
+            applicationEventPublisher.publishEvent(new TenantCreatedEvent(tenant.getId(), userId));
         });
         return tenant.getId();
+    }
+
+    /** 客户公司里「成员」角色的编码（与平台里的业务员角色相同，前端按编码识别） */
+    public static final String MEMBER_ROLE_CODE = "cgch_sales";
+
+    private Set<Long> getMemberTemplateMenuIds() {
+        return roleService.getRoleList().stream()
+                .filter(r -> MEMBER_ROLE_CODE.equals(r.getCode()))
+                .findFirst()
+                .map(r -> permissionService.getRoleMenuListByRoleId(r.getId()))
+                .orElseGet(() -> {
+                    log.warn("[getMemberTemplateMenuIds][平台里没有编码为 {} 的业务员角色，新公司的成员角色将没有任何权限]", MEMBER_ROLE_CODE);
+                    return Collections.emptySet();
+                });
+    }
+
+    private void createMemberRole(TenantPackageDO tenantPackage, Set<Long> templateMenuIds) {
+        RoleSaveReqVO reqVO = new RoleSaveReqVO();
+        reqVO.setName("成员").setCode(MEMBER_ROLE_CODE).setSort(1)
+                .setRemark("系统自动生成：日常接待、跟进客户；只看自己负责的数据和公开给团队的会话");
+        Long roleId = roleService.createRole(reqVO, RoleTypeEnum.SYSTEM.getType(), DataScopeEnum.SELF.getScope());
+        permissionService.assignRoleMenu(roleId, CollUtil.intersectionDistinct(templateMenuIds, tenantPackage.getMenuIds()));
+    }
+
+    @Override
+    @DataPermission(enable = false)
+    public PageResult<TenantConsoleRespVO> getTenantConsolePage(TenantPageReqVO pageReqVO) {
+        PageResult<TenantDO> page = tenantMapper.selectPage(pageReqVO);
+        List<TenantConsoleRespVO> list = new ArrayList<>(page.getList().size());
+        for (TenantDO tenant : page.getList()) {
+            TenantConsoleRespVO vo = BeanUtils.toBean(tenant, TenantConsoleRespVO.class);
+            vo.setPlatform(isSystemTenant(tenant));
+            if (!Boolean.TRUE.equals(vo.getPlatform())) {
+                TenantPackageDO pkg = tenantPackageService.getTenantPackage(tenant.getPackageId());
+                vo.setPackageName(pkg != null ? pkg.getName() : null);
+            } else {
+                vo.setPackageName("平台（全部权限）");
+            }
+            // 只读开户信息：管理员账号、已建账号数（在该公司内统计，不读取任何业务数据）
+            TenantUtils.execute(tenant.getId(), () -> {
+                vo.setUsedAccountCount(userService.getUserCountInCurrentTenant());
+                if (tenant.getContactUserId() != null) {
+                    AdminUserDO admin = userService.getUser(tenant.getContactUserId());
+                    if (admin != null) {
+                        vo.setAdminUsername(admin.getUsername());
+                        vo.setAdminNickname(admin.getNickname());
+                    }
+                }
+            });
+            list.add(vo);
+        }
+        return new PageResult<>(list, page.getTotal());
     }
 
     private Long createUser(Long roleId, TenantSaveReqVO createReqVO) {

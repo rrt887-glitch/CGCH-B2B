@@ -32,7 +32,10 @@ import com.anji.captcha.service.CaptchaService;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.system.enums.PasswordPolicy;
+import cn.iocoder.yudao.module.system.service.tenant.TenantService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import java.util.concurrent.TimeUnit;
 import jakarta.validation.Validator;
@@ -42,6 +45,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Objects;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -75,6 +79,9 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private CaptchaService captchaService;
     @Resource
     private SmsCodeApi smsCodeApi;
+    @Resource
+    @Lazy // 避免循环依赖
+    private TenantService tenantService;
 
     /**
      * 验证码的开关，默认为 true
@@ -111,8 +118,44 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // 校验验证码
         validateCaptcha(reqVO);
 
+        // 账号全平台唯一：按账号找到所属公司（租户），登录页不用再选公司
+        Long tenantId = resolveLoginTenant(reqVO.getUsername());
+        if (tenantId == null) {
+            // 账号不存在：照常走一遍校验，按普通失败提示并计入失败次数，不暴露账号是否存在
+            return doLogin(reqVO);
+        }
+        AuthLoginRespVO[] result = new AuthLoginRespVO[1];
+        // 用 Runnable 形式：Callable 形式会把业务异常（密码错误、锁定等）包成 RuntimeException
+        TenantUtils.execute(tenantId, () -> {
+            result[0] = doLogin(reqVO);
+        });
+        return result[0];
+    }
+
+    /**
+     * 登录账号所属的公司。账号不存在时返回 null；老数据里同一账号出现在多家公司时，
+     * 以请求头里的公司为准，没有带或对不上时提示联系平台处理。
+     */
+    private Long resolveLoginTenant(String username) {
+        List<AdminUserDO> users = userService.getUserListByUsernameIgnoreTenant(username);
+        if (users.isEmpty()) {
+            return null;
+        }
+        if (users.size() == 1) {
+            return users.get(0).getTenantId();
+        }
+        Long headerTenantId = TenantContextHolder.getTenantId();
+        if (headerTenantId != null && users.stream().anyMatch(u -> Objects.equals(u.getTenantId(), headerTenantId))) {
+            return headerTenantId;
+        }
+        throw exception(TENANT_LOGIN_AMBIGUOUS);
+    }
+
+    private AuthLoginRespVO doLogin(AuthLoginReqVO reqVO) {
         // 使用账号密码，进行登录
         AdminUserDO user = authenticate(reqVO.getUsername(), reqVO.getPassword());
+        // 密码正确后再检查公司是否停用、到期（放在密码校验之后，避免借此探测账号）
+        tenantService.validTenant(user.getTenantId());
 
         // 如果 socialType 非空，说明需要绑定社交用户
         if (reqVO.getSocialType() != null) {
@@ -324,7 +367,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     // ========== 登录失败锁定 ==========
 
     private static String loginFailKey(String username) {
-        return PasswordPolicy.loginFailKey(TenantContextHolder.getTenantId(), username);
+        return PasswordPolicy.loginFailKey(username);
     }
 
     private void validateNotLocked(String failKey) {

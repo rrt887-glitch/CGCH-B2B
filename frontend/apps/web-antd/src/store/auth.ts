@@ -60,13 +60,20 @@ export const useAuthStore = defineStore('auth', () => {
           break;
         }
         default: {
+          // 账号全平台唯一，由后端按账号找到所属公司；清掉上一次的公司和「进入客户后台」状态
+          accessStore.setTenantId(null);
+          accessStore.setVisitTenantId(null);
           loginResult = await loginApi(params);
         }
       }
-      const { accessToken, refreshToken } = loginResult;
+      const { accessToken, refreshToken, tenantId } = loginResult;
 
       // 如果成功获取到 accessToken
       if (accessToken) {
+        // 之后的请求都带上账号所属公司
+        if (tenantId) {
+          accessStore.setTenantId(tenantId);
+        }
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
 

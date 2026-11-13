@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.crm.util;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.yudao.framework.common.biz.system.permission.PermissionCommonApi;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.crm.dal.dataobject.permission.CrmPermissionDO;
 import cn.iocoder.yudao.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.yudao.module.crm.enums.common.CrmSceneTypeEnum;
@@ -32,8 +33,14 @@ public class CrmPermissionUtils {
      * @return 是/否
      */
     public static boolean isCrmAdmin() {
+        // 平台运营经「进入客户后台」访问时，账号不属于这家公司，按管理员看这家公司的全部 CRM 数据（进入已登记并记录日志）
+        if (SecurityFrameworkUtils.skipPermissionCheck()) {
+            return true;
+        }
+        // 每家公司的管理员（客户公司是租户管理员，平台是超级管理员）看得到本公司全部成员的客户
         PermissionCommonApi permissionApi = SpringUtil.getBean(PermissionCommonApi.class);
-        return permissionApi.hasAnyRoles(getLoginUserId(), RoleCodeEnum.CRM_ADMIN.getCode());
+        return permissionApi.hasAnyRoles(getLoginUserId(), RoleCodeEnum.CRM_ADMIN.getCode(),
+                RoleCodeEnum.TENANT_ADMIN.getCode(), RoleCodeEnum.SUPER_ADMIN.getCode());
     }
 
     /**

@@ -40,6 +40,10 @@ public class ChannelWaConversationRespVO {
     private Boolean group;
     @Schema(description = "群聊是否由 AI 自动回复（群聊默认关闭）")
     private Boolean aiEnabled;
+    @Schema(description = "是否已公开给团队（本公司全部成员可见）")
+    private Boolean teamPublic;
+    @Schema(description = "当前账号能否处理（回复、改状态、转交）；为 false 表示只是查看同事公开给团队的会话")
+    private Boolean canHandle;
     @Schema(description = "当前处理人（转交后的负责人，否则为号码所属业务员）")
     private Long handlerUserId;
     @Schema(description = "当前处理人姓名")

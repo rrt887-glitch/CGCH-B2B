@@ -59,6 +59,14 @@ public class ChannelWaMessageController {
         return success(true);
     }
 
+    @PutMapping("/conversation/team-public")
+    @Operation(summary = "公开给团队 / 取消公开：开启后本公司全部成员可在「团队」里查看（负责人或管理员操作）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    public CommonResult<Boolean> teamPublic(@RequestParam("id") Long id, @RequestParam("enabled") Boolean enabled) {
+        whatsAppService.setTeamPublic(getLoginUserId(), id, Boolean.TRUE.equals(enabled));
+        return success(true);
+    }
+
     @PutMapping("/conversation/star")
     @Operation(summary = "收藏 / 取消收藏")
     @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")

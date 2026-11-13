@@ -20,6 +20,8 @@ export namespace AuthApi {
     refreshToken: string;
     userId: number;
     expiresTime: number;
+    /** 账号所属公司（租户）编号，之后的请求放在 tenant-id 请求头里 */
+    tenantId?: number;
   }
 
   /** 租户信息返回值 */

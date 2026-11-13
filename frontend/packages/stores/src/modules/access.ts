@@ -105,7 +105,7 @@ export const useAccessStore = defineStore('core-access', {
     setTenantId(tenantId: null | number) {
       this.tenantId = tenantId;
     },
-    setVisitTenantId(visitTenantId: number) {
+    setVisitTenantId(visitTenantId: null | number) {
       this.visitTenantId = visitTenantId;
     },
     unlockScreen() {

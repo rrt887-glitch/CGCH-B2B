@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.system.controller.admin.auth.vo;
 
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.validation.InEnum;
+import cn.iocoder.yudao.module.system.enums.LoginAccountPolicy;
 import cn.iocoder.yudao.module.system.enums.social.SocialTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -21,10 +22,10 @@ import jakarta.validation.constraints.Pattern;
 @Builder
 public class AuthLoginReqVO extends CaptchaVerificationReqVO {
 
-    @Schema(description = "账号", requiredMode = Schema.RequiredMode.REQUIRED, example = "yudaoyuanma")
+    @Schema(description = "账号（邮箱或手机号；老账号为字母数字）", requiredMode = Schema.RequiredMode.REQUIRED, example = "sales@example.com")
     @NotEmpty(message = "登录账号不能为空")
-    @Length(min = 4, max = 30, message = "账号长度为 4-30 位")
-    @Pattern(regexp = "^[a-zA-Z0-9]{4,30}$", message = "账号格式为数字以及字母")
+    @Length(min = 4, max = LoginAccountPolicy.MAX_LENGTH, message = "账号长度为 4-64 位")
+    @Pattern(regexp = LoginAccountPolicy.LOGIN_REGEX, message = LoginAccountPolicy.LOGIN_MESSAGE)
     private String username;
 
     @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "buzhidao")

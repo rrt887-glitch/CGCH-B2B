@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.system.service.tenant;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantConsoleRespVO;
 import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantPageReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.tenant.vo.tenant.TenantSaveReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.tenant.TenantDO;
@@ -71,6 +72,14 @@ public interface TenantService {
      * @return 租户分页
      */
     PageResult<TenantDO> getTenantPage(TenantPageReqVO pageReqVO);
+
+    /**
+     * 平台「客户管理」列表：开户信息 + 管理员账号 + 已建账号数，不读取客户的业务数据
+     *
+     * @param pageReqVO 分页查询
+     * @return 客户列表
+     */
+    PageResult<TenantConsoleRespVO> getTenantConsolePage(TenantPageReqVO pageReqVO);
 
     /**
      * 获得名字对应的租户

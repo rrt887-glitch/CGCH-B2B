@@ -676,6 +676,7 @@ CREATE TABLE `channel_wa_conversation` (
   `owner_user_id` bigint NULL COMMENT '负责人：转交后由该业务员处理；为空表示由号码所属的业务员处理',
   `remark_name` varchar(255) NULL COMMENT '备注名：业务员给客户起的名字，优先于对方昵称显示',
   `ai_enabled` bit(1) NULL DEFAULT b'0' COMMENT 'WhatsApp 群聊是否由 AI 自动回复（默认关闭，手动开启）；私聊不使用',
+  `team_public` bit(1) NULL DEFAULT b'0' COMMENT '公开给团队：开启后本公司全部成员都能在「团队」里查看（只能看、写内部备注）',
   `status` varchar(16) NULL COMMENT '会话状态：open 进行中（空也算）、pending 待处理、resolved 已解决；客户再来消息时自动回到进行中',
   `priority` int NULL COMMENT '优先级：0 无、1 低、2 中、3 高、4 紧急',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',

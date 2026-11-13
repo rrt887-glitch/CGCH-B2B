@@ -62,6 +62,10 @@ export namespace ChannelWaApi {
     group?: boolean;
     /** 群聊是否由 AI 自动回复（默认关闭） */
     aiEnabled?: boolean;
+    /** 已公开给团队：本公司全部成员可在「团队会话」里查看 */
+    teamPublic?: boolean;
+    /** 当前账号能否处理（回复、改状态、转交）；false 表示只是查看同事公开给团队的会话 */
+    canHandle?: boolean;
     /** 客户等级：1 A 类 … 4 D 类 */
     customerLevel?: number;
     /** 当前处理人及姓名（团队会话里显示） */
@@ -90,7 +94,7 @@ export namespace ChannelWaApi {
     open: number;
     pending: number;
     resolved: number;
-    /** 能看到同事数据时才有（超级管理员）；业务员没有 */
+    /** 团队进行中：管理员是全公司同事的会话 + 公开给团队的会话；成员只有公开给团队的会话 */
     teamOpen?: number;
     unreadByAccount: Record<string, number>;
   }
@@ -178,6 +182,9 @@ export const starWaConversation = (id: number, starred: boolean) =>
 /** 群聊的 AI 自动回复开关（群聊默认关闭） */
 export const setWaGroupAi = (id: number, enabled: boolean) =>
   requestClient.put(`/channel/wa/conversation/group-ai?id=${id}&enabled=${enabled}`);
+/** 公开给团队 / 取消公开（负责人或管理员） */
+export const setWaTeamPublic = (id: number, enabled: boolean) =>
+  requestClient.put(`/channel/wa/conversation/team-public?id=${id}&enabled=${enabled}`);
 export const remarkWaConversation = (id: number, name: string) =>
   requestClient.put('/channel/wa/conversation/remark', null, { params: { id, name } });
 export const transferWaConversation = (id: number, userId: number) =>

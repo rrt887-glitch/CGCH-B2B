@@ -1,78 +1,27 @@
 <script lang="ts" setup>
 import type { VbenFormSchema } from '@vben/common-ui';
 
-import type { AuthApi } from '#/api/core/auth';
-
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { AuthenticationLogin, Verification, z } from '@vben/common-ui';
-import { isCaptchaEnable, isTenantEnable } from '@vben/hooks';
+import { isCaptchaEnable } from '@vben/hooks';
 import { $t } from '@vben/locales';
-import { useAccessStore } from '@vben/stores';
 
-import {
-  checkCaptcha,
-  getCaptcha,
-  getTenantByWebsite,
-  getTenantSimpleList,
-  socialAuthRedirect,
-} from '#/api/core/auth';
+import { checkCaptcha, getCaptcha, socialAuthRedirect } from '#/api/core/auth';
 import { useAuthStore } from '#/store';
 
 defineOptions({ name: 'Login' });
 
+// 多家客户共用一个网址：登录只填账号（邮箱或手机号，全平台唯一）和密码，系统按账号找到所属公司，不再选公司。
 const { query } = useRoute();
 const authStore = useAuthStore();
-const accessStore = useAccessStore();
-const tenantEnable = isTenantEnable();
 const captchaEnable = isCaptchaEnable();
 
 const loginRef = ref();
 const verifyRef = ref();
 
 const captchaType = 'blockPuzzle'; // 验证码类型：'blockPuzzle' | 'clickWord'
-
-/** 获取租户列表，并默认选中 */
-const tenantList = ref<AuthApi.TenantResult[]>([]);
-/** 当前网址已对应到某家公司（租户） */
-const websiteMatched = ref(false);
-/** 租户列表加载完成前不显示下拉，避免一闪而过 */
-const tenantLoaded = ref(false); // 租户列表
-async function fetchTenantList() {
-  if (!tenantEnable) {
-    return;
-  }
-  try {
-    // 获取租户列表、域名对应租户
-    const websiteTenantPromise = getTenantByWebsite(window.location.hostname);
-    tenantList.value = await getTenantSimpleList();
-
-    // 选中租户：域名 > store 中的租户 > 首个租户
-    let tenantId: null | number = null;
-    const websiteTenant = await websiteTenantPromise;
-    websiteMatched.value = !!websiteTenant?.id;
-    if (websiteTenant?.id) {
-      tenantId = websiteTenant.id;
-    }
-    // 如果没有从域名获取到租户，尝试从 store 中获取
-    if (!tenantId && accessStore.tenantId) {
-      tenantId = accessStore.tenantId;
-    }
-    // 如果还是没有租户，使用列表中的第一个
-    if (!tenantId && tenantList.value?.[0]?.id) {
-      tenantId = tenantList.value[0].id;
-    }
-
-    // 设置选中的租户编号
-    accessStore.setTenantId(tenantId);
-    loginRef.value.getFormApi().setFieldValue('tenantId', tenantId?.toString());
-  } catch (error) {
-    console.error('获取租户列表失败:', error);
-  } finally {
-    tenantLoaded.value = true;
-  }
-}
 
 /** 处理登录 */
 async function handleLogin(values: any) {
@@ -119,47 +68,20 @@ async function handleThirdLogin(type: number) {
   }
 }
 
-/** 组件挂载时获取租户信息 */
-onMounted(() => {
-  fetchTenantList();
-});
-
 const formSchema = computed((): VbenFormSchema[] => {
   return [
     {
-      component: 'VbenSelect',
-      componentProps: {
-        options: tenantList.value.map((item) => ({
-          label: item.name,
-          value: item.id.toString(),
-        })),
-        placeholder: $t('authentication.tenantTip'),
-      },
-      fieldName: 'tenantId',
-      label: $t('authentication.tenant'),
-      rules: z.string().min(1, { message: $t('authentication.tenantTip') }),
-      dependencies: {
-        triggerFields: ['tenantId'],
-        if: tenantEnable,
-        // 只有一家公司、或网址已对应到某家公司时自动选好，不显示下拉；没选上时才显示让用户选
-        show: (values) => tenantLoaded.value && (!values.tenantId || (tenantList.value.length > 1 && !websiteMatched.value)),
-        trigger(values) {
-          if (values.tenantId) {
-            accessStore.setTenantId(Number(values.tenantId));
-          }
-        },
-      },
-    },
-    {
       component: 'VbenInput',
       componentProps: {
-        placeholder: $t('authentication.usernameTip'),
+        autocomplete: 'username',
+        placeholder: '邮箱或手机号',
       },
       fieldName: 'username',
-      label: $t('authentication.username'),
+      label: '账号',
       rules: z
         .string()
-        .min(1, { message: $t('authentication.usernameTip') })
+        .trim()
+        .min(1, { message: '请输入邮箱或手机号' })
         .default(import.meta.env.VITE_APP_DEFAULT_USERNAME),
     },
     {

@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception0;
@@ -25,6 +26,9 @@ public class TenantVisitContextInterceptor implements HandlerInterceptor {
     private final TenantProperties tenantProperties;
 
     private final SecurityFrameworkService securityFrameworkService;
+
+    /** 可选：要求先经「进入客户后台」登记才能访问 */
+    private final ObjectProvider<TenantVisitGuard> visitGuardProvider;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -45,6 +49,11 @@ public class TenantVisitContextInterceptor implements HandlerInterceptor {
         // 校验用户是否可切换租户
         if (!securityFrameworkService.hasAnyPermissions(PERMISSION)) {
             throw exception0(GlobalErrorCodeConstants.FORBIDDEN.getCode(), "您无权切换租户");
+        }
+        // 必须先经「进入客户后台」登记（填写原因、记录日志），且在有效期内
+        TenantVisitGuard guard = visitGuardProvider.getIfAvailable();
+        if (guard != null && !guard.isVisitAllowed(loginUser.getId(), visitTenantId)) {
+            throw exception0(GlobalErrorCodeConstants.FORBIDDEN.getCode(), "请从「客户管理」点击「进入客户后台」后再访问");
         }
 
         // 【重点】切换租户编号
