@@ -11,8 +11,16 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
-import { Checkbox, DatePicker, Empty, Input, Pagination, Popover, Table, Tooltip } from 'ant-design-vue';
-
+import {
+  Checkbox,
+  DatePicker,
+  Empty,
+  Input,
+  Pagination,
+  Popover,
+  Table,
+  Tooltip,
+} from 'ant-design-vue';
 
 const props = withDefaults(
   defineProps<{
@@ -21,7 +29,9 @@ const props = withDefaults(
     showTotal?: boolean;
     rail?: RailItem[];
     columns: CrmColumn[];
-    fetch: (params: Record<string, any>) => Promise<{ list: any[]; total: number }>;
+    fetch: (
+      params: Record<string, any>,
+    ) => Promise<{ list: any[]; total: number }>;
     searchField?: string;
     searchPlaceholder?: string;
     /** 日期范围筛选，例如 { field: 'contactLastTime', label: '最近联系时间' } */
@@ -36,13 +46,22 @@ const props = withDefaults(
     /** 「全部」下方只展示、不可点选的统计，例如订单总额 */
     stats?: { label: string; value: number | string }[];
   }>(),
-  { rail: () => [], stats: () => [], allLabel: '全部', searchField: 'name', searchPlaceholder: '请输入名称', selectable: true, baseParams: () => ({}), showTotal: false },
+  {
+    rail: () => [],
+    stats: () => [],
+    allLabel: '全部',
+    searchField: 'name',
+    searchPlaceholder: '请输入名称',
+    selectable: true,
+    baseParams: () => ({}),
+    showTotal: false,
+  },
 );
 
 const emit = defineEmits<{ loaded: [rows: any[]]; select: [rows: any[]] }>();
 
 // ===== 左侧筛选栏 =====
-const railOpen = ref(true);
+const railOpen = ref(false);
 const railKey = ref('all');
 const expanded = reactive<Record<string, boolean>>({});
 const counts = reactive<Record<string, number>>({});
@@ -66,7 +85,12 @@ async function countOf(it: RailItem) {
     return;
   }
   try {
-    const r = await props.fetch({ ...props.baseParams, ...it.filter, pageNo: 1, pageSize: 1 });
+    const r = await props.fetch({
+      ...props.baseParams,
+      ...it.filter,
+      pageNo: 1,
+      pageSize: 1,
+    });
     counts[it.key] = r.total ?? 0;
   } catch {
     counts[it.key] = 0;
@@ -76,7 +100,9 @@ async function countOf(it: RailItem) {
 async function loadCounts() {
   await countOf(allItem);
   await Promise.all(props.rail.map((it) => countOf(it)));
-  await Promise.all(props.rail.flatMap((it) => (it.children ?? []).map((c) => countOf(c))));
+  await Promise.all(
+    props.rail.flatMap((it) => (it.children ?? []).map((c) => countOf(c))),
+  );
 }
 
 function groupCount(it: RailItem) {
@@ -117,7 +143,10 @@ function readHidden(): string[] {
 const hiddenCols = ref<string[]>(readHidden());
 watch(hiddenCols, (v) => {
   try {
-    localStorage.setItem(`cgch-crm-cols:${props.storageKey}`, JSON.stringify(v));
+    localStorage.setItem(
+      `cgch-crm-cols:${props.storageKey}`,
+      JSON.stringify(v),
+    );
   } catch {
     // 忽略
   }
@@ -126,9 +155,20 @@ watch(hiddenCols, (v) => {
 const tableColumns = computed(() =>
   props.columns
     .filter((c) => !hiddenCols.value.includes(c.key))
-    .map((c) => ({ key: c.key, dataIndex: c.key, title: c.title, width: c.width ?? 140, fixed: c.fixed, ellipsis: c.ellipsis ?? true })),
+    .map((c) => ({
+      key: c.key,
+      dataIndex: c.key,
+      title: c.title,
+      width: c.width ?? 140,
+      fixed: c.fixed,
+      ellipsis: c.ellipsis ?? true,
+    })),
 );
-const scrollX = computed(() => tableColumns.value.reduce((s, c) => s + (c.width || 140), 0) + (props.selectable ? 48 : 0));
+const scrollX = computed(
+  () =>
+    tableColumns.value.reduce((s, c) => s + (c.width || 140), 0) +
+    (props.selectable ? 48 : 0),
+);
 
 // 记住本次会话里的搜索词、左侧筛选和页码：从详情页返回列表时恢复（只存在本标签页的会话存储里）
 const STATE_KEY = `cgch-crm-list:${props.storageKey}`;
@@ -145,14 +185,28 @@ try {
 }
 function saveState() {
   try {
-    sessionStorage.setItem(STATE_KEY, JSON.stringify({ keyword: keyword.value, railKey: railKey.value, pageNo: page.no, pageSize: page.size }));
+    sessionStorage.setItem(
+      STATE_KEY,
+      JSON.stringify({
+        keyword: keyword.value,
+        railKey: railKey.value,
+        pageNo: page.no,
+        pageSize: page.size,
+      }),
+    );
   } catch {
     // 忽略
   }
 }
 
 function params() {
-  const p: Record<string, any> = { ...props.baseParams, ...railFilter.value, ...extra.value, pageNo: page.no, pageSize: page.size };
+  const p: Record<string, any> = {
+    ...props.baseParams,
+    ...railFilter.value,
+    ...extra.value,
+    pageNo: page.no,
+    pageSize: page.size,
+  };
   if (keyword.value.trim()) p[props.searchField] = keyword.value.trim();
   if (props.dateFilter && range.value) {
     p[props.dateFilter.field] = [
@@ -184,7 +238,11 @@ function search() {
 }
 
 function setExtra(v: Record<string, any>) {
-  extra.value = Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined && x !== null && x !== ''));
+  extra.value = Object.fromEntries(
+    Object.entries(v).filter(
+      ([, x]) => x !== undefined && x !== null && x !== '',
+    ),
+  );
   search();
 }
 
@@ -208,7 +266,12 @@ function reload() {
 
 onMounted(reload);
 watch(
-  () => props.rail.map((it) => `${it.key}:${(it.children ?? []).map((c) => c.key).join(',')}`).join('|'),
+  () =>
+    props.rail
+      .map(
+        (it) => `${it.key}:${(it.children ?? []).map((c) => c.key).join(',')}`,
+      )
+      .join('|'),
   () => loadCounts(),
 );
 
@@ -223,18 +286,40 @@ defineExpose({ reload, setExtra, currentParams: params });
         <span v-if="showTotal" class="ml-1">{{ total }}</span>
       </h2>
       <div class="flex flex-wrap items-center gap-2">
-        <slot name="actions"></slot>
+        <button
+          v-if="rail.length || $slots.rail"
+          type="button"
+          class="crm-filter-toggle"
+          :aria-expanded="railOpen"
+          @click="railOpen = !railOpen"
+        >
+          {{ railOpen ? '收起筛选' : '客户筛选' }}</button
+        ><slot name="actions"></slot>
       </div>
     </div>
 
     <div class="crm-list__body">
-      <aside v-if="rail.length || $slots.rail" class="crm-list__rail" :class="{ closed: !railOpen }">
+      <aside
+        v-if="(rail.length || $slots.rail) && railOpen"
+        class="crm-list__rail"
+        :class="{ closed: !railOpen }"
+      >
         <template v-if="railOpen">
-          <div class="crm-rail__item crm-rail__all" :class="{ on: railKey === 'all' }" @click="pickRail('all')">
-            <span>{{ allLabel }}</span><span class="crm-rail__num">{{ counts.all ?? 0 }}</span>
+          <div
+            class="crm-rail__item crm-rail__all"
+            :class="{ on: railKey === 'all' }"
+            @click="pickRail('all')"
+          >
+            <span>{{ allLabel }}</span
+            ><span class="crm-rail__num">{{ counts.all ?? 0 }}</span>
           </div>
-          <div v-for="st in stats" :key="st.label" class="crm-rail__item crm-rail__stat">
-            <span>{{ st.label }}</span><span class="crm-rail__num">{{ st.value }}</span>
+          <div
+            v-for="st in stats"
+            :key="st.label"
+            class="crm-rail__item crm-rail__stat"
+          >
+            <span>{{ st.label }}</span
+            ><span class="crm-rail__num">{{ st.value }}</span>
           </div>
           <div class="crm-rail__list">
             <template v-for="it in rail" :key="it.key">
@@ -242,7 +327,9 @@ defineExpose({ reload, setExtra, currentParams: params });
               <div
                 class="crm-rail__item"
                 :class="{ on: railKey === it.key }"
-                @click="it.children && !it.filter ? toggleGroup(it) : pickRail(it.key)"
+                @click="
+                  it.children && !it.filter ? toggleGroup(it) : pickRail(it.key)
+                "
               >
                 <span class="flex items-center gap-1">
                   <IconifyIcon
@@ -252,7 +339,11 @@ defineExpose({ reload, setExtra, currentParams: params });
                     :class="{ open: expanded[it.key] }"
                     @click.stop="toggleGroup(it)"
                   />
-                  <IconifyIcon v-if="it.icon" :icon="it.icon" class="size-3.5 text-amber-400" />
+                  <IconifyIcon
+                    v-if="it.icon"
+                    :icon="it.icon"
+                    class="size-3.5 text-amber-400"
+                  />
                   {{ it.label }}
                 </span>
                 <span class="crm-rail__num">{{ groupCount(it) }}</span>
@@ -268,13 +359,26 @@ defineExpose({ reload, setExtra, currentParams: params });
                   <span class="truncate">{{ c.label }}</span>
                   <span class="crm-rail__num">{{ counts[c.key] ?? 0 }}</span>
                 </div>
-                <div v-if="!it.children.length" class="crm-rail__child py-1 text-xs text-gray-400">暂无</div>
+                <div
+                  v-if="!it.children.length"
+                  class="crm-rail__child py-1 text-xs text-gray-400"
+                >
+                  暂无
+                </div>
               </template>
             </template>
           </div>
         </template>
-        <button type="button" class="crm-list__fold" :title="railOpen ? '收起筛选' : '展开筛选'" @click="railOpen = !railOpen">
-          <IconifyIcon :icon="railOpen ? 'lucide:chevron-left' : 'lucide:chevron-right'" class="size-3.5" />
+        <button
+          type="button"
+          class="crm-list__fold"
+          :title="railOpen ? '收起筛选' : '展开筛选'"
+          @click="railOpen = !railOpen"
+        >
+          <IconifyIcon
+            :icon="railOpen ? 'lucide:chevron-left' : 'lucide:chevron-right'"
+            class="size-3.5"
+          />
         </button>
       </aside>
 
@@ -288,7 +392,9 @@ defineExpose({ reload, setExtra, currentParams: params });
             @press-enter="search"
             @change="(e: any) => !e.target.value && search()"
           >
-            <template #prefix><IconifyIcon icon="lucide:search" class="size-3.5 text-gray-400" /></template>
+            <template #prefix
+              ><IconifyIcon icon="lucide:search" class="size-3.5 text-gray-400"
+            /></template>
           </Input>
           <div v-if="dateFilter" class="crm-list__range">
             <span class="crm-list__range-label">{{ dateFilter.label }}</span>
@@ -301,7 +407,9 @@ defineExpose({ reload, setExtra, currentParams: params });
           </div>
           <slot name="filters"></slot>
           <Tooltip title="刷新">
-            <button type="button" class="crm-list__icon" @click="reload"><IconifyIcon icon="lucide:rotate-cw" class="size-4" /></button>
+            <button type="button" class="crm-list__icon" @click="reload">
+              <IconifyIcon icon="lucide:rotate-cw" class="size-4" />
+            </button>
           </Tooltip>
           <Popover trigger="click" placement="bottomRight">
             <template #content>
@@ -311,7 +419,12 @@ defineExpose({ reload, setExtra, currentParams: params });
                   <Checkbox
                     :checked="!hiddenCols.includes(c.key)"
                     :disabled="c.required"
-                    @change="(e: any) => (hiddenCols = e.target.checked ? hiddenCols.filter((k) => k !== c.key) : [...hiddenCols, c.key])"
+                    @change="
+                      (e: any) =>
+                        (hiddenCols = e.target.checked
+                          ? hiddenCols.filter((k) => k !== c.key)
+                          : [...hiddenCols, c.key])
+                    "
                   >
                     {{ c.title }}
                   </Checkbox>
@@ -319,7 +432,9 @@ defineExpose({ reload, setExtra, currentParams: params });
               </div>
             </template>
             <Tooltip title="表格设置">
-              <button type="button" class="crm-list__icon"><IconifyIcon icon="lucide:settings" class="size-4" /></button>
+              <button type="button" class="crm-list__icon">
+                <IconifyIcon icon="lucide:settings" class="size-4" />
+              </button>
             </Tooltip>
           </Popover>
         </div>
@@ -336,10 +451,15 @@ defineExpose({ reload, setExtra, currentParams: params });
             size="middle"
           >
             <template #bodyCell="slotProps">
-              <slot name="cell" v-bind="slotProps">{{ slotProps.text ?? '-' }}</slot>
+              <slot name="cell" v-bind="slotProps">{{
+                slotProps.text ?? '-'
+              }}</slot>
             </template>
             <template #emptyText>
-              <Empty :image="Empty.PRESENTED_IMAGE_SIMPLE" description="暂无数据" />
+              <Empty
+                :image="Empty.PRESENTED_IMAGE_SIMPLE"
+                description="暂无数据"
+              />
             </template>
           </Table>
         </div>
@@ -382,7 +502,7 @@ defineExpose({ reload, setExtra, currentParams: params });
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  color: #1D1D1F;
+  color: #1d1d1f;
 }
 
 .crm-list__body {
@@ -439,12 +559,12 @@ defineExpose({ reload, setExtra, currentParams: params });
 }
 
 .crm-rail__item:hover {
-  background: #F2F2F7;
+  background: #f2f2f7;
 }
 
 .crm-rail__item.on {
-  color: #0071E3;
-  background: #E8F2FC;
+  color: #0071e3;
+  background: #e8f2fc;
 }
 
 .crm-rail__all {
@@ -539,8 +659,8 @@ defineExpose({ reload, setExtra, currentParams: params });
 }
 
 .crm-list__icon:hover {
-  color: #0071E3;
-  background: #F2F2F7;
+  color: #0071e3;
+  background: #f2f2f7;
 }
 
 .crm-list__table {
@@ -569,6 +689,34 @@ defineExpose({ reload, setExtra, currentParams: params });
 
   .crm-list__search {
     width: 100%;
+  }
+}
+</style>
+
+<style scoped>
+.crm-filter-toggle {
+  border: 0;
+  border-radius: 99px;
+  padding: 7px 14px;
+  background: #007aff14;
+  color: #007aff;
+  font-size: 13px;
+  cursor: pointer;
+}
+@media (width <= 760px) {
+  .crm-list__rail {
+    position: absolute;
+    z-index: 12;
+    top: 0;
+    left: 0;
+    max-height: 100%;
+    width: 210px;
+    background: white !important;
+    display: block !important;
+    box-shadow: 0 8px 30px #0002;
+  }
+  .crm-list__body {
+    position: relative;
   }
 }
 </style>

@@ -9,7 +9,12 @@ import type { ChannelAiApi } from '#/api/channel/ai';
 import type { MailTemplateApi } from '#/api/channel/mail-template';
 import { getMailTemplates } from '#/api/channel/mail-template';
 import { Tinymce } from '#/components/tinymce';
-import { closeDraft, draftMail, DRAFT_REASON, getPendingDraft } from '#/api/channel/ai';
+import {
+  closeDraft,
+  draftMail,
+  DRAFT_REASON,
+  getPendingDraft,
+} from '#/api/channel/ai';
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -49,7 +54,11 @@ import {
 defineOptions({ name: 'CgchChannelMail' });
 
 /** 嵌入「会话」页时：邮箱由左栏选择，隐藏本页的邮箱下拉 */
-const props = defineProps<{ accountId?: number; embedded?: boolean; openId?: number }>();
+const props = defineProps<{
+  accountId?: number;
+  embedded?: boolean;
+  openId?: number;
+}>();
 
 const router = useRouter();
 const route = useRoute();
@@ -85,7 +94,9 @@ const accountOptions = computed(() => [
   { label: '全部邮箱', value: undefined as any },
   ...accounts.value.map((a) => ({ label: a.email, value: a.id })),
 ]);
-const unrepliedTotal = computed(() => accounts.value.reduce((n, a) => n + (a.unrepliedCount ?? 0), 0));
+const unrepliedTotal = computed(() =>
+  accounts.value.reduce((n, a) => n + (a.unrepliedCount ?? 0), 0),
+);
 
 async function loadAccounts() {
   accounts.value = await getMailAccountList();
@@ -117,12 +128,18 @@ watch([accountId, view], () => {
 async function open(item: ChannelMailApi.Message) {
   detailLoading.value = true;
   try {
-    const [detail, history] = await Promise.all([getMail(item.id), getMailThread(item.id)]);
+    const [detail, history] = await Promise.all([
+      getMail(item.id),
+      getMailThread(item.id),
+    ]);
     current.value = detail;
     thread.value = history;
     item.readStatus = true;
     resetReply();
-    aiDraft.value = detail.direction === 1 ? ((await getPendingDraft('mail', detail.id)) ?? undefined) : undefined;
+    aiDraft.value =
+      detail.direction === 1
+        ? ((await getPendingDraft('mail', detail.id)) ?? undefined)
+        : undefined;
   } finally {
     detailLoading.value = false;
   }
@@ -132,7 +149,9 @@ const syncing = ref(false);
 async function syncAll() {
   syncing.value = true;
   try {
-    const ids = accountId.value ? [accountId.value] : accounts.value.map((a) => a.id!);
+    const ids = accountId.value
+      ? [accountId.value]
+      : accounts.value.map((a) => a.id!);
     let n = 0;
     for (const id of ids) n += await syncMailAccount(id);
     message.success(n > 0 ? `收到 ${n} 封新邮件` : '没有新邮件');
@@ -160,10 +179,14 @@ async function pickFiles(target: ChannelMailApi.Attachment[]) {
   input.onchange = async () => {
     const files = [...(input.files ?? [])];
     const tooBig = files.filter((f) => f.size > MAX_ATTACHMENT);
-    if (tooBig.length > 0) message.warning(`单个附件不能超过 25MB：${tooBig.map((f) => f.name).join('、')}`);
+    if (tooBig.length > 0)
+      message.warning(
+        `单个附件不能超过 25MB：${tooBig.map((f) => f.name).join('、')}`,
+      );
     uploading.value = true;
     try {
-      for (const f of files.filter((x) => x.size <= MAX_ATTACHMENT)) target.push(await uploadMailAttachment(f));
+      for (const f of files.filter((x) => x.size <= MAX_ATTACHMENT))
+        target.push(await uploadMailAttachment(f));
     } finally {
       uploading.value = false;
     }
@@ -217,7 +240,10 @@ function resetReply() {
   replyFiles.value = [];
 }
 function quote(m: ChannelMailApi.Message) {
-  const body = (m.textBody || '').split('\n').map((l) => `> ${l}`).join('\n');
+  const body = (m.textBody || '')
+    .split('\n')
+    .map((l) => `> ${l}`)
+    .join('\n');
   return `\n\nOn ${m.sentTime}, ${m.fromName || m.fromAddress} wrote:\n${body}`;
 }
 async function reply() {
@@ -225,7 +251,9 @@ async function reply() {
   if (!m || !replyText.value.trim()) return;
   replySending.value = true;
   try {
-    const subject = /^re:/i.test(m.subject || '') ? m.subject : `Re: ${m.subject || ''}`;
+    const subject = /^re:/i.test(m.subject || '')
+      ? m.subject
+      : `Re: ${m.subject || ''}`;
     await sendMail({
       accountId: m.accountId,
       to: [m.fromAddress!],
@@ -246,18 +274,34 @@ async function reply() {
 
 // ===== 写邮件 =====
 const composeOpen = ref(false);
-const compose = reactive({ accountId: undefined as number | undefined, to: '', cc: '', subject: '', text: '', html: '' });
+const compose = reactive({
+  accountId: undefined as number | undefined,
+  to: '',
+  cc: '',
+  subject: '',
+  text: '',
+  html: '',
+});
 const composeFiles = ref<ChannelMailApi.Attachment[]>([]);
 /** 邮件模板（设置 → 邮件模板）；套用后正文改为富文本 */
 const templates = ref<MailTemplateApi.Template[]>([]);
 const templateId = ref<number>();
 async function openCompose() {
-  Object.assign(compose, { accountId: accountId.value ?? accounts.value[0]?.id, to: '', cc: '', subject: '', text: '', html: '' });
+  Object.assign(compose, {
+    accountId: accountId.value ?? accounts.value[0]?.id,
+    to: '',
+    cc: '',
+    subject: '',
+    text: '',
+    html: '',
+  });
   composeFiles.value = [];
   templateId.value = undefined;
   composeOpen.value = true;
   templates.value = await getMailTemplates({ enabled: true }).catch(() => []);
-  const def = templates.value.find((t) => t.defaulted && t.category === 'promo');
+  const def = templates.value.find(
+    (t) => t.defaulted && t.category === 'promo',
+  );
   if (def) applyTemplate(def.id!);
 }
 function applyTemplate(id?: number) {
@@ -270,7 +314,11 @@ function applyTemplate(id?: number) {
   compose.subject = t.subject;
   compose.html = t.html;
 }
-const split = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+const split = (s: string) =>
+  s
+    .split(/[,;\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
 async function sendCompose() {
   if (!compose.accountId || !compose.to.trim()) {
     message.warning('请选择发件邮箱并填写收件人');
@@ -303,62 +351,131 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Page auto-content-height>
-    <div v-if="accounts.length === 0" class="flex h-full items-center justify-center rounded bg-white">
+  <Page auto-content-height :class="{ 'mail-design': embedded }">
+    <div
+      v-if="accounts.length === 0"
+      class="flex h-full items-center justify-center rounded bg-white"
+    >
       <Empty description="还没有绑定邮箱">
-        <Button type="primary" @click="router.push('/v3/channel')">去绑定邮箱</Button>
+        <Button type="primary" @click="router.push('/v3/channel')"
+          >去绑定邮箱</Button
+        >
       </Empty>
     </div>
 
-    <div v-else class="flex h-full gap-3">
+    <div
+      v-else
+      class="mail-panes flex h-full gap-3"
+      :class="{ 'mail-has-current': !!current }"
+    >
       <!-- 左：邮箱与文件夹 -->
-      <div class="flex w-52 shrink-0 flex-col gap-3 rounded bg-white p-3">
+      <div
+        v-if="!embedded"
+        class="mail-folders flex w-52 shrink-0 flex-col gap-3 rounded bg-white p-3"
+      >
         <Button type="primary" block @click="openCompose">写邮件</Button>
-        <Select v-if="!embedded" v-model:value="accountId" :options="accountOptions" />
+        <Select
+          v-if="!embedded"
+          v-model:value="accountId"
+          :options="accountOptions"
+        />
         <div class="flex flex-col">
           <div
             v-for="v in VIEWS"
             :key="v.key"
             class="flex cursor-pointer items-center justify-between rounded px-3 py-2"
-            :class="view === v.key ? 'bg-blue-50 font-medium text-blue-600' : 'hover:bg-gray-50'"
+            :class="
+              view === v.key
+                ? 'bg-blue-50 font-medium text-blue-600'
+                : 'hover:bg-gray-50'
+            "
             @click="view = v.key"
           >
             <span>{{ v.label }}</span>
-            <Badge v-if="v.key === 'unreplied' && unrepliedTotal" :count="unrepliedTotal" />
+            <Badge
+              v-if="v.key === 'unreplied' && unrepliedTotal"
+              :count="unrepliedTotal"
+            />
           </div>
         </div>
         <Button block :loading="syncing" @click="syncAll">立即收信</Button>
       </div>
 
       <!-- 中：邮件列表 -->
-      <div class="flex w-96 shrink-0 flex-col rounded bg-white">
+      <div class="mail-list flex w-96 shrink-0 flex-col rounded bg-white">
         <div class="p-3">
-          <InputSearch v-model:value="keyword" allow-clear placeholder="搜索主题、发件人" @search="() => { pageNo = 1; loadList(); }" />
+          <div v-if="embedded" class="mb-3 flex gap-2">
+            <Select
+              v-model:value="view"
+              class="min-w-0 flex-1"
+              :options="VIEWS.map((v) => ({ label: v.label, value: v.key }))"
+            /><Button type="primary" @click="openCompose">写邮件</Button
+            ><Button :loading="syncing" @click="syncAll">收信</Button>
+          </div>
+          <InputSearch
+            v-model:value="keyword"
+            allow-clear
+            placeholder="搜索主题、发件人"
+            @search="
+              () => {
+                pageNo = 1;
+                loadList();
+              }
+            "
+          />
         </div>
         <div class="flex-1 overflow-auto">
           <Spin :spinning="listLoading">
             <List :data-source="list" :locale="{ emptyText: '暂无邮件' }">
               <template #renderItem="{ item }">
                 <ListItem
-                  class="cursor-pointer !px-3"
-                  :class="current?.id === item.id ? 'bg-blue-50' : 'hover:bg-gray-50'"
+                  class="mail-row cursor-pointer !px-3"
+                  :class="
+                    current?.id === item.id
+                      ? 'is-selected bg-blue-50'
+                      : 'hover:bg-gray-50'
+                  "
                   @click="open(item)"
                 >
                   <div class="w-full min-w-0">
                     <div class="flex items-center justify-between gap-2">
-                      <span class="truncate" :class="item.readStatus ? '' : 'font-semibold'">
-                        {{ item.direction === 2 ? `发给 ${item.toAddresses}` : item.fromName || item.fromAddress }}
+                      <span
+                        class="truncate"
+                        :class="item.readStatus ? '' : 'font-semibold'"
+                      >
+                        {{
+                          item.direction === 2
+                            ? `发给 ${item.toAddresses}`
+                            : item.fromName || item.fromAddress
+                        }}
                       </span>
-                      <span class="shrink-0 text-xs text-gray-400">{{ fmtDateTime(item.sentTime, 'MM-DD HH:mm') }}</span>
+                      <span class="shrink-0 text-xs text-gray-400">{{
+                        fmtDateTime(item.sentTime, 'MM-DD HH:mm')
+                      }}</span>
                     </div>
-                    <div class="truncate text-sm" :class="item.readStatus ? 'text-gray-700' : 'font-semibold'">
+                    <div
+                      class="truncate text-sm"
+                      :class="
+                        item.readStatus ? 'text-gray-700' : 'font-semibold'
+                      "
+                    >
                       {{ item.subject || '（无主题）' }}
                     </div>
-                    <div class="truncate text-xs text-gray-400">{{ item.snippet }}</div>
+                    <div class="truncate text-xs text-gray-400">
+                      {{ item.snippet }}
+                    </div>
                     <div class="mt-1 flex gap-1">
-                      <Tag v-if="item.customerName" color="blue">{{ item.customerName }}</Tag>
-                      <Tag v-else-if="item.clueName" color="cyan">线索 · {{ item.clueName }}</Tag>
-                      <Tag v-if="item.direction === 1 && item.replied" color="green">已回复</Tag>
+                      <Tag v-if="item.customerName" color="blue">{{
+                        item.customerName
+                      }}</Tag>
+                      <Tag v-else-if="item.clueName" color="cyan"
+                        >线索 · {{ item.clueName }}</Tag
+                      >
+                      <Tag
+                        v-if="item.direction === 1 && item.replied"
+                        color="green"
+                        >已回复</Tag
+                      >
                       <Tag v-if="item.hasAttachments">📎 附件</Tag>
                       <Tag v-if="item.aiGenerated" color="purple">AI 回复</Tag>
                     </div>
@@ -369,34 +486,71 @@ onMounted(async () => {
           </Spin>
         </div>
         <div class="flex justify-center border-t p-2">
-          <Pagination v-model:current="pageNo" :page-size="pageSize" :total="total" size="small" simple @change="loadList" />
+          <Pagination
+            v-model:current="pageNo"
+            :page-size="pageSize"
+            :total="total"
+            size="small"
+            simple
+            @change="loadList"
+          />
         </div>
       </div>
 
       <!-- 右：正文与回复 -->
-      <div class="flex min-w-0 flex-1 flex-col rounded bg-white">
+      <div class="mail-reader flex min-w-0 flex-1 flex-col rounded bg-white">
         <Spin :spinning="detailLoading" class="h-full">
-          <div v-if="!current" class="flex h-full items-center justify-center p-10">
+          <div
+            v-if="!current"
+            class="flex h-full items-center justify-center p-10"
+          >
             <Empty description="选择一封邮件查看" />
           </div>
           <div v-else class="flex h-full flex-col">
             <div class="border-b p-4">
+              <Button
+                class="mail-mobile-back"
+                type="text"
+                @click="current = undefined"
+                >‹ 返回邮件列表</Button
+              >
               <div class="flex items-start justify-between gap-3">
-                <h3 class="text-lg font-semibold">{{ current.subject || '（无主题）' }}</h3>
-                <Popconfirm v-if="current.folder !== 'TRASH'" title="移到已删除？" @confirm="trash">
+                <h3 class="text-lg font-semibold">
+                  {{ current.subject || '（无主题）' }}
+                </h3>
+                <Popconfirm
+                  v-if="current.folder !== 'TRASH'"
+                  title="移到已删除？"
+                  @confirm="trash"
+                >
                   <Button size="small" danger>删除</Button>
                 </Popconfirm>
               </div>
               <div class="mt-1 text-sm text-gray-600">
-                {{ current.fromName }} &lt;{{ current.fromAddress }}&gt; → {{ current.toAddresses }}
-                <span v-if="current.ccAddresses">，抄送 {{ current.ccAddresses }}</span>
+                {{ current.fromName }} &lt;{{ current.fromAddress }}&gt; →
+                {{ current.toAddresses }}
+                <span v-if="current.ccAddresses"
+                  >，抄送 {{ current.ccAddresses }}</span
+                >
               </div>
               <div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
                 <span>{{ fmtDateTime(current.sentTime) }}</span>
-                <Tag v-if="current.customerName" color="blue" class="cursor-pointer" @click="router.push(`/crm/customer/detail/${current.customerId}`)">
+                <Tag
+                  v-if="current.customerName"
+                  color="blue"
+                  class="cursor-pointer"
+                  @click="
+                    router.push(`/crm/customer/detail/${current.customerId}`)
+                  "
+                >
                   客户：{{ current.customerName }}
                 </Tag>
-                <Tag v-else-if="current.clueName" color="cyan" class="cursor-pointer" @click="router.push(`/crm/clue/detail/${current.clueId}`)">
+                <Tag
+                  v-else-if="current.clueName"
+                  color="cyan"
+                  class="cursor-pointer"
+                  @click="router.push(`/crm/clue/detail/${current.clueId}`)"
+                >
                   线索：{{ current.clueName }}
                 </Tag>
                 <Tag v-else-if="current.direction === 1">未关联客户</Tag>
@@ -410,9 +564,14 @@ onMounted(async () => {
                 sandbox="allow-popups allow-popups-to-escape-sandbox"
                 class="h-[420px] w-full border-0"
               ></iframe>
-              <pre v-else class="whitespace-pre-wrap font-sans text-sm">{{ current.textBody }}</pre>
+              <pre v-else class="whitespace-pre-wrap font-sans text-sm">{{
+                current.textBody
+              }}</pre>
 
-              <div v-if="current.attachments?.length" class="mt-4 flex flex-wrap gap-2">
+              <div
+                v-if="current.attachments?.length"
+                class="mt-4 flex flex-wrap gap-2"
+              >
                 <a
                   v-for="a in current.attachments"
                   :key="a.id"
@@ -422,50 +581,102 @@ onMounted(async () => {
                   class="flex items-center gap-2 rounded border px-3 py-2 text-sm hover:bg-gray-50"
                 >
                   <span>📎 {{ a.fileName }}</span>
-                  <span class="text-xs text-gray-400">{{ formatSize(a.fileSize) }}</span>
+                  <span class="text-xs text-gray-400">{{
+                    formatSize(a.fileSize)
+                  }}</span>
                 </a>
               </div>
 
               <div v-if="thread.length > 1" class="mt-6">
-                <div class="mb-2 text-sm font-medium text-gray-500">往来记录（{{ thread.length }} 封）</div>
+                <div class="mb-2 text-sm font-medium text-gray-500">
+                  往来记录（{{ thread.length }} 封）
+                </div>
                 <div
                   v-for="t in thread"
                   :key="t.id"
                   class="mb-2 rounded border-l-4 p-2 text-sm"
-                  :class="t.direction === 2 ? 'border-green-400 bg-green-50' : 'border-blue-400 bg-blue-50'"
+                  :class="
+                    t.direction === 2
+                      ? 'border-green-400 bg-green-50'
+                      : 'border-blue-400 bg-blue-50'
+                  "
                 >
                   <div class="text-xs text-gray-500">
-                    {{ t.direction === 2 ? '我方' : t.fromName || t.fromAddress }} · {{ fmtDateTime(t.sentTime) }}
+                    {{
+                      t.direction === 2 ? '我方' : t.fromName || t.fromAddress
+                    }}
+                    · {{ fmtDateTime(t.sentTime) }}
                   </div>
                   <div class="truncate">{{ t.snippet }}</div>
                 </div>
               </div>
             </div>
 
-            <div v-if="current.direction === 1 && current.folder !== 'TRASH'" class="border-t p-4">
-              <div v-if="aiDraft" class="mb-2 rounded border border-orange-200 bg-orange-50 p-3 text-sm">
+            <div
+              v-if="current.direction === 1 && current.folder !== 'TRASH'"
+              class="mail-reply border-t p-4"
+            >
+              <div
+                v-if="aiDraft"
+                class="mail-ai-draft mb-2 rounded border border-orange-200 bg-orange-50 p-3 text-sm"
+              >
                 <div class="mb-1 font-medium text-orange-700">
-                  AI 已准备回复，未自动发出：{{ DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason }}
-                  <span v-if="aiDraft.reasonDetail">（{{ aiDraft.reasonDetail }}）</span>
+                  AI 已准备回复，未自动发出：{{
+                    DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason
+                  }}
+                  <span v-if="aiDraft.reasonDetail"
+                    >（{{ aiDraft.reasonDetail }}）</span
+                  >
                 </div>
-                <div v-if="aiDraft.content" class="line-clamp-3 whitespace-pre-wrap text-gray-700">{{ aiDraft.content }}</div>
+                <div
+                  v-if="aiDraft.content"
+                  class="line-clamp-3 whitespace-pre-wrap text-gray-700"
+                >
+                  {{ aiDraft.content }}
+                </div>
                 <div class="mt-2 flex gap-2">
-                  <Button v-if="aiDraft.content" size="small" type="primary" ghost @click="useDraft">填入回复框</Button>
+                  <Button
+                    v-if="aiDraft.content"
+                    size="small"
+                    type="primary"
+                    ghost
+                    @click="useDraft"
+                    >填入回复框</Button
+                  >
                   <Button size="small" @click="discardDraft">忽略</Button>
                 </div>
               </div>
-              <Textarea v-model:value="replyText" :rows="5" placeholder="输入回复内容，原邮件会自动引用在下方" />
+              <Textarea
+                v-model:value="replyText"
+                :rows="5"
+                placeholder="输入回复内容，原邮件会自动引用在下方"
+              />
               <div v-if="replyFiles.length" class="mt-2 flex flex-wrap gap-2">
-                <Tag v-for="a in replyFiles" :key="a.id" closable @close="removeFile(replyFiles, a.id)">
+                <Tag
+                  v-for="a in replyFiles"
+                  :key="a.id"
+                  closable
+                  @close="removeFile(replyFiles, a.id)"
+                >
                   📎 {{ a.fileName }} {{ formatSize(a.fileSize) }}
                 </Tag>
               </div>
               <div class="mt-2 flex justify-between">
                 <div class="flex gap-2">
-                  <Button :loading="uploading" @click="pickFiles(replyFiles)">添加附件</Button>
-                  <Button :loading="aiLoading" @click="aiCompose">AI 起草</Button>
+                  <Button :loading="uploading" @click="pickFiles(replyFiles)"
+                    >添加附件</Button
+                  >
+                  <Button :loading="aiLoading" @click="aiCompose"
+                    >AI 起草</Button
+                  >
                 </div>
-                <Button type="primary" :loading="replySending" :disabled="!replyText.trim() || uploading" @click="reply">发送回复</Button>
+                <Button
+                  type="primary"
+                  :loading="replySending"
+                  :disabled="!replyText.trim() || uploading"
+                  @click="reply"
+                  >发送回复</Button
+                >
               </div>
             </div>
           </div>
@@ -473,28 +684,61 @@ onMounted(async () => {
       </div>
     </div>
 
-    <Modal v-model:open="composeOpen" title="写邮件" :width="680" ok-text="发送" @ok="sendCompose">
+    <Modal
+      v-model:open="composeOpen"
+      title="写邮件"
+      :width="680"
+      ok-text="发送"
+      @ok="sendCompose"
+    >
       <div class="flex flex-col gap-3">
         <Select
           v-model:value="compose.accountId"
           :options="accounts.map((a) => ({ label: a.email, value: a.id }))"
           placeholder="发件邮箱"
         />
-        <Input v-model:value="compose.to" placeholder="收件人，多个用逗号分隔" />
+        <Input
+          v-model:value="compose.to"
+          placeholder="收件人，多个用逗号分隔"
+        />
         <Input v-model:value="compose.cc" placeholder="抄送（可选）" />
         <Select
           :value="templateId"
           allow-clear
           placeholder="套用邮件模板（可选，在「设置 → 邮件模板」里管理）"
-          :options="templates.map((t) => ({ label: `${t.name}${t.defaulted ? '（默认）' : ''}`, value: t.id }))"
+          :options="
+            templates.map((t) => ({
+              label: `${t.name}${t.defaulted ? '（默认）' : ''}`,
+              value: t.id,
+            }))
+          "
           @change="(v: any) => applyTemplate(v)"
         />
         <Input v-model:value="compose.subject" placeholder="主题" />
-        <Tinymce v-if="compose.html || templateId" v-model="compose.html" :height="320" />
-        <Textarea v-else v-model:value="compose.text" :rows="10" placeholder="正文" />
+        <Tinymce
+          v-if="compose.html || templateId"
+          v-model="compose.html"
+          :height="320"
+        />
+        <Textarea
+          v-else
+          v-model:value="compose.text"
+          :rows="10"
+          placeholder="正文"
+        />
         <div class="flex flex-wrap items-center gap-2">
-          <Button size="small" :loading="uploading" @click="pickFiles(composeFiles)">添加附件</Button>
-          <Tag v-for="a in composeFiles" :key="a.id" closable @close="removeFile(composeFiles, a.id)">
+          <Button
+            size="small"
+            :loading="uploading"
+            @click="pickFiles(composeFiles)"
+            >添加附件</Button
+          >
+          <Tag
+            v-for="a in composeFiles"
+            :key="a.id"
+            closable
+            @close="removeFile(composeFiles, a.id)"
+          >
             📎 {{ a.fileName }} {{ formatSize(a.fileSize) }}
           </Tag>
         </div>

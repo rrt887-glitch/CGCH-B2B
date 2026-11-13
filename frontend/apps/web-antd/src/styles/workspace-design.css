@@ -1,0 +1,470 @@
+/* Product skin from the approved OpenDesign reference. All selectors stay within
+   the workspace; permissions, forms and API-backed components remain native. */
+.mail-mobile-back {
+  display: none;
+}
+@media (width <= 760px) {
+  .is-apple .mail-has-current .mail-list {
+    display: none;
+  }
+  .is-apple .mail-panes:not(.mail-has-current) .mail-reader {
+    display: none;
+  }
+  .is-apple .mail-mobile-back {
+    display: inline-flex;
+  }
+  .is-apple .mail-reader > .ant-spin-nested-loading,
+  .is-apple .mail-reader .ant-spin-container {
+    height: 100%;
+  }
+  .is-apple .mail-reader {
+    width: 100%;
+  }
+  .is-apple .mail-list {
+    flex: 1 !important;
+    min-width: 0;
+  }
+  .is-apple .mail-reader .mail-reply {
+    max-height: 50%;
+    overflow: auto;
+  }
+}
+.cgch-shell.is-apple {
+  --cg-primary: #007aff;
+  --cg-primary-soft: rgb(0 122 255 / 12%);
+  --cg-canvas: #f2f2f7;
+  --cg-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 2px 14px rgb(0 0 0 / 4%);
+  --cg-glass: rgb(255 255 255 / 64%);
+  font-size: 15px;
+}
+.is-apple .rail-group {
+  padding: 14px 12px 4px;
+  color: #92929c;
+  font-size: 11px;
+  font-weight: 600;
+}
+.is-apple .cgch-rail__nav {
+  overflow: auto;
+  min-height: 0;
+}
+.is-apple .cgch-rail__item {
+  flex-shrink: 0;
+}
+.is-apple .cgch-rail__logo {
+  flex-shrink: 0;
+}
+.is-apple .cgch-main {
+  min-width: 0;
+}
+.is-apple :where(.ant-btn) {
+  min-height: 32px;
+  font-size: 13px;
+}
+.is-apple :where(.ant-btn-primary) {
+  background: #007aff;
+  border-color: #007aff;
+}
+.is-apple
+  :where(
+    .ant-input,
+    .ant-input-affix-wrapper,
+    .ant-select-selector,
+    .ant-picker
+  ) {
+  border-radius: 10px;
+}
+.is-apple
+  :where(.ant-input:not(textarea), .ant-input-affix-wrapper, .ant-picker) {
+  background: #7878800c;
+}
+.is-apple :where(.ant-table) {
+  font-size: 13px;
+}
+.is-apple :where(.ant-table-thead > tr > th) {
+  background: #f7f7fa;
+  color: #6e6e73;
+  font-size: 11px;
+  font-weight: 500;
+  padding-block: 13px;
+}
+.is-apple :where(.ant-table-tbody > tr > td) {
+  padding-block: 16px;
+  border-color: #ededf1;
+}
+.is-apple :where(.ant-tag) {
+  border-radius: 7px;
+  font-size: 11px;
+}
+.is-apple .side-hub {
+  gap: 20px;
+  height: 100%;
+  min-height: 0;
+}
+.is-apple .side-hub__menu {
+  flex-basis: 165px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 12px 0;
+}
+.is-apple .side-hub__item {
+  margin: 3px 0;
+  padding: 10px 12px;
+  border-radius: 11px;
+  color: #6e6e73;
+  font-size: 13px;
+}
+.is-apple .side-hub__item.on {
+  color: #007aff;
+  background: #007aff14;
+  font-weight: 600;
+}
+.is-apple .side-hub__main {
+  background: transparent;
+  border-radius: 22px;
+  min-width: 0;
+}
+.is-apple .side-hub__body {
+  height: 100%;
+  padding: 0;
+}
+.is-apple .side-hub--crm {
+  flex-direction: column;
+  gap: 10px;
+}
+.is-apple .side-hub--crm .side-hub__menu {
+  flex: none;
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  padding: 4px;
+  max-width: 100%;
+  width: max-content;
+  overflow-x: auto;
+  background: #7878800c;
+  border-radius: 12px;
+}
+.is-apple .side-hub--crm .side-hub__group,
+.is-apple .side-hub--crm .side-hub__sep {
+  display: none;
+}
+.is-apple .side-hub--crm .side-hub__item {
+  white-space: nowrap;
+  margin: 0;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+.is-apple .side-hub--crm .side-hub__item.on {
+  background: white;
+  color: #1d1d1f;
+  box-shadow: 0 1px 4px #0000000c;
+}
+.is-apple .crm-list {
+  padding: 12px 3px 0;
+}
+.is-apple .crm-list__head {
+  padding-bottom: 20px;
+  gap: 15px;
+}
+.is-apple .crm-list__title {
+  font-size: 30px;
+  letter-spacing: -1px;
+  line-height: 1.3;
+}
+.is-apple .crm-list__main {
+  background: white;
+  border-radius: 22px;
+  box-shadow: var(--cg-shadow);
+  overflow: hidden;
+}
+.is-apple .crm-list__filters {
+  padding: 16px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.is-apple .crm-list__pager {
+  padding: 15px 18px;
+  border-top: 0.5px solid #e5e5ea;
+}
+.is-apple .crm-list__rail {
+  background: #ffffff80;
+  border: 0;
+  border-radius: 18px;
+}
+.is-apple .crm-list__table {
+  min-width: 0;
+}
+.is-apple .crm-stage-chips {
+  padding: 8px 0 15px;
+  gap: 6px;
+}
+.is-apple .crm-stage-chips button {
+  border-radius: 99px;
+}
+.is-apple .agent {
+  height: 100%;
+  gap: 20px;
+  min-height: 0;
+}
+.is-apple .agent__steps {
+  flex-basis: 160px;
+  padding: 16px 0;
+  background: transparent;
+}
+.is-apple .agent__step {
+  font-size: 13px;
+  padding: 11px 12px;
+  border-radius: 11px;
+  gap: 8px;
+}
+.is-apple .agent__step.on {
+  color: #007aff;
+  background: #007aff14;
+}
+.is-apple .agent__num {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+.is-apple .agent__main {
+  border-radius: 22px;
+  padding: 22px;
+  background: white;
+  box-shadow: var(--cg-shadow);
+}
+.is-apple .agent__test {
+  flex-basis: 280px;
+  border-radius: 22px;
+  background: #ffffffa3;
+  border: 1px solid #ffffffcc;
+  padding: 17px;
+  box-shadow: var(--cg-shadow);
+}
+.is-apple .ps__title {
+  font-size: 28px;
+  letter-spacing: -0.8px;
+}
+.is-apple .ps__card {
+  border-radius: 18px;
+  box-shadow: none;
+  background: #f7f7fa;
+}
+.is-apple .ch-page {
+  height: 100%;
+  padding: 14px 4px;
+  overflow: auto;
+}
+.is-apple .ch-spin,
+.is-apple .ch-spin .ant-spin-container {
+  height: auto;
+}
+.is-apple .channel-table-labels {
+  display: none;
+}
+.is-apple .channel-account-panel {
+  background: transparent;
+}
+.is-apple .channel-account-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.is-apple .channel-account-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 15px 10px;
+  padding: 22px;
+  background: white;
+  border-radius: 22px;
+  box-shadow: var(--cg-shadow);
+  min-width: 0;
+}
+.is-apple .channel-account-card > div:first-child {
+  grid-column: 1 / -1;
+  padding-bottom: 5px;
+}
+.is-apple .channel-account-card .ch-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+.is-apple .channel-account-card .ch-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+.is-apple .channel-account-card > div:last-child {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  border-top: 0.5px solid #e5e5ea;
+  padding-top: 16px;
+  flex-wrap: wrap;
+}
+.is-apple .channel-assignees {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.is-apple .channel-assignees small {
+  color: #86868b;
+  font-size: 11px;
+}
+.is-apple .mail-design {
+  height: 100%;
+}
+.is-apple .mail-design [data-layout-region='page-content'] {
+  padding: 0;
+}
+.is-apple .mail-panes {
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+  border-radius: 22px;
+  overflow: hidden;
+  background: white;
+}
+.is-apple .mail-list {
+  background: #f7f7fa;
+  border-radius: 0;
+  border-right: 0.5px solid #e5e5ea;
+  width: 285px;
+}
+.is-apple .mail-reader {
+  border-radius: 0;
+  min-height: 0;
+}
+.is-apple .mail-row {
+  border: 0;
+  margin: 4px 8px;
+  padding: 14px 12px;
+  border-radius: 12px;
+  transition: background 0.2s;
+}
+.is-apple .mail-row.is-selected {
+  background: #007aff;
+  color: white;
+}
+.is-apple
+  .mail-row.is-selected
+  :where(.text-gray-400, .text-gray-500, .text-gray-600) {
+  color: #ffffffcf;
+}
+.is-apple .mail-reply {
+  margin: 0 22px 22px;
+  padding: 18px;
+  border: 1px solid #eeeef4;
+  border-radius: 20px;
+  box-shadow: var(--cg-shadow);
+}
+.is-apple .mail-ai-draft {
+  padding: 16px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background:
+    linear-gradient(white, white) padding-box,
+    linear-gradient(120deg, #ff9500, #ff2d92, #af52de, #007aff) border-box;
+}
+@media (width <= 1450px) {
+  .is-apple .channel-account-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .is-apple .agent__test {
+    flex-basis: 245px;
+  }
+  .is-apple .agent {
+    gap: 14px;
+  }
+}
+@media (width <= 1100px) {
+  .is-apple .agent {
+    flex-wrap: wrap;
+    overflow: auto;
+  }
+  .is-apple .agent__main {
+    flex-basis: calc(100% - 180px);
+  }
+  .is-apple .agent__test {
+    flex-basis: 100%;
+    min-height: 350px;
+  }
+  .is-apple .crm-list__rail {
+    flex-basis: 145px;
+  }
+  .is-apple .side-hub__menu {
+    flex-basis: 145px;
+  }
+}
+@media (width <= 760px) {
+  .is-apple .rail-group {
+    display: none;
+  }
+  .is-apple .cgch-rail__nav {
+    gap: 7px;
+  }
+  .is-apple .cgch-rail__item {
+    min-height: 44px;
+  }
+  .is-apple .cgch-rail__item > span {
+    display: none;
+  }
+  .is-apple .cgch-rail__item:focus-visible {
+    outline: 2px solid #007aff;
+    outline-offset: -2px;
+  }
+  .is-apple .channel-account-grid {
+    grid-template-columns: 1fr;
+  }
+  .is-apple .crm-list__rail {
+    display: none;
+  }
+  .is-apple .crm-list__main {
+    min-width: 0;
+  }
+  .is-apple .crm-list__title {
+    font-size: 25px;
+  }
+  .is-apple .crm-list__filters {
+    padding: 12px;
+  }
+  .is-apple .crm-list__filters > * {
+    max-width: 100%;
+  }
+  .is-apple .agent__steps {
+    flex-basis: 100%;
+    flex-direction: row;
+    overflow: auto;
+    padding: 0;
+    gap: 5px;
+  }
+  .is-apple .agent__step {
+    white-space: nowrap;
+    min-height: 44px;
+  }
+  .is-apple .agent__main {
+    flex-basis: 100%;
+    padding: 17px;
+  }
+  .is-apple .agent__test {
+    min-height: 370px;
+  }
+  .is-apple .side-hub--crm .side-hub__menu {
+    display: none;
+  }
+  .is-apple .ant-btn:not(.ant-btn-sm) {
+    min-height: 40px;
+  }
+  .is-apple .mail-list {
+    width: 100%;
+  }
+  .is-apple .mail-reply {
+    margin: 0 8px 8px;
+  }
+  .is-apple .crm-list__pager {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .is-apple .cgch-main {
+    overflow: auto;
+  }
+}

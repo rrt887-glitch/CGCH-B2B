@@ -22,36 +22,51 @@ const router = useRouter();
 
 // 没有权限的项不显示（例如业务员看不到「成员」「AI 接待设置」）
 const { hasAccessByCodes } = useAccess();
-const allowed = (it: { codes?: string[] }) => !it.codes?.length || hasAccessByCodes(it.codes);
+const allowed = (it: { codes?: string[] }) =>
+  !it.codes?.length || hasAccessByCodes(it.codes);
 const visibleGroups = computed(() =>
-  props.groups.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter((g) => g.items.length > 0),
+  props.groups
+    .map((g) => ({ ...g, items: g.items.filter(allowed) }))
+    .filter((g) => g.items.length > 0),
 );
 const items = computed(() => visibleGroups.value.flatMap((g) => g.items));
 const activeKey = computed(() => {
   const k = String(route.query.tab || '');
   return items.value.some((i) => i.key === k) ? k : items.value[0]?.key;
 });
-const active = computed(() => items.value.find((i) => i.key === activeKey.value));
+const active = computed(() =>
+  items.value.find((i) => i.key === activeKey.value),
+);
 
 const cache = new Map<string, Component>();
 const view = computed(() => {
   const item = active.value;
   if (!item) return undefined;
   if (!cache.has(item.key)) {
-    cache.set(item.key, markRaw(defineAsyncComponent({ loader: item.load, loadingComponent: Spin, delay: 120 })));
+    cache.set(
+      item.key,
+      markRaw(
+        defineAsyncComponent({
+          loader: item.load,
+          loadingComponent: Spin,
+          delay: 120,
+        }),
+      ),
+    );
   }
   return cache.get(item.key);
 });
 
 function select(key: string, extra?: Record<string, string>) {
-  if (key !== activeKey.value || extra) router.replace({ query: { tab: key, ...extra } });
+  if (key !== activeKey.value || extra)
+    router.replace({ query: { tab: key, ...extra } });
 }
 /** 子页面之间跳转（例如线索转客户后打开客户列表） */
 provide('cgchHubSelect', select);
 </script>
 
 <template>
-  <div class="side-hub">
+  <div class="side-hub" :class="{ 'side-hub--crm': route.path === '/v3/crm' }">
     <aside class="side-hub__menu">
       <template v-for="(g, gi) in visibleGroups" :key="gi">
         <div v-if="gi > 0 && !g.label" class="side-hub__sep"></div>
@@ -140,7 +155,7 @@ provide('cgchHubSelect', select);
 }
 
 .side-hub__item:hover {
-  color: #1D1D1F;
+  color: #1d1d1f;
   background: #f2f2f7;
 }
 
@@ -174,7 +189,7 @@ provide('cgchHubSelect', select);
   font-size: 13px;
   color: #6e6e73;
   cursor: pointer;
-  background: #F2F2F7;
+  background: #f2f2f7;
   border: 0;
   border-radius: 8px;
 }
