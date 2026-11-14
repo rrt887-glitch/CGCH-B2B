@@ -9,10 +9,8 @@ import type { ChannelWaApi } from '#/api/channel/whatsapp';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { preferences } from '@vben/preferences';
-import { useUserStore } from '@vben/stores';
-
-import { Avatar, Badge, Empty, Spin } from 'ant-design-vue';
+import { Button, Drawer, Empty, Select, Spin, Tag } from 'ant-design-vue';
+import { IconifyIcon } from '@vben/icons';
 
 import { getMailAccountList } from '#/api/channel/mail';
 import {
@@ -22,13 +20,11 @@ import {
 } from '#/api/channel/whatsapp';
 import MailWorkbench from '#/views/cgch/channel/mail/index.vue';
 import ImWorkbench from '#/views/cgch/channel/im/index.vue';
-import { CHANNEL_ICONS } from '#/assets/channel-icons';
 
 defineOptions({ name: 'CgchV3Conversation' });
 
 const route = useRoute();
 const router = useRouter();
-const userStore = useUserStore();
 
 const loading = ref(true);
 const filtersOpen = ref(false);
@@ -43,14 +39,12 @@ const counts = ref<ChannelWaApi.InboxCounts>();
 async function loadCounts() {
   counts.value = await getWaInboxCounts().catch(() => counts.value);
 }
-const unreadOf = (id?: number) =>
-  id === undefined ? 0 : (counts.value?.unreadByAccount?.[id] ?? 0);
 let countTimer: ReturnType<typeof setInterval> | undefined;
 onBeforeUnmount(() => countTimer && clearInterval(countTimer));
 function pickView(v: 'mine' | 'team') {
   openId.value = undefined;
   view.value = v;
-  selected.value = { kind: 'im' };
+  if (selected.value.kind !== 'im') selected.value = { kind: 'im' };
   router.replace({
     query: { ...route.query, channel: undefined, ref: undefined },
   });
@@ -69,17 +63,52 @@ watch(
   },
 );
 
-const GRADES = [
-  { key: '', label: '全部等级' },
-  { key: 'A', label: 'A类客户' },
-  { key: 'B', label: 'B类客户' },
-  { key: 'C', label: 'C类客户' },
-  { key: 'D', label: 'D类客户' },
-];
-const grade = ref('');
-/** 客户等级 A–D 对应 crm_customer_level 字典值 1–4 */
-const LEVEL: Record<string, number> = { A: 1, B: 2, C: 3, D: 4 };
-
+const filters = ref<{
+  levels: number[];
+  group?: boolean;
+  highPriority: boolean;
+}>({ levels: [], highPriority: false });
+const draft = ref({ ...filters.value, levels: [] as number[] });
+const filterCount = computed(
+  () =>
+    filters.value.levels.length +
+    Number(filters.value.group !== undefined) +
+    Number(filters.value.highPriority),
+);
+function openFilters() {
+  draft.value = { ...filters.value, levels: [...filters.value.levels] };
+  filtersOpen.value = true;
+}
+function applyFilters() {
+  filters.value = { ...draft.value, levels: [...draft.value.levels] };
+  filtersOpen.value = false;
+}
+function toggleLevel(n: number) {
+  draft.value.levels = draft.value.levels.includes(n)
+    ? draft.value.levels.filter((v) => v !== n)
+    : [...draft.value.levels, n];
+}
+function clearFilters() {
+  filters.value = { levels: [], highPriority: false };
+}
+const accountKey = computed(
+  () => `${selected.value.kind}:${selected.value.id ?? 'all'}`,
+);
+const accountOptions = computed(() => [
+  ...(showIm.value ? [{ value: 'im:all', label: '全部即时消息' }] : []),
+  ...waAccounts.value.map((a) => ({
+    value: `im:${a.id}`,
+    label: `${PLATFORM[a.platform || 'whatsapp']} · ${a.name || imLabel(a)}`,
+  })),
+  ...(mailAccounts.value.length
+    ? [{ value: 'mail:all', label: '全部邮件' }]
+    : []),
+  ...mailAccounts.value.map((a) => ({ value: `mail:${a.id}`, label: a.email })),
+]);
+function selectAccount(value: string) {
+  const [kind, id] = value.split(':');
+  pick(kind as 'im' | 'mail', id === 'all' ? undefined : Number(id));
+}
 const PLATFORM: Record<string, string> = {
   whatsapp: 'WhatsApp',
   messenger: 'Facebook',
@@ -90,19 +119,6 @@ const PLATFORM: Record<string, string> = {
 };
 const imLabel = (a: ChannelWaApi.Account) =>
   a.displayPhone || a.name || a.phoneNumberId;
-/** 账号前面的渠道图标（与原网站一致） */
-const IM_ICON: Record<string, string> = {
-  whatsapp: 'whatsapp',
-  messenger: 'messenger',
-  instagram: 'instagram',
-  web: 'im',
-  youtube: 'youtube',
-  tiktok: 'tiktok',
-};
-const imIcon = (a: ChannelWaApi.Account) =>
-  CHANNEL_ICONS[IM_ICON[a.platform || 'whatsapp'] ?? 'whatsapp'];
-const mailIcon = (m: ChannelMailApi.Account) =>
-  CHANNEL_ICONS[m.provider || 'custom'] ?? CHANNEL_ICONS.custom;
 /** 自己没有号码时，可能有同事转交过来的会话 */
 const hasTransferred = ref(false);
 const showIm = computed(
@@ -129,10 +145,6 @@ function pick(kind: 'im' | 'mail', id?: number) {
     },
   });
 }
-
-const avatar = computed(
-  () => userStore.userInfo?.avatar || preferences.app.defaultAvatar,
-);
 
 onMounted(async () => {
   try {
@@ -167,392 +179,385 @@ onMounted(async () => {
 
 <template>
   <div class="v3-conv" @keydown.esc="filtersOpen = false">
-    <div class="inbox-toolbar">
-      <button
-        type="button"
-        :aria-expanded="filtersOpen"
-        @click="filtersOpen = !filtersOpen"
-      >
-        收件箱与筛选 {{ filtersOpen ? '⌃' : '⌄' }}</button
-      ><span
-        >{{
-          selected.kind === 'mail'
-            ? '邮件'
-            : view === 'team'
-              ? '团队会话'
-              : '我的会话'
-        }}
-        · {{ grade ? `${grade} 类客户` : '全部等级' }}</span
-      >
-    </div>
     <Spin :spinning="loading" wrapper-class-name="h-full">
       <div v-if="!loading && !hasAny" class="v3-conv__empty">
-        <Empty description="还没有接入任何渠道账号">
-          <a @click="router.push('/v3/channel')">去渠道页连接账号 →</a>
-        </Empty>
+        <Empty description="还没有接入任何渠道账号"
+          ><Button type="primary" @click="router.push('/v3/channel')"
+            >连接渠道账号</Button
+          ></Empty
+        >
       </div>
-
-      <div v-else class="v3-conv__body">
-        <aside v-show="filtersOpen" class="v3-conv__side">
-          <div class="flex items-center gap-2 px-3 py-3">
-            <Avatar :src="avatar" :size="24" />
-            <span class="truncate font-semibold">会话</span>
-            <span class="ml-auto truncate text-xs text-[#86868B]">{{
-              userStore.userInfo?.nickname
-            }}</span>
-          </div>
-
-          <div v-if="showIm" class="v3-conv__group">
-            <div
-              class="v3-conv__item"
-              :class="{
-                on: selected.kind === 'im' && !selected.id && view === 'mine',
-              }"
-              @click="pickView('mine')"
-            >
-              <span class="flex-1">我的会话</span>
-              <span class="v3-conv__count">{{ counts?.open ?? '' }}</span>
-            </div>
-            <!-- 团队会话：管理员看全公司；成员只看到同事「公开给团队」的会话 -->
-            <div
-              v-if="counts?.teamOpen != null"
-              class="v3-conv__item"
-              :class="{
-                on: selected.kind === 'im' && !selected.id && view === 'team',
-              }"
-              @click="pickView('team')"
-            >
-              <span class="flex-1">团队会话</span>
-              <span class="v3-conv__count">{{ counts?.teamOpen || '' }}</span>
-            </div>
-          </div>
-
-          <div v-if="waAccounts.length" class="v3-conv__label">收件箱</div>
-          <div class="v3-conv__group">
-            <div
-              v-for="a in waAccounts"
-              :key="`im-${a.id}`"
-              class="v3-conv__item v3-conv__item--sub"
-              :class="{ on: selected.kind === 'im' && selected.id === a.id }"
-              @click="
-                view = 'mine';
-                pick('im', a.id);
-              "
-            >
-              <img
-                :src="imIcon(a)"
-                :alt="PLATFORM[a.platform || 'whatsapp']"
-                class="v3-conv__icon"
-              />
-              <span
-                class="flex-1 truncate"
-                :title="`${PLATFORM[a.platform || 'whatsapp']} · ${imLabel(a)}`"
-                >{{ a.name || imLabel(a) }}</span
+      <div v-else class="v3-conv__main">
+        <ImWorkbench
+          v-if="selected.kind === 'im'"
+          :key="viewKey"
+          embedded
+          :account-id="selected.id"
+          :levels="filters.levels"
+          :group="filters.group"
+          :high-priority="filters.highPriority"
+          :open-id="openId"
+          :view="view"
+          @changed="loadCounts"
+        >
+          <template #list-controls>
+            <div class="ownership" aria-label="会话归属">
+              <button
+                type="button"
+                :class="{ on: view === 'mine' }"
+                @click="pickView('mine')"
               >
-              <span v-if="unreadOf(a.id)" class="v3-conv__badge">{{
-                unreadOf(a.id)
-              }}</span>
+                我的
+                <small
+                  v-if="counts?.open != null"
+                  title="全部账号的进行中会话数"
+                  >{{ counts.open }}</small
+                ></button
+              ><button
+                v-if="counts?.teamOpen != null"
+                type="button"
+                :class="{ on: view === 'team' }"
+                @click="pickView('team')"
+              >
+                团队
+                <small title="全部账号的团队进行中会话数">{{
+                  counts.teamOpen
+                }}</small>
+              </button>
             </div>
-          </div>
-
-          <div v-if="mailAccounts.length" class="v3-conv__label">邮箱</div>
-          <div class="v3-conv__group">
-            <div
-              v-if="mailAccounts.length"
-              class="v3-conv__item"
-              :class="{ on: selected.kind === 'mail' && !selected.id }"
-              @click="pick('mail')"
-            >
-              全部邮件
+            <div class="account-line">
+              <Select
+                :value="accountKey"
+                :options="accountOptions"
+                class="account-select"
+                aria-label="选择收件箱账号"
+                @change="(v: any) => selectAccount(String(v))"
+              /><button
+                type="button"
+                class="filter-trigger"
+                :class="{ on: filterCount > 0 }"
+                aria-label="筛选会话"
+                :aria-expanded="filtersOpen"
+                @click="openFilters"
+              >
+                <IconifyIcon icon="lucide:sliders-horizontal" /><span
+                  v-if="filterCount"
+                  >{{ filterCount }}</span
+                >
+              </button>
             </div>
-            <div
-              v-for="m in mailAccounts"
-              :key="`mail-${m.id}`"
-              class="v3-conv__item v3-conv__item--sub"
-              :class="{ on: selected.kind === 'mail' && selected.id === m.id }"
-              @click="pick('mail', m.id)"
-            >
-              <img :src="mailIcon(m)" alt="" class="v3-conv__icon" />
-              <span class="flex-1 truncate" :title="m.email">{{
-                m.email
-              }}</span>
-              <Badge
-                v-if="m.unrepliedCount"
-                :count="m.unrepliedCount"
-                size="small"
-              />
+            <div v-if="filterCount" class="filter-chips">
+              <Tag
+                v-for="n in filters.levels"
+                :key="n"
+                closable
+                @close.prevent="
+                  filters.levels = filters.levels.filter((v) => v !== n)
+                "
+                >{{ ['A', 'B', 'C', 'D'][n - 1] }} 类</Tag
+              ><Tag
+                v-if="filters.group !== undefined"
+                closable
+                @close.prevent="filters.group = undefined"
+                >{{ filters.group ? '群聊' : '联系人' }}</Tag
+              ><Tag
+                v-if="filters.highPriority"
+                closable
+                @close.prevent="filters.highPriority = false"
+                >高优先级</Tag
+              ><button type="button" @click="clearFilters">清空</button>
             </div>
-          </div>
-
-          <div class="v3-conv__label">客户等级</div>
-          <div class="flex flex-wrap gap-1.5 px-3 pb-3">
-            <button
-              v-for="g in GRADES"
-              :key="g.key"
-              type="button"
-              class="v3-conv__chip"
-              :class="{ on: grade === g.key }"
-              @click="grade = g.key"
-            >
-              {{ g.key ? `${g.key} 类` : '全部' }}
-            </button>
-          </div>
-        </aside>
-
-        <section class="v3-conv__main">
-          <ImWorkbench
-            v-if="selected.kind === 'im'"
-            :key="viewKey"
-            embedded
-            :account-id="selected.id"
-            :level="LEVEL[grade]"
-            :open-id="openId"
-            :view="view"
-            @changed="loadCounts"
-          />
-          <MailWorkbench
-            v-else
-            :key="viewKey"
-            embedded
-            :account-id="selected.id"
-            :open-id="openId"
-          />
-        </section>
+          </template>
+        </ImWorkbench>
+        <MailWorkbench
+          v-else
+          :key="viewKey"
+          embedded
+          :account-id="selected.id"
+          :open-id="openId"
+          ><template #list-controls
+            ><Select
+              :value="accountKey"
+              :options="accountOptions"
+              class="w-full"
+              aria-label="选择收件箱账号"
+              @change="(v: any) => selectAccount(String(v))" /></template
+        ></MailWorkbench>
       </div>
     </Spin>
+    <Drawer
+      v-model:open="filtersOpen"
+      title="筛选会话"
+      placement="right"
+      :width="290"
+      :mask="false"
+      :get-container="false"
+      :root-style="{ position: 'absolute' }"
+      root-class-name="conversation-filter-drawer"
+      @close="filtersOpen = false"
+    >
+      <p class="filter-description">
+        只筛选当前账号和归属下的会话。应用后，条件会显示在列表上方。
+      </p>
+      <div class="filter-field">
+        <label>客户等级 · 可多选</label>
+        <div class="grade-options">
+          <button
+            v-for="(g, i) in ['A', 'B', 'C', 'D']"
+            :key="g"
+            type="button"
+            :class="{ on: draft.levels.includes(i + 1) }"
+            :aria-pressed="draft.levels.includes(i + 1)"
+            @click="toggleLevel(i + 1)"
+          >
+            {{ g }} 类
+          </button>
+        </div>
+        <button type="button" class="filter-reset" @click="draft.levels = []">
+          不限等级
+        </button>
+      </div>
+      <div class="filter-field">
+        <label for="conversation-kind">会话类型</label
+        ><select
+          id="conversation-kind"
+          :value="
+            draft.group === undefined ? 'all' : draft.group ? 'group' : 'person'
+          "
+          @change="
+            (e: any) =>
+              (draft.group =
+                e.target.value === 'all'
+                  ? undefined
+                  : e.target.value === 'group')
+          "
+        >
+          <option value="all">全部类型</option>
+          <option value="person">联系人</option>
+          <option value="group">群聊</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="conversation-priority">优先级</label
+        ><select
+          id="conversation-priority"
+          :value="draft.highPriority ? 'high' : 'all'"
+          @change="(e: any) => (draft.highPriority = e.target.value === 'high')"
+        >
+          <option value="all">全部优先级</option>
+          <option value="high">高及紧急</option>
+        </select>
+      </div>
+      <template #footer
+        ><div class="filter-footer">
+          <Button
+            @click="
+              draft = { levels: [], group: undefined, highPriority: false }
+            "
+            >重置</Button
+          ><Button type="primary" @click="applyFilters">应用筛选</Button>
+        </div></template
+      >
+    </Drawer>
   </div>
 </template>
-
-<style scoped>
-.v3-conv {
-  height: calc(100vh - 32px);
-}
-
-.v3-conv :deep(.ant-spin-container) {
-  height: 100%;
-}
-
-.v3-conv__empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  background: #fff;
-  border-radius: 12px;
-}
-
-.v3-conv__body {
-  display: flex;
-  gap: 12px;
-  height: 100%;
-}
-
-.v3-conv__side {
-  flex: 0 0 212px;
-  overflow: auto;
-  background: #fff;
-  border-radius: 18px;
-  box-shadow: var(--cg-shadow);
-}
-
-.v3-conv__group {
-  padding: 0 8px;
-}
-
-.v3-conv__item {
-  transition:
-    background-color 0.25s var(--cg-ease),
-    color 0.25s var(--cg-ease);
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  font-size: 13px;
-  color: #424245;
-  cursor: pointer;
-  border-radius: 8px;
-}
-
-.v3-conv__icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-  border-radius: 4px;
-}
-
-.v3-conv__item--sub {
-  padding-left: 14px;
-  font-size: 13px;
-  color: #6e6e73;
-}
-
-.v3-conv__item:hover {
-  color: #1d1d1f;
-  background: #f2f2f7;
-}
-
-.v3-conv__item.on {
-  font-weight: 600;
-  color: #fff;
-  background: #0071e3;
-}
-
-.v3-conv__label {
-  padding: 14px 18px 6px;
-  font-size: 12px;
-  color: #86868b;
-}
-
-.v3-conv__count {
-  font-size: 12px;
-  color: #86868b;
-}
-
-.v3-conv__badge {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 18px;
-  color: #fff;
-  text-align: center;
-  background: #0071e3;
-  border-radius: 9px;
-}
-
-.v3-conv__chip {
-  padding: 2px 9px;
-  font-size: 12px;
-  color: #424245;
-  cursor: pointer;
-  background: #fff;
-  border: 1px solid #e5e5ea;
-  border-radius: 4px;
-}
-
-.v3-conv__chip.on {
-  color: #0066cc;
-  background: #e8f2fc;
-  border-color: #b8d7f5;
-}
-
-.v3-conv__item.on .v3-conv__count {
-  color: rgb(255 255 255 / 85%);
-}
-
-.v3-conv__item.on .v3-conv__badge {
-  color: #0071e3;
-  background: #fff;
-}
-
-.v3-conv__main {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-}
-
-/* 窄屏：左侧导航改成顶部一行可横向滑动的标签，下面是会话区（会话区内部再按列表 / 聊天切换） */
-@media (max-width: 1023px) {
-  .v3-conv__body {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .v3-conv__side {
-    display: flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-    padding: 6px;
-    overflow: auto hidden;
-    border-radius: 14px;
-  }
-
-  .v3-conv__side > div:first-child,
-  .v3-conv__label {
-    display: none;
-  }
-
-  .v3-conv__group {
-    display: flex;
-    flex: none;
-    gap: 4px;
-    padding: 0;
-  }
-
-  .v3-conv__side > .flex-wrap {
-    flex-wrap: nowrap;
-    padding: 0 0 0 6px;
-  }
-
-  .v3-conv__item {
-    flex: none;
-    white-space: nowrap;
-  }
-
-  .v3-conv__item--sub span.flex-1 {
-    max-width: 140px;
-  }
-
-  .v3-conv__chip {
-    flex: none;
-    white-space: nowrap;
-  }
-
-  .v3-conv__main {
-    flex: 1;
-    min-height: 0;
-  }
-}
-</style>
-
 <style scoped>
 .v3-conv {
   position: relative;
   height: 100%;
-  padding-top: 42px;
+  min-height: 0;
 }
-.inbox-toolbar {
-  position: absolute;
-  inset: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  height: 34px;
-  padding: 0 6px;
-}
-.inbox-toolbar button {
-  border: 0;
-  background: #ffffff9e;
-  border-radius: 99px;
-  padding: 5px 14px;
-  color: #007aff;
-  cursor: pointer;
-}
-.inbox-toolbar span {
-  font-size: 12px;
-  color: #86868b;
-}
-.v3-conv__side {
-  position: absolute;
-  top: 42px;
-  left: 0;
-  width: 240px;
-  max-height: calc(100% - 42px);
-  z-index: 20;
-  border: 1px solid #e5e5ea;
-  box-shadow: 0 15px 45px #0002;
-}
-.v3-conv__body {
-  gap: 0;
+.v3-conv :deep(.ant-spin-container) {
+  height: 100%;
 }
 .v3-conv__main {
   height: 100%;
+  min-height: 0;
+  background: white;
   border-radius: 22px;
   overflow: hidden;
+}
+.v3-conv__empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
   background: white;
+  border-radius: 22px;
+}
+.ownership {
+  display: flex;
+  background: #78788013;
+  padding: 3px;
+  border-radius: 10px;
+  gap: 3px;
+}
+.ownership button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 7px;
+  color: #777780;
+  cursor: pointer;
+}
+.ownership button.on {
+  background: white;
+  box-shadow: 0 1px 4px #0001;
+  color: #202025;
+  font-weight: 600;
+}
+.ownership small {
+  margin-left: 7px;
+  font-size: 10px;
+  font-weight: 400;
+  color: #9999a2;
+}
+.account-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-select {
+  flex: 1;
+  min-width: 0;
+}
+.filter-trigger {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e5e5ed;
+  border-radius: 10px;
+  background: white;
+  color: #777780;
+  cursor: pointer;
+}
+.filter-trigger :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+.filter-trigger.on {
+  background: #e8f2ff;
+  color: #007aff;
+  border-color: #c5dfff;
+}
+.filter-trigger span {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  background: #007aff;
+  border: 2px solid #f8f8fb;
+  border-radius: 99px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 12px;
+  font-size: 9px;
+  color: white;
+}
+.filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.filter-chips :deep(.ant-tag) {
+  margin: 0;
+  background: #e6f1ff;
+  border: 0;
+  color: #007aff;
+  font-size: 10px;
+}
+.filter-chips button,
+.filter-reset {
+  font-size: 10px;
+  color: #8a8a93;
+  background: none;
+  border: 0;
+  padding: 4px;
+  cursor: pointer;
+}
+.filter-description {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #9696a1;
+  border-bottom: 1px solid #eeeef4;
+  padding-bottom: 22px;
+}
+.filter-field {
+  margin: 24px 0;
+}
+.filter-field label {
+  font-size: 12px;
+  color: #64646f;
+  display: block;
+  margin-bottom: 11px;
+}
+.grade-options {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.grade-options button {
+  padding: 8px 0;
+  border: 1px solid #e7e7ef;
+  border-radius: 8px;
+  font-size: 11px;
+  background: white;
+  color: #92929d;
+  cursor: pointer;
+}
+.grade-options button.on {
+  border-color: #007aff66;
+  color: #007aff;
+  background: #007aff0b;
+}
+.filter-field select {
+  border: 1px solid #e7e7ef;
+  background: #fafafc;
+  border-radius: 9px;
+  padding: 10px;
+  width: 100%;
+  font-size: 12px;
+  color: #74747e;
+}
+.filter-footer {
+  display: flex;
+  gap: 8px;
+}
+.filter-footer > * {
+  flex: 1;
+}
+.v3-conv :deep(.conversation-filter-drawer .ant-drawer-content-wrapper) {
+  box-shadow: -12px 0 40px #22223b08;
+}
+.v3-conv :deep(.conversation-filter-drawer .ant-drawer-content) {
+  border-left: 1px solid #ededf4;
+}
+.v3-conv button:focus-visible {
+  outline: 2px solid #007aff;
+  outline-offset: 2px;
+}
+@media (width <= 760px) {
+  .ownership button {
+    min-height: 39px;
+  }
+  .filter-trigger {
+    width: 44px;
+    height: 44px;
+  }
+  .account-select :deep(.ant-select-selector) {
+    min-height: 44px;
+    align-items: center;
+  }
+  .grade-options button,
+  .filter-footer :deep(.ant-btn),
+  .filter-field select {
+    min-height: 44px;
+  }
+  .v3-conv :deep(.ant-drawer-content-wrapper) {
+    max-width: 90vw !important;
+  }
 }
 </style>

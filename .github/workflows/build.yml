@@ -2195,6 +2195,34 @@ jobs:
           assert [(m['textBody'], m['senderName'], m['senderWaId']) for m in gm] == [('group chat', 'Group Member', '8615900009999')], gm
           assert sorted(c['waId'] for c in call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['list'] if c['accountId'] == ea['id']) \
               == ['1203630@g.us', '8615900003333'], '私聊与群聊各一个会话'
+          # Conversation filters must run before pagination and compose with account scope.
+          filter_a = call('POST', '/crm/customer/create', {'name': 'Filter Customer A', 'ownerUserId': 1, 'level': 1})
+          filter_b = call('POST', '/crm/customer/create', {'name': 'Filter Customer B', 'ownerUserId': 1, 'level': 2})
+          old_filter_rows = sql(f"SELECT id, IFNULL(customer_id, 'NULL'), IFNULL(priority, 'NULL') FROM channel_wa_conversation WHERE id IN ({ecv['id']},{gcv['id']})")
+          try:
+              sql(f"UPDATE channel_wa_conversation SET customer_id={filter_a}, priority=0 WHERE id={ecv['id']}")
+              sql(f"UPDATE channel_wa_conversation SET customer_id={filter_b}, priority=4 WHERE id={gcv['id']}")
+              filter_url = f"/channel/wa/conversation/page?pageNo=1&pageSize=1&accountId={ea['id']}"
+              both = call('GET', filter_url + '&levels=1,2')
+              assert both['total'] == 2 and len(both['list']) == 1, both
+              only_a = call('GET', filter_url + '&levels=1')
+              assert only_a['total'] == 1 and only_a['list'][0]['id'] == ecv['id'], only_a
+              legacy_a = call('GET', filter_url + '&level=1')
+              assert legacy_a['total'] == 1 and legacy_a['list'][0]['id'] == ecv['id'], legacy_a
+              group_high = call('GET', filter_url + '&levels=1,2&group=true&highPriority=true')
+              assert group_high['total'] == 1 and group_high['list'][0]['id'] == gcv['id'], group_high
+              contacts = call('GET', filter_url + '&group=false')
+              assert contacts['total'] == 1 and contacts['list'][0]['id'] == ecv['id'], contacts
+              assert call('GET', filter_url + '&group=false&highPriority=true')['total'] == 0
+              invalid = call('GET', filter_url + '&levels=9', ok=False)
+              assert invalid['code'] != 0, invalid
+          finally:
+              for old in old_filter_rows.splitlines():
+                  old_id, old_customer, old_priority = old.split('\t')
+                  sql(f"UPDATE channel_wa_conversation SET customer_id={old_customer}, priority={old_priority} WHERE id={old_id}")
+              call('DELETE', f'/crm/customer/delete?id={filter_a}')
+              call('DELETE', f'/crm/customer/delete?id={filter_b}')
+          print('Conversation filters: multi-grade OR, group/contact, priority, pagination and legacy level passed')
           # 群聊的 AI 自动回复：默认关闭，按群开启；私聊不能用这个开关；回复发到群里
           call('PUT', f"/channel/wa/conversation/group-ai?id={gcv['id']}&enabled=true")
           assert call('GET', f"/channel/wa/conversation/get?id={gcv['id']}")['aiEnabled'] is True

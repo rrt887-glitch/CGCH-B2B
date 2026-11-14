@@ -1,6 +1,10 @@
 package cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo;
 
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
+import java.util.List;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -22,6 +26,13 @@ public class ChannelWaConversationPageReqVO extends PageParam {
     private Boolean unreplied;
     /** 客户等级（crm_customer_level 字典值：1 A 类 … 4 D 类） */
     private Integer level;
+    /** Multiple levels, OR within the selection; combined with other filters using AND. */
+    @Size(max = 4)
+    private List<@Min(1) @Max(4) Integer> levels;
+    /** true: group chats; false: contacts; null: both */
+    private Boolean group;
+    /** high and urgent priorities */
+    private Boolean highPriority;
 
     /** 团队会话：看数据权限范围内其他同事负责的会话（主管用） */
     private Boolean team;

@@ -7,7 +7,13 @@ export namespace ChannelWaApi {
     id?: number;
     name?: string;
     /** whatsapp（默认）、messenger（Facebook 主页私信）、instagram */
-    platform?: 'instagram' | 'messenger' | 'tiktok' | 'web' | 'whatsapp' | 'youtube';
+    platform?:
+      | 'instagram'
+      | 'messenger'
+      | 'tiktok'
+      | 'web'
+      | 'whatsapp'
+      | 'youtube';
     /** 接待成员：逗号分隔的用户编号，新客户轮流分给他们；为空时由号码所属的业务员接待 */
     assignUserIds?: string;
     /** 扫码接入：最近一次同步聊天记录的时间、Evolution 里保存的记录数、新导入数、隐藏号码无法导入数、失败原因 */
@@ -37,7 +43,13 @@ export namespace ChannelWaApi {
 
   export interface Conversation {
     id: number;
-    platform?: 'instagram' | 'messenger' | 'tiktok' | 'web' | 'whatsapp' | 'youtube';
+    platform?:
+      | 'instagram'
+      | 'messenger'
+      | 'tiktok'
+      | 'web'
+      | 'whatsapp'
+      | 'youtube';
     accountId: number;
     waId: string;
     profileName?: string;
@@ -138,6 +150,10 @@ export namespace ChannelWaApi {
     starred?: boolean;
     unreplied?: boolean;
     level?: number;
+    /** Comma-separated customer levels; evaluated on the server before pagination. */
+    levels?: string;
+    group?: boolean;
+    highPriority?: boolean;
     /** 团队会话：数据权限范围内其他同事负责的会话 */
     team?: boolean;
     /** 只看关联了这个 CRM 客户的会话 */
@@ -159,48 +175,96 @@ export namespace ChannelWaApi {
 }
 
 // ===== 号码 =====
-export const getWaAccountList = () => requestClient.get<ChannelWaApi.Account[]>('/channel/wa-account/list');
+export const getWaAccountList = () =>
+  requestClient.get<ChannelWaApi.Account[]>('/channel/wa-account/list');
 export const createWaAccount = (data: ChannelWaApi.Account) =>
   requestClient.post<number>('/channel/wa-account/create', data);
 export const updateWaAccount = (data: ChannelWaApi.Account) =>
   requestClient.put('/channel/wa-account/update', data);
-export const deleteWaAccount = (id: number) => requestClient.delete(`/channel/wa-account/delete?id=${id}`);
+export const deleteWaAccount = (id: number) =>
+  requestClient.delete(`/channel/wa-account/delete?id=${id}`);
 /** 同步 Facebook 主页 / Instagram 最近的聊天记录，返回新导入的消息数 */
-export const syncWaHistory = (id: number) => requestClient.post<number>(`/channel/wa-account/sync-history?id=${id}`);
+export const syncWaHistory = (id: number) =>
+  requestClient.post<number>(`/channel/wa-account/sync-history?id=${id}`);
 export const getWaTemplates = (id: number) =>
-  requestClient.get<ChannelWaApi.Template[]>(`/channel/wa-account/templates?id=${id}`);
+  requestClient.get<ChannelWaApi.Template[]>(
+    `/channel/wa-account/templates?id=${id}`,
+  );
 
 // ===== 会话与消息 =====
-export const getWaConversationPage = (params: ChannelWaApi.ConversationPageReq) =>
-  requestClient.get<PageResult<ChannelWaApi.Conversation>>('/channel/wa/conversation/page', { params });
+export const getWaConversationPage = (
+  params: ChannelWaApi.ConversationPageReq,
+) =>
+  requestClient.get<PageResult<ChannelWaApi.Conversation>>(
+    '/channel/wa/conversation/page',
+    { params },
+  );
 export const getWaConversation = (id: number) =>
-  requestClient.get<ChannelWaApi.Conversation>(`/channel/wa/conversation/get?id=${id}`);
+  requestClient.get<ChannelWaApi.Conversation>(
+    `/channel/wa/conversation/get?id=${id}`,
+  );
 export const archiveWaConversation = (id: number, archived: boolean) =>
-  requestClient.put(`/channel/wa/conversation/archive?id=${id}&archived=${archived}`);
+  requestClient.put(
+    `/channel/wa/conversation/archive?id=${id}&archived=${archived}`,
+  );
 export const starWaConversation = (id: number, starred: boolean) =>
-  requestClient.put(`/channel/wa/conversation/star?id=${id}&starred=${starred}`);
+  requestClient.put(
+    `/channel/wa/conversation/star?id=${id}&starred=${starred}`,
+  );
 /** 群聊的 AI 自动回复开关（群聊默认关闭） */
 export const setWaGroupAi = (id: number, enabled: boolean) =>
-  requestClient.put(`/channel/wa/conversation/group-ai?id=${id}&enabled=${enabled}`);
+  requestClient.put(
+    `/channel/wa/conversation/group-ai?id=${id}&enabled=${enabled}`,
+  );
 /** 公开给团队 / 取消公开（负责人或管理员） */
 export const setWaTeamPublic = (id: number, enabled: boolean) =>
-  requestClient.put(`/channel/wa/conversation/team-public?id=${id}&enabled=${enabled}`);
+  requestClient.put(
+    `/channel/wa/conversation/team-public?id=${id}&enabled=${enabled}`,
+  );
 export const remarkWaConversation = (id: number, name: string) =>
-  requestClient.put('/channel/wa/conversation/remark', null, { params: { id, name } });
+  requestClient.put('/channel/wa/conversation/remark', null, {
+    params: { id, name },
+  });
 export const transferWaConversation = (id: number, userId: number) =>
-  requestClient.put(`/channel/wa/conversation/transfer?id=${id}&userId=${userId}`);
-export const setWaConversationStatus = (id: number, status: ChannelWaApi.ConversationStatus) =>
-  requestClient.put('/channel/wa/conversation/status', null, { params: { id, status } });
+  requestClient.put(
+    `/channel/wa/conversation/transfer?id=${id}&userId=${userId}`,
+  );
+export const setWaConversationStatus = (
+  id: number,
+  status: ChannelWaApi.ConversationStatus,
+) =>
+  requestClient.put('/channel/wa/conversation/status', null, {
+    params: { id, status },
+  });
 export const setWaConversationPriority = (id: number, priority: number) =>
-  requestClient.put('/channel/wa/conversation/priority', null, { params: { id, priority } });
-export const getWaInboxCounts = () => requestClient.get<ChannelWaApi.InboxCounts>('/channel/wa/conversation/counts');
+  requestClient.put('/channel/wa/conversation/priority', null, {
+    params: { id, priority },
+  });
+export const getWaInboxCounts = () =>
+  requestClient.get<ChannelWaApi.InboxCounts>(
+    '/channel/wa/conversation/counts',
+  );
 export const getWaConversationEvents = (conversationId: number) =>
-  requestClient.get<ChannelWaApi.ConversationEvent[]>('/channel/wa/conversation/events', { params: { conversationId } });
-export const addWaConversationNote = (conversationId: number, content: string) =>
-  requestClient.post<ChannelWaApi.ConversationEvent>('/channel/wa/conversation/note', null, { params: { conversationId, content } });
-export const deleteWaConversationNote = (id: number) => requestClient.delete('/channel/wa/conversation/note', { params: { id } });
+  requestClient.get<ChannelWaApi.ConversationEvent[]>(
+    '/channel/wa/conversation/events',
+    { params: { conversationId } },
+  );
+export const addWaConversationNote = (
+  conversationId: number,
+  content: string,
+) =>
+  requestClient.post<ChannelWaApi.ConversationEvent>(
+    '/channel/wa/conversation/note',
+    null,
+    { params: { conversationId, content } },
+  );
+export const deleteWaConversationNote = (id: number) =>
+  requestClient.delete('/channel/wa/conversation/note', { params: { id } });
 /** 会话状态、优先级的显示 */
-export const CONVERSATION_STATUS: { label: string; value: ChannelWaApi.ConversationStatus }[] = [
+export const CONVERSATION_STATUS: {
+  label: string;
+  value: ChannelWaApi.ConversationStatus;
+}[] = [
   { label: '进行中', value: 'open' },
   { label: '待处理', value: 'pending' },
   { label: '已解决', value: 'resolved' },
@@ -213,13 +277,19 @@ export const PRIORITY_OPTIONS = [
   { label: '紧急', value: 4, color: '#D70015' },
 ];
 export const getWaMessages = (conversationId: number, beforeId?: number) =>
-  requestClient.get<ChannelWaApi.Message[]>('/channel/wa/message/list', { params: { conversationId, beforeId } });
+  requestClient.get<ChannelWaApi.Message[]>('/channel/wa/message/list', {
+    params: { conversationId, beforeId },
+  });
 export const sendWaMessage = (data: ChannelWaApi.SendReq) =>
   requestClient.post<ChannelWaApi.Message>('/channel/wa/message/send', data);
 /** 取媒体地址（收到的媒体首次查看时由后端从 Meta 下载） */
 export const getWaMedia = (id: number) =>
   requestClient.get<ChannelWaApi.Message>(`/channel/wa/message/media?id=${id}`);
-export const sendWaMedia = (conversationId: number, file: File, caption?: string) =>
+export const sendWaMedia = (
+  conversationId: number,
+  file: File,
+  caption?: string,
+) =>
   requestClient.upload<ChannelWaApi.Message>('/channel/wa/message/send-media', {
     conversationId,
     file,
@@ -235,8 +305,12 @@ export function templateParamCount(t?: ChannelWaApi.Template) {
 
 /** 用变量值替换模板正文，作为聊天记录里的预览 */
 export function templatePreview(t: ChannelWaApi.Template, params: string[]) {
-  const body = t.components?.find((c) => c.type === 'BODY')?.text ?? `[模板] ${t.name}`;
-  return body.replaceAll(/\{\{(\d+)\}\}/g, (_, n) => params[Number(n) - 1] || `{{${n}}}`);
+  const body =
+    t.components?.find((c) => c.type === 'BODY')?.text ?? `[模板] ${t.name}`;
+  return body.replaceAll(
+    /\{\{(\d+)\}\}/g,
+    (_, n) => params[Number(n) - 1] || `{{${n}}}`,
+  );
 }
 
 /** 设置号码的接待成员：这个号码上的新客户在他们之间轮流分配；传空数组恢复为号码所属的业务员接待 */

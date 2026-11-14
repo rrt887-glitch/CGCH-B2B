@@ -102,6 +102,9 @@ const props = defineProps<{
   accountId?: number;
   embedded?: boolean;
   level?: number;
+  levels?: number[];
+  group?: boolean;
+  highPriority?: boolean;
   openId?: number;
   view?: 'mine' | 'team';
 }>();
@@ -145,6 +148,7 @@ const teamView = computed(
   () => props.view === 'team' || listFilter.value === 'team',
 );
 const listTitle = computed(() => {
+  if (props.embedded) return '会话';
   if (props.accountId) {
     const a = accounts.value.find((x) => x.id === props.accountId);
     if (a) return a.name || a.displayPhone || a.phoneNumberId;
@@ -253,7 +257,9 @@ const accountOptions = computed(() => [
   })),
 ]);
 
+let listRequest = 0;
 async function loadConversations(silent = false) {
+  const request = ++listRequest;
   if (!silent) listLoading.value = true;
   try {
     const res = await getWaConversationPage({
@@ -267,11 +273,14 @@ async function loadConversations(silent = false) {
       archived: listFilter.value === 'archived' || undefined,
       team: teamView.value || undefined,
       level: props.level,
+      levels: props.levels?.join(',') || undefined,
+      group: props.group,
+      highPriority: props.highPriority || undefined,
       status: statusFilter.value || undefined,
     });
-    conversations.value = res.list;
+    if (request === listRequest) conversations.value = res.list;
   } finally {
-    listLoading.value = false;
+    if (request === listRequest) listLoading.value = false;
   }
 }
 
@@ -315,7 +324,16 @@ async function refreshCurrent() {
 }
 
 watch(
-  [accountId, listFilter, statusFilter, () => props.level, () => props.view],
+  [
+    accountId,
+    listFilter,
+    statusFilter,
+    () => props.level,
+    () => props.levels?.join(','),
+    () => props.group,
+    () => props.highPriority,
+    () => props.view,
+  ],
   () => loadConversations(),
 );
 watch(
@@ -374,6 +392,9 @@ const customerGroup = ref<number>();
 interface PanelCustomer {
   name?: string;
   level?: number;
+  levels?: number[];
+  group?: boolean;
+  highPriority?: boolean;
   countryCode?: string;
   email?: string;
   mobile?: string;
@@ -1150,6 +1171,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             size="small"
             :options="accountOptions"
           />
+          <slot name="list-controls"></slot>
           <InputSearch
             v-model:value="keyword"
             allow-clear
@@ -1157,7 +1179,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             @search="() => loadConversations()"
           />
           <div
-            class="flex gap-4 overflow-x-auto border-0 border-b border-solid border-[#E5E5EA]"
+            class="im-list-tabs flex border-0 border-b border-solid border-[#E5E5EA]"
             role="tablist"
             aria-label="会话筛选"
           >
@@ -1167,7 +1189,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               type="button"
               role="tab"
               :aria-selected="listFilter === f.value"
-              class="-mb-px shrink-0 cursor-pointer border-0 border-b-2 border-solid bg-transparent px-0 pb-2 pt-1 text-[13px]"
+              class="im-list-tab -mb-px cursor-pointer border-0 border-b-2 border-solid bg-transparent px-0 pb-2 pt-1 text-[12px]"
               :class="
                 listFilter === f.value
                   ? 'border-[#0071E3] font-semibold text-[#1D1D1F]'
@@ -1195,6 +1217,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             <div
               v-for="c in conversations"
               :key="c.id"
+              :aria-label="`打开会话 ${c.remarkName || c.customerName || contact(c)}`"
               class="im-contact flex cursor-pointer gap-2.5 border-0 border-b border-solid border-[#F2F2F7] px-4 py-3"
               :class="
                 current?.id === c.id
@@ -1221,7 +1244,11 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                     }"
                   ></span>
                   <span class="min-w-0 flex-1 truncate">{{
-                    accountName(c.accountId) || plat(c).label
+                    props.accountId
+                      ? c.group
+                        ? '群聊'
+                        : plat(c).label
+                      : accountName(c.accountId) || plat(c).label
                   }}</span>
                   <span class="shrink-0"
                     >{{ md(c.lastMessageTime) }}
@@ -2573,6 +2600,70 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   .im-composer [role='tablist'] {
     flex-wrap: wrap;
     gap: 10px;
+  }
+}
+</style>
+
+<style scoped>
+.apple-im .im-list {
+  width: 330px;
+}
+.apple-im .im-list-tabs {
+  justify-content: space-between;
+  gap: 8px;
+  overflow: visible;
+}
+.im-list-tab {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.apple-im .im-list-tabs [role='tab'] {
+  font-size: 12px;
+}
+.apple-im .im-contact {
+  min-height: 85px;
+}
+.apple-im .im-list :deep(.ant-input-search-button) {
+  border: 0;
+  background: transparent;
+  color: #8c8c98;
+}
+.apple-im .im-list :deep(.ant-input-group-addon) {
+  background: transparent;
+}
+.apple-im .im-contact :deep(.font-semibold) {
+  font-size: 13px;
+}
+.apple-im .im-list > div:first-child {
+  padding-top: 22px;
+  gap: 12px;
+}
+@media (width <= 1450px) {
+  .apple-im .im-toolbar > div:first-child {
+    flex: 1 0 100%;
+  }
+  .apple-im .im-toolbar > div:last-child {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+}
+@media (width <= 1450px) and (width >= 1024px) {
+  .apple-im .im-list {
+    width: 330px;
+  }
+  .apple-im .im-inspector {
+    width: 245px;
+  }
+}
+@media (width <= 1023px) {
+  .apple-im .im-list {
+    width: 100%;
+  }
+  .im-list-tab {
+    min-height: 39px;
+  }
+  .apple-im .im-list :deep(.ant-input-affix-wrapper) {
+    min-height: 40px;
   }
 }
 </style>

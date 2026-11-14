@@ -404,6 +404,7 @@ onMounted(async () => {
       <!-- 中：邮件列表 -->
       <div class="mail-list flex w-96 shrink-0 flex-col rounded bg-white">
         <div class="p-3">
+          <slot name="list-controls"></slot>
           <div v-if="embedded" class="mb-3 flex gap-2">
             <Select
               v-model:value="view"
