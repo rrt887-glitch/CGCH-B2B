@@ -148,6 +148,7 @@ jobs:
           EOF
           echo "--- 业务接口（验证表结构与代码一致） ---"
           fail=0
+          api_fail_detail=""
           for api in crm/customer/page crm/clue/page crm/contact/page crm/business/page crm/contract/page crm/receivable/page \
                      crm/product/page crm/follow-up-record/page?bizType=2\&bizId=1 crm/business-status/page \
                      pay/app/page pay/order/page ai/chat/conversation/my-list ai/model/page bpm/category/page bpm/form/page; do
@@ -155,9 +156,10 @@ jobs:
             r=$(curl -s "http://127.0.0.1:48080/admin-api/${api}${sep}pageNo=1&pageSize=10" -H "Authorization: Bearer $TOKEN" -H 'tenant-id: 1')
             code=$(echo "$r" | python3 -c "import sys,json;print(json.load(sys.stdin).get('code'))" 2>/dev/null || echo parse-error)
             echo "$code  $api"
-            if [ "$code" != "0" ]; then echo "  -> ${r:0:300}"; echo "::error title=api $api::${r:0:500}"; fail=1; fi
+            # 每条失败都写成注解会被 GitHub 截断，统一汇总到最后一条
+            if [ "$code" != "0" ]; then echo "  -> ${r:0:300}"; api_fail_detail="${api_fail_detail}${api} → ${r:0:220} | "; fail=1; fi
           done
-          [ $fail -eq 0 ] || { echo '有业务接口失败'; exit 1; }
+          [ $fail -eq 0 ] || { echo "::error title=业务接口失败::$(echo "$api_fail_detail" | sed 's/%/%25/g')"; echo '有业务接口失败'; exit 1; }
 
           echo "--- 外贸 CRM 扩展：标签、分组、客户新字段、筛选、查重、商机阶段 ---"
           export TOKEN
