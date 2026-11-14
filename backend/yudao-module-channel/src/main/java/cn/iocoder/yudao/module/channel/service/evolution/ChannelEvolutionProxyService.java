@@ -98,7 +98,8 @@ public class ChannelEvolutionProxyService {
                     .host(StrUtil.trim(req.getHost()))
                     .port(req.getPort())
                     .protocol(StrUtil.trim(req.getProtocol()))
-                    .username(StrUtil.trim(req.getUsername()))
+                    // 账号是明文可见的：传空就是清空（不清空的话换到不需要账号的代理会一直带着上一套的账号）
+                    .username(StrUtil.blankToDefault(StrUtil.trim(req.getUsername()), ""))
                     .build();
             // 密码：留空表示沿用原密码；clearPassword 表示换成不需要密码的代理
             if (Boolean.TRUE.equals(req.getClearPassword())) {
