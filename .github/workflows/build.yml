@@ -2189,9 +2189,10 @@ jobs:
           assert b1['integration'] == 'WHATSAPP-BAILEYS' and b1['number'] == '8613800002222' and b1['qrcode'] is True and b1['groupsIgnore'] is False, b1
           assert b1['webhook']['url'] == 'http://127.0.0.1:48080/admin-api/channel/evolution/webhook' and b1['webhook']['enabled'] \
               and set(b1['webhook']['events']) == {'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'MESSAGES_SET'} and b1['webhook']['headers']['x-cgch-token'], b1
-          assert evo()['instances'][s1['session']]['proxy'] == {'enabled': True, 'proxyHost': 'proxy-a.example', 'proxyPort': '1080',
-                                                                'proxyProtocol': 'socks5', 'proxyUsername': 'u1', 'proxyPassword': 'p1'}, \
-              '建实例时就设置好出口代理，手机扫码前生效'
+          pr1 = evo()['instances'][s1['session']].get('proxy')
+          assert pr1 == {'enabled': True, 'proxyHost': 'proxy-a.example', 'proxyPort': '1080',
+                         'proxyProtocol': 'socks5', 'proxyUsername': 'u1', 'proxyPassword': 'p1'}, \
+              f'建实例时就设置好出口代理，手机扫码前生效；实际={pr1}'
           # 换代理后，新号码用新的出口
           call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'proxy-b.example', 'port': 2080, 'protocol': 'http'})
           s1b = call('POST', '/channel/evolution/session', {})

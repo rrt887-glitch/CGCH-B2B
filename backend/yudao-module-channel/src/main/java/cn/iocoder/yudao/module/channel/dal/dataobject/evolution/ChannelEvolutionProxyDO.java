@@ -17,7 +17,8 @@ import java.time.LocalDateTime;
  * 一家客户群发被风控，同一个 IP 上的新号码更难连上。配了代理后，Evolution 用该客户自己的 IP 连 WhatsApp，
  * 互相不牵连。密码加密存储。
  */
-@TableName("channel_evolution_proxy")
+// autoResultMap = true：password 走 EncryptTypeHandler，查询时要按 typeHandler 解密，否则读到的是密文
+@TableName(value = "channel_evolution_proxy", autoResultMap = true)
 @KeySequence("channel_evolution_proxy_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
