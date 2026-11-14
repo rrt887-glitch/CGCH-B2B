@@ -56,6 +56,14 @@ public class RoleServiceImpl implements RoleService {
     @LogRecord(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_CREATE_SUB_TYPE, bizNo = "{{#role.id}}",
             success = SYSTEM_ROLE_CREATE_SUCCESS)
     public Long createRole(RoleSaveReqVO createReqVO, Integer type) {
+        return createRole(createReqVO, type, DataScopeEnum.ALL.getScope()); // 默认可查看所有数据。原因是，可能一些项目不需要项目权限
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @LogRecord(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_CREATE_SUB_TYPE, bizNo = "{{#role.id}}",
+            success = SYSTEM_ROLE_CREATE_SUCCESS)
+    public Long createRole(RoleSaveReqVO createReqVO, Integer type, Integer dataScope) {
         // 1. 校验角色
         validateRoleDuplicate(createReqVO.getName(), createReqVO.getCode(), null);
 
@@ -63,7 +71,7 @@ public class RoleServiceImpl implements RoleService {
         RoleDO role = BeanUtils.toBean(createReqVO, RoleDO.class)
                 .setType(ObjectUtil.defaultIfNull(type, RoleTypeEnum.CUSTOM.getType()))
                 .setStatus(ObjUtil.defaultIfNull(createReqVO.getStatus(), CommonStatusEnum.ENABLE.getStatus()))
-                .setDataScope(DataScopeEnum.ALL.getScope()); // 默认可查看所有数据。原因是，可能一些项目不需要项目权限
+                .setDataScope(ObjUtil.defaultIfNull(dataScope, DataScopeEnum.ALL.getScope()));
         roleMapper.insert(role);
 
         // 3. 记录操作日志上下文

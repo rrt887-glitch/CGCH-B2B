@@ -27,6 +27,16 @@ public interface RoleService {
     Long createRole(@Valid RoleSaveReqVO createReqVO, Integer type);
 
     /**
+     * 创建角色，并指定数据范围（系统内置角色创建后不能再改数据范围，所以在创建时一并设置）
+     *
+     * @param createReqVO 创建角色信息
+     * @param type 角色类型
+     * @param dataScope 数据范围，参见 DataScopeEnum
+     * @return 角色编号
+     */
+    Long createRole(@Valid RoleSaveReqVO createReqVO, Integer type, Integer dataScope);
+
+    /**
      * 更新角色
      *
      * @param updateReqVO 更新角色信息

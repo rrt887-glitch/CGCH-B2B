@@ -90,6 +90,10 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      * WhatsApp 群聊是否由 AI 自动回复：群聊默认不回复，需要的群手动开启；私聊不使用这个字段
      */
     private Boolean aiEnabled;
+    /**
+     * 公开给团队：开启后本公司全部成员都能在「团队」里看到这个会话（只能看、写内部备注）；负责人或管理员开关
+     */
+    private Boolean teamPublic;
 
     /** 是否 WhatsApp 群聊（客户编号是「群编号@g.us」） */
     public static boolean isGroup(String waId) {

@@ -11,6 +11,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.dashboard.ChannelDashboardMappe
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailAccountMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaAccountMapper;
 import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.channel.controller.admin.dashboard.vo.ChannelDashboardRespVO.Scope;
 import cn.iocoder.yudao.module.system.api.permission.PermissionApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
@@ -58,8 +59,10 @@ public class ChannelDashboardService {
      */
     public Scope resolveScope(Long loginUserId, Long userId) {
         Scope scope = new Scope();
-        DeptDataPermissionRespDTO perm = permissionApi.getDeptDataPermission(loginUserId);
-        if (perm != null && Boolean.TRUE.equals(perm.getAll())) {
+        // 平台运营经「进入客户后台」访问时，账号不属于这家公司，按该公司的全部数据看（进入已登记并记录日志）
+        DeptDataPermissionRespDTO perm = SecurityFrameworkUtils.skipPermissionCheck() ? null
+                : permissionApi.getDeptDataPermission(loginUserId);
+        if (SecurityFrameworkUtils.skipPermissionCheck() || (perm != null && Boolean.TRUE.equals(perm.getAll()))) {
             scope.setAll(true);
         } else {
             Set<Long> visible = new TreeSet<>();

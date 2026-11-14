@@ -998,7 +998,7 @@ public class ChannelWhatsAppService {
         if (m == null) {
             throw exception(WA_MESSAGE_NOT_EXISTS);
         }
-        validateConversation(userId, m.getConversationId()); // 转交后由处理人查看
+        validateConversationReadable(userId, m.getConversationId()); // 转交后由处理人查看；公开给团队的同事也能看
         ChannelWaAccountDO a = accountMapper.selectById(m.getAccountId());
         if (StrUtil.isBlank(m.getFileUrl())) {
             if (StrUtil.isBlank(m.getMediaId())) {
@@ -1193,18 +1193,31 @@ public class ChannelWhatsAppService {
         return new PageResult<>(toConversationVOs(page.getList()), page.getTotal());
     }
 
-    /** 团队会话：数据权限范围内其他同事负责的会话（主管查看、必要时接手） */
+    /**
+     * 团队会话：数据权限范围内其他同事负责的会话（主管查看、必要时接手），
+     * 以及同事「公开给团队」的会话（全公司成员都能看到，成员只能看到这一部分）。
+     */
     private PageResult<ChannelWaConversationRespVO> getTeamConversationPage(Long userId, ChannelWaConversationPageReqVO req) {
         Set<Long> team = teamUsers(userId);
-        if (team != null && team.isEmpty()) {
-            return PageResult.empty();
-        }
         List<Long> mine = accountMapper.selectListByUserId(userId).stream().map(ChannelWaAccountDO::getId).toList();
         List<Long> teamAccounts = team == null ? List.of() : accountMapper.selectList().stream()
                 .filter(a -> a.getUserId() != null && team.contains(a.getUserId())).map(ChannelWaAccountDO::getId).toList();
-        PageResult<ChannelWaConversationDO> page = conversationMapper.selectTeamPage(req, userId, team,
-                teamAccounts.isEmpty() ? List.of(-1L) : teamAccounts, mine.isEmpty() ? List.of(-1L) : mine);
-        return new PageResult<>(toConversationVOs(page.getList()), page.getTotal());
+        PageResult<ChannelWaConversationDO> page = conversationMapper.selectTeamPage(req, userId, nonEmpty(team),
+                nonEmpty(teamAccounts), nonEmpty(mine));
+        List<ChannelWaConversationRespVO> list = toConversationVOs(page.getList());
+        if (team != null) { // 管理员全部能处理；其他人逐条标出哪些只能查看
+            Map<Long, ChannelWaConversationDO> byId = page.getList().stream()
+                    .collect(Collectors.toMap(ChannelWaConversationDO::getId, Function.identity()));
+            list.forEach(vo -> vo.setCanHandle(canHandle(userId, byId.get(vo.getId()))));
+        } else {
+            list.forEach(vo -> vo.setCanHandle(true));
+        }
+        return new PageResult<>(list, page.getTotal());
+    }
+
+    /** 空集合换成 [-1]：IN (-1) 不会命中任何数据，避免生成 IN () */
+    private static <T extends Collection<Long>> Collection<Long> nonEmpty(T ids) {
+        return ids == null ? null : ids.isEmpty() ? List.of(-1L) : ids;
     }
 
     /** 我的数据权限范围内的其他同事（不含自己）；null 表示可看全部（例如管理员） */
@@ -1309,7 +1322,7 @@ public class ChannelWhatsAppService {
 
     /** 内部备注：只给团队看，不发给客户 */
     public ChannelWaConversationEventRespVO addConversationNote(Long userId, Long id, String content) {
-        validateConversation(userId, id);
+        validateConversationReadable(userId, id); // 公开给团队的会话，同事也可以写内部备注帮忙
         String text = StrUtil.trim(content);
         if (StrUtil.isBlank(text)) {
             throw exception(AI_LLM_FAIL, "请填写备注内容");
@@ -1323,7 +1336,7 @@ public class ChannelWhatsAppService {
 
     /** 会话的内部备注和动态（按时间正序），前端按时间穿插到聊天记录里 */
     public List<ChannelWaConversationEventRespVO> getConversationEvents(Long userId, Long id) {
-        validateConversation(userId, id);
+        validateConversationReadable(userId, id);
         return toEventVOs(conversationEventMapper.selectRecent(id, 200));
     }
 
@@ -1383,15 +1396,14 @@ public class ChannelWhatsAppService {
                 default -> r.setResolved(n);
             }
         }
+        // 团队进行中：主管 / 管理员是范围内同事的会话 + 公开给团队的会话；成员只有公开给团队的会话
         Set<Long> team = teamUsers(userId);
-        if (team == null || !team.isEmpty()) {
-            List<Long> teamAccounts = team == null ? List.of() : accountMapper.selectList().stream()
-                    .filter(a -> a.getUserId() != null && team.contains(a.getUserId())).map(ChannelWaAccountDO::getId).toList();
-            ChannelWaConversationPageReqVO req = new ChannelWaConversationPageReqVO();
-            req.setStatus(ChannelWaConversationDO.STATUS_OPEN);
-            r.setTeamOpen(conversationMapper.selectCount(conversationMapper.applyFilters(conversationMapper.teamQuery(userId, team,
-                    teamAccounts.isEmpty() ? List.of(-1L) : teamAccounts, accountIds), req)));
-        }
+        List<Long> teamAccounts = team == null ? List.of() : accountMapper.selectList().stream()
+                .filter(a -> a.getUserId() != null && team.contains(a.getUserId())).map(ChannelWaAccountDO::getId).toList();
+        ChannelWaConversationPageReqVO teamReq = new ChannelWaConversationPageReqVO();
+        teamReq.setStatus(ChannelWaConversationDO.STATUS_OPEN);
+        r.setTeamOpen(conversationMapper.selectCount(conversationMapper.applyFilters(conversationMapper.teamQuery(userId, nonEmpty(team),
+                nonEmpty(teamAccounts), accountIds), teamReq)));
         ChannelWaConversationPageReqVO unread = new ChannelWaConversationPageReqVO();
         unread.setUnreadOnly(true);
         Map<Long, Integer> byAccount = new HashMap<>();
@@ -1422,8 +1434,9 @@ public class ChannelWhatsAppService {
 
     /** 会话消息（按时间正序），并清零未读 */
     public List<ChannelWaMessageRespVO> getMessages(Long userId, Long conversationId, Long beforeId, Integer limit) {
-        ChannelWaConversationDO conv = validateConversation(userId, conversationId);
-        if (conv.getUnreadCount() != null && conv.getUnreadCount() > 0 && beforeId == null) {
+        ChannelWaConversationDO conv = validateConversationReadable(userId, conversationId);
+        // 只有能处理的人查看时才清零未读；同事查看公开会话不影响负责人的未读提醒
+        if (conv.getUnreadCount() != null && conv.getUnreadCount() > 0 && beforeId == null && canHandle(userId, conv)) {
             conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId()).setUnreadCount(0));
         }
         int n = limit == null ? 50 : Math.max(1, Math.min(limit, 200));
@@ -1431,7 +1444,10 @@ public class ChannelWhatsAppService {
     }
 
     public ChannelWaConversationRespVO getConversation(Long userId, Long id) {
-        return toConversationVOs(List.of(validateConversation(userId, id))).get(0);
+        ChannelWaConversationDO c = validateConversationReadable(userId, id);
+        ChannelWaConversationRespVO vo = toConversationVOs(List.of(c)).get(0);
+        vo.setCanHandle(canHandle(userId, c));
+        return vo;
     }
 
     /**
@@ -1440,22 +1456,47 @@ public class ChannelWhatsAppService {
      */
     private ChannelWaConversationDO validateConversation(Long userId, Long id) {
         ChannelWaConversationDO c = id == null ? null : conversationMapper.selectById(id);
-        if (c == null) {
+        if (c == null || !canHandle(userId, c)) {
             throw exception(WA_CONVERSATION_NOT_EXISTS);
         }
+        return c;
+    }
+
+    /**
+     * 能查看会话的人：能处理的人（见 {@link #validateConversation}），以及会话已「公开给团队」时本公司的全部成员。
+     * 公开的会话其他成员只能看消息、写内部备注，不能回复客户或改状态、转交。
+     */
+    private ChannelWaConversationDO validateConversationReadable(Long userId, Long id) {
+        ChannelWaConversationDO c = id == null ? null : conversationMapper.selectById(id);
+        if (c == null || !(Boolean.TRUE.equals(c.getTeamPublic()) || canHandle(userId, c))) {
+            throw exception(WA_CONVERSATION_NOT_EXISTS);
+        }
+        return c;
+    }
+
+    /** 处理人本人，或数据权限范围包含处理人的主管 / 管理员 */
+    private boolean canHandle(Long userId, ChannelWaConversationDO c) {
         Long handler = c.getOwnerUserId();
         if (handler == null) {
             ChannelWaAccountDO a = accountMapper.selectById(c.getAccountId());
             handler = a == null ? null : a.getUserId();
         }
         if (Objects.equals(handler, userId)) {
-            return c;
+            return true;
         }
         Set<Long> team = handler == null ? Set.of() : teamUsers(userId);
-        if (team == null || team.contains(handler)) {
-            return c;
+        return team == null || team.contains(handler);
+    }
+
+    /** 公开给团队：开启后本公司全部成员都能在「团队」里看到这个会话；只有负责人或管理员（主管）能开关 */
+    public void setTeamPublic(Long userId, Long id, boolean enabled) {
+        ChannelWaConversationDO c = validateConversation(userId, id);
+        if (Boolean.TRUE.equals(c.getTeamPublic()) == enabled) {
+            return;
         }
-        throw exception(WA_CONVERSATION_NOT_EXISTS);
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setTeamPublic(enabled));
+        logActivity(id, userId, userName(userId) + (enabled ? " 把会话公开给团队" : " 取消了公开，团队成员不再能看到"));
+        channelRealtimeService.conversationChanged(id, null, "team-public");
     }
 
     private List<ChannelWaConversationRespVO> toConversationVOs(List<ChannelWaConversationDO> list) {

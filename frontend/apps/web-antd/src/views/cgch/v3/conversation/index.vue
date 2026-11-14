@@ -106,7 +106,11 @@ const mailIcon = (m: ChannelMailApi.Account) =>
 /** 自己没有号码时，可能有同事转交过来的会话 */
 const hasTransferred = ref(false);
 const showIm = computed(
-  () => waAccounts.value.length > 0 || hasTransferred.value,
+  () =>
+    waAccounts.value.length > 0 ||
+    hasTransferred.value ||
+    // 自己没有号码，但同事公开给团队的会话也能看
+    (counts.value?.teamOpen ?? 0) > 0,
 );
 const hasAny = computed(() => showIm.value || mailAccounts.value.length > 0);
 const viewKey = computed(
@@ -209,7 +213,7 @@ onMounted(async () => {
               <span class="flex-1">我的会话</span>
               <span class="v3-conv__count">{{ counts?.open ?? '' }}</span>
             </div>
-            <!-- 团队会话只有能看到别人数据的成员（超级管理员）才有；业务员只看自己的 -->
+            <!-- 团队会话：管理员看全公司；成员只看到同事「公开给团队」的会话 -->
             <div
               v-if="counts?.teamOpen != null"
               class="v3-conv__item"

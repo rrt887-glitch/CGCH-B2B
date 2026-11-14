@@ -13,8 +13,10 @@ import { useAccessStore, useUserStore } from '@vben/stores';
 
 import { Avatar, Dropdown, Menu, MenuItem, Tooltip } from 'ant-design-vue';
 
+import { exitTenant } from '#/api/system/tenant-visit';
 import { router } from '#/router';
 import { useAuthStore } from '#/store';
+import { endVisit, getVisitInfo } from '#/utils/tenant-visit';
 import LoginForm from '#/views/_core/authentication/login.vue';
 
 const userStore = useUserStore();
@@ -99,6 +101,32 @@ const SETTINGS: NavItem = {
   icon: 'lucide:settings',
   path: '/v3/settings',
 };
+/** 平台运营专用：客户管理（开户、账号数、到期、进入客户后台）；客户公司的账号没有租户查询权限，看不到这个入口 */
+const PLATFORM: NavItem = {
+  key: 'platform',
+  label: '客户管理',
+  icon: 'lucide:building-2',
+  path: '/v3/platform/tenants',
+  group: '平台',
+};
+const isPlatform = computed(() =>
+  (accessStore.accessCodes ?? []).includes('system:tenant:query'),
+);
+const navItems = computed(() => (isPlatform.value ? [...NAV, PLATFORM] : NAV));
+
+/** 正在「进入客户后台」时，顶部提示看的是哪家客户，并可随时退出 */
+const visit = computed(() =>
+  accessStore.visitTenantId ? getVisitInfo() : null,
+);
+async function leaveVisit() {
+  const v = visit.value;
+  if (v) {
+    await exitTenant(v.tenantId).catch(() => undefined);
+  }
+  endVisit();
+  await router.replace('/v3/platform/tenants');
+  window.location.reload();
+}
 
 /** 当前所在模块：按路径前缀判断，CRM 的客户/线索详情等页面也算 CRM */
 const activeKey = computed(() => {
@@ -109,7 +137,7 @@ const activeKey = computed(() => {
     return route.query.tab === 'salesmind' ? 'prospect' : 'crm';
   if (p === '/v3/agent')
     return route.query.tab === 'knowledge' ? 'knowledge' : 'agent';
-  const hit = [...NAV, SETTINGS].find(
+  const hit = [...NAV, SETTINGS, PLATFORM].find(
     (n) => p === n.path || p.startsWith(`${n.path}/`),
   );
   if (hit) return hit.key;
@@ -148,7 +176,7 @@ function onUserMenu({ key }: { key: number | string }) {
         >
       </div>
       <nav class="cgch-rail__nav">
-        <template v-for="item in NAV" :key="item.key"
+        <template v-for="item in navItems" :key="item.key"
           ><div v-if="appleWorkspace && item.group" class="rail-group">
             {{ item.group }}
           </div>
@@ -209,6 +237,14 @@ function onUserMenu({ key }: { key: number | string }) {
     </aside>
 
     <main class="cgch-main">
+      <div v-if="visit" class="cgch-visit-bar" role="status">
+        <span
+          >正在以平台身份查看「<b>{{ visit.tenantName }}</b>」的后台，这次进入已记录，客户能看到。</span
+        >
+        <button type="button" class="cgch-visit-bar__exit" @click="leaveVisit">
+          退出客户后台
+        </button>
+      </div>
       <RouterView v-slot="{ Component, route: r }">
         <Transition name="cg-page">
           <component :is="Component" :key="r.path" />
@@ -353,6 +389,35 @@ function onUserMenu({ key }: { key: number | string }) {
   height: 100vh;
   padding: 16px;
   overflow: auto;
+}
+
+/* 平台运营正在查看某家客户的后台：醒目的橙色提示条 */
+.cgch-visit-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #7a3e00;
+  background: #fff4e5;
+  border: 1px solid #ffd591;
+  border-radius: 10px;
+}
+
+.cgch-visit-bar__exit {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #fff;
+  cursor: pointer;
+  background: #d46b08;
+  border: 0;
+  border-radius: 999px;
 }
 </style>
 

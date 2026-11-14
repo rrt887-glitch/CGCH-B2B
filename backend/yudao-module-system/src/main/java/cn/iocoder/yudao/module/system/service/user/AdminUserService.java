@@ -112,6 +112,21 @@ public interface AdminUserService {
     AdminUserDO getUserByUsername(String username);
 
     /**
+     * 跨全部公司（忽略租户）按账号查用户。账号全平台唯一，正常情况下最多一条；老数据可能有重复。
+     *
+     * @param username 账号
+     * @return 用户列表
+     */
+    List<AdminUserDO> getUserListByUsernameIgnoreTenant(String username);
+
+    /**
+     * 当前公司（租户）里的账号数，与开户时的账号数上限比较用
+     *
+     * @return 账号数
+     */
+    Long getUserCountInCurrentTenant();
+
+    /**
      * 通过手机号获取用户
      *
      * @param mobile 手机号

@@ -17,10 +17,9 @@ public interface PasswordPolicy {
     /** 锁定多少分钟 */
     int LOCK_MINUTES = 15;
 
-    /** 记录登录失败次数的缓存键：按租户 + 账号（不区分大小写） */
-    static String loginFailKey(Long tenantId, String username) {
-        return "cgch:login-fail:" + (tenantId == null ? 0 : tenantId) + ":"
-                + (username == null ? "" : username.trim().toLowerCase());
+    /** 记录登录失败次数的缓存键：账号全平台唯一，按账号计数（不区分大小写） */
+    static String loginFailKey(String username) {
+        return "cgch:login-fail:" + (username == null ? "" : username.trim().toLowerCase());
     }
 
 }

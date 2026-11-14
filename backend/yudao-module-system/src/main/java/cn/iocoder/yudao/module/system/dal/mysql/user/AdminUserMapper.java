@@ -17,6 +17,11 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
         return selectOne(AdminUserDO::getUsername, username);
     }
 
+    /** 按账号查全部记录（调用方在忽略租户时使用，用来跨公司判断账号是否重复、登录时找到所属公司） */
+    default List<AdminUserDO> selectListByUsername(String username) {
+        return selectList(AdminUserDO::getUsername, username);
+    }
+
     default AdminUserDO selectByEmail(String email) {
         return selectOne(AdminUserDO::getEmail, email);
     }

@@ -50,6 +50,9 @@ public interface ErrorCodeConstants {
     ErrorCode USER_REGISTER_DISABLED = new ErrorCode(1_002_003_011, "注册功能已关闭");
     ErrorCode USER_ADMIN_NOT_ALLOW_DISABLE = new ErrorCode(1_002_003_012, "超级管理员或租户管理员账号不能禁用");
     ErrorCode USER_ADMIN_NOT_ALLOW_DELETE = new ErrorCode(1_002_003_013, "超级管理员或租户管理员账号不能删除");
+    ErrorCode USER_USERNAME_FORMAT = new ErrorCode(1_002_003_014, "登录账号请使用邮箱或手机号");
+    ErrorCode USER_USERNAME_USED_BY_OTHER = new ErrorCode(1_002_003_015, "这个账号已被使用，请换一个邮箱或手机号");
+    ErrorCode USER_ROLE_NOT_IN_TENANT = new ErrorCode(1_002_003_016, "只能分配本公司的角色");
 
     // ========== 部门模块 1-002-004-000 ==========
     ErrorCode DEPT_NAME_DUPLICATE = new ErrorCode(1_002_004_000, "已经存在该名字的部门");
@@ -113,6 +116,10 @@ public interface ErrorCodeConstants {
     ErrorCode TENANT_CAN_NOT_UPDATE_SYSTEM = new ErrorCode(1_002_015_003, "系统租户不能进行修改、删除等操作！");
     ErrorCode TENANT_NAME_DUPLICATE = new ErrorCode(1_002_015_004, "名字为【{}】的租户已存在");
     ErrorCode TENANT_WEBSITE_DUPLICATE = new ErrorCode(1_002_015_005, "域名为【{}】的租户已存在");
+    ErrorCode TENANT_LOGIN_AMBIGUOUS = new ErrorCode(1_002_015_006, "这个账号同时存在于多家公司，请联系平台管理员处理");
+    ErrorCode TENANT_VISIT_REQUIRED = new ErrorCode(1_002_015_007, "请从「客户管理」点击「进入客户后台」后再访问");
+    ErrorCode TENANT_VISIT_SELF = new ErrorCode(1_002_015_008, "不能进入平台自己的后台");
+    ErrorCode TENANT_VISIT_REASON_REQUIRED = new ErrorCode(1_002_015_009, "请填写进入客户后台的原因");
 
     // ========== 租户套餐 1-002-016-000 ==========
     ErrorCode TENANT_PACKAGE_NOT_EXISTS = new ErrorCode(1_002_016_000, "租户套餐不存在");

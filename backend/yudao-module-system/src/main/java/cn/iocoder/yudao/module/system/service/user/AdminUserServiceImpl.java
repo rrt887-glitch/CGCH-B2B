@@ -1,5 +1,8 @@
 package cn.iocoder.yudao.module.system.service.user;
 
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.yudao.module.system.enums.LoginAccountPolicy;
 import cn.iocoder.yudao.module.system.enums.PasswordPolicy;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
@@ -114,7 +117,11 @@ public class AdminUserServiceImpl implements AdminUserService {
                 throw exception(USER_COUNT_MAX, tenant.getAccountCount());
             }
         });
-        // 1.2 校验正确性
+        // 1.2 校验正确性：新账号必须是邮箱或手机号（全平台唯一，登录时据此找到所属公司）
+        if (!LoginAccountPolicy.isValidNewAccount(createReqVO.getUsername())) {
+            throw exception(USER_USERNAME_FORMAT);
+        }
+        createReqVO.setUsername(createReqVO.getUsername().trim());
         validateUserForCreateOrUpdate(null, createReqVO.getUsername(),
                 createReqVO.getMobile(), createReqVO.getEmail(), createReqVO.getDeptId(), createReqVO.getPostIds());
         // 2.1 插入用户
@@ -147,6 +154,9 @@ public class AdminUserServiceImpl implements AdminUserService {
             }
         });
         // 1.3 校验正确性
+        if (!LoginAccountPolicy.isValidNewAccount(registerReqVO.getUsername())) {
+            throw exception(USER_USERNAME_FORMAT);
+        }
         validateUserForCreateOrUpdate(null, registerReqVO.getUsername(), null, null, null, null);
 
         // 2. 插入用户
@@ -340,6 +350,21 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     @Override
+    public List<AdminUserDO> getUserListByUsernameIgnoreTenant(String username) {
+        if (StrUtil.isBlank(username)) {
+            return Collections.emptyList();
+        }
+        String account = username.trim();
+        // 跨全部公司、且不受数据权限过滤，保证唯一性判断和登录时找公司都准确
+        return DataPermissionUtils.executeIgnore(() -> TenantUtils.executeIgnore(() -> userMapper.selectListByUsername(account)));
+    }
+
+    @Override
+    public Long getUserCountInCurrentTenant() {
+        return DataPermissionUtils.executeIgnore(() -> userMapper.selectCount());
+    }
+
+    @Override
     public AdminUserDO getUserByMobile(String mobile) {
         return userMapper.selectByMobile(mobile);
     }
@@ -486,16 +511,13 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (StrUtil.isBlank(username)) {
             return;
         }
-        AdminUserDO user = userMapper.selectByUsername(username);
-        if (user == null) {
-            return;
-        }
-        // 如果 id 为空，说明不用比较是否为相同 id 的用户
-        if (id == null) {
-            throw exception(USER_USERNAME_EXISTS);
-        }
-        if (!user.getId().equals(id)) {
-            throw exception(USER_USERNAME_EXISTS);
+        // 账号在整个平台内唯一：登录时只填账号，靠它找到所属公司，所以不同公司之间也不能重复
+        Long tenantId = TenantContextHolder.getTenantId();
+        for (AdminUserDO user : getUserListByUsernameIgnoreTenant(username)) {
+            if (id != null && user.getId().equals(id)) {
+                continue;
+            }
+            throw exception(Objects.equals(user.getTenantId(), tenantId) ? USER_USERNAME_EXISTS : USER_USERNAME_USED_BY_OTHER);
         }
     }
 
@@ -589,6 +611,14 @@ public class AdminUserServiceImpl implements AdminUserService {
 
             // 2.2.1 判断如果不存在，在进行插入
             AdminUserDO existUser = userMapper.selectByUsername(importUser.getUsername());
+            if (existUser == null && !LoginAccountPolicy.isValidNewAccount(importUser.getUsername())) {
+                respVO.getFailureUsernames().put(importUser.getUsername(), USER_USERNAME_FORMAT.getMsg());
+                return;
+            }
+            if (existUser == null && !getUserListByUsernameIgnoreTenant(importUser.getUsername()).isEmpty()) {
+                respVO.getFailureUsernames().put(importUser.getUsername(), USER_USERNAME_USED_BY_OTHER.getMsg());
+                return;
+            }
             if (existUser == null) {
                 userMapper.insert(BeanUtils.toBean(importUser, AdminUserDO.class)
                         .setPassword(encodePassword(initPassword)).setPostIds(new HashSet<>())); // 设置默认密码及空岗位编号数组
@@ -649,7 +679,7 @@ public class AdminUserServiceImpl implements AdminUserService {
             return;
         }
         try {
-            stringRedisTemplate.delete(PasswordPolicy.loginFailKey(user.getTenantId(), user.getUsername()));
+            stringRedisTemplate.delete(PasswordPolicy.loginFailKey(user.getUsername()));
         } catch (org.springframework.dao.DataAccessException e) {
             log.warn("[unlockLogin][解除登录锁定异常] {}", e.getMessage());
         }

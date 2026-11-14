@@ -810,12 +810,12 @@ jobs:
           rid = call('POST', '/system/role/create', {'name': '业务员（仅本人）', 'code': 'cgch_sales_self', 'sort': 10, 'status': 0})
           call('POST', '/system/permission/assign-role-data-scope', {'roleId': rid, 'dataScope': 5})
           call('POST', '/system/permission/assign-role-menu', {'roleId': rid, 'menuIds': [20000, 20001, 22401]})
-          uid = call('POST', '/system/user/create', {'username': 'sales2', 'nickname': '业务员小王', 'password': 'Sales2pass'})
+          uid = call('POST', '/system/user/create', {'username': 'sales2@ci.example', 'nickname': '业务员小王', 'password': 'Sales2pass'})
           call('POST', '/system/permission/assign-user-role', {'userId': uid, 'roleIds': [rid]})
           call('POST', '/crm/clue/create', {'name': 'Wang 的线索', 'ownerUserId': uid})
           lg = json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/login', method='POST',
                headers={'tenant-id': '1', 'Content-Type': 'application/json'},
-               data=json.dumps({'username': 'sales2', 'password': 'Sales2pass'}).encode())))
+               data=json.dumps({'username': 'sales2@ci.example', 'password': 'Sales2pass'}).encode())))
           assert lg['code'] == 0, lg
           H2 = dict(H, Authorization='Bearer ' + lg['data']['accessToken'])
           def call2(path):
@@ -832,11 +832,11 @@ jobs:
           assert other['cluesCreated'] == 1 and other['inquiries'] == 0, '管理员可按业务员筛选'
           print('看板数据权限：仅本人角色只看到自己的线索与消息，不能查看他人；管理员可看全部或按人筛选')
           # ---- 两种账号：超级管理员添加的「业务员」能用日常功能，不能改公司设置，看不到团队会话 ----
-          sid = call('POST', '/system/user/create', {'username': 'sales3', 'nickname': '业务员小李', 'password': 'Sales3pass'})
+          sid = call('POST', '/system/user/create', {'username': 'sales3@ci.example', 'nickname': '业务员小李', 'password': 'Sales3pass'})
           call('POST', '/system/permission/assign-user-role', {'userId': sid, 'roleIds': [300]})
           lg3s = json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/login', method='POST',
                  headers={'tenant-id': '1', 'Content-Type': 'application/json'},
-                 data=json.dumps({'username': 'sales3', 'password': 'Sales3pass'}).encode())))
+                 data=json.dumps({'username': 'sales3@ci.example', 'password': 'Sales3pass'}).encode())))
           assert lg3s['code'] == 0, lg3s
           H3 = dict(H, Authorization='Bearer ' + lg3s['data']['accessToken'])
           def call3(path):
@@ -851,9 +851,11 @@ jobs:
           assert call3('/crm/customer/page?pageNo=1&pageSize=1&sceneType=1')['code'] == 0
           assert call3('/system/user/page?pageNo=1&pageSize=1')['code'] != 0, '业务员不能管理成员'
           c3 = call3('/channel/wa/conversation/counts')
-          assert c3['code'] == 0 and c3['data'].get('teamOpen') is None, c3
+          assert c3['code'] == 0 and c3['data'].get('teamOpen') == 0, f'业务员只看到同事公开给团队的会话，现在没有: {c3}'
           assert call('GET', '/channel/wa/conversation/counts').get('teamOpen') is not None, '超级管理员有团队会话'
-          print('两种账号：业务员有日常功能、没有公司设置和成员管理，看不到团队会话；超级管理员可看团队会话')
+          t3 = call3('/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')
+          assert t3['code'] == 0 and t3['data']['total'] == 0, f'没有公开的会话时业务员的团队会话为空: {t3}'
+          print('两种账号：业务员有日常功能、没有公司设置和成员管理，团队会话里只有同事公开的会话；超级管理员可看团队会话')
           # ---- 密码规则：新密码至少 8 位、字母加数字；连续输错 5 次锁定 15 分钟；管理员重置密码可解锁 ----
           def rawreq(method, path, body, headers=None):
               req = urllib.request.Request(BASE + path, method=method, headers=headers or H, data=json.dumps(body).encode())
@@ -864,24 +866,165 @@ jobs:
           for bad in ['abc123', 'abcdefgh', '12345678']:
               r = rawreq('POST', '/system/user/create', {'username': 'weakpw', 'nickname': '弱密码', 'password': bad})
               assert r['code'] != 0 and '字母和数字' in r['msg'], (bad, r)
-          lid = call('POST', '/system/user/create', {'username': 'locktest', 'nickname': '锁定测试', 'password': 'Lock1test'})
+          lid = call('POST', '/system/user/create', {'username': 'locktest@ci.example', 'nickname': '锁定测试', 'password': 'Lock1test'})
           r = rawreq('PUT', '/system/user/update-password', {'id': lid, 'password': 'short1'})
           assert r['code'] != 0 and '字母和数字' in r['msg'], r
-          codes = [login_as('locktest', 'Wrong1pass')['code'] for _ in range(5)]
+          codes = [login_as('locktest@ci.example', 'Wrong1pass')['code'] for _ in range(5)]
           assert codes == [1002000000, 1002000000, 1002000003, 1002000003, 1002000002], codes
-          r = login_as('locktest', 'Lock1test')
+          r = login_as('locktest@ci.example', 'Lock1test')
           assert r['code'] == 1002000002 and '分钟' in r['msg'], f'锁定期间密码正确也不能登录: {r}'
-          r = login_as('LockTest', 'Lock1test')
+          r = login_as('LockTest@CI.example', 'Lock1test')
           assert r['code'] == 1002000002, f'锁定不区分账号大小写: {r}'
           call('PUT', '/system/user/update-password', {'id': lid, 'password': 'Lock2test'})
-          r = login_as('locktest', 'Lock2test')
+          r = login_as('locktest@ci.example', 'Lock2test')
           assert r['code'] == 0, f'管理员重置密码后应立即解锁: {r}'
           assert login_as('nobodyhere', 'Wrong1pass')['code'] == 1002000000, '不存在的账号也按普通失败提示'
-          r = login_as('locktest', 'Wrong1pass'); assert r['code'] == 1002000000, r
-          assert login_as('locktest', 'Lock2test')['code'] == 0
-          assert [login_as('locktest', 'Wrong1pass')['code'] for _ in range(2)] == [1002000000, 1002000000], '登录成功后失败次数清零'
+          r = login_as('locktest@ci.example', 'Wrong1pass'); assert r['code'] == 1002000000, r
+          assert login_as('locktest@ci.example', 'Lock2test')['code'] == 0
+          assert [login_as('locktest@ci.example', 'Wrong1pass')['code'] for _ in range(2)] == [1002000000, 1002000000], '登录成功后失败次数清零'
           call('DELETE', f'/system/user/delete?id={lid}')
           print('密码规则：弱密码被拒绝；连续输错 5 次锁定，锁定期间正确密码也不能登录；管理员重置密码解锁；登录成功清零')
+
+          # ---- 多家客户：开户、按账号登录（不传公司）、成员、数据隔离、公开给团队、进入客户后台 ----
+          def _multi_tenant_test():  # 放在函数里，变量不影响后面的测试
+              def req_x(h, method, path, body=None):
+                  rq = urllib.request.Request(BASE + path, method=method, headers=h,
+                                              data=json.dumps(body).encode() if body is not None else None)
+                  return json.load(urllib.request.urlopen(rq))
+              def callx(h, method, path, body=None):
+                  d = req_x(h, method, path, body)
+                  assert d.get('code') == 0, f'{method} {path} 失败: {d}'
+                  return d['data']
+              def login_free(u, p):  # 登录页不再选公司：不带 tenant-id
+                  return req_x({'Content-Type': 'application/json'}, 'POST', '/system/auth/login', {'username': u, 'password': p})
+              def as_user(lg):
+                  return {'Authorization': 'Bearer ' + lg['data']['accessToken'], 'tenant-id': str(lg['data']['tenantId']),
+                          'Content-Type': 'application/json'}
+              # 不登录拿不到客户名单
+              for p in ['/system/tenant/simple-list', '/system/tenant/get-id-by-name?name=x', '/system/tenant/get-by-website?website=hig.global']:
+                  d = req_x({'tenant-id': '1'}, 'GET', p)
+                  assert d['code'] == 401, f'{p} 不应公开: {d}'
+              pkgs = call('GET', '/system/tenant-package/get-simple-list')
+              assert any(p['id'] == 200 and p['name'] == '客户标准版' for p in pkgs), pkgs
+              # 新账号必须是邮箱或手机号
+              r = rawreq('POST', '/system/user/create', {'username': 'plainname', 'nickname': '旧格式', 'password': 'Plain1pass'})
+              assert r['code'] == 1002003014, f'新账号只能用邮箱或手机号: {r}'
+              expire = int((time.time() + 365 * 86400) * 1000)
+              def tenant_body(name, admin):
+                  return {'name': name, 'contactName': name, 'status': 0, 'packageId': 200, 'expireTime': expire,
+                          'accountCount': 5, 'username': admin, 'password': 'Boss1pass'}
+              ta = call('POST', '/system/tenant/create', tenant_body('客户A-CI', 'boss@a.ci.example'))
+              tb = call('POST', '/system/tenant/create', tenant_body('客户B-CI', '+8613800000002'))
+              r = rawreq('POST', '/system/tenant/create', tenant_body('客户C-CI', 'BOSS@a.ci.example'))
+              assert r['code'] != 0 and ('已被使用' in r['msg'] or '已经存在' in r['msg']), f'账号全平台唯一（不区分大小写）: {r}'
+              r = rawreq('POST', '/system/user/create', {'username': 'boss@a.ci.example', 'nickname': '重复', 'password': 'Dup1pass'})
+              assert r['code'] == 1002003015, f'平台里也不能建别家已用的账号: {r}'
+              la = login_free('boss@a.ci.example', 'Boss1pass')
+              assert la['code'] == 0 and la['data']['tenantId'] == ta, f'按账号找到所属公司: {la}'
+              lb = login_free('+8613800000002', 'Boss1pass')
+              assert lb['code'] == 0 and lb['data']['tenantId'] == tb, lb
+              assert login_free('admin', 'admin123')['data']['tenantId'] == 1, '老账号照常登录，属于平台'
+              assert login_free('nobody@ci.example', 'Wrong1pass')['code'] == 1002000000, '不存在的账号按普通失败提示'
+              HA, HB = as_user(la), as_user(lb)
+              d = req_x(dict(HA, **{'tenant-id': str(tb)}), 'GET', '/crm/customer/page?pageNo=1&pageSize=1')
+              assert d['code'] == 403, f'带别家的公司编号访问应被拒绝: {d}'
+              # 开户自动建好「管理员」「成员」两个角色；管理员有业务功能和成员管理，没有平台功能和充值
+              roles = {x['code']: x for x in callx(HA, 'GET', '/system/role/simple-list')}
+              assert {'tenant_admin', 'cgch_sales'} <= set(roles) and 'super_admin' not in roles, roles
+              member_role = roles['cgch_sales']['id']
+              pa = set(callx(HA, 'GET', '/system/auth/get-permission-info')['permissions'])
+              for p in ['channel:wa-message:query', 'channel:wa-message:send', 'crm:customer:create', 'channel:ai:config',
+                        'system:user:create', 'system:user:update-password', 'system:permission:assign-user-role']:
+                  assert p in pa, f'客户管理员应有 {p}'
+              for p in ['system:tenant:query', 'system:tenant:create', 'system:tenant:visit', 'channel:credit:recharge', 'system:menu:query']:
+                  assert p not in pa, f'客户管理员不应有 {p}'
+              assert req_x(HA, 'GET', '/system/tenant/console-page?pageNo=1&pageSize=10')['code'] != 0
+              assert req_x(HA, 'POST', '/channel/credit/recharge', {'amount': 1000})['code'] != 0, '客户不能给自己充智点'
+              assert any(t['name'] == '外贸标准流程' for t in callx(HA, 'GET', '/crm/business-status/type-simple-list')), '新客户有外贸标准商机流程'
+              # 成员：管理员添加并分配本公司的成员角色；不能分配别家的角色、不能操作别家的账号；账号数上限 5（含管理员）
+              m1 = callx(HA, 'POST', '/system/user/create', {'username': 'm1@a.ci.example', 'nickname': '成员一', 'password': 'Member1pass'})
+              callx(HA, 'POST', '/system/permission/assign-user-role', {'userId': m1, 'roleIds': [member_role]})
+              d = req_x(HA, 'POST', '/system/permission/assign-user-role', {'userId': m1, 'roleIds': [1]})
+              assert d['code'] == 1002003016, f'不能分配平台的超级管理员角色: {d}'
+              d = req_x(HA, 'POST', '/system/permission/assign-user-role', {'userId': 1, 'roleIds': [member_role]})
+              assert d['code'] != 0, f'不能给别家的账号分配角色: {d}'
+              for i in range(2, 5):
+                  callx(HA, 'POST', '/system/user/create', {'username': f'm{i}@a.ci.example', 'nickname': f'成员{i}', 'password': 'Member1pass'})
+              d = req_x(HA, 'POST', '/system/user/create', {'username': 'm5@a.ci.example', 'nickname': '成员5', 'password': 'Member1pass'})
+              assert d['code'] == 1002003008, f'超过账号数上限: {d}'
+              lm = login_free('m1@a.ci.example', 'Member1pass')
+              assert lm['code'] == 0 and lm['data']['tenantId'] == ta, lm
+              HM = as_user(lm)
+              pm = set(callx(HM, 'GET', '/system/auth/get-permission-info')['permissions'])
+              assert 'channel:wa-message:query' in pm and 'channel:ai:config' not in pm and 'system:user:create' not in pm, sorted(pm)[:20]
+              # 数据隔离：A 的客户只有 A 能看到，B 和平台都看不到
+              ca = callx(HA, 'POST', '/crm/customer/create', {'name': 'A 公司的客户-CI', 'ownerUserId': la['data']['userId']})
+              assert all(c['id'] != ca for c in callx(HB, 'GET', '/crm/customer/page?pageNo=1&pageSize=100')['list'])
+              gb = req_x(HB, 'GET', f'/crm/customer/get?id={ca}')
+              assert gb['code'] != 0 or gb['data'] is None, f'B 不能读 A 的客户: {gb}'
+              assert all(c['id'] != ca for c in call('GET', '/crm/customer/page?pageNo=1&pageSize=100')['list']), '平台默认看不到客户的数据'
+              # 公开给团队：A 的官网在线客服来了一位访客；成员看不到，管理员公开后成员在「团队会话」里能看、能写备注，不能回复和改状态
+              site = callx(HA, 'POST', '/channel/web-im/site', {'domain': 'https://a-ci.example', 'name': 'A 官网'})
+              key = next(a for a in callx(HA, 'GET', '/channel/wa-account/list') if a['id'] == site)['phoneNumberId']
+              assert req_x({'Content-Type': 'application/json'}, 'POST', '/channel/web-im/send',
+                           {'k': key, 'visitorId': 'vcitenanta01', 'text': 'Hi, price for 100 pcs?'})['code'] == 0
+              conv = None
+              for _ in range(20):
+                  lst = callx(HA, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=20')['list']
+                  conv = next((c for c in lst if c['waId'] == 'vcitenanta01'), None)
+                  if conv: break
+                  time.sleep(0.5)
+              assert conv, 'A 的管理员收到访客会话'
+              cid = conv['id']
+              assert callx(HM, 'GET', '/channel/wa/conversation/counts')['teamOpen'] == 0
+              assert req_x(HM, 'GET', f'/channel/wa/conversation/get?id={cid}')['code'] != 0, '未公开时成员看不到'
+              assert req_x(HB, 'GET', f'/channel/wa/conversation/get?id={cid}')['code'] != 0, '别家看不到'
+              assert req_x(HM, 'PUT', f'/channel/wa/conversation/team-public?id={cid}&enabled=true')['code'] != 0, '成员不能公开别人的会话'
+              callx(HA, 'PUT', f'/channel/wa/conversation/team-public?id={cid}&enabled=true')
+              assert callx(HM, 'GET', '/channel/wa/conversation/counts')['teamOpen'] == 1
+              tm = callx(HM, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=20&team=true')
+              assert tm['total'] == 1 and tm['list'][0]['id'] == cid and tm['list'][0]['teamPublic'] is True and tm['list'][0]['canHandle'] is False, tm
+              g = callx(HM, 'GET', f'/channel/wa/conversation/get?id={cid}')
+              assert g['canHandle'] is False and g['teamPublic'] is True, g
+              assert any(m['textBody'] == 'Hi, price for 100 pcs?' for m in callx(HM, 'GET', f'/channel/wa/message/list?conversationId={cid}')), '成员能看消息'
+              note = callx(HM, 'POST', f'/channel/wa/conversation/note?conversationId={cid}&content=' + urllib.parse.quote('我来补充：这位客户上周问过'))
+              assert note['userId'] == lm['data']['userId'], '成员能给公开的会话写内部备注'
+              assert req_x(HM, 'POST', '/channel/wa/message/send', {'conversationId': cid, 'text': 'hello'})['code'] != 0, '成员不能回复公开的会话'
+              assert req_x(HM, 'PUT', f'/channel/wa/conversation/status?id={cid}&status=resolved')['code'] != 0, '成员不能改状态'
+              assert req_x(HB, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=20&team=true')['data']['total'] == 0, '别家的团队会话里没有'
+              callx(HA, 'PUT', f'/channel/wa/conversation/team-public?id={cid}&enabled=false')
+              assert req_x(HM, 'GET', f'/channel/wa/conversation/get?id={cid}')['code'] != 0, '取消公开后成员看不到'
+              # 平台进入客户后台：必须先登记原因；有效期内能看全部数据；每次进入都有记录，客户也能看到；退出后失效
+              HV = dict(H, **{'visit-tenant-id': str(ta)})
+              d = req_x(HV, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=20&team=true')
+              assert d['code'] == 403 and '进入客户后台' in d['msg'], f'没有登记不能访问客户数据: {d}'
+              assert rawreq('POST', '/system/tenant-visit/enter', {'tenantId': ta, 'reason': ' '})['code'] != 0, '必须填写原因'
+              assert rawreq('POST', '/system/tenant-visit/enter', {'tenantId': 1, 'reason': 'x'})['code'] == 1002015008
+              ent = call('POST', '/system/tenant-visit/enter', {'tenantId': ta, 'reason': 'CI：协助排查'})
+              assert ent['tenantId'] == ta and ent['tenantName'] == '客户A-CI', ent
+              vp = callx(HV, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=20&team=true')
+              assert any(c['id'] == cid for c in vp['list']), f'进入后能看到客户的全部会话: {vp}'
+              assert any(c['id'] == ca for c in callx(HV, 'GET', '/crm/customer/page?pageNo=1&pageSize=50')['list']), '进入后能看到客户的 CRM'
+              assert req_x(dict(H, **{'visit-tenant-id': str(tb)}), 'GET', '/crm/customer/page?pageNo=1&pageSize=1')['code'] == 403, '只对登记的那家有效'
+              logs = call('GET', f'/system/tenant-visit/page?pageNo=1&pageSize=10&visitTenantId={ta}')['list']
+              assert logs and logs[0]['reason'] == 'CI：协助排查' and logs[0]['username'] == 'admin', logs
+              mine_logs = callx(HA, 'GET', '/system/tenant-visit/my-page?pageNo=1&pageSize=10')['list']
+              assert [x['reason'] for x in mine_logs] == ['CI：协助排查'], f'客户管理员能看到平台的进入记录: {mine_logs}'
+              assert req_x(HM, 'GET', '/system/tenant-visit/my-page?pageNo=1&pageSize=10')['code'] != 0, '成员看不到进入记录'
+              call('POST', f'/system/tenant-visit/exit?tenantId={ta}')
+              assert req_x(HV, 'GET', '/crm/customer/page?pageNo=1&pageSize=1')['code'] == 403, '退出后失效'
+              assert call('GET', f'/system/tenant-visit/page?pageNo=1&pageSize=1&visitTenantId={ta}')['list'][0]['exitTime'], '记录退出时间'
+              # 客户管理列表：开户信息、管理员账号、已建账号数；停用后客户不能登录
+              cp = {x['id']: x for x in call('GET', '/system/tenant/console-page?pageNo=1&pageSize=50')['list']}
+              assert cp[ta]['adminUsername'] == 'boss@a.ci.example' and cp[ta]['usedAccountCount'] == 5 and cp[ta]['packageName'] == '客户标准版', cp[ta]
+              assert cp[1]['platform'] is True
+              call('PUT', '/system/tenant/update', {'id': tb, 'name': '客户B-CI', 'contactName': '客户B-CI', 'status': 1, 'packageId': 200,
+                                                    'expireTime': expire, 'accountCount': 5})
+              r = login_free('+8613800000002', 'Boss1pass')
+              assert r['code'] == 1002015001, f'停用的客户不能登录: {r}'
+              print('多家客户：开户自动建管理员和成员角色；按账号登录不选公司；账号全平台唯一；客户名单不公开；数据互相隔离；'
+                    '成员只看自己的和公开给团队的会话；平台进入客户后台必须登记、有记录、客户可见、退出即失效')
+          _multi_tenant_test()
 
           # ---- AI 工作报告 ----
           today = time.strftime('%Y-%m-%d')
@@ -1119,7 +1262,7 @@ jobs:
           call('POST', '/system/permission/assign-role-menu', {'roleId': rid, 'menuIds': [20000, 20001, 22401, 20300, 20301, 22901]})
           lg2 = json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/login', method='POST',
                 headers={'tenant-id': '1', 'Content-Type': 'application/json'},
-                data=json.dumps({'username': 'sales2', 'password': 'Sales2pass'}).encode())))
+                data=json.dumps({'username': 'sales2@ci.example', 'password': 'Sales2pass'}).encode())))
           H3 = dict(H, Authorization='Bearer ' + lg2['data']['accessToken'])
           def call3(method, path, body=None):
               return json.load(urllib.request.urlopen(urllib.request.Request(BASE + path, method=method, headers=H3,
@@ -1808,7 +1951,7 @@ jobs:
           # 权限：没有维护权限的业务员不能改企业云盘和别人建的全员模板，自己的可以
           lg3 = json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/login', method='POST',
                 headers={'tenant-id': '1', 'Content-Type': 'application/json'},
-                data=json.dumps({'username': 'sales2', 'password': 'Sales2pass'}).encode())))
+                data=json.dumps({'username': 'sales2@ci.example', 'password': 'Sales2pass'}).encode())))
           assert lg3['code'] == 0, lg3
           HS = dict(H, Authorization='Bearer ' + lg3['data']['accessToken'])
           def call_s(method, path, body=None):

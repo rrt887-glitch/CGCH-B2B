@@ -51,8 +51,12 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
             q.and(w -> w.nested(x -> x.isNotNull(ChannelWaConversationDO::getOwnerUserId).ne(ChannelWaConversationDO::getOwnerUserId, userId))
                     .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).notIn(ChannelWaConversationDO::getAccountId, myAccounts)));
         } else {
+            // 范围内同事负责的会话，或者「公开给团队」的会话（不是我自己负责的）
             q.and(w -> w.in(ChannelWaConversationDO::getOwnerUserId, teamUsers)
-                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).in(ChannelWaConversationDO::getAccountId, teamAccounts)));
+                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).in(ChannelWaConversationDO::getAccountId, teamAccounts))
+                    .or().nested(x -> x.eq(ChannelWaConversationDO::getTeamPublic, true)
+                            .and(y -> y.nested(z -> z.isNotNull(ChannelWaConversationDO::getOwnerUserId).ne(ChannelWaConversationDO::getOwnerUserId, userId))
+                                    .or().nested(z -> z.isNull(ChannelWaConversationDO::getOwnerUserId).notIn(ChannelWaConversationDO::getAccountId, myAccounts)))));
         }
         return q;
     }

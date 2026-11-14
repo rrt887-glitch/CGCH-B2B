@@ -225,3 +225,46 @@ SELECT 300, m.`id`, 'admin', 'admin', b'0', 1
      'crm:customer-group:create', 'crm:customer-group:update', 'crm:customer-group:delete',
      'crm:tag:create', 'crm:tag:update', 'crm:tag:delete')
    AND NOT EXISTS (SELECT 1 FROM `system_role_menu` x WHERE x.`role_id` = 300 AND x.`menu_id` = m.`id` AND x.`deleted` = b'0');
+
+-- ==================== 多家客户（与 migrations/034 相同；账号长度、会话公开字段已在建表脚本里） ====================
+-- 平台「进入客户后台」记录（平台级数据，不属于任何一家客户）
+CREATE TABLE IF NOT EXISTS `system_tenant_visit_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `user_id` bigint NOT NULL COMMENT '进入的平台账号',
+  `username` varchar(64) NULL COMMENT '平台账号',
+  `nickname` varchar(64) NULL COMMENT '平台账号姓名',
+  `visit_tenant_id` bigint NOT NULL COMMENT '进入的客户（租户）编号',
+  `visit_tenant_name` varchar(64) NULL COMMENT '客户名称',
+  `reason` varchar(255) NOT NULL COMMENT '进入原因',
+  `ip` varchar(64) NULL COMMENT '来源 IP',
+  `user_agent` varchar(512) NULL COMMENT '浏览器',
+  `enter_time` datetime NOT NULL COMMENT '进入时间',
+  `expire_time` datetime NOT NULL COMMENT '有效期至（到期需重新进入）',
+  `exit_time` datetime NULL COMMENT '主动退出时间',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_visit_tenant` (`visit_tenant_id`, `id`),
+  KEY `idx_user_tenant` (`user_id`, `visit_tenant_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '平台进入客户后台的记录';
+
+-- 客户标准版套餐（编号 200）：草根出海全部功能 + 成员管理，不含平台功能和智点充值；开户默认选它
+INSERT INTO `system_tenant_package` (`id`, `name`, `status`, `remark`, `menu_ids`, `creator`, `updater`, `deleted`)
+SELECT 200, '客户标准版', 0, '草根出海全部功能 + 成员管理；不含平台功能和智点充值', CAST(JSON_ARRAYAGG(m.`id`) AS CHAR), '1', '1', b'0'
+  FROM `system_menu` m
+  LEFT JOIN (
+    WITH RECURSIVE sub AS (
+      SELECT `id` FROM `system_menu` WHERE (`id` = 480 OR `id` BETWEEN 20000 AND 29999) AND `deleted` = b'0'
+      UNION
+      SELECT c.`id` FROM `system_menu` c JOIN sub ON c.`parent_id` = sub.`id` WHERE c.`deleted` = b'0'
+    )
+    SELECT `id` FROM sub
+  ) allowed ON allowed.`id` = m.`id`
+ WHERE m.`deleted` = b'0' AND m.`status` = 0
+   AND (allowed.`id` IS NOT NULL OR m.`id` IN (1, 4, 23, 24, 25, 26, 29, 5, 80))
+   AND COALESCE(m.`permission`, '') <> 'channel:credit:recharge'
+   AND NOT EXISTS (SELECT 1 FROM `system_tenant_package` p WHERE p.`id` = 200)
+HAVING COUNT(*) > 0;
