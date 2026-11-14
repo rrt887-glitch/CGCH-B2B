@@ -63,6 +63,8 @@ public class ChannelEvolutionProxyService {
             ChannelEvolutionProxyRespVO vo = p == null ? new ChannelEvolutionProxyRespVO()
                     : BeanUtils.toBean(p, ChannelEvolutionProxyRespVO.class);
             vo.setTenantId(tenantId);
+            // 没有配置过时也返回 false，避免前端拿到 null
+            vo.setEnabled(p != null && Boolean.TRUE.equals(p.getEnabled()));
             vo.setHasPassword(p != null && StrUtil.isNotBlank(p.getPassword()));
             return vo;
         });

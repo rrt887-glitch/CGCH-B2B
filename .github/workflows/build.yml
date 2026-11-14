@@ -2156,7 +2156,8 @@ jobs:
           assert call('GET', '/channel/evolution/config') == {'enabled': True}
           # 出口代理：每家客户用自己的 IP，建实例时先设置代理再出二维码（否则首次连接用的是服务器 IP）
           assert call('GET', '/channel/evolution/proxy/mine') == {'enabled': False}, '默认没有代理'
-          assert call('GET', '/channel/evolution/proxy?tenantId=1')['enabled'] is False
+          assert call('GET', '/channel/evolution/proxy?tenantId=1')['enabled'] is False, '没配置过时返回 enabled=false'
+          assert call('GET', '/channel/evolution/proxy?tenantId=1')['hasPassword'] is False
           assert call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': '', 'port': 1080,
                                                          'protocol': 'socks5'}, ok=False)['code'] != 0, '启用代理必须填主机'
           assert call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'proxy-a.example', 'port': 1080,
