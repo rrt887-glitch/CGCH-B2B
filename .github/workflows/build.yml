@@ -371,6 +371,8 @@ jobs:
 
           echo "--- WhatsApp：绑定、Webhook 验证与签名、收消息、关联客户、24 小时窗口、文本与模板、状态回执 ---"
           python3 - <<'PY'
+          import sys, traceback
+          sys.excepthook = lambda t, v, tb: (print('::error title=test failed::' + ''.join(traceback.format_exception(t, v, tb)).replace('%', '%25').replace('\n', '%0A')), sys.__excepthook__(t, v, tb))
           import hashlib, hmac, json, os, time, urllib.error, urllib.request
           BASE = 'http://127.0.0.1:48080/admin-api'
           H = {'Authorization': 'Bearer ' + os.environ['TOKEN'], 'tenant-id': '1', 'Content-Type': 'application/json'}
