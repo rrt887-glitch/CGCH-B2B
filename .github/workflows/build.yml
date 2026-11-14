@@ -2154,6 +2154,33 @@ jobs:
               return json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/channel/wa/message/send-media', method='POST', data=parts, headers=hdr)))
           call('PUT', '/channel/ai/config/save', dict(cfg_k, llmApiKey='', waMode='off'))
           assert call('GET', '/channel/evolution/config') == {'enabled': True}
+          # 出口代理：每家客户用自己的 IP，建实例时先设置代理再出二维码（否则首次连接用的是服务器 IP）
+          assert call('GET', '/channel/evolution/proxy/mine') == {'enabled': False}, '默认没有代理'
+          assert call('GET', '/channel/evolution/proxy?tenantId=1')['enabled'] is False
+          assert call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': '', 'port': 1080,
+                                                         'protocol': 'socks5'}, ok=False)['code'] != 0, '启用代理必须填主机'
+          assert call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'proxy-a.example', 'port': 1080,
+                                                         'protocol': 'ftp'}, ok=False)['code'] != 0, '协议只支持 http/https/socks4/socks5'
+          assert call('PUT', '/channel/evolution/proxy', {'tenantId': 999, 'enabled': False}, ok=False)['code'] != 0, '客户不存在'
+          call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'proxy-a.example', 'port': 1080,
+                                                  'protocol': 'socks5', 'username': 'u1', 'password': 'p1'})
+          mine = call('GET', '/channel/evolution/proxy/mine')
+          assert mine == {'enabled': True, 'host': 'proxy-a.example', 'protocol': 'socks5'}, mine
+          pv = call('GET', '/channel/evolution/proxy?tenantId=1')
+          assert pv['enabled'] is True and pv['hasPassword'] is True and pv['port'] == 1080, pv
+          assert 'p1' not in json.dumps(pv) and 'password' not in [k for k in pv if k != 'hasPassword'], pv
+          # 客户自己的账号看不到、改不了出口代理（代理池由平台维护）
+          lg_p = json.load(urllib.request.urlopen(urllib.request.Request(BASE + '/system/auth/login', method='POST',
+                   headers={'tenant-id': '1', 'Content-Type': 'application/json'},
+                   data=json.dumps({'username': 'sales3@ci.example', 'password': 'Sales3pass'}).encode())))
+          HP = dict(H, Authorization='Bearer ' + lg_p['data']['accessToken'])
+          def call_p(method, path, body=None):
+              rq = urllib.request.Request(BASE + path, method=method, headers=HP,
+                                          data=json.dumps(body).encode() if body is not None else None)
+              return json.load(urllib.request.urlopen(rq))
+          assert call_p('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': False})['code'] != 0, '业务员不能改出口代理'
+          assert call_p('GET', '/channel/evolution/proxy?tenantId=1')['code'] != 0, '业务员不能看别家的代理配置'
+          print('出口代理：平台按客户配置，主机/端口/协议校验；密码加密保存且不回传；业务员看不到也改不了')
           # 配对码
           s1 = call('POST', '/channel/evolution/session', {'number': '+86 138-0000-2222'})
           assert s1['status'] == 'connecting' and s1['pairingCode'] == 'ABCD1234' and s1['session'].startswith('cgch-1-1-'), s1
@@ -2161,6 +2188,25 @@ jobs:
           assert b1['integration'] == 'WHATSAPP-BAILEYS' and b1['number'] == '8613800002222' and b1['qrcode'] is True and b1['groupsIgnore'] is False, b1
           assert b1['webhook']['url'] == 'http://127.0.0.1:48080/admin-api/channel/evolution/webhook' and b1['webhook']['enabled'] \
               and set(b1['webhook']['events']) == {'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'MESSAGES_SET'} and b1['webhook']['headers']['x-cgch-token'], b1
+          assert evo()['instances'][s1['session']]['proxy'] == {'enabled': True, 'proxyHost': 'proxy-a.example', 'proxyPort': '1080',
+                                                                'proxyProtocol': 'socks5', 'proxyUsername': 'u1', 'proxyPassword': 'p1'}, \
+              '建实例时就设置好出口代理，手机扫码前生效'
+          # 换代理后，新号码用新的出口
+          call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'proxy-b.example', 'port': 2080, 'protocol': 'http'})
+          s1b = call('POST', '/channel/evolution/session', {})
+          assert evo()['instances'][s1b['session']]['proxy']['proxyHost'] == 'proxy-b.example' \
+              and evo()['instances'][s1b['session']]['proxy']['proxyProtocol'] == 'http', '新号码用新出口'
+          assert 'u1' not in json.dumps(evo()['instances'][s1b['session']]['proxy']), '没填账号时不带上一套的账号'
+          call('DELETE', f"/channel/evolution/session?session={s1b['session']}")
+          # 代理连不上时明确报错，并且不留下半成品实例
+          n_inst = len(evo()['instances'])
+          call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'bad.example', 'port': 1080, 'protocol': 'socks5'})
+          bad = call('POST', '/channel/evolution/session', {}, ok=False)
+          assert bad['code'] != 0 and '设置出口代理失败' in bad['msg'] and 'bad.example' in bad['msg'], bad
+          assert wait(lambda: len(evo()['instances']) == n_inst, '坏代理时删除半成品实例')
+          call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': False})
+          assert call('GET', '/channel/evolution/proxy/mine') == {'enabled': False}
+          print('出口代理：建实例时先设置；换代理新号码用新出口；代理不通时明确报错并清理实例')
           p1 = call('GET', f"/channel/evolution/session?session={s1['session']}")
           assert p1['status'] == 'connecting' and p1['pairingCode'] == 'ABCD1234' and p1['qr'].startswith('data:image/png;base64,QR'), p1
           assert call('GET', '/channel/evolution/session?session=cgch-1-999-x')['status'] == 'expired', '别人的连接看不到'
@@ -2174,6 +2220,16 @@ jobs:
           ea = next(a for a in call('GET', '/channel/wa-account/list') if a['id'] == p1['accountId'])
           assert ea['authType'] == 'evolution' and ea['connState'] == 'open' and ea['name'] == 'Evo Biz' and ea['phoneNumberId'] == s1['session'] \
               and ea['enabled'] and ea['platform'] == 'whatsapp', ea
+          # 已经连上的号码：改代理后可以「应用到已有号码」，不用重新扫码
+          call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'proxy-c.example', 'port': 3080,
+                                                  'protocol': 'https', 'applyNow': True})
+          applied = evo()['instances'][s1['session']]['proxies']
+          assert len(applied) >= 2 and applied[-1]['proxyHost'] == 'proxy-c.example' and applied[-1]['proxyProtocol'] == 'https', applied
+          pv3 = call('GET', '/channel/evolution/proxy?tenantId=1')
+          assert pv3['lastAppliedTime'] and not pv3['lastError'], pv3
+          call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': False, 'applyNow': True})
+          assert evo()['instances'][s1['session']]['proxies'][-1]['enabled'] is False, '关闭代理后号码改回直连'
+          print('出口代理：已连上的号码可一键改为新出口，关闭后回到直连')
           # 收消息：私聊入库；群聊单独成会话（记下发消息的成员）；@lid 联系人按真实号码归到同一会话
           evo_state(s1['session'], groups=[{'id': '1203630@g.us', 'subject': 'Hair Dryer Buyers'}])
           assert evo_msg(s1['session'], 'EVOIN1', '8615900003333@s.whatsapp.net', {'conversation': 'Hi, what is the MOQ?'}, 'conversation') == 200

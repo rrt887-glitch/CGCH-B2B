@@ -148,6 +148,30 @@ public final class EvolutionClient {
         return QrCode.of(call(c, "GET", "/instance/connect/" + enc(name), null, 30));
     }
 
+    /**
+     * 设置这个实例的出口代理（Evolution v2 的 POST /proxy/set/{instanceName}）。
+     * 每家客户用自己的代理 IP，一家群发被风控时不会牵连同服务器上的其他客户。
+     * 必须在手机扫码确认之前设置好，连接建立后按新代理生效需要重新连接。
+     */
+    public static void setProxy(ChannelOAuthProperties.Evolution c, String name, ProxyConfig p) {
+        ObjectNode body = JSON.createObjectNode();
+        body.put("enabled", p != null && p.enabled());
+        if (p != null && p.enabled()) {
+            body.put("proxyHost", p.host());
+            body.put("proxyPort", String.valueOf(p.port())); // Evolution 要字符串
+            body.put("proxyProtocol", p.protocol());
+            if (StrUtil.isNotBlank(p.username())) {
+                body.put("proxyUsername", p.username());
+                body.put("proxyPassword", p.password());
+            }
+        }
+        call(c, "POST", "/proxy/set/" + enc(name), body, 20);
+    }
+
+    /** 出口代理配置；enabled 为 false 表示直接用服务器 IP */
+    public record ProxyConfig(boolean enabled, String host, Integer port, String protocol, String username, String password) {
+    }
+
     public record Info(String ownerJid, String profileName, String connectionStatus) {
     }
 

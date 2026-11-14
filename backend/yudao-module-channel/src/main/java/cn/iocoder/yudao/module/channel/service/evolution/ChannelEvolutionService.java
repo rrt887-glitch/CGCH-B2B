@@ -64,6 +64,8 @@ public class ChannelEvolutionService {
     @Resource
     @Lazy
     private ChannelWhatsAppService whatsAppService;
+    @Resource
+    private ChannelEvolutionProxyService proxyService;
 
     private ChannelOAuthProperties.Evolution cfg() {
         return channelOAuthProperties.getEvolution();
@@ -150,6 +152,8 @@ public class ChannelEvolutionService {
         String token = IdUtil.fastSimpleUUID();
         try {
             EvolutionClient.Created c = EvolutionClient.createInstance(cfg(), name, phone, webhookUrl(), token);
+            // 先设置这家客户的出口代理，再让手机扫码：否则第一次连接会用平台服务器的 IP
+            proxyService.applyToNewInstance(name);
             savePending(name, new Pending(TenantContextHolder.getRequiredTenantId(), userId, token, c.token(), accountId));
             return new Session(name, "connecting", c.qr().base64(), c.qr().pairingCode(), null, null);
         } catch (WaGraphClient.WaApiException e) {
