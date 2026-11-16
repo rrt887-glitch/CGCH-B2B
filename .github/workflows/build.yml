@@ -986,6 +986,10 @@ jobs:
               gb = req_x(HB, 'GET', f'/crm/customer/get?id={ca}')
               assert gb['code'] != 0 or gb['data'] is None, f'B 不能读 A 的客户: {gb}'
               assert all(c['id'] != ca for c in call('GET', '/crm/customer/page?pageNo=1&pageSize=100')['list']), '平台默认看不到客户的数据'
+              # 成员不带 sceneType 也不能翻到全公司数据（前端会带，但接口层要自己兜住）
+              leak = callx(HM, 'GET', '/crm/customer/page?pageNo=1&pageSize=50')
+              assert all(c['id'] != ca for c in leak['list']), f'成员不带 sceneType 也不能看到别人的客户: {leak["list"]}'
+              assert callx(HM, 'GET', '/crm/customer/page?pageNo=1&pageSize=50&sceneType=1')['total'] == 0
               # 公开给团队：A 的官网在线客服来了一位访客；成员看不到，管理员公开后成员在「团队会话」里能看、能写备注，不能回复和改状态
               site = callx(HA, 'POST', '/channel/web-im/site', {'domain': 'https://a-ci.example', 'name': 'A 官网'})
               # 渠道账号可见范围：成员自己名下的账号，管理员也要能看到（否则同事扫好码，换个人登录就一个账号都看不到）

@@ -1,4 +1,0 @@
-fix: 不带 sceneType 查 CRM 列表时成员能翻到全公司数据
-
-- appendPermissionCondition 在 sceneType 为空时什么都不加，接口层可绕过前端读别人负责的客户/线索/商机
-- 改为：sceneType 为空时管理员不限、其他角色按「我负责的」过滤
