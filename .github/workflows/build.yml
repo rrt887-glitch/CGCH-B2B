@@ -2999,11 +2999,20 @@ jobs:
           set -e
           fail() { msg="失败的命令：$BASH_COMMAND%0A$(tail -n 40 /tmp/install*.log 2>/dev/null | sed 's/%/%25/g' | cut -c1-200 | awk '{printf "%s%%0A", $0}')"; echo "::error title=一键安装::$msg"; }
           trap fail ERR
+          # 安装/升级会重启后端，页面要等一会儿才能访问；等不到再报错（否则每次都可能偶发失败）
+          wait_page() { # $1 路径  $2 期望出现的文字
+            for i in $(seq 1 40); do
+              if curl -fsS "http://127.0.0.1$1" 2>/dev/null | grep -q -- "$2"; then echo "页面正常：$1"; return 0; fi
+              sleep 3
+            done
+            echo "::error title=页面检查失败::$1 里没有「$2」（等了 120 秒）"
+            return 1
+          }
           docker image rm -f $REGISTRY/cgch-backend:${{ github.sha }} $REGISTRY/cgch-web:${{ github.sha }} $REGISTRY/cgch-mysql:${{ github.sha }} >/dev/null 2>&1 || true
           cat deploy/install.sh | sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash 2>&1 | tee /tmp/install.log  # 与用户一样用管道执行
           grep -q '安装完成' /tmp/install.log || { echo "::error::安装脚本没有执行到最后"; exit 1; }
-          curl -fsS http://127.0.0.1/privacy | grep -q 'Privacy Policy'
-          curl -fsS http://127.0.0.1/ | grep -qi '<div id="app"'
+          wait_page /privacy 'Privacy Policy'
+          wait_page / 'id="app"'
           code=$(curl -s -o /tmp/login.json -w '%{http_code}' -H 'tenant-id: 1' -H 'Content-Type: application/json' \
             -d '{"username":"admin","password":"wrong-password"}' http://127.0.0.1/admin-api/system/auth/login)
           cat /tmp/login.json; echo
@@ -3030,7 +3039,7 @@ jobs:
           set -o pipefail
           cat deploy/install.sh | sudo CGCH_VERSION=${{ github.sha }} GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" GHCR_USER="${{ github.actor }}" bash 2>&1 | tee /tmp/install2.log \
             || { echo "::error title=升级安装失败::$(grep -E '执行数据库升级|ERROR|错误' /tmp/install2.log | tail -15 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"; exit 1; }
-          curl -fsS http://127.0.0.1/terms | grep -q 'Terms of Service'
+          wait_page /terms 'Terms of Service'
           grep -q '执行数据库升级：001-v3-brand-intent.sql' /tmp/install2.log || { echo "::error::升级脚本没有执行"; exit 1; }
           # 升级脚本补的索引：去重查询要走索引
           dbq() { sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro"' 2>/dev/null; }
