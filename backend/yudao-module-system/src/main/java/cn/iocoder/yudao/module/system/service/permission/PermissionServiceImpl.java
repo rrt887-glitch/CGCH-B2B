@@ -257,8 +257,16 @@ public class PermissionServiceImpl implements PermissionService {
         if (loginUserId == null) {
             return true; // 无登录态（系统内部调用，例如开户时自动分配管理员）
         }
-        return cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.skipPermissionCheck()
-                || hasAnyPermissions(loginUserId, "system:tenant:update");
+        // 平台运营经「进入客户后台」操作
+        if (cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.skipPermissionCheck()) {
+            return true;
+        }
+        // 平台账号才有超级管理员角色。注意：开户时当前租户已经切到新公司，查角色要忽略租户，
+        // 否则平台管理员的角色会被租户条件过滤掉，误判成「客户」。
+        Set<Long> roleIds = cn.iocoder.yudao.framework.tenant.core.util.TenantUtils.executeIgnore(
+                () -> convertSet(userRoleMapper.selectListByUserId(loginUserId), UserRoleDO::getRoleId));
+        return cn.iocoder.yudao.framework.tenant.core.util.TenantUtils.executeIgnore(
+                () -> roleService.hasAnySuperAdmin(roleIds));
     }
 
     @Override
