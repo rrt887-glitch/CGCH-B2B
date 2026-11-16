@@ -182,12 +182,15 @@ class Handler(BaseHTTPRequestHandler):
             n = path[2]
             if n not in EVO:
                 return missing(n)
-            if (body.get('proxyHost') or '').startswith('bad.'):
+            if (body.get('host') or body.get('proxyHost') or '').startswith('bad.'):
                 return self._json(400, {'status': 400, 'error': 'Bad Request',
                                         'response': {'message': ['Proxy connection refused']}})
-            if body.get('enabled') and (not body.get('proxyHost') or not body.get('proxyPort')):
-                return self._json(400, {'status': 400, 'error': 'Bad Request',
-                                        'response': {'message': ['Invalid proxy configuration']}})
+            # 与 Evolution 真实校验一致：字段是 host / port / protocol（不是 proxyHost 那一套）
+            if body.get('enabled'):
+                lacking = [k for k in ('host', 'port', 'protocol') if not body.get(k)]
+                if lacking:
+                    return self._json(400, {'status': 400, 'error': 'Bad Request',
+                                            'response': {'message': ['instance requires property "%s"' % k for k in lacking]}})
             EVO[n].setdefault('proxies', []).append(body)
             EVO[n]['proxy'] = body
             return self._json(200, {'success': True, 'message': 'Proxy configured successfully'})

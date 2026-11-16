@@ -154,15 +154,17 @@ public final class EvolutionClient {
      * 必须在手机扫码确认之前设置好，连接建立后按新代理生效需要重新连接。
      */
     public static void setProxy(ChannelOAuthProperties.Evolution c, String name, ProxyConfig p) {
+        // 注意：Evolution 运行时校验的字段是 host / port / protocol / username / password
+        // （官方 openapi 里写的 proxyHost/proxyPort/proxyProtocol 是错的，照那样发会被 400 拒绝）
         ObjectNode body = JSON.createObjectNode();
         body.put("enabled", p != null && p.enabled());
         if (p != null && p.enabled()) {
-            body.put("proxyHost", p.host());
-            body.put("proxyPort", String.valueOf(p.port())); // Evolution 要字符串
-            body.put("proxyProtocol", p.protocol());
+            body.put("host", p.host());
+            body.put("port", String.valueOf(p.port())); // Evolution 要字符串
+            body.put("protocol", p.protocol());
             if (StrUtil.isNotBlank(p.username())) {
-                body.put("proxyUsername", p.username());
-                body.put("proxyPassword", p.password());
+                body.put("username", p.username());
+                body.put("password", p.password());
             }
         }
         call(c, "POST", "/proxy/set/" + enc(name), body, 20);

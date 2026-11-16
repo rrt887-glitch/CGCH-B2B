@@ -2234,14 +2234,14 @@ jobs:
           assert b1['webhook']['url'] == 'http://127.0.0.1:48080/admin-api/channel/evolution/webhook' and b1['webhook']['enabled'] \
               and set(b1['webhook']['events']) == {'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'MESSAGES_SET'} and b1['webhook']['headers']['x-cgch-token'], b1
           pr1 = evo()['instances'][s1['session']].get('proxy')
-          assert pr1 == {'enabled': True, 'proxyHost': 'proxy-a.example', 'proxyPort': '1080',
-                         'proxyProtocol': 'socks5', 'proxyUsername': 'u1', 'proxyPassword': 'p1'}, \
+          assert pr1 == {'enabled': True, 'host': 'proxy-a.example', 'port': '1080',
+                         'protocol': 'socks5', 'username': 'u1', 'password': 'p1'}, \
               f'建实例时就设置好出口代理，手机扫码前生效；实际={pr1}'
           # 换代理后，新号码用新的出口
           call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'proxy-b.example', 'port': 2080, 'protocol': 'http'})
           s1b = call('POST', '/channel/evolution/session', {})
-          assert evo()['instances'][s1b['session']]['proxy']['proxyHost'] == 'proxy-b.example' \
-              and evo()['instances'][s1b['session']]['proxy']['proxyProtocol'] == 'http', '新号码用新出口'
+          assert evo()['instances'][s1b['session']]['proxy']['host'] == 'proxy-b.example' \
+              and evo()['instances'][s1b['session']]['proxy']['protocol'] == 'http', '新号码用新出口'
           assert 'u1' not in json.dumps(evo()['instances'][s1b['session']]['proxy']), '没填账号时不带上一套的账号'
           call('DELETE', f"/channel/evolution/session?session={s1b['session']}")
           # 代理连不上时明确报错，并且不留下半成品实例
@@ -2270,7 +2270,7 @@ jobs:
           call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'proxy-c.example', 'port': 3080,
                                                   'protocol': 'https', 'applyNow': True})
           applied = evo()['instances'][s1['session']]['proxies']
-          assert len(applied) >= 2 and applied[-1]['proxyHost'] == 'proxy-c.example' and applied[-1]['proxyProtocol'] == 'https', applied
+          assert len(applied) >= 2 and applied[-1]['host'] == 'proxy-c.example' and applied[-1]['protocol'] == 'https', applied
           pv3 = call('GET', '/channel/evolution/proxy?tenantId=1')
           assert pv3['lastAppliedTime'] and not pv3['lastError'], pv3
           call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': False, 'applyNow': True})
