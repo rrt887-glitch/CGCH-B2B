@@ -177,6 +177,20 @@ class Handler(BaseHTTPRequestHandler):
             i['groupsIgnore'] = body.get('groupsIgnore')
             i['settingsSet'] = body
             return self._json(201, {'settings': {'instanceName': path[2], 'settings': body}})
+        # 出口代理：POST /proxy/set/{instanceName}
+        if method == 'POST' and len(path) == 3 and path[:2] == ['proxy', 'set']:
+            n = path[2]
+            if n not in EVO:
+                return missing(n)
+            if (body.get('proxyHost') or '').startswith('bad.'):
+                return self._json(400, {'status': 400, 'error': 'Bad Request',
+                                        'response': {'message': ['Proxy connection refused']}})
+            if body.get('enabled') and (not body.get('proxyHost') or not body.get('proxyPort')):
+                return self._json(400, {'status': 400, 'error': 'Bad Request',
+                                        'response': {'message': ['Invalid proxy configuration']}})
+            EVO[n].setdefault('proxies', []).append(body)
+            EVO[n]['proxy'] = body
+            return self._json(200, {'success': True, 'message': 'Proxy configured successfully'})
         if method == 'GET' and len(path) == 3 and path[:2] == ['group', 'fetchAllGroups']:
             if path[2] not in EVO:
                 return missing(path[2])

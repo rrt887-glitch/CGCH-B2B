@@ -7,7 +7,7 @@
  */
 import type { Dayjs } from 'dayjs';
 
-import type { TenantConsoleRow, TenantVisitLog } from '#/api/system/tenant-visit';
+import type { EvolutionProxy, TenantConsoleRow, TenantVisitLog } from '#/api/system/tenant-visit';
 
 import { onMounted, reactive, ref } from 'vue';
 
@@ -17,9 +17,11 @@ import dayjs from 'dayjs';
 import {
   createTenant,
   enterTenant,
+  getEvolutionProxy,
   getTenantConsolePage,
   getTenantPackageSimpleList,
   getVisitLogPage,
+  saveEvolutionProxy,
   updateTenant,
 } from '#/api/system/tenant-visit';
 import { router } from '#/router';
@@ -159,6 +161,62 @@ async function doEnter() {
   }
 }
 
+// ===== 出口代理：扫码接入的号码走这家客户自己的 IP =====
+const PROTOCOLS = [
+  { label: 'SOCKS5', value: 'socks5' },
+  { label: 'SOCKS4', value: 'socks4' },
+  { label: 'HTTP', value: 'http' },
+  { label: 'HTTPS', value: 'https' },
+];
+const proxyOpen = ref(false);
+const proxySaving = ref(false);
+const proxyRow = ref<TenantConsoleRow>();
+const proxyInfo = ref<EvolutionProxy>({ enabled: false });
+const proxyForm = reactive({ enabled: false, host: '', port: 1080 as number | undefined, protocol: 'socks5', username: '', password: '', hasPassword: false });
+async function openProxy(row: any) {
+  proxyRow.value = row;
+  const info = await getEvolutionProxy(row.id).catch(() => ({ enabled: false }) as EvolutionProxy);
+  proxyInfo.value = info;
+  Object.assign(proxyForm, {
+    enabled: !!info.enabled,
+    host: info.host ?? '',
+    port: info.port ?? 1080,
+    protocol: info.protocol || 'socks5',
+    username: info.username ?? '',
+    password: '',
+    hasPassword: !!info.hasPassword,
+  });
+  proxyOpen.value = true;
+}
+async function saveProxyFor() {
+  if (!proxyRow.value) return;
+  if (proxyForm.enabled) {
+    if (!proxyForm.host.trim()) return message.warning('请填写代理主机');
+    if (!proxyForm.port) return message.warning('请填写代理端口');
+  }
+  proxySaving.value = true;
+  try {
+    const failed = await saveEvolutionProxy({
+      tenantId: proxyRow.value.id,
+      enabled: proxyForm.enabled,
+      host: proxyForm.host.trim() || undefined,
+      port: proxyForm.port,
+      protocol: proxyForm.protocol,
+      username: proxyForm.username.trim() || undefined,
+      password: proxyForm.password || undefined,
+      applyNow: true,
+    });
+    if (failed && failed.length > 0) {
+      message.warning(`代理已保存，但有 ${failed.length} 个号码没设置成功：${failed.join('；')}`, 8);
+    } else {
+      message.success(proxyForm.enabled ? '已保存，并设置到这家客户已有的号码上' : '已关闭出口代理，号码改回直连');
+    }
+    proxyOpen.value = false;
+  } finally {
+    proxySaving.value = false;
+  }
+}
+
 // ===== 进入记录 =====
 const logOpen = ref(false);
 const logRow = ref<TenantConsoleRow>();
@@ -238,9 +296,10 @@ onMounted(async () => {
           <Switch size="small" :checked="record.status === 0" :disabled="record.platform" @change="(v: any) => toggleStatus(record, !!v)" />
         </template>
         <template v-else-if="column.key === 'actions'">
-          <div v-if="!record.platform" class="flex gap-1">
+          <div v-if="!record.platform" class="flex flex-wrap gap-1">
             <Button type="link" size="small" @click="openForm(record)">修改</Button>
             <Button type="link" size="small" :disabled="record.status !== 0" @click="openEnter(record)">进入后台</Button>
+            <Button type="link" size="small" @click="openProxy(record)">出口代理</Button>
             <Button type="link" size="small" @click="openLogs(record)">记录</Button>
           </div>
           <span v-else class="text-xs text-[#6E6E73]">平台自己</span>
@@ -276,6 +335,41 @@ onMounted(async () => {
         进入后可以查看和操作这家客户的数据，2 小时后自动失效。这次进入会记录下来，客户管理员能看到时间和原因。
       </p>
       <Textarea v-model:value="reason" :maxlength="200" :rows="3" show-count placeholder="进入原因，例如：客户反馈 WhatsApp 收不到消息，协助排查" />
+    </Modal>
+
+    <Modal v-model:open="proxyOpen" :title="`「${proxyRow?.name}」的 WhatsApp 出口代理`" :confirm-loading="proxySaving"
+           ok-text="保存并应用" width="560px" @ok="saveProxyFor">
+      <p class="mt-3 text-[13px] text-[#6E6E73]">
+        扫码接入的号码都跑在同一台 WhatsApp 服务上。给这家客户配一个自己的出口 IP，一家群发被风控时不会牵连同服务器上的其他客户。
+        保存后会设置到这家客户已有的号码上（正在连接的号码需要重新连接才生效）。
+      </p>
+      <Form layout="vertical" class="mt-3">
+        <FormItem label="使用自己的出口 IP">
+          <Switch v-model:checked="proxyForm.enabled" />
+          <span class="ml-2 text-xs text-[#6E6E73]">关闭时直接从平台服务器 IP 出去</span>
+        </FormItem>
+        <template v-if="proxyForm.enabled">
+          <div class="grid grid-cols-3 gap-3">
+            <FormItem label="代理主机" required class="col-span-2">
+              <Input v-model:value="proxyForm.host" :maxlength="255" placeholder="proxy.example.com 或 1.2.3.4" />
+            </FormItem>
+            <FormItem label="端口" required><InputNumber v-model:value="proxyForm.port" :min="1" :max="65535" class="w-full" /></FormItem>
+          </div>
+          <FormItem label="协议" required>
+            <Select v-model:value="proxyForm.protocol" :options="PROTOCOLS" />
+          </FormItem>
+          <div class="grid grid-cols-2 gap-3">
+            <FormItem label="代理账号"><Input v-model:value="proxyForm.username" :maxlength="128" placeholder="可空" /></FormItem>
+            <FormItem label="代理密码" :extra="proxyForm.hasPassword ? '留空表示不修改' : '可空'">
+              <InputPassword v-model:value="proxyForm.password" :maxlength="255" placeholder="可空" />
+            </FormItem>
+          </div>
+        </template>
+        <div v-if="proxyInfo.lastAppliedTime || proxyInfo.lastError" class="mt-1 text-xs">
+          <span v-if="proxyInfo.lastAppliedTime" class="text-[#6E6E73]">上次设置：{{ fmtDateTime(proxyInfo.lastAppliedTime) }}</span>
+          <span v-if="proxyInfo.lastError" class="text-[#c93400]">　失败：{{ proxyInfo.lastError }}</span>
+        </div>
+      </Form>
     </Modal>
 
     <Modal v-model:open="logOpen" :title="logRow ? `「${logRow.name}」的进入记录` : '进入记录'" :footer="null" width="820px">

@@ -2,17 +2,23 @@ package cn.iocoder.yudao.module.channel.controller.admin.evolution;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.tenant.core.aop.TenantIgnore;
+import cn.iocoder.yudao.module.channel.controller.admin.evolution.vo.ChannelEvolutionProxyRespVO;
+import cn.iocoder.yudao.module.channel.controller.admin.evolution.vo.ChannelEvolutionProxySaveReqVO;
+import cn.iocoder.yudao.module.channel.service.evolution.ChannelEvolutionProxyService;
 import cn.iocoder.yudao.module.channel.service.evolution.ChannelEvolutionService;
 import cn.iocoder.yudao.module.channel.service.evolution.EvolutionClient;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -24,10 +30,13 @@ import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUti
 @Tag(name = "管理后台 - WhatsApp 扫码接入")
 @RestController
 @RequestMapping("/channel/evolution")
+@Validated
 public class ChannelEvolutionController {
 
     @Resource
     private ChannelEvolutionService channelEvolutionService;
+    @Resource
+    private ChannelEvolutionProxyService channelEvolutionProxyService;
 
     @GetMapping("/config")
     @Operation(summary = "是否已开通扫码接入")
@@ -59,6 +68,36 @@ public class ChannelEvolutionController {
     public CommonResult<Boolean> cancel(@RequestParam("session") String session) {
         channelEvolutionService.cancel(getLoginUserId(), session);
         return success(true);
+    }
+
+    // ==================== 出口代理（平台运营在「客户管理」里按客户配置） ====================
+
+    @GetMapping("/proxy")
+    @Operation(summary = "查看某家客户的出口代理（平台）")
+    @PreAuthorize("@ss.hasPermission('system:tenant:update')")
+    public CommonResult<ChannelEvolutionProxyRespVO> getProxy(@RequestParam("tenantId") Long tenantId) {
+        return success(channelEvolutionProxyService.getProxy(tenantId));
+    }
+
+    @PutMapping("/proxy")
+    @Operation(summary = "保存某家客户的出口代理（平台）：可同时把代理应用到这家客户已有的号码")
+    @PreAuthorize("@ss.hasPermission('system:tenant:update')")
+    public CommonResult<List<String>> saveProxy(@Valid @RequestBody ChannelEvolutionProxySaveReqVO reqVO) {
+        return success(channelEvolutionProxyService.saveProxy(reqVO));
+    }
+
+    @PostMapping("/proxy/apply")
+    @Operation(summary = "把已保存的代理重新应用到某家客户的全部号码（平台）")
+    @PreAuthorize("@ss.hasPermission('system:tenant:update')")
+    public CommonResult<List<String>> applyProxy(@RequestParam("tenantId") Long tenantId) {
+        return success(channelEvolutionProxyService.applyToTenant(tenantId));
+    }
+
+    @GetMapping("/proxy/mine")
+    @Operation(summary = "本公司是否配置了出口代理（客户管理员可见，只返回是否启用和出口主机）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:query')")
+    public CommonResult<Map<String, Object>> myProxy() {
+        return success(channelEvolutionProxyService.myProxySummary());
     }
 
     @PostMapping("/webhook")

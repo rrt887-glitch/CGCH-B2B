@@ -73,3 +73,27 @@ export const getVisitLogPage = (params: PageParam & { visitTenantId?: number }) 
 /** 平台进入过本公司后台的记录（客户管理员查看） */
 export const getMyVisitLogPage = (params: PageParam) =>
   requestClient.get<PageResult<TenantVisitLog>>('/system/tenant-visit/my-page', { params });
+
+/** WhatsApp 扫码接入的出口代理（平台按客户配置） */
+export interface EvolutionProxy {
+  tenantId?: number;
+  enabled: boolean;
+  host?: string;
+  port?: number;
+  protocol?: string;
+  username?: string;
+  hasPassword?: boolean;
+  lastAppliedTime?: number | string;
+  lastError?: string;
+}
+
+export const getEvolutionProxy = (tenantId: number) =>
+  requestClient.get<EvolutionProxy>('/channel/evolution/proxy', { params: { tenantId }, ...PLATFORM });
+
+/** 保存出口代理；applyNow 为 true 时同时设置到这家客户已有的号码上。返回设置失败的号码说明 */
+export const saveEvolutionProxy = (data: EvolutionProxy & { applyNow?: boolean; password?: string; clearPassword?: boolean }) =>
+  requestClient.put<string[]>('/channel/evolution/proxy', data, PLATFORM);
+
+/** 把已保存的代理重新应用到某家客户的全部号码 */
+export const applyEvolutionProxy = (tenantId: number) =>
+  requestClient.post<string[]>('/channel/evolution/proxy/apply', null, { params: { tenantId }, ...PLATFORM });
