@@ -896,11 +896,11 @@ jobs:
           call('POST', '/system/permission/assign-user-role', {'userId': aid, 'roleIds': [1]})
           r = rawreq('PUT', '/system/user/update-status', {'id': 1, 'status': 1})
           assert r['code'] == 1002003018, f'不能停用自己: {r}'
-          r = rawreq('DELETE', '/system/user/delete?id=1')
+          r = rawreq('DELETE', '/system/user/delete?id=1', {})
           assert r['code'] == 1002003018, f'不能删除自己: {r}'
           assert rawreq('PUT', '/system/user/update-status', {'id': aid, 'status': 1})['code'] == 0, '可以停用其他管理员'
           assert rawreq('PUT', '/system/user/update-status', {'id': aid, 'status': 0})['code'] == 0
-          assert rawreq('DELETE', f'/system/user/delete?id={aid}')['code'] == 0, '可以删除其他管理员（自己还在）'
+          assert rawreq('DELETE', f'/system/user/delete?id={aid}', {})['code'] == 0, '可以删除其他管理员（自己还在）'
           assert call('GET', '/system/user/get?id=' + str(aid)) is None
           print('管理员账号：可以删除/停用其他管理员；不能动自己；至少保留一个管理员')
 
