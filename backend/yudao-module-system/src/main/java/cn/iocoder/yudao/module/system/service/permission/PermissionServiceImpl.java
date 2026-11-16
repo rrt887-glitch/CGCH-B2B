@@ -17,6 +17,7 @@ import cn.iocoder.yudao.module.system.dal.mysql.permission.RoleMenuMapper;
 import cn.iocoder.yudao.module.system.dal.mysql.permission.UserRoleMapper;
 import cn.iocoder.yudao.module.system.dal.redis.RedisKeyConstants;
 import cn.iocoder.yudao.module.system.enums.permission.DataScopeEnum;
+import cn.iocoder.yudao.module.system.enums.permission.RoleCodeEnum;
 import cn.iocoder.yudao.module.system.service.dept.DeptService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
@@ -38,6 +39,7 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.yudao.framework.common.util.json.JsonUtils.toJsonString;
 import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.USER_NOT_EXISTS;
+import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.USER_ROLE_ADMIN_ONLY_PLATFORM;
 import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.USER_ROLE_NOT_IN_TENANT;
 
 /**
@@ -215,8 +217,15 @@ public class PermissionServiceImpl implements PermissionService {
             throw exception(USER_NOT_EXISTS);
         }
         Set<Long> wanted = CollUtil.emptyIfNull(roleIds);
-        if (!wanted.isEmpty() && roleService.getRoleList(wanted).size() != wanted.size()) {
+        List<RoleDO> wantedRoles = wanted.isEmpty() ? Collections.emptyList() : roleService.getRoleList(wanted);
+        if (!wanted.isEmpty() && wantedRoles.size() != wanted.size()) {
             throw exception(USER_ROLE_NOT_IN_TENANT);
+        }
+        // 「管理员」只能由平台授予：客户公司自己只能添加成员（运营可经「进入客户后台」代为创建）
+        boolean assignsAdmin = wantedRoles.stream().anyMatch(r -> RoleCodeEnum.isSuperAdmin(r.getCode())
+                || RoleCodeEnum.TENANT_ADMIN.getCode().equals(r.getCode()));
+        if (assignsAdmin && !isPlatformOperator()) {
+            throw exception(USER_ROLE_ADMIN_ONLY_PLATFORM);
         }
         // 获得角色拥有角色编号
         Set<Long> dbRoleIds = convertSet(userRoleMapper.selectListByUserId(userId),
@@ -237,6 +246,19 @@ public class PermissionServiceImpl implements PermissionService {
         if (!CollectionUtil.isEmpty(deleteMenuIds)) {
             userRoleMapper.deleteListByUserIdAndRoleIdIds(userId, deleteMenuIds);
         }
+    }
+
+    /**
+     * 当前操作人是不是平台运营：平台账号有「租户管理」权限；跨租户（进入客户后台）时按平台处理。
+     * 用权限而不是写死租户编号，客户公司的管理员没有这个权限。
+     */
+    private boolean isPlatformOperator() {
+        Long loginUserId = cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId();
+        if (loginUserId == null) {
+            return true; // 无登录态（系统内部调用，例如开户时自动分配管理员）
+        }
+        return cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.skipPermissionCheck()
+                || hasAnyPermissions(loginUserId, "system:tenant:update");
     }
 
     @Override

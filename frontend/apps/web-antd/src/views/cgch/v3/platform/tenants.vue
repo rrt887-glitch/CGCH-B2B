@@ -16,6 +16,7 @@ import dayjs from 'dayjs';
 
 import {
   createTenant,
+  deleteTenant,
   enterTenant,
   getEvolutionProxy,
   getTenantConsolePage,
@@ -161,6 +162,33 @@ async function doEnter() {
   }
 }
 
+// ===== 删除客户：需要输入客户名称确认；删除后客户不能登录、不再出现在列表，业务数据仍保留在库里 =====
+const delOpen = ref(false);
+const delRow = ref<TenantConsoleRow>();
+const delConfirm = ref('');
+const deleting = ref(false);
+function openDelete(row: any) {
+  delRow.value = row;
+  delConfirm.value = '';
+  delOpen.value = true;
+}
+async function doDelete() {
+  const row = delRow.value;
+  if (!row) return;
+  if (delConfirm.value.trim() !== row.name) {
+    return message.warning('请输入客户名称确认删除');
+  }
+  deleting.value = true;
+  try {
+    await deleteTenant(row.id);
+    message.success(`已删除「${row.name}」，这家客户的账号无法再登录`);
+    delOpen.value = false;
+    await load();
+  } finally {
+    deleting.value = false;
+  }
+}
+
 // ===== 出口代理：扫码接入的号码走这家客户自己的 IP =====
 const PROTOCOLS = [
   { label: 'SOCKS5', value: 'socks5' },
@@ -301,6 +329,7 @@ onMounted(async () => {
             <Button type="link" size="small" :disabled="record.status !== 0" @click="openEnter(record)">进入后台</Button>
             <Button type="link" size="small" @click="openProxy(record)">出口代理</Button>
             <Button type="link" size="small" @click="openLogs(record)">记录</Button>
+            <Button type="link" size="small" danger @click="openDelete(record)">删除</Button>
           </div>
           <span v-else class="text-xs text-[#6E6E73]">平台自己</span>
         </template>
@@ -335,6 +364,23 @@ onMounted(async () => {
         进入后可以查看和操作这家客户的数据，2 小时后自动失效。这次进入会记录下来，客户管理员能看到时间和原因。
       </p>
       <Textarea v-model:value="reason" :maxlength="200" :rows="3" show-count placeholder="进入原因，例如：客户反馈 WhatsApp 收不到消息，协助排查" />
+    </Modal>
+
+    <Modal v-model:open="delOpen" :title="`删除客户「${delRow?.name}」`" :confirm-loading="deleting"
+           ok-text="确认删除" ok-type="danger" @ok="doDelete">
+      <div class="mt-3 text-[13px] leading-6 text-[#1D1D1E]">
+        <p class="m-0">删除后：</p>
+        <ul class="mb-2 ml-4 list-disc text-[#6E6E73]">
+          <li>这家客户的管理员和成员<b>无法再登录</b>，也不再出现在客户列表里</li>
+          <li>客户的会话、客户、渠道绑定等数据<b>仍保留在数据库里</b>（可恢复，不会立刻腾空间）</li>
+          <li>这个客户的域名/账号不会被其他客户占用</li>
+        </ul>
+        <p class="m-0">如果只是欠费或暂停，用「启用」开关关掉就好，不用删除。</p>
+      </div>
+      <div class="mt-3">
+        <div class="mb-1 text-[13px]">请输入客户名称 <b>{{ delRow?.name }}</b> 确认：</div>
+        <Input v-model:value="delConfirm" :placeholder="delRow?.name" />
+      </div>
     </Modal>
 
     <Modal v-model:open="proxyOpen" :title="`「${proxyRow?.name}」的 WhatsApp 出口代理`" :confirm-loading="proxySaving"

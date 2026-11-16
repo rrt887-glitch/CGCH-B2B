@@ -954,6 +954,9 @@ jobs:
               assert d['code'] == 1002003016, f'不能分配平台的超级管理员角色: {d}'
               d = req_x(HA, 'POST', '/system/permission/assign-user-role', {'userId': 1, 'roleIds': [member_role]})
               assert d['code'] != 0, f'不能给别家的账号分配角色: {d}'
+              # 客户只有平台能建「管理员」：客户管理员把成员提成管理员也要被拒
+              d = req_x(HA, 'POST', '/system/permission/assign-user-role', {'userId': m1, 'roleIds': [roles['tenant_admin']['id']]})
+              assert d['code'] == 1002003017, f'客户不能创建管理员: {d}'
               for i in range(2, 5):
                   callx(HA, 'POST', '/system/user/create', {'username': f'm{i}@a.ci.example', 'nickname': f'成员{i}', 'password': 'Member1pass'})
               d = req_x(HA, 'POST', '/system/user/create', {'username': 'm5@a.ci.example', 'nickname': '成员5', 'password': 'Member1pass'})
@@ -1037,6 +1040,14 @@ jobs:
                                                     'expireTime': expire, 'accountCount': 5})
               r = login_free('+8613800000002', 'Boss1pass')
               assert r['code'] == 1002015001, f'停用的客户不能登录: {r}'
+              # 删除客户：只有平台能删；删掉后不再出现在列表、账号无法登录；系统租户（平台自己）不能删
+              assert req_x(HB, 'DELETE', f'/system/tenant/delete?id={tb}')['code'] != 0, '客户自己不能删客户'
+              call('DELETE', f'/system/tenant/delete?id={tb}')
+              d = req_x({'tenant-id': '1', 'Content-Type': 'application/json'}, 'POST', '/system/auth/login',
+                        {'username': '+8613800000002', 'password': 'Boss1pass'})
+              assert d['code'] != 0, f'删除后账号不能登录: {d}'
+              assert tb not in [x['id'] for x in call('GET', '/system/tenant/console-page?pageNo=1&pageSize=50')['list']], '删除后不在列表'
+              assert req_x(H, 'DELETE', '/system/tenant/delete?id=1')['code'] != 0, '平台自己的租户不能删'
               print('多家客户：开户自动建管理员和成员角色；按账号登录不选公司；账号全平台唯一；客户名单不公开；数据互相隔离；'
                     '成员只看自己的和公开给团队的会话；平台进入客户后台必须登记、有记录、客户可见、退出即失效')
           _multi_tenant_test()

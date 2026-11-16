@@ -54,6 +54,9 @@ export const createTenant = (data: any) => requestClient.post<number>('/system/t
 /** 修改客户：账号数、到期时间、套餐、启用 / 停用 */
 export const updateTenant = (data: any) => requestClient.put('/system/tenant/update', data, PLATFORM);
 
+/** 删除客户（软删除：客户从此不能登录、不再出现在列表；业务数据仍保留在库里） */
+export const deleteTenant = (id: number) => requestClient.delete(`/system/tenant/delete?id=${id}`, PLATFORM);
+
 /** 套餐列表 */
 export const getTenantPackageSimpleList = () =>
   requestClient.get<{ id: number; name: string }[]>('/system/tenant-package/get-simple-list', PLATFORM);

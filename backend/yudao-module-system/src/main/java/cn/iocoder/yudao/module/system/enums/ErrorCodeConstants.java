@@ -53,6 +53,7 @@ public interface ErrorCodeConstants {
     ErrorCode USER_USERNAME_FORMAT = new ErrorCode(1_002_003_014, "登录账号请使用邮箱或手机号");
     ErrorCode USER_USERNAME_USED_BY_OTHER = new ErrorCode(1_002_003_015, "这个账号已被使用，请换一个邮箱或手机号");
     ErrorCode USER_ROLE_NOT_IN_TENANT = new ErrorCode(1_002_003_016, "只能分配本公司的角色");
+    ErrorCode USER_ROLE_ADMIN_ONLY_PLATFORM = new ErrorCode(1_002_003_017, "管理员账号只能由平台创建，客户只能添加成员");
 
     // ========== 部门模块 1-002-004-000 ==========
     ErrorCode DEPT_NAME_DUPLICATE = new ErrorCode(1_002_004_000, "已经存在该名字的部门");

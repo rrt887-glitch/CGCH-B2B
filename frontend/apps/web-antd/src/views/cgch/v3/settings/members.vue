@@ -39,6 +39,8 @@ const ROLE_LABEL: Record<RoleKind, { color: string; label: string }> = {
 
 const userStore = useUserStore();
 const myId = computed(() => Number((userStore.userInfo as any)?.id ?? (userStore.userInfo as any)?.userId));
+/** 平台运营（超级管理员）才可以给客户创建「管理员」；客户自己只能添加成员 */
+const isPlatform = computed(() => (userStore.userRoles ?? []).includes('super_admin'));
 
 /** 本公司的管理员 / 成员角色编号（按编码查到） */
 const adminRoleIds = ref<number[]>([]);
@@ -85,7 +87,10 @@ async function load() {
 const open = ref(false);
 const saving = ref(false);
 const form = reactive({ id: undefined as number | undefined, username: '', nickname: '', password: '', mobile: '', email: '', role: 'sales' as 'admin' | 'sales' });
+/** 编辑前这个账号是不是管理员（客户不能改管理员账号的角色） */
+const originalRole = ref<RoleKind>('sales');
 function openForm(row?: any) {
+  originalRole.value = (row?.role as RoleKind) ?? 'sales';
   Object.assign(form, {
     id: row?.id,
     username: row?.username ?? '',
@@ -123,7 +128,11 @@ async function save() {
     } else {
       id = (await createUser(data)) as unknown as number;
     }
-    await assignUserRole({ userId: id!, roleIds: [roleId] } as any);
+    // 客户公司不能改「管理员」账号的角色（只能由平台设置），其它情况按选的来
+    const keepAdmin = !isPlatform.value && originalRole.value === 'admin';
+    if (!keepAdmin) {
+      await assignUserRole({ userId: id!, roleIds: [roleId] } as any);
+    }
     message.success(form.id ? '已保存' : '已添加，可以用这个账号登录了');
     open.value = false;
     await load();
@@ -209,7 +218,7 @@ onMounted(async () => {
         <h2 class="m-0 text-lg font-semibold text-[#1D1D1F]">成员</h2>
         <p class="m-0 mt-1 text-[13px] text-[#6E6E73]">
           管理员可以使用全部功能、看到本公司所有人的客户和会话；成员只看自己负责的客户和会话，以及同事公开给团队的会话，不能修改大模型、知识库等公司设置。
-          账号数量上限以开户时为准，需要增加请联系平台。
+          账号数量上限以开户时为准，需要增加请联系平台。这里只能添加<strong>成员</strong>，管理员账号由平台创建。
         </p>
       </div>
       <Input.Search v-model:value="keyword" allow-clear placeholder="搜索姓名" class="w-full sm:w-56" @search="page.no = 1; load()" />
@@ -266,7 +275,7 @@ onMounted(async () => {
           <Input v-model:value="form.username" :maxlength="64" :disabled="!!form.id" placeholder="例如：zhangsan@example.com" />
         </FormItem>
         <FormItem v-if="!form.id" label="登录密码" required :extra="PASSWORD_TIP"><InputPassword v-model:value="form.password" :maxlength="64" /></FormItem>
-        <FormItem label="角色">
+        <FormItem v-if="isPlatform" label="角色">
           <RadioGroup v-model:value="form.role" :disabled="form.id === myId">
             <Radio value="sales">成员（只看自己负责的客户和会话）</Radio>
             <Radio value="admin">管理员（全部功能和本公司全部数据）</Radio>
@@ -274,6 +283,12 @@ onMounted(async () => {
           <div v-if="form.role === 'admin' && form.id !== myId && adminCount >= 1" class="mt-1 text-xs text-[#c93400]">
             管理员能看到本公司所有客户和会话、修改公司设置，请只给负责人。
           </div>
+        </FormItem>
+        <FormItem v-else label="角色">
+          <div class="text-[13px] text-[#1D1D1F]">
+            {{ originalRole === 'admin' ? '管理员（由平台设置，不能修改）' : '成员（只看自己负责的客户和会话）' }}
+          </div>
+          <div class="mt-1 text-xs text-[#6E6E73]">需要增加管理员账号请联系平台。</div>
         </FormItem>
         <FormItem label="手机（可选）"><Input v-model:value="form.mobile" :maxlength="20" /></FormItem>
         <FormItem label="邮箱（可选）"><Input v-model:value="form.email" :maxlength="50" /></FormItem>
