@@ -331,17 +331,53 @@ public class AdminUserServiceImpl implements AdminUserService {
         });
     }
 
+    /**
+     * 删除 / 停用管理员账号的校验。
+     *
+     * 老规则是「只要是管理员就不许删、不许停用」，导致清理演示账号、退掉多余管理员都做不到。
+     * 现在改成两条底线：不能操作自己（避免把自己锁在外面）、不能把公司里最后一个管理员删掉或停掉。
+     *
+     * @param errorCode 保留参数以兼容原有调用（不再用于一刀切拦截）
+     */
     private void validateUserNotAdmin(Long id, ErrorCode errorCode) {
-        Set<Long> roleIds = permissionService.getUserRoleIdListByUserId(id);
-        if (CollUtil.isEmpty(roleIds)) {
+        if (!isAdminUser(id)) {
             return;
         }
-        for (RoleDO role : roleService.getRoleList(roleIds)) {
-            if (ObjectUtils.equalsAny(role.getCode(),
-                    RoleCodeEnum.SUPER_ADMIN.getCode(), RoleCodeEnum.TENANT_ADMIN.getCode())) {
-                throw exception(errorCode);
-            }
+        Long loginUserId = cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId();
+        if (java.util.Objects.equals(loginUserId, id)) {
+            throw exception(USER_ADMIN_NOT_ALLOW_SELF);
         }
+        if (!hasOtherEnabledAdmin(id)) {
+            throw exception(USER_ADMIN_LAST_ONE);
+        }
+    }
+
+    /** 这个账号是不是管理员（超级管理员 / 租户管理员） */
+    private boolean isAdminUser(Long userId) {
+        Set<Long> roleIds = permissionService.getUserRoleIdListByUserId(userId);
+        if (CollUtil.isEmpty(roleIds)) {
+            return false;
+        }
+        return roleService.getRoleList(roleIds).stream().anyMatch(role -> ObjectUtils.equalsAny(role.getCode(),
+                RoleCodeEnum.SUPER_ADMIN.getCode(), RoleCodeEnum.TENANT_ADMIN.getCode()));
+    }
+
+    /** 除了 excludeUserId 之外，本公司还有没有启用中的管理员 */
+    private boolean hasOtherEnabledAdmin(Long excludeUserId) {
+        Set<Long> adminRoleIds = roleService.getRoleList().stream()
+                .filter(role -> ObjectUtils.equalsAny(role.getCode(),
+                        RoleCodeEnum.SUPER_ADMIN.getCode(), RoleCodeEnum.TENANT_ADMIN.getCode()))
+                .map(RoleDO::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        if (adminRoleIds.isEmpty()) {
+            return true; // 连管理员角色都没有，不需要保护
+        }
+        Set<Long> userIds = new HashSet<>(permissionService.getUserRoleIdListByRoleId(adminRoleIds));
+        userIds.remove(excludeUserId);
+        return userIds.stream().anyMatch(uid -> {
+            AdminUserDO user = userMapper.selectById(uid);
+            return user != null && !CommonStatusEnum.isDisable(user.getStatus());
+        });
     }
 
     @Override

@@ -891,6 +891,20 @@ jobs:
           call('DELETE', f'/system/user/delete?id={lid}')
           print('密码规则：弱密码被拒绝；连续输错 5 次锁定，锁定期间正确密码也不能登录；管理员重置密码解锁；登录成功清零')
 
+          # ---- 管理员账号的删除 / 停用：不再一律禁止，只要求「不能动自己」且「至少留一个管理员」 ----
+          aid = call('POST', '/system/user/create', {'username': 'extraadmin@ci.example', 'nickname': '第二管理员', 'password': 'Admin2pass'})
+          call('POST', '/system/permission/assign-user-role', {'userId': aid, 'roleIds': [1]})
+          r = rawreq('PUT', '/system/user/update-status', {'id': 1, 'status': 1})
+          assert r['code'] == 1002003018, f'不能停用自己: {r}'
+          r = rawreq('DELETE', '/system/user/delete?id=1')
+          assert r['code'] == 1002003018, f'不能删除自己: {r}'
+          assert rawreq('PUT', '/system/user/update-status', {'id': aid, 'status': 1})['code'] == 0, '可以停用其他管理员'
+          assert rawreq('PUT', '/system/user/update-status', {'id': aid, 'status': 0})['code'] == 0
+          assert rawreq('DELETE', f'/system/user/delete?id={aid}')['code'] == 0, '可以删除其他管理员（自己还在）'
+          assert call('GET', '/system/user/get?id=' + str(aid)) is None
+          print('管理员账号：可以删除/停用其他管理员；不能动自己；至少保留一个管理员')
+
+
           # ---- 多家客户：开户、按账号登录（不传公司）、成员、数据隔离、公开给团队、进入客户后台 ----
           def _multi_tenant_test():  # 放在函数里，变量不影响后面的测试
               def req_x(h, method, path, body=None):
