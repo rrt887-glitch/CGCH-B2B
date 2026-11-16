@@ -901,7 +901,7 @@ jobs:
           assert rawreq('PUT', '/system/user/update-status', {'id': aid, 'status': 1})['code'] == 0, '可以停用其他管理员'
           assert rawreq('PUT', '/system/user/update-status', {'id': aid, 'status': 0})['code'] == 0
           assert rawreq('DELETE', f'/system/user/delete?id={aid}', {})['code'] == 0, '可以删除其他管理员（自己还在）'
-          assert call('GET', '/system/user/get?id=' + str(aid)) is None
+          assert aid not in [u['id'] for u in call('GET', '/system/user/page?pageNo=1&pageSize=100')['list']], '删除后查不到'
           print('管理员账号：可以删除/停用其他管理员；不能动自己；至少保留一个管理员')
 
 
