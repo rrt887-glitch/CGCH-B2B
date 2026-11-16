@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.number.NumberUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.crm.controller.admin.business.vo.status.CrmBusinessStatusRespVO;
 import cn.iocoder.yudao.module.crm.controller.admin.business.vo.status.CrmBusinessStatusSaveReqVO;
 import cn.iocoder.yudao.module.crm.dal.dataobject.business.CrmBusinessStatusDO;
@@ -99,7 +100,14 @@ public class CrmBusinessStatusController {
         Map<Long, DeptRespDTO> deptMap = deptApi.getDeptMap(
                 convertSetByFlatMap(pageResult.getList(), CrmBusinessStatusTypeDO::getDeptIds, Collection::stream));
         return success(BeanUtils.toBean(pageResult, CrmBusinessStatusRespVO.class, statusTypeVO -> {
-            statusTypeVO.setCreator(userMap.get(NumberUtils.parseLong(statusTypeVO.getCreator())).getNickname());
+            // creator 可能是别家租户的账号（例如数据迁移前创建的），取不到昵称时留空，不能空指针
+            AdminUserRespDTO creator = null;
+            try {
+                creator = userMap.get(NumberUtils.parseLong(statusTypeVO.getCreator()));
+            } catch (NumberFormatException ignored) {
+                // creator 不是数字，留空
+            }
+            statusTypeVO.setCreator(creator == null ? null : creator.getNickname());
             statusTypeVO.setDeptNames(convertList(statusTypeVO.getDeptIds(),
                     deptId -> deptMap.containsKey(deptId) ? deptMap.get(deptId).getName() : null));
         }));
@@ -109,9 +117,12 @@ public class CrmBusinessStatusController {
     @Operation(summary = "获得商机状态组列表")
     public CommonResult<List<CrmBusinessStatusRespVO>> getBusinessStatusTypeSimpleList() {
         List<CrmBusinessStatusTypeDO> list = businessStatusTypeService.getBusinessStatusTypeList();
-        // 过滤掉部门不匹配的
-        Long deptId = adminUserApi.getUser(getLoginUserId()).getDeptId();
-        list.removeIf(statusType -> CollUtil.isNotEmpty(statusType.getDeptIds()) && !statusType.getDeptIds().contains(deptId));
+        // 过滤掉部门不匹配的。平台运营「进入客户后台」时当前账号不属于这家公司，查不到用户也不做部门过滤
+        if (!SecurityFrameworkUtils.skipPermissionCheck()) {
+            AdminUserRespDTO loginUser = adminUserApi.getUser(getLoginUserId());
+            Long deptId = loginUser == null ? null : loginUser.getDeptId();
+            list.removeIf(statusType -> CollUtil.isNotEmpty(statusType.getDeptIds()) && !statusType.getDeptIds().contains(deptId));
+        }
         return success(BeanUtils.toBean(list, CrmBusinessStatusRespVO.class));
     }
 
