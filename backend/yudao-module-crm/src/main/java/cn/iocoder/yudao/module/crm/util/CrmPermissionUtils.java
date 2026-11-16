@@ -57,7 +57,13 @@ public class CrmPermissionUtils {
         MybatisPlusJoinProperties mybatisPlusJoinProperties = SpringUtil.getBean(MybatisPlusJoinProperties.class);
         final String ownerUserIdField = mybatisPlusJoinProperties.getTableAlias() + ".owner_user_id";
         // 场景一：我负责的数据
-        if (CrmSceneTypeEnum.isOwner(sceneType)) {
+        // 没传场景时不能「不过滤」：否则任何登录成员都能翻到全公司的数据（接口层可绕过前端）
+        // 非管理员按「我负责的」处理；管理员保持不限（看板、管理页需要全部）
+        boolean noScene = sceneType == null;
+        if (noScene && CrmPermissionUtils.isCrmAdmin()) {
+            return;
+        }
+        if (CrmSceneTypeEnum.isOwner(sceneType) || noScene) {
             query.eq(ownerUserIdField, userId);
         }
         // 场景二：我参与的数据（我有读或写权限，并且不是负责人）
