@@ -971,6 +971,15 @@ jobs:
               assert all(c['id'] != ca for c in call('GET', '/crm/customer/page?pageNo=1&pageSize=100')['list']), '平台默认看不到客户的数据'
               # 公开给团队：A 的官网在线客服来了一位访客；成员看不到，管理员公开后成员在「团队会话」里能看、能写备注，不能回复和改状态
               site = callx(HA, 'POST', '/channel/web-im/site', {'domain': 'https://a-ci.example', 'name': 'A 官网'})
+              # 渠道账号可见范围：成员自己名下的账号，管理员也要能看到（否则同事扫好码，换个人登录就一个账号都看不到）
+              member_site = callx(HM, 'POST', '/channel/web-im/site', {'domain': 'https://a-member-ci.example', 'name': 'A 成员官网'})
+              mine_acc = callx(HM, 'GET', '/channel/wa-account/list')
+              assert [a['id'] for a in mine_acc] == [member_site], f'成员只看得到自己名下的账号: {mine_acc}'
+              all_acc = {a['id'] for a in callx(HA, 'GET', '/channel/wa-account/list')}
+              assert {site, member_site} <= all_acc, f'管理员要看得到全公司的账号: {all_acc}'
+              assert {a['id'] for a in callx(HB, 'GET', '/channel/wa-account/list')} == set(), '别家看不到'
+              callx(HA, 'PUT', '/channel/wa-account/assignees', {'id': member_site, 'userIds': [m1]})
+              print('渠道账号：管理员看得到成员名下的账号并可操作，成员只看自己的，别家看不到')
               key = next(a for a in callx(HA, 'GET', '/channel/wa-account/list') if a['id'] == site)['phoneNumberId']
               assert req_x({'Content-Type': 'application/json'}, 'POST', '/channel/web-im/send',
                            {'k': key, 'visitorId': 'vcitenanta01', 'text': 'Hi, price for 100 pcs?'})['code'] == 0

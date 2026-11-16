@@ -198,8 +198,23 @@ public class ChannelWhatsAppService {
         messageMapper.delete(new LambdaQueryWrapperX<ChannelWaMessageDO>().eq(ChannelWaMessageDO::getAccountId, id));
     }
 
+    /**
+     * 能看到的渠道账号：管理员（数据权限为全部）看本公司全部账号，主管看自己和下属名下的，
+     * 成员只看自己名下的。避免「同事扫好码，换个人登录就一个账号都看不到」。
+     */
+    public List<ChannelWaAccountDO> visibleAccounts(Long userId) {
+        List<ChannelWaAccountDO> all = accountMapper.selectList();
+        Set<Long> team = teamUsers(userId);
+        if (team == null) {
+            return all; // 管理员：本公司全部
+        }
+        Set<Long> owners = new HashSet<>(team);
+        owners.add(userId);
+        return all.stream().filter(a -> a.getUserId() != null && owners.contains(a.getUserId())).toList();
+    }
+
     public List<ChannelWaAccountRespVO> listAccounts(Long userId) {
-        return accountMapper.selectListByUserId(userId).stream().map(a -> {
+        return visibleAccounts(userId).stream().map(a -> {
             ChannelWaAccountRespVO vo = BeanUtils.toBean(a, ChannelWaAccountRespVO.class);
             vo.setPlatform(StrUtil.blankToDefault(a.getPlatform(), ChannelWaAccountDO.PLATFORM_WHATSAPP));
             vo.setAuthType(StrUtil.blankToDefault(a.getAuthType(), ChannelWaAccountDO.AUTH_MANUAL));
@@ -213,7 +228,12 @@ public class ChannelWhatsAppService {
 
     public ChannelWaAccountDO validateAccount(Long userId, Long id) {
         ChannelWaAccountDO a = id == null ? null : accountMapper.selectById(id);
-        if (a == null || !Objects.equals(a.getUserId(), userId)) {
+        if (a == null) {
+            throw exception(WA_ACCOUNT_NOT_EXISTS);
+        }
+        // 自己名下的直接放行；否则看是否在可见范围内（管理员能操作本公司任何账号，与「能看全部会话」一致）
+        if (!Objects.equals(a.getUserId(), userId)
+                && visibleAccounts(userId).stream().noneMatch(x -> Objects.equals(x.getId(), id))) {
             throw exception(WA_ACCOUNT_NOT_EXISTS);
         }
         return a;
