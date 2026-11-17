@@ -1043,20 +1043,26 @@ jobs:
               assert any(c['id'] == ca for c in callx(HV, 'GET', '/crm/customer/page?pageNo=1&pageSize=50')['list']), '进入后能看到客户的 CRM'
               assert req_x(dict(H, **{'visit-tenant-id': str(tb)}), 'GET', '/crm/customer/page?pageNo=1&pageSize=1')['code'] == 403, '只对登记的那家有效'
               # 进入 A 期间，带别家编号的「平台级」接口也要挡住：代理配置、改客户、叠着进另一家
-              assert req_x(HV, 'GET', f'/channel/evolution/proxy?tenantId={tb}')['code'] == 403, '进入 A 时不能读 B 的出口代理'
-              assert req_x(HV, 'GET', f'/channel/evolution/proxy?tenantId={ta}')['code'] == 0, '进入 A 能读 A 自己的代理'
-              assert req_x(HV, 'PUT', '/system/tenant/update', {'id': tb, 'name': '客户B-CI', 'contactName': '客户B-CI',
-                                                              'status': 1, 'packageId': 200, 'expireTime': expire,
-                                                              'accountCount': 5})['code'] == 403, '进入 A 时不能改 B 的开户信息'
-              assert req_x(HV, 'POST', '/system/tenant-visit/enter', {'tenantId': tb, 'reason': 'x'})['code'] == 403, '不能叠着进另一家'
+              def code_of(h, method, path, body=None):  # 403 可能是 HTTP 状态，也可能是 code，统一取值
+                  try:
+                      return req_x(h, method, path, body).get('code')
+                  except urllib.error.HTTPError as e:
+                      return e.code
+              assert code_of(HV, 'GET', f'/channel/evolution/proxy?tenantId={tb}') == 403, '进入 A 时不能读 B 的出口代理'
+              assert code_of(HV, 'GET', f'/channel/evolution/proxy?tenantId={ta}') == 0, '进入 A 能读 A 自己的代理'
+              assert code_of(HV, 'PUT', '/system/tenant/update', {'id': tb, 'name': '客户B-CI', 'contactName': '客户B-CI',
+                                                                  'status': 1, 'packageId': 200, 'expireTime': expire,
+                                                                  'accountCount': 5}) == 403, '进入 A 时不能改 B 的开户信息'
+              assert code_of(HV, 'POST', '/system/tenant-visit/enter', {'tenantId': tb, 'reason': 'x'}) == 403, '不能叠着进另一家'
               # 批量删管理员不能把公司管理员一次清空
               admin_a = [u['id'] for u in callx(HA, 'GET', '/system/user/page?pageNo=1&pageSize=20')['list']
                          if u['username'] == 'boss@a.ci.example'][0]
-              assert req_x(HV, 'POST', '/system/permission/assign-user-role', {'userId': m1, 'roleIds': [roles['tenant_admin']['id']]})['code'] == 0, '平台可代为把成员提成管理员'
-              d = req_x(HV, 'DELETE', f'/system/user/delete-list?ids={admin_a},{m1}', {})
-              assert d['code'] == 1002003019, f'不能把管理员一次删光: {d}'
+              assert code_of(HV, 'POST', '/system/permission/assign-user-role',
+                             {'userId': m1, 'roleIds': [roles['tenant_admin']['id']]}) == 0, '平台可代为把成员提成管理员'
+              assert code_of(HV, 'DELETE', f'/system/user/delete-list?ids={admin_a},{m1}') == 1002003019, '不能把管理员一次删光'
               assert m1 in [u['id'] for u in callx(HA, 'GET', '/system/user/page?pageNo=1&pageSize=20')['list']], '被拒后管理员还在'
-              assert req_x(HV, 'POST', '/system/permission/assign-user-role', {'userId': m1, 'roleIds': [member_role]})['code'] == 0, '恢复成员角色'
+              assert code_of(HV, 'POST', '/system/permission/assign-user-role',
+                             {'userId': m1, 'roleIds': [member_role]}) == 0, '恢复成员角色'
               logs = call('GET', f'/system/tenant-visit/page?pageNo=1&pageSize=10&visitTenantId={ta}')['list']
               assert logs and logs[0]['reason'] == 'CI：协助排查' and logs[0]['username'] == 'admin', logs
               mine_logs = callx(HA, 'GET', '/system/tenant-visit/my-page?pageNo=1&pageSize=10')['list']
