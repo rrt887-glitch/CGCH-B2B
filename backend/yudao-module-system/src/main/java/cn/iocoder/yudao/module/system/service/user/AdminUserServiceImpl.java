@@ -342,16 +342,6 @@ public class AdminUserServiceImpl implements AdminUserService {
         });
     }
 
-        // 2. 批量删除用户
-        userMapper.deleteByIds(ids);
-
-        // 3. 批量删除用户关联数据
-        ids.forEach(id -> {
-            permissionService.processUserDeleted(id);
-            userPostMapper.deleteByUserId(id);
-        });
-    }
-
     /**
      * 删除 / 停用管理员账号的校验。
      *
