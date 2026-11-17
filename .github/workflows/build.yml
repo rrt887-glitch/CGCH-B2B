@@ -1050,7 +1050,8 @@ jobs:
                                                               'accountCount': 5})['code'] == 403, '进入 A 时不能改 B 的开户信息'
               assert req_x(HV, 'POST', '/system/tenant-visit/enter', {'tenantId': tb, 'reason': 'x'})['code'] == 403, '不能叠着进另一家'
               # 批量删管理员不能把公司管理员一次清空
-              admin_a = la['userId']
+              admin_a = [u['id'] for u in callx(HA, 'GET', '/system/user/page?pageNo=1&pageSize=20')['list']
+                         if u['username'] == 'boss@a.ci.example'][0]
               assert req_x(HV, 'POST', '/system/permission/assign-user-role', {'userId': m1, 'roleIds': [roles['tenant_admin']['id']]})['code'] == 0, '平台可代为把成员提成管理员'
               d = req_x(HV, 'DELETE', f'/system/user/delete-list?ids={admin_a},{m1}', {})
               assert d['code'] == 1002003019, f'不能把管理员一次删光: {d}'
