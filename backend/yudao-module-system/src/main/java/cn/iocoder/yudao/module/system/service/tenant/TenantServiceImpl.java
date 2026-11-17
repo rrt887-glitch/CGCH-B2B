@@ -299,6 +299,8 @@ public class TenantServiceImpl implements TenantService {
     }
 
     private TenantDO validateUpdateTenant(Long id) {
+        // 进入客户后台时只能改当前这家，避免带别家编号越权操作
+        cn.iocoder.yudao.framework.tenant.core.util.TenantVisitUtils.assertInVisitScope(id);
         TenantDO tenant = tenantMapper.selectById(id);
         if (tenant == null) {
             throw exception(TENANT_NOT_EXISTS);

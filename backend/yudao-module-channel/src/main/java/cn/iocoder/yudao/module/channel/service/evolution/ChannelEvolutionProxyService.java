@@ -55,6 +55,7 @@ public class ChannelEvolutionProxyService {
 
     /** 取指定客户的代理配置（平台用） */
     public ChannelEvolutionProxyRespVO getProxy(Long tenantId) {
+        cn.iocoder.yudao.framework.tenant.core.util.TenantVisitUtils.assertInVisitScope(tenantId);
         if (tenantService.getTenant(tenantId) == null) {
             throw exception(AI_LLM_FAIL, "客户不存在");
         }
@@ -76,6 +77,7 @@ public class ChannelEvolutionProxyService {
      */
     public List<String> saveProxy(ChannelEvolutionProxySaveReqVO req) {
         Long tenantId = req.getTenantId() != null ? req.getTenantId() : TenantContextHolder.getRequiredTenantId();
+        cn.iocoder.yudao.framework.tenant.core.util.TenantVisitUtils.assertInVisitScope(tenantId);
         if (tenantService.getTenant(tenantId) == null) {
             throw exception(AI_LLM_FAIL, "客户不存在");
         }
@@ -93,13 +95,15 @@ public class ChannelEvolutionProxyService {
         }
         return TenantUtils.execute(tenantId, () -> {
             ChannelEvolutionProxyDO old = proxyMapper.selectCurrent();
+            // 关闭代理时保留原来填的主机/端口/协议，下次重新打开不用再填一遍
+            boolean keep = !enabled && old != null;
             ChannelEvolutionProxyDO save = ChannelEvolutionProxyDO.builder()
                     .enabled(enabled)
-                    .host(StrUtil.trim(req.getHost()))
-                    .port(req.getPort())
-                    .protocol(StrUtil.trim(req.getProtocol()))
+                    .host(keep ? old.getHost() : StrUtil.trim(req.getHost()))
+                    .port(keep ? old.getPort() : req.getPort())
+                    .protocol(keep ? old.getProtocol() : StrUtil.trim(req.getProtocol()))
                     // 账号是明文可见的：传空就是清空（不清空的话换到不需要账号的代理会一直带着上一套的账号）
-                    .username(StrUtil.blankToDefault(StrUtil.trim(req.getUsername()), ""))
+                    .username(keep ? old.getUsername() : StrUtil.blankToDefault(StrUtil.trim(req.getUsername()), ""))
                     .build();
             // 密码：留空表示沿用原密码；clearPassword 表示换成不需要密码的代理
             if (Boolean.TRUE.equals(req.getClearPassword())) {
@@ -124,6 +128,7 @@ public class ChannelEvolutionProxyService {
 
     /** 把这套代理设置到该客户全部扫码接入的号码上，返回失败的号码说明 */
     public List<String> applyToTenant(Long tenantId) {
+        cn.iocoder.yudao.framework.tenant.core.util.TenantVisitUtils.assertInVisitScope(tenantId);
         List<String> errors = TenantUtils.execute(tenantId, () -> {
             ChannelEvolutionProxyDO p = proxyMapper.selectCurrent();
             EvolutionClient.ProxyConfig config = toConfig(p);

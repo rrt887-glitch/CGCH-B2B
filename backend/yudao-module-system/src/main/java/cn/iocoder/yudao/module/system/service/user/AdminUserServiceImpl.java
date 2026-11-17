@@ -318,8 +318,29 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteUserList(List<Long> ids) {
-        // 1. 校验不能删除管理员
-        ids.forEach(id -> validateUserNotAdmin(id, USER_ADMIN_NOT_ALLOW_DELETE));
+        // 1. 校验：不能删自己；批量删管理员时按「整批删完之后还剩几个」判断，避免两个管理员一起删就都没了
+        Set<Long> idSet = new HashSet<>(ids);
+        Long loginUserId = cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId();
+        for (Long id : ids) {
+            if (isAdminUser(id)) {
+                if (java.util.Objects.equals(loginUserId, id)) {
+                    throw exception(USER_ADMIN_NOT_ALLOW_SELF);
+                }
+                if (!hasOtherEnabledAdmin(idSet)) {
+                    throw exception(USER_ADMIN_LAST_ONE);
+                }
+            }
+        }
+
+        // 2. 批量删除用户
+        userMapper.deleteByIds(ids);
+
+        // 3. 批量删除用户关联数据
+        ids.forEach(id -> {
+            permissionService.processUserDeleted(id);
+            userPostMapper.deleteByUserId(id);
+        });
+    }
 
         // 2. 批量删除用户
         userMapper.deleteByIds(ids);
@@ -347,7 +368,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (java.util.Objects.equals(loginUserId, id)) {
             throw exception(USER_ADMIN_NOT_ALLOW_SELF);
         }
-        if (!hasOtherEnabledAdmin(id)) {
+        if (!hasOtherEnabledAdmin(java.util.Collections.singletonList(id))) {
             throw exception(USER_ADMIN_LAST_ONE);
         }
     }
@@ -362,8 +383,8 @@ public class AdminUserServiceImpl implements AdminUserService {
                 RoleCodeEnum.SUPER_ADMIN.getCode(), RoleCodeEnum.TENANT_ADMIN.getCode()));
     }
 
-    /** 除了 excludeUserId 之外，本公司还有没有启用中的管理员 */
-    private boolean hasOtherEnabledAdmin(Long excludeUserId) {
+    /** 除了 excludeUserIds 之外，本公司还有没有启用中的管理员 */
+    private boolean hasOtherEnabledAdmin(Collection<Long> excludeUserIds) {
         Set<Long> adminRoleIds = roleService.getRoleList().stream()
                 .filter(role -> ObjectUtils.equalsAny(role.getCode(),
                         RoleCodeEnum.SUPER_ADMIN.getCode(), RoleCodeEnum.TENANT_ADMIN.getCode()))
@@ -373,7 +394,7 @@ public class AdminUserServiceImpl implements AdminUserService {
             return true; // 连管理员角色都没有，不需要保护
         }
         Set<Long> userIds = new HashSet<>(permissionService.getUserRoleIdListByRoleId(adminRoleIds));
-        userIds.remove(excludeUserId);
+        userIds.removeAll(CollUtil.emptyIfNull(excludeUserIds));
         return userIds.stream().anyMatch(uid -> {
             AdminUserDO user = userMapper.selectById(uid);
             return user != null && !CommonStatusEnum.isDisable(user.getStatus());
@@ -392,7 +413,11 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
         String account = username.trim();
         // 跨全部公司、且不受数据权限过滤，保证唯一性判断和登录时找公司都准确
-        return DataPermissionUtils.executeIgnore(() -> TenantUtils.executeIgnore(() -> userMapper.selectListByUsername(account)));
+        List<AdminUserDO> users = DataPermissionUtils.executeIgnore(
+                () -> TenantUtils.executeIgnore(() -> userMapper.selectListByUsername(account)));
+        // 客户被删除后，它的账号不该再占用这个登录名（否则同一个邮箱不能给新客户用）
+        return users.stream().filter(user -> tenantService.getTenant(user.getTenantId()) != null)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Override

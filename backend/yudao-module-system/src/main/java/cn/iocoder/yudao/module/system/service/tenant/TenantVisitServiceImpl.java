@@ -53,6 +53,8 @@ public class TenantVisitServiceImpl implements TenantVisitService, TenantVisitGu
         if (StrUtil.isBlank(reason)) {
             throw exception(TENANT_VISIT_REASON_REQUIRED);
         }
+        // 已经在访问某家客户时，不能直接叠着进另一家（否则多处审计记录对应不上）
+        cn.iocoder.yudao.framework.tenant.core.util.TenantVisitUtils.assertInVisitScope(tenantId);
         TenantDO tenant = tenantService.getTenant(tenantId);
         if (tenant == null) {
             throw exception(TENANT_NOT_EXISTS);
