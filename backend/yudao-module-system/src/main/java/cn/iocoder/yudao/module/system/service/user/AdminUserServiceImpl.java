@@ -29,6 +29,7 @@ import cn.iocoder.yudao.module.system.controller.admin.user.vo.user.UserSaveReqV
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.UserPostDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.permission.RoleDO;
+import cn.iocoder.yudao.module.system.dal.dataobject.tenant.TenantDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.dal.mysql.dept.UserPostMapper;
 import cn.iocoder.yudao.module.system.dal.mysql.user.AdminUserMapper;
@@ -92,6 +93,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Resource
     @Lazy // 延迟，避免循环依赖报错
     private TenantService tenantService;
+    @Resource
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Resource
     @Lazy // 懒加载，避免循环依赖
     private OAuth2TokenService oauth2TokenService;
@@ -310,6 +313,8 @@ public class AdminUserServiceImpl implements AdminUserService {
         permissionService.processUserDeleted(id);
         // 2.2 删除用户岗位
         userPostMapper.deleteByUserId(id);
+        // 2.3 通知其他模块接手他名下的业务数据（会话、渠道账号、CRM 等），避免出现「负责人已不存在」
+        publishUserDeleted(user);
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("user", user);
@@ -340,6 +345,39 @@ public class AdminUserServiceImpl implements AdminUserService {
             permissionService.processUserDeleted(id);
             userPostMapper.deleteByUserId(id);
         });
+        // 4. 通知其他模块接手这些账号名下的业务数据
+        ids.forEach(id -> {
+            AdminUserDO user = new AdminUserDO();
+            user.setId(id);
+            user.setTenantId(TenantContextHolder.getRequiredTenantId());
+            publishUserDeleted(user);
+        });
+    }
+
+    /**
+     * 账号删除后，把他名下的业务数据转给公司管理员（没有可用管理员时置空为「未分配」）。
+     * 监听方异常不影响删除本身，只记日志。
+     */
+    private void publishUserDeleted(AdminUserDO user) {
+        try {
+            Long tenantId = user.getTenantId() != null ? user.getTenantId() : TenantContextHolder.getRequiredTenantId();
+            Long newOwner = resolveHandoverUserId(tenantId, user.getId());
+            eventPublisher.publishEvent(new cn.iocoder.yudao.module.system.api.user.event.AdminUserDeletedEvent(
+                    this, user.getId(), tenantId, newOwner));
+        } catch (Exception ex) {
+            log.warn("[publishUserDeleted][账号({}) 业务数据交接失败] {}", user.getId(), ex.getMessage());
+        }
+    }
+
+    /** 接手人：本公司的管理员（开户时填的联系人），不能是被删的人自己 */
+    private Long resolveHandoverUserId(Long tenantId, Long deletedUserId) {
+        TenantDO tenant = tenantService.getTenant(tenantId);
+        Long candidate = tenant == null ? null : tenant.getContactUserId();
+        if (candidate == null || candidate.equals(deletedUserId)) {
+            return null;
+        }
+        AdminUserDO handover = userMapper.selectById(candidate);
+        return handover != null && !CommonStatusEnum.isDisable(handover.getStatus()) ? candidate : null;
     }
 
     /**

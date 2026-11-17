@@ -1087,6 +1087,12 @@ jobs:
               assert d['code'] != 0, f'删除后账号不能登录: {d}'
               assert tb not in [x['id'] for x in call('GET', '/system/tenant/console-page?pageNo=1&pageSize=50')['list']], '删除后不在列表'
               assert req_x(H, 'DELETE', '/system/tenant/delete?id=1')['code'] != 0, '平台自己的租户不能删'
+              # 删除成员后，他名下的会话自动转给公司管理员（不再出现「负责人已不存在」）
+              callx(HA, 'PUT', f'/channel/wa/conversation/transfer?id={cid}&userId={m1}')
+              callx(HA, 'DELETE', f'/system/user/delete?id={m1}')
+              c2 = callx(HA, 'GET', f'/channel/wa/conversation/get?id={cid}')
+              assert c2.get('handlerUserId') == admin_a, f'删除成员后会话应转给管理员，实际={c2.get("handlerUserId")}'
+              print('删除成员：他名下的会话/渠道账号/CRM 自动转给公司管理员，不留「负责人已不存在」的孤儿数据')
               print('多家客户：开户自动建管理员和成员角色；按账号登录不选公司；账号全平台唯一；客户名单不公开；数据互相隔离；'
                     '成员只看自己的和公开给团队的会话；平台进入客户后台必须登记、有记录、客户可见、退出即失效')
           _multi_tenant_test()
