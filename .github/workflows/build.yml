@@ -2271,6 +2271,8 @@ jobs:
               and evo()['instances'][s1b['session']]['proxy']['protocol'] == 'http', '新号码用新出口'
           assert 'u1' not in json.dumps(evo()['instances'][s1b['session']]['proxy']), '没填账号时不带上一套的账号'
           call('DELETE', f"/channel/evolution/session?session={s1b['session']}")
+          # 删除是异步的：先等上一个实例真的没了再记基准数，否则基准里还带着它，后面永远等不到相等
+          assert wait(lambda: s1b['session'] not in evo()['instances'], '等上一个实例删掉')
           # 代理连不上时明确报错，并且不留下半成品实例
           n_inst = len(evo()['instances'])
           call('PUT', '/channel/evolution/proxy', {'tenantId': 1, 'enabled': True, 'host': 'bad.example', 'port': 1080, 'protocol': 'socks5'})
