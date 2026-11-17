@@ -177,7 +177,7 @@ jobs:
               d = json.load(urllib.request.urlopen(req))
               if d.get('code') != 0:
                   print(f'::error title={method} {path}::{d}')
-                  raise SystemExit(f'{method} {path} 失败: {d}')
+                  raise AssertionError(f'{method} {path} 失败: {d}')
               return d['data']
           tag = call('POST', '/crm/tag/create', {'name': '重点客户', 'color': '#1677ff'})
           sub = call('POST', '/crm/tag/create', {'name': '北美', 'parentId': tag})
@@ -229,7 +229,7 @@ jobs:
               d = json.load(urllib.request.urlopen(req))
               if ok and d.get('code') != 0:
                   print(f'::error title={method} {path}::{d}')
-                  raise SystemExit(f'{method} {path} 失败: {d}')
+                  raise AssertionError(f'{method} {path} 失败: {d}')
               return d if not ok else d['data']
           # 请求编号回传；跨域不带凭据
           rq = urllib.request.Request(BASE + '/system/auth/get-permission-info', headers=dict(H, **{'X-Request-ID': 'ci-rid-123', 'Origin': 'https://evil.example'}))
@@ -295,7 +295,7 @@ jobs:
               hdr['Content-Type'] = f'multipart/form-data; boundary={b}'
               d = json.load(urllib.request.urlopen(urllib.request.Request(BASE + path, method='POST', data=parts, headers=hdr)))
               if d.get('code') != 0:
-                  raise SystemExit(f'上传 {path} 失败: {d}')
+                  raise AssertionError(f'上传 {path} 失败: {d}')
               return d['data']
           up = upload('/channel/mail-message/upload-attachment', {}, 'quote.pdf', b'%PDF-1.4 quotation USD 8.5', 'application/pdf')
           sid = call('POST', '/channel/mail-message/send', {'accountId': aid, 'to': ['buyer@acme-trading.example'],
@@ -386,7 +386,7 @@ jobs:
               d = json.load(urllib.request.urlopen(req))
               if ok and d.get('code') != 0:
                   print(f'::error title={method} {path}::{d}')
-                  raise SystemExit(f'{method} {path} 失败: {d}')
+                  raise AssertionError(f'{method} {path} 失败: {d}')
               return d if not ok else d['data']
           def raw(method, url, data=None, headers=None):
               req = urllib.request.Request(url, method=method, data=data, headers=headers or {})
@@ -457,7 +457,7 @@ jobs:
               hdr['Content-Type'] = f'multipart/form-data; boundary={b}'
               d = json.load(urllib.request.urlopen(urllib.request.Request(BASE + path, method='POST', data=parts, headers=hdr)))
               if d.get('code') != 0:
-                  raise SystemExit(f'上传 {path} 失败: {d}')
+                  raise AssertionError(f'上传 {path} 失败: {d}')
               return d['data']
           import struct, zlib
           def tiny_png(tag):  # 1x1 像素的真实 PNG，末尾附带标记便于校验
@@ -517,7 +517,7 @@ jobs:
               d = json.load(urllib.request.urlopen(req))
               if ok and d.get('code') != 0:
                   print(f'::error title={method} {path}::{d}')
-                  raise SystemExit(f'{method} {path} 失败: {d}')
+                  raise AssertionError(f'{method} {path} 失败: {d}')
               return d if not ok else d['data']
           def wait(fn, what, timeout=15):
               end = time.time() + timeout
@@ -1804,7 +1804,7 @@ jobs:
               d = json.load(urllib.request.urlopen(req))
               if ok and d.get('code') != 0:
                   print(f'::error title={method} {path}::{d}')
-                  raise SystemExit(f'{method} {path} 失败: {d}')
+                  raise AssertionError(f'{method} {path} 失败: {d}')
               return d if not ok else d['data']
           s = call('GET', '/channel/ai/agent-settings')
           assert s['skills']['quote'] is True and len(s['skills']['grades']) == 4 and s['presets'], s
