@@ -476,7 +476,7 @@ jobs:
           try:
               upload('/channel/wa/message/send-media', {'conversationId': c['id']}, 'fake.png', b'MZ not really a png', 'image/png')
               raise AssertionError('伪装成图片的文件应被拒绝')
-          except SystemExit as e:
+          except (AssertionError, SystemExit) as e:
               assert '不支持的文件类型' in str(e), e
           assert len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_uploads'))) == before, '被拒绝的文件不应上传到 Meta'
           print('发送图片正常：本地校验并保存后再上传 Meta；伪装成图片的文件被拒绝且未外发')
