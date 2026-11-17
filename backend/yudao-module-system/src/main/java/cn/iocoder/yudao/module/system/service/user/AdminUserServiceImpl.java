@@ -384,7 +384,9 @@ public class AdminUserServiceImpl implements AdminUserService {
             return true; // 连管理员角色都没有，不需要保护
         }
         Set<Long> userIds = new HashSet<>(permissionService.getUserRoleIdListByRoleId(adminRoleIds));
-        userIds.removeAll(CollUtil.emptyIfNull(excludeUserIds));
+        if (excludeUserIds != null) {
+            userIds.removeAll(excludeUserIds);
+        }
         return userIds.stream().anyMatch(uid -> {
             AdminUserDO user = userMapper.selectById(uid);
             return user != null && !CommonStatusEnum.isDisable(user.getStatus());
