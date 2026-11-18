@@ -1206,18 +1206,19 @@ public class ChannelWhatsAppService {
         if (one) {
             validateAccount(userId, req.getAccountId());
         }
-        boolean allScope = cn.iocoder.yudao.module.channel.controller.admin.dashboard.vo.ChannelDashboardRespVO.Scope scope =
+        cn.iocoder.yudao.module.channel.controller.admin.dashboard.vo.ChannelDashboardRespVO.Scope scope =
                 channelDashboardService.resolveScope(userId, null);
+        boolean allScope = scope.isAll();
         // 管理员/进入客户后台：默认列表就是本公司全部会话（含成员负责的）；成员只看自己号码上的和转交给自己的
         Collection<Long> accountIds = one
                 ? List.of(req.getAccountId())
-                : allScope.isAll()
+                : allScope
                     ? accountMapper.selectList().stream().map(ChannelWaAccountDO::getId).toList()
                     : accountMapper.selectListByUserId(userId).stream().map(ChannelWaAccountDO::getId).toList();
         if (accountIds.isEmpty()) {
             accountIds = List.of(-1L); // 自己没有号码，但可能有别人转交过来的会话
         }
-        PageResult<ChannelWaConversationDO> page = allScope.isAll()
+        PageResult<ChannelWaConversationDO> page = allScope
                 ? conversationMapper.selectPageAll(req, accountIds)
                 : conversationMapper.selectPage(req, accountIds, userId, one);
         return new PageResult<>(toConversationVOs(page.getList()), page.getTotal());
