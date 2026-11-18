@@ -136,12 +136,16 @@ public class ChannelLeadService {
         CrmClueDO clue = findClueByEmail(email);
         if (clue == null) {
             ChannelAiConfigDO cfg = channelAiConfigMapper.selectCurrent();
-            if (cfg == null || !Boolean.TRUE.equals(cfg.getLeadAutoCreate())) {
+            // 兜底：没开「AI 自动建档」时，只要邮件里出现明确的询盘词也建档（否则营销订阅、通知类邮件会把 CRM 刷满）
+            boolean autoCreate = cfg != null && Boolean.TRUE.equals(cfg.getLeadAutoCreate());
+            if (!autoCreate && !looksLikeInquiry(m)) {
                 return;
             }
             String body = HtmlText.snippet(m.getTextBody(), m.getHtmlBody(), 2000);
-            Extracted ex = extract(cfg, "mail", m.getId(), account.getUserId(),
-                    "发件人：" + StrUtil.nullToEmpty(m.getFromName()) + " <" + email + ">\n主题：" + StrUtil.nullToEmpty(m.getSubject()) + "\n正文：\n" + body);
+            Extracted ex = autoCreate && cfg != null
+                    ? extract(cfg, "mail", m.getId(), account.getUserId(),
+                        "发件人：" + StrUtil.nullToEmpty(m.getFromName()) + " <" + email + ">\n主题：" + StrUtil.nullToEmpty(m.getSubject()) + "\n正文：\n" + body)
+                    : Extracted.EMPTY;
             String domain = LeadInference.domainOf(email);
             clue = CrmClueDO.builder()
                     .name(firstNonBlank(ex.contactName(), m.getFromName(), StrUtil.subBefore(email, "@", false)))
@@ -268,6 +272,27 @@ public class ChannelLeadService {
         } else {
             start.run();
         }
+    }
+
+    /** 兜底建档只认这些词：营销订阅、系统通知不会命中 */
+    private static final String[] INQUIRY_KEYWORDS = {
+            "inquiry", "enquiry", "quotation", "quote", "rfq", "price list", "best price", "unit price",
+            "moq", "minimum order", "sample order", "询价", "报价", "采购", "起订量", "打样",
+    };
+
+    /** 这封邮件看起来像不像真询盘（主题、摘要、正文任意一处命中询盘词） */
+    private static boolean looksLikeInquiry(ChannelMailMessageDO m) {
+        String text = (StrUtil.nullToEmpty(m.getSubject()) + "\n" + StrUtil.nullToEmpty(m.getSnippet())
+                + "\n" + StrUtil.nullToEmpty(m.getTextBody())).toLowerCase(Locale.ROOT);
+        if (StrUtil.isBlank(text)) {
+            return false;
+        }
+        for (String keyword : INQUIRY_KEYWORDS) {
+            if (text.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private CrmClueDO findClueByEmail(String email) {

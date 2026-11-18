@@ -684,9 +684,15 @@ jobs:
           # ---- 线索自动建档 ----
           def clues(kw):
               return call('GET', f'/crm/clue/page?pageNo=1&pageSize=20&sceneType=1&name={urllib.parse.quote(kw)}')['list']
-          mm3 = inquiry('Hans Mueller <hans@mueller-gmbh.de>', 'RFQ hair dryer', 'Hello, we need 2000 pcs hair dryer. Regards, Hans')
+          # 兜底：没开「AI 自动建档」时，明确带询盘词的陌生邮件也会建档（营销/通知邮件不会）
+          fb = inquiry('Fallback Buyer <fb@unknown-domain.example>', 'Inquiry: 500 pcs', 'Please quote 500 pcs, thanks.')
           time.sleep(2)
-          assert clues('Hans') == [], '未开启自动建档时不应建线索'
+          fb_lead = wait(lambda: clues('Fallback'), '兜底建档：陌生域名也建线索')[0]
+          assert fb_lead['source'] == 10 and fb_lead['email'] == 'fb@unknown-domain.example', fb_lead
+          # 没有询盘词的普通邮件不建线索
+          inquiry('Hans Mueller <hans@mueller-gmbh.de>', 'Hello', 'Just checking in, nothing to order yet.')
+          time.sleep(2)
+          assert clues('Hans') == [], '没有询盘词的邮件不应建线索'
           call('PUT', '/channel/ai/config/save', dict(cfg, waMode='auto', mailMode='auto', leadAutoCreate=True, leadAiExtract=True))
           bal0 = call('GET', '/channel/credit/summary')['balance']
           mm4 = inquiry('Hans Mueller <hans@mueller-gmbh.de>', 'RFQ hair dryer again', 'Hello, please quote 2000 pcs hair dryer. Hans')
@@ -1028,6 +1034,10 @@ jobs:
               assert req_x(HM, 'POST', '/channel/wa/message/send', {'conversationId': cid, 'text': 'hello'})['code'] != 0, '成员不能回复公开的会话'
               assert req_x(HM, 'PUT', f'/channel/wa/conversation/status?id={cid}&status=resolved')['code'] != 0, '成员不能改状态'
               assert req_x(HB, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=20&team=true')['data']['total'] == 0, '别家的团队会话里没有'
+              # 团队会话包含自己负责的（管理员视角）
+              ta_team = callx(HA, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')
+              assert ta_team['total'] >= 1 and any(c['id'] == cid for c in ta_team['list']), \
+                  f'团队会话应包含自己负责的会话: {ta_team["total"]}'
               callx(HA, 'PUT', f'/channel/wa/conversation/team-public?id={cid}&enabled=false')
               assert req_x(HM, 'GET', f'/channel/wa/conversation/get?id={cid}')['code'] != 0, '取消公开后成员看不到'
               # 平台进入客户后台：必须先登记原因；有效期内能看全部数据；每次进入都有记录，客户也能看到；退出后失效

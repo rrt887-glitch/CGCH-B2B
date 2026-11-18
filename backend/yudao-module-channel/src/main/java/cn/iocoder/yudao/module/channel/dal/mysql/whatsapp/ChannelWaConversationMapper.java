@@ -48,8 +48,8 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
                                                                    Collection<Long> myAccounts) {
         LambdaQueryWrapperX<ChannelWaConversationDO> q = new LambdaQueryWrapperX<>();
         if (teamUsers == null) {
-            q.and(w -> w.nested(x -> x.isNotNull(ChannelWaConversationDO::getOwnerUserId).ne(ChannelWaConversationDO::getOwnerUserId, userId))
-                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).notIn(ChannelWaConversationDO::getAccountId, myAccounts)));
+            // 管理员：团队会话 = 本公司全部会话（含自己负责的），不再排除自己
+            return q;
         } else {
             // 范围内同事负责的会话，或者「公开给团队」的会话（不是我自己负责的）
             q.and(w -> w.in(ChannelWaConversationDO::getOwnerUserId, teamUsers)

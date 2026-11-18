@@ -1220,9 +1220,14 @@ public class ChannelWhatsAppService {
     private PageResult<ChannelWaConversationRespVO> getTeamConversationPage(Long userId, ChannelWaConversationPageReqVO req) {
         Set<Long> team = teamUsers(userId);
         List<Long> mine = accountMapper.selectListByUserId(userId).stream().map(ChannelWaAccountDO::getId).toList();
-        List<Long> teamAccounts = team == null ? List.of() : accountMapper.selectList().stream()
-                .filter(a -> a.getUserId() != null && team.contains(a.getUserId())).map(ChannelWaAccountDO::getId).toList();
-        PageResult<ChannelWaConversationDO> page = conversationMapper.selectTeamPage(req, userId, nonEmpty(team),
+        // 团队会话包含自己：成员的「我的号码」和本人都要算进来
+        Set<Long> teammates = team == null ? null : new HashSet<>(team);
+        if (teammates != null) {
+            teammates.add(userId);
+        }
+        List<Long> teamAccounts = teammates == null ? List.of() : accountMapper.selectList().stream()
+                .filter(a -> a.getUserId() != null && teammates.contains(a.getUserId())).map(ChannelWaAccountDO::getId).toList();
+        PageResult<ChannelWaConversationDO> page = conversationMapper.selectTeamPage(req, userId, nonEmpty(teammates),
                 nonEmpty(teamAccounts), nonEmpty(mine));
         List<ChannelWaConversationRespVO> list = toConversationVOs(page.getList());
         if (team != null) { // 管理员全部能处理；其他人逐条标出哪些只能查看
