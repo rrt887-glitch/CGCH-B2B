@@ -47,17 +47,8 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
     default LambdaQueryWrapperX<ChannelWaConversationDO> teamQuery(Long userId, Collection<Long> teamUsers, Collection<Long> teamAccounts,
                                                                    Collection<Long> myAccounts) {
         LambdaQueryWrapperX<ChannelWaConversationDO> q = new LambdaQueryWrapperX<>();
-        if (teamUsers == null) {
-            // 管理员：团队会话 = 本公司全部会话（含自己负责的），不再排除自己
-            return q;
-        } else {
-            // 范围内同事负责的会话，或者「公开给团队」的会话（不是我自己负责的）
-            q.and(w -> w.in(ChannelWaConversationDO::getOwnerUserId, teamUsers)
-                    .or().nested(x -> x.isNull(ChannelWaConversationDO::getOwnerUserId).in(ChannelWaConversationDO::getAccountId, teamAccounts))
-                    .or().nested(x -> x.eq(ChannelWaConversationDO::getTeamPublic, true)
-                            .and(y -> y.nested(z -> z.isNotNull(ChannelWaConversationDO::getOwnerUserId).ne(ChannelWaConversationDO::getOwnerUserId, userId))
-                                    .or().nested(z -> z.isNull(ChannelWaConversationDO::getOwnerUserId).notIn(ChannelWaConversationDO::getAccountId, myAccounts)))));
-        }
+        // 团队会话 = 被显式「公开给团队」的会话（谁公开的都算），全公司可见
+        q.eq(ChannelWaConversationDO::getTeamPublic, true);
         return q;
     }
 

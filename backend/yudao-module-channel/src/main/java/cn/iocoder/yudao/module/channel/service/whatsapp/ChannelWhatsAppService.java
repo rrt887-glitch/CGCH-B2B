@@ -1218,25 +1218,13 @@ public class ChannelWhatsAppService {
      * 以及同事「公开给团队」的会话（全公司成员都能看到，成员只能看到这一部分）。
      */
     private PageResult<ChannelWaConversationRespVO> getTeamConversationPage(Long userId, ChannelWaConversationPageReqVO req) {
-        Set<Long> team = teamUsers(userId);
-        List<Long> mine = accountMapper.selectListByUserId(userId).stream().map(ChannelWaAccountDO::getId).toList();
-        // 团队会话包含自己：成员的「我的号码」和本人都要算进来
-        Set<Long> teammates = team == null ? null : new HashSet<>(team);
-        if (teammates != null) {
-            teammates.add(userId);
-        }
-        List<Long> teamAccounts = teammates == null ? List.of() : accountMapper.selectList().stream()
-                .filter(a -> a.getUserId() != null && teammates.contains(a.getUserId())).map(ChannelWaAccountDO::getId).toList();
-        PageResult<ChannelWaConversationDO> page = conversationMapper.selectTeamPage(req, userId, nonEmpty(teammates),
-                nonEmpty(teamAccounts), nonEmpty(mine));
+        // 团队会话 = 被显式「公开给团队」的会话：谁公开的都能在团队里看到，全公司可见
+        PageResult<ChannelWaConversationDO> page = conversationMapper.selectTeamPage(req, userId, null, null, null);
         List<ChannelWaConversationRespVO> list = toConversationVOs(page.getList());
-        if (team != null) { // 管理员全部能处理；其他人逐条标出哪些只能查看
-            Map<Long, ChannelWaConversationDO> byId = page.getList().stream()
-                    .collect(Collectors.toMap(ChannelWaConversationDO::getId, Function.identity()));
-            list.forEach(vo -> vo.setCanHandle(canHandle(userId, byId.get(vo.getId()))));
-        } else {
-            list.forEach(vo -> vo.setCanHandle(true));
-        }
+        // 管理员能直接处理；其他人只能查看（要接手得由负责人转交）
+        Map<Long, ChannelWaConversationDO> byId = page.getList().stream()
+                .collect(Collectors.toMap(ChannelWaConversationDO::getId, Function.identity()));
+        list.forEach(vo -> vo.setCanHandle(canHandle(userId, byId.get(vo.getId()))));
         return new PageResult<>(list, page.getTotal());
     }
 

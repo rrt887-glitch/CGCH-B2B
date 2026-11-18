@@ -1034,10 +1034,11 @@ jobs:
               assert req_x(HM, 'POST', '/channel/wa/message/send', {'conversationId': cid, 'text': 'hello'})['code'] != 0, '成员不能回复公开的会话'
               assert req_x(HM, 'PUT', f'/channel/wa/conversation/status?id={cid}&status=resolved')['code'] != 0, '成员不能改状态'
               assert req_x(HB, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=20&team=true')['data']['total'] == 0, '别家的团队会话里没有'
-              # 团队会话包含自己负责的（管理员视角）
+              # 团队会话 = 只有「公开给团队」的会话（管理员也一样）；此时 cid 已公开，所以两位都能看到
               ta_team = callx(HA, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')
               assert ta_team['total'] >= 1 and any(c['id'] == cid for c in ta_team['list']), \
-                  f'团队会话应包含自己负责的会话: {ta_team["total"]}'
+                  f'公开后管理员的团队会话里应有它: {ta_team["total"]}'
+              assert all(c.get('teamPublic') is True for c in ta_team['list']), '团队会话里只能是公开的：{ta_team}'
               callx(HA, 'PUT', f'/channel/wa/conversation/team-public?id={cid}&enabled=false')
               assert req_x(HM, 'GET', f'/channel/wa/conversation/get?id={cid}')['code'] != 0, '取消公开后成员看不到'
               # 平台进入客户后台：必须先登记原因；有效期内能看全部数据；每次进入都有记录，客户也能看到；退出后失效
@@ -2589,15 +2590,17 @@ jobs:
           call('POST', '/system/permission/assign-role-menu', {'roleId': srole, 'menuIds': [20000, 20001, 22401, 22111, 22112]})
           call('PUT', f"/channel/wa/conversation/transfer?id={ecv['id']}&userId={sid}")
           assert ecv['id'] not in [c['id'] for c in cpage()], '转交后自己的列表里没有'
-          # 团队会话：管理员（全部数据权限）看得到全部（含自己负责的）；小王只有本人数据权限，团队里只有自己的会话
+          # 团队会话 = 被显式「公开给团队」的会话：没公开的不在团队里；公开后管理员和成员都能看到
           tm = call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')['list']
-          tv = next((c for c in tm if c['id'] == ecv['id']), None)
-          assert tv and tv['handlerUserId'] == sid and tv['handlerName'] == '业务员小王', tm
-          assert [c for c in tm if c.get('handlerUserId') == 1], '团队会话包含自己负责的'
+          assert not [c for c in tm if c['id'] == ecv['id']], '没公开的会话不应出现在团队会话里'
+          call('PUT', f"/channel/wa/conversation/team-public?id={ecv['id']}&enabled=true")
+          tm2 = call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')['list']
+          tv = next((c for c in tm2 if c['id'] == ecv['id']), None)
+          assert tv and tv['handlerUserId'] == sid and tv['handlerName'] == '业务员小王', tm2
+          assert call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')['data']['total'] >= 1, '公开后成员也能在团队会话里看到'
+          call('PUT', f"/channel/wa/conversation/team-public?id={ecv['id']}&enabled=false")
           assert call('GET', f"/channel/wa/conversation/get?id={ecv['id']}")['id'] == ecv['id'], '主管能查看下属的会话'
-          t_s = call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')
-          assert t_s['code'] == 0 and t_s['data']['total'] >= 1 \
-              and all(c.get('handlerUserId') == sid for c in t_s['data']['list']), f'只有本人权限时团队会话里只有自己的: {t_s}'
+          assert call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')['data']['total'] == 0, '取消公开后成员的团队会话为空'
           # 客户 360：会话关联客户后，客户详情的沟通记录里能看到这段对话；没有客户权限的人看不到
           tcid = call('POST', '/crm/customer/create', {'name': 'Timeline Buyer', 'ownerUserId': 1})
           sql(f"UPDATE channel_wa_conversation SET customer_id = {tcid} WHERE id = {ecv['id']}")
