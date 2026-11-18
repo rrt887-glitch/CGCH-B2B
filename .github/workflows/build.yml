@@ -2661,7 +2661,7 @@ jobs:
           assert evo_msg(s2['session'], 'EVOAS1', '8615900007771@s.whatsapp.net', {'conversation': 'Price list please'}, 'conversation') == 200
           a1 = wait(lambda: next((c for c in call_s('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50')['data']['list']
                                   if c['waId'] == '8615900007771'), None), '第一个新客户分给小王')
-          assert a1['ownerUserId'] == sid and a1['id'] not in [c['id'] for c in cpage()], a1
+          assert a1['ownerUserId'] == sid and a1['id'] in [c['id'] for c in cpage()], a1  # 管理员能看到全公司会话
           assert evo_msg(s2['session'], 'EVOAS2', '8615900007772@s.whatsapp.net', {'conversation': 'Do you ship to Kenya?'}, 'conversation') == 200
           a2 = wait(lambda: next((c for c in cpage() if c['waId'] == '8615900007772'), None), '第二个新客户轮到号码所属业务员')
           assert not a2.get('ownerUserId'), a2
