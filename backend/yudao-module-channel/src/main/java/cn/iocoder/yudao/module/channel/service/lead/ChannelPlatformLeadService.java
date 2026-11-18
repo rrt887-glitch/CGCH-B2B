@@ -114,17 +114,26 @@ public class ChannelPlatformLeadService {
 
     // ==================== 规则 ====================
 
+    /** 默认规则只初始化一次的锁（并发首次访问时两边都看到空表会各插一套，生产上就出现过重复） */
+    private static final Object RULE_INIT_LOCK = new Object();
+
     /** 本租户的规则；第一次使用时写入默认规则（阿里国际站、中国制造网） */
     public List<ChannelLeadRuleDO> rules() {
         List<ChannelLeadRuleDO> list = channelLeadRuleMapper.selectOrdered();
-        if (list.isEmpty()) {
+        if (!list.isEmpty()) {
+            return list;
+        }
+        synchronized (RULE_INIT_LOCK) {
+            list = channelLeadRuleMapper.selectOrdered(); // 再查一次，别人可能已经插好了
+            if (!list.isEmpty()) {
+                return list;
+            }
             channelLeadRuleMapper.insert(ChannelLeadRuleDO.builder().name("阿里国际站").matchField(ChannelLeadRuleDO.FIELD_FROM)
                     .keyword("alibaba.com").source(SOURCE_ALIBABA).enabled(true).sort(1).build());
             channelLeadRuleMapper.insert(ChannelLeadRuleDO.builder().name("中国制造网").matchField(ChannelLeadRuleDO.FIELD_FROM)
                     .keyword("made-in-china.com").source(SOURCE_MADE_IN_CHINA).enabled(true).sort(2).build());
-            list = channelLeadRuleMapper.selectOrdered();
+            return channelLeadRuleMapper.selectOrdered();
         }
-        return list;
     }
 
     public Long saveRule(ChannelLeadRuleDO r) {

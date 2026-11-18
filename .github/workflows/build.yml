@@ -1087,6 +1087,12 @@ jobs:
               assert d['code'] != 0, f'删除后账号不能登录: {d}'
               assert tb not in [x['id'] for x in call('GET', '/system/tenant/console-page?pageNo=1&pageSize=50')['list']], '删除后不在列表'
               assert req_x(H, 'DELETE', '/system/tenant/delete?id=1')['code'] != 0, '平台自己的租户不能删'
+              # 默认线索规则并发首次访问只应初始化一套（曾经并发插入两套）
+              import concurrent.futures as _cf
+              with _cf.ThreadPoolExecutor(max_workers=8) as ex:
+                  list(ex.map(lambda _: req_x(HA, 'GET', '/channel/lead-rule/list'), range(8)))
+              rules_now = callx(HA, 'GET', '/channel/lead-rule/list')
+              assert len(rules_now) == 2, f'默认线索规则不应重复: {rules_now}'
               # 删除成员后，他名下的会话自动转给公司管理员（不再出现「负责人已不存在」）
               callx(HA, 'PUT', f'/channel/wa/conversation/transfer?id={cid}&userId={m1}')
               callx(HA, 'DELETE', f'/system/user/delete?id={m1}')
