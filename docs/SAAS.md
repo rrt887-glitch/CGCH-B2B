@@ -40,6 +40,32 @@
    按 [`backend/sql/mysql/cgch/manual/move-tenant1-business-to-new-tenant.sql`](../backend/sql/mysql/cgch/manual/move-tenant1-business-to-new-tenant.sql) 文件开头的步骤执行（先在「客户管理」给 HIG 开户，再执行脚本）。
 6. 用新客户的管理员登录检查会话、客户、渠道；把登录地址、账号、密码交给客户。
 
+## 磁盘越来越大怎么办（每次升级都会留旧镜像）
+
+升级会拉新镜像、起新容器，旧的镜像和容器日志会慢慢占空间。服务器上跑这个脚本，**默认只检查不删**：
+
+```bash
+cd /opt/cgch
+curl -fsSL https://raw.githubusercontent.com/rrt887-glitch/CGCH-B2B/main/deploy/cleanup.sh -o cleanup.sh
+bash cleanup.sh            # 只看：磁盘、内存、镜像、数据卷、MySQL binlog 各占多少
+bash cleanup.sh --apply    # 清理：悬空镜像、停止的容器、构建缓存、7 天没用的旧镜像、本项目只保留最近 2 个版本
+```
+
+**绝不会删数据**：MySQL / Evolution / Caddy 的数据卷不在清理范围里（脚本只列出来给你看）。
+
+几个常见「吃硬盘」的东西：
+
+| 东西 | 怎么看 | 处理 |
+|---|---|---|
+| 旧镜像 | `docker images \| grep cgch-` | `bash cleanup.sh --apply` |
+| 容器日志 | 已限制 20MB×3/容器，正常不会涨 | 不用管 |
+| MySQL binlog | `docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW BINARY LOGS;"'` | 在 MySQL 里 `PURGE BINARY LOGS BEFORE NOW() - INTERVAL 7 DAY;` |
+| 旧备份 | `ls -lh /root/*.sql` | 只留最近 2~3 份 |
+| 系统日志 | `journalctl --disk-usage` | `journalctl --vacuum-size=200M` |
+| 会话/消息数据 | 业务数据，会持续增长 | 属正常，必要时归档旧会话 |
+
+> 千万不要执行 `docker system prune --volumes`：那会把数据库和 Evolution 的数据卷一起删掉。
+
 ## WhatsApp 出口代理（扫码接入）
 
 扫码接入的号码都跑在同一台 Evolution 服务上。如果不配代理，所有客户的消息都从平台服务器同一个 IP 出去，

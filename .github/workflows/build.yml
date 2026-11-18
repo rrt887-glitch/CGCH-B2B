@@ -2980,6 +2980,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: 检查部署脚本语法
+        run: |
+          bash -n deploy/install.sh
+          bash -n deploy/cleanup.sh
+          echo "部署脚本语法正常"
+
       - uses: actions/download-artifact@v4
         with:
           name: yudao-server-jar
