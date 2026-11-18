@@ -1049,7 +1049,7 @@ jobs:
               assert rawreq('POST', '/system/tenant-visit/enter', {'tenantId': 1, 'reason': 'x'})['code'] == 1002015008
               ent = call('POST', '/system/tenant-visit/enter', {'tenantId': ta, 'reason': 'CI：协助排查'})
               assert ent['tenantId'] == ta and ent['tenantName'] == '客户A-CI', ent
-              vp = callx(HV, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=20&team=true')
+              vp = callx(HV, 'GET', '/channel/wa/conversation/page?pageNo=1&pageSize=20')
               assert any(c['id'] == cid for c in vp['list']), f'进入后能看到客户的全部会话: {vp}'
               assert any(c['id'] == ca for c in callx(HV, 'GET', '/crm/customer/page?pageNo=1&pageSize=50')['list']), '进入后能看到客户的 CRM'
               assert req_x(dict(H, **{'visit-tenant-id': str(tb)}), 'GET', '/crm/customer/page?pageNo=1&pageSize=1')['code'] == 403, '只对登记的那家有效'
@@ -2589,7 +2589,8 @@ jobs:
           srole = next(r['id'] for r in call('GET', '/system/role/simple-list') if r['name'] == '业务员（仅本人）')
           call('POST', '/system/permission/assign-role-menu', {'roleId': srole, 'menuIds': [20000, 20001, 22401, 22111, 22112]})
           call('PUT', f"/channel/wa/conversation/transfer?id={ecv['id']}&userId={sid}")
-          assert ecv['id'] not in [c['id'] for c in cpage()], '转交后自己的列表里没有'
+          # 管理员能看全公司会话，所以转交后它仍在列表里，但负责人变成小王
+          assert next((c for c in cpage() if c['id'] == ecv['id']), {}).get('handlerUserId') == sid, '转交后负责人应变成小王'
           # 团队会话 = 被显式「公开给团队」的会话：没公开的不在团队里；公开后管理员和成员都能看到
           tm = call('GET', '/channel/wa/conversation/page?pageNo=1&pageSize=50&team=true')['list']
           assert not [c for c in tm if c['id'] == ecv['id']], '没公开的会话不应出现在团队会话里'

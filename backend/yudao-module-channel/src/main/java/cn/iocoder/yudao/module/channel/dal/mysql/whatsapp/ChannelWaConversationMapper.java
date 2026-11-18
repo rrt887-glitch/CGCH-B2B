@@ -31,6 +31,17 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
         return selectPage(req, applyFilters(q, req));
     }
 
+    /** 管理员视角：这些号码上的全部会话（不按负责人过滤） */
+    default PageResult<ChannelWaConversationDO> selectPageAll(cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaConversationPageReqVO req,
+                                                               Collection<Long> accountIds) {
+        LambdaQueryWrapperX<ChannelWaConversationDO> q = new LambdaQueryWrapperX<>();
+        q.in(ChannelWaConversationDO::getAccountId, accountIds);
+        if (req.getAccountId() != null) {
+            q.eq(ChannelWaConversationDO::getAccountId, req.getAccountId());
+        }
+        return selectPage(req, applyFilters(q, req));
+    }
+
     /**
      * 会话列表：我号码上的会话（没转交给别人的）+ 转交给我的会话
      *
