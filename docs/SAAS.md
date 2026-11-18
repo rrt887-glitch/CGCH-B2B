@@ -40,6 +40,29 @@
    按 [`backend/sql/mysql/cgch/manual/move-tenant1-business-to-new-tenant.sql`](../backend/sql/mysql/cgch/manual/move-tenant1-business-to-new-tenant.sql) 文件开头的步骤执行（先在「客户管理」给 HIG 开户，再执行脚本）。
 6. 用新客户的管理员登录检查会话、客户、渠道；把登录地址、账号、密码交给客户。
 
+## 内存紧张怎么办
+
+这套服务（MySQL + Redis + 后端 + Evolution + Evolution 的 Postgres + Caddy）在 3.4G 的轻量服务器上跑，`available` 长期低于 300MB 时会出现卡顿甚至短时打不开。先看谁在吃：
+
+```bash
+docker stats --no-stream        # 每个容器当前内存
+free -h                         # available 掉到多少
+```
+
+安装脚本已经做了三件事控住内存（可用 `.env` 覆盖）：
+
+| 配置 | 默认 | 位置 |
+|---|---|---|
+| 后端堆上限 | `-Xms256m -Xmx640m`、Metaspace 320m、SerialGC | `.env` 里 `CGCH_JAVA_OPTS` |
+| Evolution（Node）堆上限 | `--max-old-space-size=512` | `.env` 里 `CGCH_EVOLUTION_HEAP` |
+| MySQL | 关掉 `performance_schema`、缓冲池 256MB | 编排文件里的 `command` |
+
+如果 `docker stats` 显示某个容器明显超了，按这个顺序调：
+
+1. **后端**：`CGCH_JAVA_OPTS=-Xms256m -Xmx768m -XX:MaxMetaspaceSize=320m -XX:+UseSerialGC`（先加堆，别超过 800m）
+2. **Evolution**：`CGCH_EVOLUTION_HEAP=--max-old-space-size=768`（群聊历史多的时候）
+3. 还是不够就升机器：这套组合在 3.4G 上属于「刚好够用」，4G 以上更稳
+
 ## 磁盘越来越大怎么办（每次升级都会留旧镜像）
 
 升级会拉新镜像、起新容器，旧的镜像和容器日志会慢慢占空间。服务器上跑这个脚本，**默认只检查不删**：

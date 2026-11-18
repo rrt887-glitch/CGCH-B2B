@@ -135,6 +135,8 @@ services:
     image: ${REGISTRY}/cgch-mysql:${VERSION}
     restart: unless-stopped
     logging: *logging
+    # 小内存服务器：关掉 performance_schema 能省 200~400MB，缓冲池 256MB 足够几千个会话
+    command: ["mysqld", "--performance-schema=OFF", "--innodb-buffer-pool-size=256M"]
     environment:
       MYSQL_ROOT_PASSWORD: \${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ruoyi-vue-pro
@@ -171,6 +173,8 @@ services:
       REDIS_HOST: redis
       CGCH_EVOLUTION_BASE_URL: http://evolution:8080
       CGCH_EVOLUTION_WEBHOOK_BASE: http://backend:48080
+      # 堆上限固定住，避免后端随机器内存膨胀把 Evolution/MySQL 挤掉（可在 .env 里用 CGCH_JAVA_OPTS 覆盖）
+      JAVA_OPTS: "\${CGCH_JAVA_OPTS:--Xms256m -Xmx640m -XX:MaxMetaspaceSize=320m -XX:+UseSerialGC}"
     volumes:
       - backend-logs:/root/logs
       - backend-files:/app/files
@@ -203,6 +207,8 @@ services:
       SERVER_URL: http://evolution:8080
       SERVER_DISABLE_DOCS: "true"
       SERVER_DISABLE_MANAGER: "true"
+      # Node 堆上限：不限制的话会随聊天记录一直涨（可在 .env 里用 CGCH_EVOLUTION_HEAP 覆盖）
+      NODE_OPTIONS: "\${CGCH_EVOLUTION_HEAP:---max-old-space-size=512}"
       AUTHENTICATION_API_KEY: \${CGCH_EVOLUTION_API_KEY}
       DATABASE_PROVIDER: postgresql
       DATABASE_CONNECTION_URI: postgresql://evolution:\${EVOLUTION_DB_PASSWORD}@evolution-db:5432/evolution?schema=public
