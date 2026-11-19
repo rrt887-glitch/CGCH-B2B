@@ -42,6 +42,21 @@
    按 [`backend/sql/mysql/cgch/manual/move-tenant1-business-to-new-tenant.sql`](../backend/sql/mysql/cgch/manual/move-tenant1-business-to-new-tenant.sql) 文件开头的步骤执行（先在「客户管理」给 HIG 开户，再执行脚本）。
 6. 用新客户的管理员登录检查会话、客户、渠道；把登录地址、账号、密码交给客户。
 
+## UI 冒烟（本机跑，可选）
+
+浏览器自动化需要在你自己的电脑上跑一次（服务器上没有浏览器）：
+
+```bash
+cd live-test
+npm i playwright && npx playwright install chromium   # 第一次
+node ui-smoke.js --login      # 手动登录一次（过滑块），保存登录状态
+node ui-smoke.js              # 之后每次自动跑，约 30 秒
+```
+
+会逐个打开 看板 / 会话 / CRM / 智能体 / 渠道 / 设置，检查是否白屏、有没有 JS 报错，截图存到 `live-test/ui-shots/`。
+
+> 为什么需要手动登录一次：登录页有滑块验证码，自动过滑块不可靠；登录状态保存后可以复用，直到会话过期。
+
 ## 部署后自检（一条命令，约 30 秒）
 
 在开发机上（`live-test/` 目录）跑：
