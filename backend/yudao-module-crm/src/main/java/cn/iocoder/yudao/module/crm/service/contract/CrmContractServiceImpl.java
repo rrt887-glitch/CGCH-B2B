@@ -317,9 +317,23 @@ public class CrmContractServiceImpl implements CrmContractService {
             throw exception(CONTRACT_SUBMIT_FAIL_NOT_DRAFT);
         }
 
-        // 2. 创建合同审批流程实例
-        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(userId, new BpmProcessInstanceCreateReqDTO()
-                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY).setBusinessKey(String.valueOf(id)));
+        // 2. 创建合同审批流程实例。
+        // 默认不预置审批流程（单节点自动通过）：没有配置「crm-contract-audit」流程定义时，直接标记审核通过，
+        // 否则合同会永远停在草稿，后续回款也建不了。平台需要多级审批时，在「流程管理」里建同名流程即可自动接管。
+        String processInstanceId = null;
+        try {
+            processInstanceId = bpmProcessInstanceApi.createProcessInstance(userId, new BpmProcessInstanceCreateReqDTO()
+                    .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY).setBusinessKey(String.valueOf(id)));
+        } catch (Exception ex) {
+            if (!isProcessDefinitionMissing(ex)) {
+                throw ex;
+            }
+            log.info("[submitContract][合同({}) 未配置审批流程，按单节点自动通过处理]", id);
+            contractMapper.updateById(new CrmContractDO().setId(id).setProcessInstanceId(null)
+                    .setAuditStatus(CrmAuditStatusEnum.APPROVE.getStatus()));
+            LogRecordContext.putVariable("contractName", contract.getName());
+            return;
+        }
 
         // 3. 更新合同工作流编号
         contractMapper.updateById(new CrmContractDO().setId(id).setProcessInstanceId(processInstanceId)
@@ -327,6 +341,19 @@ public class CrmContractServiceImpl implements CrmContractService {
 
         // 3. 记录日志
         LogRecordContext.putVariable("contractName", contract.getName());
+    }
+
+    /** 是不是「流程定义不存在」这个业务异常（没有预置审批流程时会抛） */
+    private static boolean isProcessDefinitionMissing(Throwable ex) {
+        Throwable t = ex;
+        while (t != null) {
+            if (t instanceof cn.iocoder.yudao.framework.common.exception.ServiceException se
+                    && Integer.valueOf(1_009_003_002).equals(se.getCode())) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     @Override

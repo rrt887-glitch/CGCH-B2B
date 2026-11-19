@@ -1946,6 +1946,17 @@ jobs:
                            'dealTime': now_ms(30), 'discountPercent': 0, 'products': []})
           bad_rel = call('PUT', '/crm/contract/update', dict(od, id=oid, businessId=other_biz), ok=False)
           assert '不属于这个客户' in bad_rel['msg'], bad_rel
+          # 合同审批：没预置流程时按「单节点自动通过」处理，通过后才能登记回款
+          call('PUT', f'/crm/contract/submit?id={oid}')
+          o2 = call('GET', f'/crm/contract/get?id={oid}')
+          assert o2['auditStatus'] == 20, f'没有审批流程时应自动通过: {o2["auditStatus"]}'
+          plan = call('POST', '/crm/receivable-plan/create', {'contractId': oid, 'ownerUserId': 1, 'returnTime': now_ms(5), 'price': 500})
+          rec = call('POST', '/crm/receivable/create', {'contractId': oid, 'planId': plan, 'ownerUserId': 1,
+                                                        'returnTime': now_ms(6), 'price': 500, 'returnType': 1})
+          assert call('GET', f'/crm/receivable/get?id={rec}')['price'] == 500
+          print('合同审批：未配置流程时自动通过；通过后可登记回款计划与回款')
+          call('DELETE', f'/crm/receivable/delete?id={rec}')
+          call('DELETE', f'/crm/receivable-plan/delete?id={plan}')
           call('DELETE', f'/crm/contract/delete?id={oid}')
           call('DELETE', f'/crm/business/delete?id={other_biz}')
           print('客户按公司名称搜索、名称不能只有空格；订单新建为草稿可编辑、日期与关联客户校验')
