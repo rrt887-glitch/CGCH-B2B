@@ -689,6 +689,10 @@ jobs:
           time.sleep(2)
           fb_lead = wait(lambda: clues('Fallback'), '兜底建档：陌生域名也建线索')[0]
           assert fb_lead['source'] == 10 and fb_lead['email'] == 'fb@unknown-domain.example', fb_lead
+          # 营销邮件正文里的追踪链接带 moq/quote 之类的片段，不算询盘（曾经误建过线索）
+          inquiry('Newsletter <news@brand-updates.example>', 'Weekly newsletter', 'Read more at https://track.example.com/a/moq/b and enjoy.')
+          time.sleep(2)
+          assert clues('Newsletter') == [], '只有链接里带 moq 的营销邮件不应建线索'
           # 没有询盘词的普通邮件不建线索
           inquiry('Hans Mueller <hans@mueller-gmbh.de>', 'Hello', 'Just checking in, nothing to order yet.')
           time.sleep(2)

@@ -275,20 +275,30 @@ public class ChannelLeadService {
     }
 
     /** 兜底建档只认这些词：营销订阅、系统通知不会命中 */
-    private static final String[] INQUIRY_KEYWORDS = {
+    private static final String[] INQUIRY_WORDS_EN = {
             "inquiry", "enquiry", "quotation", "quote", "rfq", "price list", "best price", "unit price",
-            "moq", "minimum order", "sample order", "询价", "报价", "采购", "起订量", "打样",
+            "moq", "minimum order", "sample order",
     };
+    private static final String[] INQUIRY_WORDS_ZH = {"询价", "报价", "采购", "起订量", "打样"};
 
-    /** 这封邮件看起来像不像真询盘（主题、摘要、正文任意一处命中询盘词） */
+    /** 链接（含追踪参数）里的 moq/quote 之类的片段不算，先去掉 */
+    private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+", Pattern.CASE_INSENSITIVE);
+
+    /** 这封邮件看起来像不像真询盘（主题、摘要、正文任意一处命中询盘词；链接里的不算） */
     private static boolean looksLikeInquiry(ChannelMailMessageDO m) {
-        String text = (StrUtil.nullToEmpty(m.getSubject()) + "\n" + StrUtil.nullToEmpty(m.getSnippet())
-                + "\n" + StrUtil.nullToEmpty(m.getTextBody())).toLowerCase(Locale.ROOT);
+        String raw = StrUtil.nullToEmpty(m.getSubject()) + "\n" + StrUtil.nullToEmpty(m.getSnippet())
+                + "\n" + StrUtil.nullToEmpty(m.getTextBody());
+        String text = URL_PATTERN.matcher(raw).replaceAll(" ").toLowerCase(Locale.ROOT);
         if (StrUtil.isBlank(text)) {
             return false;
         }
-        for (String keyword : INQUIRY_KEYWORDS) {
-            if (text.contains(keyword)) {
+        for (String word : INQUIRY_WORDS_EN) {
+            if (Pattern.compile("\\b" + Pattern.quote(word) + "\\b").matcher(text).find()) {
+                return true;
+            }
+        }
+        for (String word : INQUIRY_WORDS_ZH) {
+            if (text.contains(word)) {
                 return true;
             }
         }
