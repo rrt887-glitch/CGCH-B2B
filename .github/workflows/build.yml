@@ -1958,9 +1958,9 @@ jobs:
                                                         'returnTime': now_ms(6), 'price': 500, 'returnType': 1})
           assert call('GET', f'/crm/receivable/get?id={rec}')['price'] == 500
           print('合同审批：未配置流程时自动通过；通过后可登记回款计划与回款')
-          # 清理（容忍失败：回款/计划互相引用时删除可能被业务规则挡住，不影响前面的断言）
-          call('DELETE', f'/crm/receivable-plan/delete?id={plan}', ok=False)
-          call('DELETE', f'/crm/receivable/delete?id={rec}', ok=False)
+          # 清理：先删计划再删回款（计划删掉后删回款不能 500，曾经空指针）
+          call('DELETE', f'/crm/receivable-plan/delete?id={plan}')
+          call('DELETE', f'/crm/receivable/delete?id={rec}')
           call('DELETE', f'/crm/contract/delete?id={oid}', ok=False)
           call('DELETE', f'/crm/business/delete?id={other_biz}', ok=False)
           print('客户按公司名称搜索、名称不能只有空格；订单新建为草稿可编辑、日期与关联客户校验')
