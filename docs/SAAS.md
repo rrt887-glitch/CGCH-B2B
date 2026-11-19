@@ -42,6 +42,20 @@
    按 [`backend/sql/mysql/cgch/manual/move-tenant1-business-to-new-tenant.sql`](../backend/sql/mysql/cgch/manual/move-tenant1-business-to-new-tenant.sql) 文件开头的步骤执行（先在「客户管理」给 HIG 开户，再执行脚本）。
 6. 用新客户的管理员登录检查会话、客户、渠道；把登录地址、账号、密码交给客户。
 
+## 部署后自检（一条命令，约 30 秒）
+
+在开发机上（`live-test/` 目录）跑：
+
+```bash
+node verify-live.js
+```
+
+会检查：首页/公开页、登录态、12 个平台关键接口、未登录与伪造租户头、Webhook 验签、进入 HIG 后的会话/号码/代理、团队会话语义、响应时间。
+
+- 用 `token.json` 里的 refreshToken 续期，不用每次过滑块
+- refreshToken 30 天过期后，重新登录一次：`node captcha-get.js && python solve.py && node login3.js`
+- 有失败项会以非 0 退出，方便接进部署脚本
+
 ## 内存紧张怎么办
 
 这套服务（MySQL + Redis + 后端 + Evolution + Evolution 的 Postgres + Caddy）在 3.4G 的轻量服务器上跑，`available` 长期低于 300MB 时会出现卡顿甚至短时打不开。先看谁在吃：
