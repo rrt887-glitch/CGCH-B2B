@@ -262,7 +262,7 @@ CREATE TABLE `channel_unipile_credential` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `scope_id` varchar(64) NOT NULL COMMENT 'Unipile 隔离边界（Scope）编号',
   `api_key` varchar(2048) NOT NULL COMMENT '该 Scope 专属的 API Key（加密）',
-  `api_key_mask` varchar(255) NULL COMMENT '脱敏后的 Key，展示用',
+  `api_key_mask` varchar(2048) NULL COMMENT '脱敏后的 Key，展示用',
   `status` varchar(16) NOT NULL DEFAULT 'active' COMMENT '状态：active / disabled',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

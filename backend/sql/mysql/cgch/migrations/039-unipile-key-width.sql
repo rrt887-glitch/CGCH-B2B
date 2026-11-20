@@ -15,8 +15,8 @@ DEALLOCATE PREPARE s1;
 
 SET @ddl2 := IF(
     (SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'channel_unipile_credential' AND COLUMN_NAME = 'api_key_mask') < 255,
-    'ALTER TABLE `channel_unipile_credential` MODIFY COLUMN `api_key_mask` varchar(255) NULL COMMENT ''脱敏后的 Key，展示用''',
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'channel_unipile_credential' AND COLUMN_NAME = 'api_key_mask') < 2048,
+    'ALTER TABLE `channel_unipile_credential` MODIFY COLUMN `api_key_mask` varchar(2048) NULL COMMENT ''脱敏后的 Key，展示用''',
     'SELECT 1');
 PREPARE s2 FROM @ddl2;
 EXECUTE s2;
