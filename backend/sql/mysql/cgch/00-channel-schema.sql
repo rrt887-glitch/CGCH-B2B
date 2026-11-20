@@ -257,6 +257,24 @@ CREATE TABLE `channel_evolution_proxy` (
   KEY `idx_tenant` (`tenant_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'WhatsApp 扫码接入的出口代理，每个租户一条';
 
+DROP TABLE IF EXISTS `channel_unipile_credential`;
+CREATE TABLE `channel_unipile_credential` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `scope_id` varchar(64) NOT NULL COMMENT 'Unipile 隔离边界（Scope）编号',
+  `api_key` varchar(512) NOT NULL COMMENT '该 Scope 专属的 API Key（加密）',
+  `api_key_mask` varchar(64) NULL COMMENT '脱敏后的 Key，展示用',
+  `status` varchar(16) NOT NULL DEFAULT 'active' COMMENT '状态：active / disabled',
+  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_unipile_scope` (`scope_id`),
+  KEY `idx_unipile_tenant` (`tenant_id`, `deleted`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Unipile 租户凭证（每家公司一条：Scope + 专属 Key）';
+
 DROP TABLE IF EXISTS `channel_credit_ledger`;
 CREATE TABLE `channel_credit_ledger` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
@@ -681,6 +699,7 @@ CREATE TABLE `channel_wa_conversation` (
   `account_id` bigint NULL COMMENT '业务号码编号',
   `platform` varchar(255) NULL COMMENT '平台：whatsapp（默认）、messenger、instagram，与所属账号一致',
   `wa_id` varchar(255) NULL COMMENT '客户编号：WhatsApp 为号码（纯数字，含国家码）；Messenger / Instagram 为平台分配的用户编号（PSID / IGSID）',
+  `provider_chat_id` varchar(128) NULL COMMENT 'Unipile 会话编号（只有 Unipile 接入的号码才有）',
   `profile_name` varchar(255) NULL COMMENT '客户在 WhatsApp 上的昵称',
   `customer_id` bigint NULL COMMENT '关联的 CRM 客户编号',
   `clue_id` bigint NULL COMMENT '关联的 CRM 线索编号（未成为客户的询盘）',

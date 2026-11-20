@@ -92,6 +92,10 @@ public class ChannelWhatsAppService {
     @org.springframework.context.annotation.Lazy
     private cn.iocoder.yudao.module.channel.service.evolution.ChannelEvolutionService evolutionService;
 
+    @Resource
+    @org.springframework.context.annotation.Lazy
+    private cn.iocoder.yudao.module.channel.service.unipile.ChannelUnipileService unipileService;
+
     /** 号码是否扫码接入（接入方式创建后不变，缓存起来供客服窗口判断） */
     private final java.util.Map<Long, Boolean> evolutionAccounts = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -984,6 +988,7 @@ public class ChannelWhatsAppService {
                     : cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(a.getPlatform())
                     ? channelSocialService.reply(a, conv, req.getText())
                     : a.isEvolution() ? evolutionService.sendText(a, conv.getWaId(), req.getText())
+                    : a.isUnipile() ? unipileService.sendText(a, conv.getProviderChatId(), req.getText())
                     : template
                     ? WaGraphClient.sendTemplate(a, conv.getWaId(), req.getTemplateName(),
                             StrUtil.blankToDefault(req.getTemplateLanguage(), "en_US"), req.getTemplateParams())

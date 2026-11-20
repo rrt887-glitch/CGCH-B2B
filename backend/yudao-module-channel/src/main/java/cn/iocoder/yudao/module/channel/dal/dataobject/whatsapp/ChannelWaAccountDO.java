@@ -37,6 +37,8 @@ public class ChannelWaAccountDO extends TenantBaseDO {
      * appSecret 存推送校验令牌，displayPhone 存 E.164 号码，connState 存连接状态
      */
     public static final String AUTH_EVOLUTION = "evolution";
+    /** 扫码接入（Unipile 托管，WhatsApp 关联设备）：phoneNumberId 存 Unipile 的 account_id */
+    public static final String AUTH_UNIPILE = "unipile";
     /** 扫码接入的连接状态：已连接、连接中、已断开（手机上退出了关联设备，需要重新扫码） */
     public static final String CONN_OPEN = "open";
     public static final String CONN_CONNECTING = "connecting";
@@ -133,6 +135,11 @@ public class ChannelWaAccountDO extends TenantBaseDO {
 
     public boolean isEvolution() {
         return AUTH_EVOLUTION.equals(authType);
+    }
+
+    /** 是否 Unipile 托管接入（WhatsApp 关联设备） */
+    public boolean isUnipile() {
+        return AUTH_UNIPILE.equals(authType);
     }
 
     public boolean isWeb() {

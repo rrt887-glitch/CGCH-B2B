@@ -120,6 +120,11 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      */
     private String avatarKey;
 
+    /**
+     * Unipile 的会话编号（chat_id）：只有 Unipile 接入的号码才有，回复时用它
+     */
+    private String providerChatId;
+
     public static final String STATUS_OPEN = "open";
     public static final String STATUS_PENDING = "pending";
     public static final String STATUS_RESOLVED = "resolved";
