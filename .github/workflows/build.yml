@@ -475,8 +475,9 @@ jobs:
           assert urllib.request.urlopen(img['fileUrl']).read() == sample
           ups = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_uploads'))
           assert ups[-1]['fileName'].startswith('sample') and ups[-1]['fileName'].endswith('.png') and ups[-1]['hasWhatsapp'] and ups[-1]['size'] > len(sample), ups
-          # 文件名带随机串，不能是 image-<编号>.png 这种可枚举的名字
-          assert len(ups[-1]['fileName']) >= len('sample.png') + 12, f'文件名应为随机名，实际={ups[-1]["fileName"]}'
+          # 保存到本地的文件名要带随机串，URL 不能是可枚举的 image-<编号>.png
+          import re as _re
+          assert _re.search(r'-[a-z0-9]{16}\.png$', img['fileUrl']), f'附件 URL 应带随机串: {img["fileUrl"]}'
           before = len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_uploads')))
           try:
               upload('/channel/wa/message/send-media', {'conversationId': c['id']}, 'fake.png', b'MZ not really a png', 'image/png')
