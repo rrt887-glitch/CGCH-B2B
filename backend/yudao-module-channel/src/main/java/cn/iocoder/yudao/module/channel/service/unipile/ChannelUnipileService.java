@@ -100,7 +100,8 @@ public class ChannelUnipileService {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("enabled", enabled());
         m.put("scopeId", c == null ? null : c.getScopeId());
-        m.put("apiKeyMask", c == null ? null : c.getApiKeyMask());
+        // 脱敏值每次按实际使用的 Key 现算，不依赖库里的历史值
+        m.put("apiKeyMask", enabled() ? mask(keyOf(c)) : null);
         m.put("status", c == null ? null : c.getStatus());
         return m;
     }
@@ -114,7 +115,7 @@ public class ChannelUnipileService {
         String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();
         String url;
         try {
-            url = UnipileClient.createAuthLink(props, c.getApiKey(), redirect, String.valueOf(tenantId), 15);
+            url = UnipileClient.createAuthLink(props, keyOf(c), redirect, String.valueOf(tenantId), 15);
         } catch (UnipileClient.UnipileException e) {
             // 把 Unipile 的真实原因抛给前端，别只显示「系统异常」
             throw new ServiceException(1_030_015_004, "生成扫码链接失败：" + e.getMessage());
@@ -134,7 +135,7 @@ public class ChannelUnipileService {
         }
         return TenantUtils.execute(tenantId, () -> {
             ChannelUnipileCredentialDO c = credential();
-            JsonNode acc = UnipileClient.getAccount(props, c.getApiKey(), accountId);
+            JsonNode acc = UnipileClient.getAccount(props, keyOf(c), accountId);
             String phone = StrUtil.blankToDefault(acc.path("name").asText(null), acc.path("username").asText(null));
             ChannelWaAccountDO a = accountMapper.selectByPhoneNumberId(accountId);
             if (a == null) {
@@ -281,14 +282,29 @@ public class ChannelUnipileService {
     }
 
     private String tenantKey(Long tenantId) {
-        return TenantUtils.execute(tenantId, () -> credential().getApiKey());
+        return TenantUtils.execute(tenantId, () -> keyOf(credential()));
     }
 
     private static String mask(String key) {
         if (StrUtil.isBlank(key)) {
             return "";
         }
-        // 截断到 250，避免库里字段长度不够导致插入失败
-        return StrUtil.maxLength("pk_****" + StrUtil.subSuf(key, Math.min(4, key.length())), 250);
+        // 只留最后 4 位；注意 subSuf(key, n) 是「从第 n 位截到结尾」，不是「取最后 n 位」
+        String tail = StrUtil.subSuf(key, Math.max(0, key.length() - 4));
+        return StrUtil.maxLength("pk_****" + tail, 250);
+    }
+
+    /**
+     * 实际用来调 Unipile 的 Key。
+     * 单 Key 模式（scopeId=global）直接用配置里的平台 Key，避免数据库里的加密值来回转换出问题。
+     */
+    private String keyOf(ChannelUnipileCredentialDO c) {
+        if (c == null) {
+            return props.getServiceKey();
+        }
+        if ("global".equals(c.getScopeId()) || StrUtil.isBlank(c.getApiKey())) {
+            return props.getServiceKey();
+        }
+        return c.getApiKey();
     }
 }
