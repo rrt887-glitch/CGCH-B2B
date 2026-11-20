@@ -91,9 +91,11 @@ public final class UnipileClient {
         ObjectNode wa = body.putObject("config").putObject("whatsapp");
         wa.putArray("allow_methods").add("qr").add("pairing");
         JsonNode r = call(cfg, tenantKey, "POST", "/v2/auth/link", body);
-        String url = StrUtil.blankToDefault(r.path("url").asText(null), r.path("auth_url").asText(null));
+        // Unipile 返回 {"object":"HostedAuthLink","link":"https://auth.unipile.com/?token=..."}
+        String url = StrUtil.blankToDefault(r.path("link").asText(null),
+                StrUtil.blankToDefault(r.path("url").asText(null), r.path("auth_url").asText(null)));
         if (StrUtil.isBlank(url)) {
-            throw new UnipileException("生成授权链接失败：返回里没有 url");
+            throw new UnipileException("生成授权链接失败：返回里没有 link");
         }
         return url;
     }

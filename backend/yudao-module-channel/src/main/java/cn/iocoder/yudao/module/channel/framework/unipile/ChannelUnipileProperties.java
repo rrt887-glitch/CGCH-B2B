@@ -42,7 +42,10 @@ public class ChannelUnipileProperties {
         return enabled && StrUtil.isNotBlank(dsn) && StrUtil.isNotBlank(serviceKey);
     }
 
-    /** https://{dsn}/api 形式的基础地址（兼容已带协议头或已带 /api 的写法） */
+    /**
+     * 基础地址，例如 https://api.unipile.com。
+     * 注意 Unipile v2 的路径就是 /v2/...，不要再拼 /api（v1 才是 /api/v1）。
+     */
     public String baseUrl() {
         String d = StrUtil.blankToDefault(dsn, "").trim();
         if (d.isEmpty()) {
@@ -54,6 +57,10 @@ public class ChannelUnipileProperties {
         while (d.endsWith("/")) {
             d = d.substring(0, d.length() - 1);
         }
-        return d.endsWith("/api") ? d : d + "/api";
+        // 兼容把控制台里显示的「https://api.unipile.com/v2/」整段贴进来的情况
+        if (d.endsWith("/v2")) {
+            d = d.substring(0, d.length() - 3);
+        }
+        return d;
     }
 }
