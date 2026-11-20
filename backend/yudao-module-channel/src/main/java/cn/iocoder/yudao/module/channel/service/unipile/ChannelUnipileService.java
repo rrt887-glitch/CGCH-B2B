@@ -288,6 +288,7 @@ public class ChannelUnipileService {
         if (StrUtil.isBlank(key)) {
             return "";
         }
-        return "pk_****" + StrUtil.subSuf(key, Math.min(4, key.length()));
+        // 截断到 250，避免库里字段长度不够导致插入失败
+        return StrUtil.maxLength("pk_****" + StrUtil.subSuf(key, Math.min(4, key.length())), 250);
     }
 }
