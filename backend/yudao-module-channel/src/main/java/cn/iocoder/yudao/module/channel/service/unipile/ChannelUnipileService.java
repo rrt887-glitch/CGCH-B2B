@@ -65,14 +65,33 @@ public class ChannelUnipileService {
             return saved;
         }
         Long tenantId = TenantContextHolder.getRequiredTenantId();
-        String scopeId = UnipileClient.createScope(props, "tenant-" + tenantId, String.valueOf(tenantId));
-        String apiKey = UnipileClient.createScopeKey(props, scopeId, "tenant-" + tenantId, props.getKeyExpireDays());
-        ChannelUnipileCredentialDO row = ChannelUnipileCredentialDO.builder()
-                .scopeId(scopeId).apiKey(apiKey).apiKeyMask(mask(apiKey))
-                .status(ChannelUnipileCredentialDO.STATUS_ACTIVE).build();
+        ChannelUnipileCredentialDO row;
+        try {
+            String scopeId = UnipileClient.createScope(props, "tenant-" + tenantId, String.valueOf(tenantId));
+            String apiKey = UnipileClient.createScopeKey(props, scopeId, "tenant-" + tenantId, props.getKeyExpireDays());
+            row = ChannelUnipileCredentialDO.builder()
+                    .scopeId(scopeId).apiKey(apiKey).apiKeyMask(mask(apiKey))
+                    .status(ChannelUnipileCredentialDO.STATUS_ACTIVE).build();
+            log.info("[credential][租户 {} 创建 Unipile Scope {}]", tenantId, scopeId);
+        } catch (UnipileClient.UnipileException e) {
+            if (!denied(e)) {
+                throw e;
+            }
+            // 后台建的是 Account Key（全局），没有建 Scope / 建 Key 的权限：降级为单 Key 模式。
+            // 这时隔离靠应用层：account_id 全局唯一映射租户 + 每次调用校验账号归属（不会串户，但强度弱一层）。
+            log.warn("[credential][租户 {} 无法建 Scope（{}），改用平台全局 Key]", tenantId, e.getMessage());
+            row = ChannelUnipileCredentialDO.builder()
+                    .scopeId("global").apiKey(props.getServiceKey()).apiKeyMask(mask(props.getServiceKey()))
+                    .status(ChannelUnipileCredentialDO.STATUS_ACTIVE).build();
+        }
         credentialMapper.insert(row);
-        log.info("[credential][租户 {} 创建 Unipile Scope {}]", tenantId, scopeId);
         return row;
+    }
+
+    /** 是不是「没有权限建 Scope」这类错误（Account Key 常见） */
+    private static boolean denied(Throwable e) {
+        String m = e.getMessage() == null ? "" : e.getMessage();
+        return m.contains("HTTP 401") || m.contains("HTTP 403");
     }
 
     /** 当前公司凭证的脱敏信息（给前端展示） */
