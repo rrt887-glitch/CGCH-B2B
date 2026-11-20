@@ -474,7 +474,9 @@ jobs:
           assert img['type'] == 'image' and img['textBody'] == 'Sample photo' and img['fileUrl'], img
           assert urllib.request.urlopen(img['fileUrl']).read() == sample
           ups = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_uploads'))
-          assert ups[-1]['fileName'] == 'sample.png' and ups[-1]['hasWhatsapp'] and ups[-1]['size'] > len(sample), ups
+          assert ups[-1]['fileName'].startswith('sample') and ups[-1]['fileName'].endswith('.png') and ups[-1]['hasWhatsapp'] and ups[-1]['size'] > len(sample), ups
+          # 文件名带随机串，不能是 image-<编号>.png 这种可枚举的名字
+          assert len(ups[-1]['fileName']) >= len('sample.png') + 12, f'文件名应为随机名，实际={ups[-1]["fileName"]}'
           before = len(json.load(urllib.request.urlopen('http://127.0.0.1:18080/_uploads')))
           try:
               upload('/channel/wa/message/send-media', {'conversationId': c['id']}, 'fake.png', b'MZ not really a png', 'image/png')
@@ -1698,7 +1700,7 @@ jobs:
           mr = mupload({'conversationId': fc['id'], 'caption': 'Our catalog'}, 'catalog.pdf', pdf, 'application/pdf')
           assert mr['code'] == 0 and mr['data']['type'] == 'document' and mr['data']['fileUrl'], mr
           fsl = json.load(urllib.request.urlopen('http://127.0.0.1:18080/_fbsent'))
-          assert fsl[-2]['multipart'] and fsl[-2]['fileName'] == 'catalog.pdf' and fsl[-2]['size'] == len(pdf), fsl[-2]
+          assert fsl[-2]['multipart'] and fsl[-2]['fileName'].startswith('catalog') and fsl[-2]['fileName'].endswith('.pdf') and fsl[-2]['size'] == len(pdf), fsl[-2]
           assert fsl[-2]['message']['attachment']['type'] == 'file' and fsl[-2]['recipient'] == {'id': '7001'}, fsl[-2]
           assert fsl[-1]['message']['text'] == 'Our catalog', '说明文字应作为单独一条文本发出'
           print('Messenger：发送文件（附件上传 + 说明文字）')

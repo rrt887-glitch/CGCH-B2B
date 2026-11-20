@@ -37,7 +37,22 @@ public class ChannelFileHelper {
 
     /** 保存文件，返回访问地址 */
     public String save(byte[] content, String fileName, String directory, String mimeType) {
-        return fileApi.createFile(content, StrUtil.blankToDefault(fileName, "file"), directory, mimeType);
+        return fileApi.createFile(content, randomize(fileName), directory, mimeType);
+    }
+
+    /**
+     * 文件名加随机串。
+     *
+     * 渠道附件是「公网 URL 直接访问」的（访客 H5、WhatsApp 图片都要能看），
+     * 如果文件名可猜（例如 image-8744.jpg），别人就能顺着编号遍历下载别人的聊天图片。
+     * 这里统一加 16 位随机串，URL 不可猜；原有调用方传的文件名/扩展名保留，方便下载时识别。
+     */
+    static String randomize(String fileName) {
+        String safe = StrUtil.blankToDefault(fileName, "file");
+        int dot = safe.lastIndexOf('.');
+        String base = dot > 0 ? safe.substring(0, dot) : safe;
+        String ext = dot > 0 ? safe.substring(dot) : "";
+        return StrUtil.maxLength(base, 80) + "-" + cn.hutool.core.util.RandomUtil.randomString(16) + StrUtil.maxLength(ext, 10);
     }
 
     /** 读取之前保存的文件内容 */
