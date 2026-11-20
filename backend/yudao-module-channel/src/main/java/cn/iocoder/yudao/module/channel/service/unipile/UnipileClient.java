@@ -17,6 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 
@@ -25,13 +27,16 @@ import java.util.HexFormat;
  *
  * 关键点：
  * 1. 建 Scope / 建 Key / 删账号用平台主 Key；
- * 2. 收发消息、查账号必须用「该租户自己的 Key」，这样 Unipile 侧天然隔离；
- * 3. 发送消息的真实路径是 POST /v2/{account_id}/chats/{chat_id}/messages/send。
+ * 2. 收发消息、查账号用租户自己的 Key（单 Key 模式下就是平台 Key）；
+ * 3. 发送消息的真实路径是 POST /v2/{account_id}/chats/{chat_id}/messages/send；
+ * 4. 时间是毫秒精度的 ISO（Instant.toString() 带纳秒，Unipile 会拒）。
  */
 public final class UnipileClient {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    private static final DateTimeFormatter ISO_MILLIS = DateTimeFormatter
+            .ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC);
 
     private UnipileClient() {
     }
@@ -61,7 +66,7 @@ public final class UnipileClient {
     public static String createScopeKey(ChannelUnipileProperties cfg, String scopeId, String name, int expireDays) {
         ObjectNode body = JSON.createObjectNode();
         body.put("name", StrUtil.maxLength(name, 255));
-        body.put("expires_at", Instant.now().plus(expireDays, ChronoUnit.DAYS).toString());
+        body.put("expires_at", ISO_MILLIS.format(Instant.now().plus(expireDays, ChronoUnit.DAYS)));
         ObjectNode access = body.putObject("access");
         access.put("type", "scope");
         access.put("scope_id", scopeId);
@@ -75,15 +80,12 @@ public final class UnipileClient {
 
     // ==================== 托管授权（扫码） ====================
 
-    /**
-     * 生成托管授权链接。用【租户 Key】调用，账号会直接归属该租户的 Scope。
-     * 前端打开这个地址，客户在里面扫码或输配对码。
-     */
+    /** 生成托管授权链接：前端打开后客户扫码或输配对码 */
     public static String createAuthLink(ChannelUnipileProperties cfg, String tenantKey, String redirectUri,
                                         String state, int expireMinutes) {
         ObjectNode body = JSON.createObjectNode();
         body.put("providers", "whatsapp");
-        body.put("expires_on", Instant.now().plus(expireMinutes, ChronoUnit.MINUTES).toString());
+        body.put("expires_on", ISO_MILLIS.format(Instant.now().plus(expireMinutes, ChronoUnit.MINUTES)));
         body.put("redirect_uri", redirectUri);
         if (StrUtil.isNotBlank(state)) {
             body.put("state", state);
@@ -102,9 +104,9 @@ public final class UnipileClient {
 
     // ==================== 账号 ====================
 
-    /** 查账号（用租户 Key 查，越权会 404） */
+    /** 查账号（越权会 404） */
     public static JsonNode getAccount(ChannelUnipileProperties cfg, String tenantKey, String accountId) {
-        return call(cfg, tenantKey, "GET", "/v2/accounts/" + URLEncoder.encode(accountId, StandardCharsets.UTF_8), null);
+        return call(cfg, tenantKey, "GET", "/v2/accounts/" + enc(accountId), null);
     }
 
     public static JsonNode listAccounts(ChannelUnipileProperties cfg, String tenantKey) {
@@ -112,7 +114,7 @@ public final class UnipileClient {
     }
 
     public static void deleteAccount(ChannelUnipileProperties cfg, String key, String accountId) {
-        call(cfg, key, "DELETE", "/v2/accounts/" + URLEncoder.encode(accountId, StandardCharsets.UTF_8), null);
+        call(cfg, key, "DELETE", "/v2/accounts/" + enc(accountId), null);
     }
 
     // ==================== 消息 ====================
@@ -143,7 +145,6 @@ public final class UnipileClient {
         }
         try {
             String signedPayload = new String(raw, StandardCharsets.UTF_8);
-            String expectHex;
             if (header.contains("v0=") || header.contains("t=")) {
                 String ts = "";
                 String sig = "";
@@ -158,14 +159,16 @@ public final class UnipileClient {
                 if (StrUtil.isBlank(sig)) {
                     return false;
                 }
-                expectHex = hmacHex(secret, ts + "." + signedPayload);
-                return MessageDigest.isEqual(expectHex.getBytes(StandardCharsets.UTF_8), sig.getBytes(StandardCharsets.UTF_8));
+                return same(hmacHex(secret, ts + "." + signedPayload), sig);
             }
-            expectHex = hmacHex(secret, signedPayload);
-            return MessageDigest.isEqual(expectHex.getBytes(StandardCharsets.UTF_8), header.trim().toLowerCase().getBytes(StandardCharsets.UTF_8));
+            return same(hmacHex(secret, signedPayload), header.trim().toLowerCase());
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private static boolean same(String expect, String actual) {
+        return MessageDigest.isEqual(expect.getBytes(StandardCharsets.UTF_8), actual.getBytes(StandardCharsets.UTF_8));
     }
 
     private static String hmacHex(String secret, String content) throws Exception {
@@ -196,13 +199,14 @@ public final class UnipileClient {
                 b.method(method, HttpRequest.BodyPublishers.noBody());
             } else {
                 b.header("content-type", "application/json")
-                        .method(method, HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body), StandardCharsets.UTF_8));
+                        .method(method, HttpRequest.BodyPublishers.ofString(
+                                JSON.writeValueAsString(body), StandardCharsets.UTF_8));
             }
             HttpResponse<String> resp = HTTP.send(b.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             String text = resp.body() == null ? "" : resp.body();
             if (resp.statusCode() >= 300) {
-                throw new UnipileException("Unipile " + method + " " + path + " 失败（HTTP " + resp.statusCode() + "）："
-                        + StrUtil.maxLength(text, 300));
+                throw new UnipileException("Unipile " + method + " " + path + " 失败（HTTP " + resp.statusCode()
+                        + "）：" + StrUtil.maxLength(text, 300));
             }
             return text.isEmpty() ? JSON.createObjectNode() : JSON.readTree(text);
         } catch (UnipileException e) {

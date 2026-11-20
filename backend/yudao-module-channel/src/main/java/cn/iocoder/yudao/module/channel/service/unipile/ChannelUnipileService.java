@@ -112,7 +112,13 @@ public class ChannelUnipileService {
         ChannelUnipileCredentialDO c = credential();
         Long tenantId = TenantContextHolder.getRequiredTenantId();
         String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();
-        String url = UnipileClient.createAuthLink(props, c.getApiKey(), redirect, String.valueOf(tenantId), 15);
+        String url;
+        try {
+            url = UnipileClient.createAuthLink(props, c.getApiKey(), redirect, String.valueOf(tenantId), 15);
+        } catch (UnipileClient.UnipileException e) {
+            // 把 Unipile 的真实原因抛给前端，别只显示「系统异常」
+            throw new ServiceException(1_030_015_004, "生成扫码链接失败：" + e.getMessage());
+        }
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("url", url);
         m.put("scopeId", c.getScopeId());
