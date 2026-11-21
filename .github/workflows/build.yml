@@ -906,6 +906,7 @@ jobs:
               for p in ['channel:wa-message:query', 'channel:wa-message:send', 'crm:customer:create', 'channel:ai:config',
                         'system:user:create', 'system:user:update-password', 'system:permission:assign-user-role']:
                   assert p in pa, f'客户管理员应有 {p}'
+              for p in ['system:tenant:query', 'system:tenant:create', 'system:tenant:visit', 'system:menu:query']:
                   assert p not in pa, f'客户管理员不应有 {p}'
               assert req_x(HA, 'GET', '/system/tenant/console-page?pageNo=1&pageSize=10')['code'] != 0
               assert any(t['name'] == '外贸标准流程' for t in callx(HA, 'GET', '/crm/business-status/type-simple-list')), '新客户有外贸标准商机流程'
