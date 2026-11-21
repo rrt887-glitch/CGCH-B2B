@@ -16,11 +16,14 @@ import { getMetaAuthorize, getMetaAuthorizeStatus } from '#/api/channel/oauth';
 const emit = defineEmits<{ done: []; manual: [] }>();
 const open = defineModel<boolean>('open', { default: false });
 
-/** loading 正在生成二维码；ready 等待扫码；saving 已授权正在接入；expired 二维码过期；error 生成失败 */
+/** loading 正在生成二维码；ready 等待扫码；expired 二维码过期；error 生成失败 */
 const state = ref<'error' | 'expired' | 'loading' | 'ready'>('loading');
 const url = ref('');
-const sid = ref('');
 const error = ref('');
+interface AuthorizationAttempt {
+  polling: boolean;
+}
+let activeAttempt: AuthorizationAttempt | undefined;
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 let expireTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -37,6 +40,7 @@ const tip = computed(() => {
 });
 
 function stop() {
+  activeAttempt = undefined;
   if (pollTimer) clearInterval(pollTimer);
   if (expireTimer) clearTimeout(expireTimer);
   pollTimer = undefined;
@@ -45,31 +49,36 @@ function stop() {
 
 async function refresh() {
   stop();
+  // 关闭或刷新后，已发出的请求可能仍会返回。只接受当前这次授权的结果。
+  const attempt: AuthorizationAttempt = { polling: false };
+  activeAttempt = attempt;
   error.value = '';
   state.value = 'loading';
   try {
     const r = await getMetaAuthorize();
+    if (activeAttempt !== attempt || !open.value) return;
     url.value = r.url;
-    sid.value = r.state;
     state.value = 'ready';
-    pollTimer = setInterval(poll, 2000);
+    pollTimer = setInterval(() => void poll(attempt, r.state), 2000);
     // 授权链接 10 分钟内有效，提前一点提示刷新
     expireTimer = setTimeout(() => {
+      if (activeAttempt !== attempt || !open.value) return;
       stop();
       state.value = 'expired';
     }, 9.5 * 60_000);
   } catch (error_: any) {
+    if (activeAttempt !== attempt || !open.value) return;
     state.value = 'error';
     error.value = error_?.message || '生成二维码失败，请重试';
   }
 }
 
-let polling = false;
-async function poll() {
-  if (polling || !sid.value) return;
-  polling = true;
+async function poll(attempt: AuthorizationAttempt, sid: string) {
+  if (activeAttempt !== attempt || !open.value || attempt.polling || !sid) return;
+  attempt.polling = true;
   try {
-    const r = await getMetaAuthorizeStatus(sid.value);
+    const r = await getMetaAuthorizeStatus(sid);
+    if (activeAttempt !== attempt || !open.value) return;
     if (r.status === 'ok') {
       stop();
       open.value = false;
@@ -86,7 +95,7 @@ async function poll() {
   } catch {
     // 网络抖动时下次再查
   } finally {
-    polling = false;
+    attempt.polling = false;
   }
 }
 
