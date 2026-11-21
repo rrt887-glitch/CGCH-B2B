@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.mybatis.core.type.EncryptTypeHandler;
 import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 
@@ -21,6 +22,9 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChannelUnipileCredentialDO extends TenantBaseDO {
+
+    @TableId
+    private Long id;
 
     /** Scope 编号，形如 scope_xxx */
     private String scopeId;
