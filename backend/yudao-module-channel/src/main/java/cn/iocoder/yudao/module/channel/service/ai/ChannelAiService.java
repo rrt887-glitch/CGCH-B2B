@@ -264,7 +264,6 @@ public class ChannelAiService {
     public void embedQuietly(List<ChannelAiKnowledgeDO> items) {
         ChannelAiConfigDO cfg = getConfig();
         if (items.isEmpty() || !semanticEnabled(cfg) || !channelAiUsageService.hasBalance()) {
-            return;
         }
         try {
             embedKnowledge(cfg, items, currentUserId());
@@ -342,7 +341,6 @@ public class ChannelAiService {
             m.put("semantic", sem != null);
             out.add(m);
             if (out.size() >= 10) {
-                break;
             }
         }
         return out;
@@ -645,7 +643,6 @@ public class ChannelAiService {
     /** 记录咨询意图（只在尚未分类时写入），看板「流量占比」据此统计 */
     private void saveIntent(String channel, Long refId, String intent) {
         if (intent == null || refId == null) {
-            return;
         }
         try {
             if (ChannelAiDraftDO.CHANNEL_MAIL.equals(channel)) {
@@ -664,15 +661,11 @@ public class ChannelAiService {
         }
     }
 
-    private void requireCredit() {
-    }
 
     /** 按本次 token 扣点，并记在回复记录上 */
     private ChannelAiDraftDO charge(ChannelAiDraftDO d, Long userId, String remark) {
         int tokens = (d.getPromptTokens() == null ? 0 : d.getPromptTokens()) + (d.getCompletionTokens() == null ? 0 : d.getCompletionTokens());
         channelAiUsageService.consume(d.getChannel(), d.getId(), userId, tokens, remark);
-        channelAiDraftMapper.updateById(new ChannelAiDraftDO().setId(d.getId()));
-        d;
         if (!ChannelAiDraftDO.REASON_MANUAL.equals(d.getReason())) {
             channelNotifyService.onDraft(d); // 转人工、违禁词、发送失败时提醒业务员
         }
@@ -708,20 +701,16 @@ public class ChannelAiService {
     public void handleMailInbound(Long messageId, boolean afterWait) {
         ChannelAiConfigDO cfg = channelAiConfigMapper.selectCurrent();
         if (cfg == null || ChannelAiConfigDO.MODE_OFF.equals(cfg.getMailMode())) {
-            return;
         }
         ChannelMailMessageDO m = mailService.getMessageInternal(messageId);
         if (m == null || m.getDirection() != ChannelMailMessageDO.DIRECTION_IN || NO_REPLY.matcher(StrUtil.nullToEmpty(m.getFromAddress())).find()) {
-            return;
         }
         ChannelMailAccountDO account = mailService.getAccountInternal(m.getAccountId());
         if (account == null || StrUtil.equalsIgnoreCase(account.getEmail(), m.getFromAddress())) {
-            return;
         }
         Decision wt = workTime(cfg.getMailMode(), afterWait);
         if (Decision.DEFER.equals(wt.action())) {
             defer(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), m.getId(), wt.deferSeconds());
-            return;
         }
         List<LlmClient.Message> history = mailHistory(m);
         Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history, account.getUserId());
@@ -735,7 +724,6 @@ public class ChannelAiService {
         }
         if (reason != null) {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), withFileNote(content, g), g, ChannelAiDraftDO.STATUS_PENDING, reason, g.forbidden()), account.getUserId(), "邮件自动处理");
-            return;
         }
         ChannelMailSendReqVO req = new ChannelMailSendReqVO();
         req.setAccountId(account.getId());
@@ -763,11 +751,9 @@ public class ChannelAiService {
     public void handleWhatsAppInbound(Long conversationId, Long messageId, boolean afterWait) {
         ChannelAiConfigDO cfg = channelAiConfigMapper.selectCurrent();
         if (cfg == null || ChannelAiConfigDO.MODE_OFF.equals(cfg.getWaMode())) {
-            return;
         }
         ChannelWaConversationDO conv = whatsAppService.getConversationInternal(conversationId);
         if (conv == null) {
-            return;
         }
         List<ChannelWaMessageDO> recent = whatsAppService.getRecentMessagesInternal(conversationId, WA_HISTORY);
         Optional<ChannelWaMessageDO> lastIn = recent.stream().filter(x -> x.getDirection() == ChannelWaMessageDO.DIRECTION_IN)
@@ -780,12 +766,10 @@ public class ChannelAiService {
         }
         ChannelWaAccountDO account = whatsAppService.getAccountInternal(conv.getAccountId());
         if (account == null) {
-            return;
         }
         Decision wt = workTime(cfg.getWaMode(), afterWait);
         if (Decision.DEFER.equals(wt.action())) {
             defer(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, messageId, wt.deferSeconds());
-            return;
         }
         ChannelAgentSettings.Opening opening = ChannelAgentSettings.opening(cfg);
         boolean auto = ChannelAiConfigDO.MODE_AUTO.equals(cfg.getWaMode()) && !Decision.DRAFT.equals(wt.action());
@@ -812,7 +796,6 @@ public class ChannelAiService {
             if (auto && g.handoff() && StrUtil.isNotBlank(opening.getFallback()) && whatsAppService.isWindowOpen(conv)) {
                 sendQuietly(account.getUserId(), conversationId, opening.getFallback().trim()); // 兜底话术：告诉客户稍后由同事回复
             }
-            return;
         }
         ChannelWaSendReqVO req = new ChannelWaSendReqVO();
         req.setConversationId(conversationId);
@@ -879,7 +862,6 @@ public class ChannelAiService {
         int sent = 0;
         for (ChannelMailMessageDO c : candidates) {
             if (!seen.add(c.getThreadKey())) {
-                continue;
             }
             try {
                 if (mailFollowUp(cfg, c, hours, rounds)) {
@@ -908,7 +890,6 @@ public class ChannelAiService {
             ChannelMailMessageDO t = thread.get(i);
             if (t.getDirection() == ChannelMailMessageDO.DIRECTION_IN) {
                 lastIn = t;
-                break;
             }
             if (!Boolean.TRUE.equals(t.getAiGenerated())) {
                 return false; // 中间有人工发出的邮件，交给人工
@@ -969,7 +950,6 @@ public class ChannelAiService {
         int sent = 0;
         for (ChannelWaMessageDO c : candidates) {
             if (!seen.add(c.getConversationId())) {
-                continue;
             }
             try {
                 if (waFollowUp(cfg, c.getConversationId(), hours, rounds)) {
@@ -1002,7 +982,6 @@ public class ChannelAiService {
             ChannelWaMessageDO t = recent.get(i);
             if (t.getDirection() == ChannelWaMessageDO.DIRECTION_IN) {
                 hasIn = true;
-                break;
             }
             if (!Boolean.TRUE.equals(t.getAiGenerated())) {
                 return false;
@@ -1041,7 +1020,6 @@ public class ChannelAiService {
     /** 固定开场白附带的企业云盘文件 */
     private void sendOpeningFiles(Long userId, Long conversationId, List<Long> fileIds) {
         if (fileIds == null || fileIds.isEmpty()) {
-            return;
         }
         List<ChannelCloudFileDO> files = channelCloudFileService.getEnterpriseFiles(fileIds.stream().limit(2).toList());
         sendWaFiles(new Generated("", false, null, 0, 0, null, 0, null, null, null, files), userId, conversationId);
@@ -1158,7 +1136,6 @@ public class ChannelAiService {
     static String matchedCondition(ChannelAgentSettings.Handoff h, CrmCustomerDO c) {
         for (ChannelAgentSettings.Condition cond : h.getConditions()) {
             if (!cond.isEnabled() || cond.getField() == null) {
-                continue;
             }
             boolean hit = switch (cond.getField()) {
                 case "level" -> c.getLevel() != null && cond.getValues().contains(c.getLevel());

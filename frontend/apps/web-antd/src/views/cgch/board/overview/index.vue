@@ -7,7 +7,6 @@ import type { EChartsOption, EchartsUIType } from '@vben/plugins/echarts';
 import type { ChannelDashboardApi } from '#/api/channel/dashboard';
 
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import { usePreferences } from '@vben/preferences';
@@ -22,8 +21,6 @@ import { fmtMoney } from '#/views/cgch/v3/crm/components/shared';
 
 defineOptions({ name: 'CgchBoardOverview' });
 
-const router = useRouter();
-// 预留：页面内跳转用（当前页面没有内部跳转，保留以免后续用到时再引入）
 const { isDark } = usePreferences();
 
 // 分类色（固定顺序）：1 蓝、2 橙；深色模式用为深色背景校准过的同色相阶
