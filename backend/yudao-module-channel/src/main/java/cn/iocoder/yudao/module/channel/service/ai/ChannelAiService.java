@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.channel.service.ai;
+﻿package cn.iocoder.yudao.module.channel.service.ai;
 
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
@@ -679,18 +679,6 @@ public class ChannelAiService {
         return d;
     }
 
-    /** 余额不足时不调用大模型，只留一条记录提醒人工处理 */
-    private boolean noCredit(String channel, Long refId) {
-        if (channelAiUsageService.hasBalance()) {
-            return false;
-        }
-        ChannelAiDraftDO exist = channelAiDraftMapper.selectLatestPending(channel, refId);
-        if (exist == null || !ChannelAiDraftDO.REASON_NO_CREDIT.equals(exist.getReason())) {
-            channelAiDraftMapper.insert(ChannelAiDraftDO.builder().channel(channel).refId(refId).content("")
-                    .status(ChannelAiDraftDO.STATUS_PENDING).reason(ChannelAiDraftDO.REASON_NO_CREDIT).build());
-        }
-        return true;
-    }
 
     public ChannelAiDraftDO getPendingDraft(String channel, Long refId) {
         return channelAiDraftMapper.selectLatestPending(channel, refId);
@@ -733,9 +721,6 @@ public class ChannelAiService {
         Decision wt = workTime(cfg.getMailMode(), afterWait);
         if (Decision.DEFER.equals(wt.action())) {
             defer(ChannelAiDraftDO.CHANNEL_MAIL, m.getId(), m.getId(), wt.deferSeconds());
-            return;
-        }
-        if (noCredit(ChannelAiDraftDO.CHANNEL_MAIL, m.getId())) {
             return;
         }
         List<LlmClient.Message> history = mailHistory(m);
@@ -800,9 +785,6 @@ public class ChannelAiService {
         Decision wt = workTime(cfg.getWaMode(), afterWait);
         if (Decision.DEFER.equals(wt.action())) {
             defer(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, messageId, wt.deferSeconds());
-            return;
-        }
-        if (noCredit(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId)) {
             return;
         }
         ChannelAgentSettings.Opening opening = ChannelAgentSettings.opening(cfg);

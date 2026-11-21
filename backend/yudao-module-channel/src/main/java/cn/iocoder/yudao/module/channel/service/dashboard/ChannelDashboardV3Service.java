@@ -243,7 +243,7 @@ public class ChannelDashboardV3Service {
         List<ChannelAiDraftDO> pending = channelAiDraftMapper.selectList(new LambdaQueryWrapperX<ChannelAiDraftDO>()
                 .eq(ChannelAiDraftDO::getStatus, "pending")
                 .in(ChannelAiDraftDO::getReason, List.of(ChannelAiDraftDO.REASON_HANDOFF, ChannelAiDraftDO.REASON_FORBIDDEN,
-                        ChannelAiDraftDO.REASON_SEND_FAILED, ChannelAiDraftDO.REASON_NO_CREDIT, ChannelAiDraftDO.REASON_WINDOW_CLOSED))
+                        ChannelAiDraftDO.REASON_SEND_FAILED, ChannelAiDraftDO.REASON_WINDOW_CLOSED))
                 .orderByDesc(ChannelAiDraftDO::getId).last("LIMIT 200"));
         List<Map<String, Object>> im = new ArrayList<>();
         List<Map<String, Object>> mail = new ArrayList<>();
