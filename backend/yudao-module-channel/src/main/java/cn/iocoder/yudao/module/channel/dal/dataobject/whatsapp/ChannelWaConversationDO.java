@@ -191,6 +191,12 @@ public class ChannelWaConversationDO extends TenantBaseDO {
         if ("tiktok".equals(platform)) {
             return "TikTok 评论";
         }
+        if (ChannelWaAccountDO.PLATFORM_LINKEDIN.equals(platform)) {
+            return "LinkedIn";
+        }
+        if (ChannelWaAccountDO.PLATFORM_TELEGRAM.equals(platform)) {
+            return "Telegram";
+        }
         return ChannelWaAccountDO.PLATFORM_INSTAGRAM.equals(platform) ? "Instagram" : "Facebook Messenger";
     }
 

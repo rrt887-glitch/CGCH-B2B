@@ -41,10 +41,11 @@ public class ChannelUnipileController {
     }
 
     @PostMapping("/connect")
-    @Operation(summary = "生成托管扫码链接")
+    @Operation(summary = "生成托管授权链接（provider：whatsapp / linkedin / instagram / facebook / telegram）")
     @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
-    public CommonResult<Map<String, Object>> connect() {
-        return CommonResult.success(channelUnipileService.connect());
+    public CommonResult<Map<String, Object>> connect(
+            @RequestParam(value = "provider", required = false, defaultValue = "whatsapp") String provider) {
+        return CommonResult.success(channelUnipileService.connect(provider));
     }
 
     @DeleteMapping("/account")
@@ -70,11 +71,12 @@ public class ChannelUnipileController {
             return ResponseEntity.ok("授权失败：" + errorTitle + "，请回到后台重试");
         }
         Long tenantId = parseLong(state);
+        String provider = parseProvider(state);
         try {
-            channelUnipileService.handleCallback(tenantId, null, accountId);
+            channelUnipileService.handleCallback(tenantId, null, provider, accountId);
             return ResponseEntity.ok("连接成功，可以回到后台查看");
         } catch (Exception e) {
-            log.warn("[callback][绑定失败] tenant={} account={} err={}", tenantId, accountId, e.getMessage());
+            log.warn("[callback][绑定失败] tenant={} provider={} account={} err={}", tenantId, provider, accountId, e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("绑定失败：" + e.getMessage());
         }
     }
@@ -92,10 +94,26 @@ public class ChannelUnipileController {
     }
 
     private static Long parseLong(String s) {
+        if (s == null) {
+            return null;
+        }
+        // state 形如 "租户编号:渠道"，兼容只有租户编号的老链接
+        String head = s.contains(":") ? s.substring(0, s.indexOf(':')) : s;
         try {
-            return s == null ? null : Long.valueOf(s.trim());
+            return Long.valueOf(head.trim());
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /** 从 state 里取出渠道；老链接没有渠道时按 WhatsApp 处理 */
+    private static String parseProvider(String s) {
+        if (s != null && s.contains(":")) {
+            String p = s.substring(s.indexOf(':') + 1).trim();
+            if (!p.isEmpty()) {
+                return p;
+            }
+        }
+        return "whatsapp";
     }
 }

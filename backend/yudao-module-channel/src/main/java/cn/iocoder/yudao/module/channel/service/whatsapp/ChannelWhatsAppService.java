@@ -99,6 +99,24 @@ public class ChannelWhatsAppService {
     /** 号码是否扫码接入（接入方式创建后不变，缓存起来供客服窗口判断） */
     private final java.util.Map<Long, Boolean> evolutionAccounts = new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 号码是否 Unipile 托管接入（缓存，供窗口判断与平台推断用） */
+    private final java.util.Map<Long, Boolean> unipileAccounts = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private boolean isUnipileAccount(Long accountId) {
+        if (accountId == null) {
+            return false;
+        }
+        return unipileAccounts.computeIfAbsent(accountId, id -> {
+            ChannelWaAccountDO a = TenantUtils.executeIgnore(() -> accountMapper.selectById(id));
+            return a != null && a.isUnipile();
+        });
+    }
+
+    /** 会话平台：取号码的平台，没填按 WhatsApp 处理 */
+    private static String platformOf(ChannelWaAccountDO a) {
+        return a == null || a.getPlatform() == null ? ChannelWaAccountDO.PLATFORM_WHATSAPP : a.getPlatform();
+    }
+
     private boolean isEvolutionAccount(Long accountId) {
         if (accountId == null) {
             return false;
@@ -711,7 +729,9 @@ public class ChannelWhatsAppService {
         if (StrUtil.isBlank(wamid) || messageMapper.selectByWaMessageId(a.getId(), wamid) != null) {
             return; // Meta 会重试推送，按 wamid 去重
         }
-        String from = waKey(m.path("from").asText());
+        // WhatsApp 的 waId 要归一化成纯数字；LinkedIn / Instagram / Telegram 的会话 id 是字母数字，保持原样
+        String rawFrom = m.path("from").asText();
+        String from = a.isWhatsApp() ? waKey(rawFrom) : StrUtil.trimToEmpty(rawFrom);
         String type = m.path("type").asText("unknown");
         LocalDateTime time = epoch(m.path("timestamp").asLong(0));
         ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
@@ -721,7 +741,7 @@ public class ChannelWhatsAppService {
         fillSender(msg, m);
         ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), from);
         if (conv == null) {
-            conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
+            conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(platformOf(a))
                     .waId(from).profileName(profileName)
                     .customerId(findCustomerId(from)).unreadCount(0).build();
             conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
@@ -813,7 +833,7 @@ public class ChannelWhatsAppService {
         fillSender(msg, m);
         ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), waId);
         if (conv == null) {
-            conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
+            conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(platformOf(a))
                     .waId(waId).profileName(profileName).customerId(findCustomerId(waId)).unreadCount(0).build();
             conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
             conversationMapper.insert(conv);
@@ -963,7 +983,7 @@ public class ChannelWhatsAppService {
             }
             conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), to);
             if (conv == null) {
-                conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
+                conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(platformOf(a))
                         .waId(to).customerId(findCustomerId(to)).unreadCount(0).build();
                 conversationMapper.insert(conv);
             }
@@ -1601,7 +1621,7 @@ public class ChannelWhatsAppService {
 
     private boolean windowOpen(ChannelWaConversationDO c) {
         if (c.isWeb() || cn.iocoder.yudao.module.channel.service.social.ChannelSocialService.isSocial(c.getPlatform())
-                || isEvolutionAccount(c.getAccountId())) {
+                || isEvolutionAccount(c.getAccountId()) || isUnipileAccount(c.getAccountId())) {
             return true; // 官网 IM、视频评论、扫码接入的 WhatsApp 没有客服窗口限制
         }
         return c.getLastInboundTime() != null

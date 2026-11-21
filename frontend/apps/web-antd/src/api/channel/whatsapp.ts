@@ -9,7 +9,9 @@ export namespace ChannelWaApi {
     /** whatsapp（默认）、messenger（Facebook 主页私信）、instagram */
     platform?:
       | 'instagram'
+      | 'linkedin'
       | 'messenger'
+      | 'telegram'
       | 'tiktok'
       | 'web'
       | 'whatsapp'
@@ -45,7 +47,9 @@ export namespace ChannelWaApi {
     id: number;
     platform?:
       | 'instagram'
+      | 'linkedin'
       | 'messenger'
+      | 'telegram'
       | 'tiktok'
       | 'web'
       | 'whatsapp'

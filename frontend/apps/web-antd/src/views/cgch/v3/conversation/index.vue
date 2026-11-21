@@ -113,6 +113,8 @@ const PLATFORM: Record<string, string> = {
   whatsapp: 'WhatsApp',
   messenger: 'Facebook',
   instagram: 'Instagram',
+  linkedin: 'LinkedIn',
+  telegram: 'Telegram',
   web: '官网IM',
   youtube: 'YouTube',
   tiktok: 'TikTok',

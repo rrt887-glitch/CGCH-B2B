@@ -106,44 +106,68 @@ public class ChannelUnipileService {
         return m;
     }
 
-    // ==================== 连接（托管扫码） ====================
+    // ==================== 连接（托管授权） ====================
 
-    /** 生成托管授权链接：前端打开后客户扫码或输配对码 */
-    public Map<String, Object> connect() {
+    /** 支持的渠道（Unipile 的 providers 名称） */
+    public static final java.util.List<String> SUPPORTED_PROVIDERS =
+            java.util.List.of("whatsapp", "linkedin", "instagram", "facebook", "telegram");
+
+    /** Unipile 的 provider → 我们库里的 platform */
+    public static String platformOf(String provider) {
+        String p = StrUtil.blankToDefault(provider, "whatsapp").trim().toLowerCase();
+        return switch (p) {
+            case "linkedin" -> ChannelWaAccountDO.PLATFORM_LINKEDIN;
+            case "instagram" -> ChannelWaAccountDO.PLATFORM_INSTAGRAM;
+            case "facebook", "messenger" -> ChannelWaAccountDO.PLATFORM_MESSENGER;
+            case "telegram" -> ChannelWaAccountDO.PLATFORM_TELEGRAM;
+            default -> ChannelWaAccountDO.PLATFORM_WHATSAPP;
+        };
+    }
+
+    /** 生成托管授权链接：前端打开后客户扫码 / 登录授权 */
+    public Map<String, Object> connect(String provider) {
+        String p = StrUtil.blankToDefault(provider, "whatsapp").trim().toLowerCase();
+        if (!SUPPORTED_PROVIDERS.contains(p)) {
+            throw new ServiceException(1_030_015_005, "不支持的渠道：" + provider);
+        }
         ChannelUnipileCredentialDO c = credential();
         Long tenantId = TenantContextHolder.getRequiredTenantId();
         String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();
+        // state 带上租户和渠道，回调时才知道这个账号该落到哪个客户、哪个平台
+        String state = tenantId + ":" + p;
         String url;
         try {
-            url = UnipileClient.createAuthLink(props, keyOf(c), redirect, String.valueOf(tenantId), 15);
+            url = UnipileClient.createAuthLink(props, keyOf(c), redirect, state, 15, p);
         } catch (UnipileClient.UnipileException e) {
             // 把 Unipile 的真实原因抛给前端，别只显示「系统异常」
-            throw new ServiceException(1_030_015_004, "生成扫码链接失败：" + e.getMessage());
+            throw new ServiceException(1_030_015_004, "生成授权链接失败：" + e.getMessage());
         }
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("url", url);
+        m.put("provider", p);
         m.put("scopeId", c.getScopeId());
         m.put("expiresInMinutes", 15);
         return m;
     }
 
-    /** 扫码完成后的回调：用该租户 Key 校验账号确实属于它，再落库 */
+    /** 授权完成后的回调：用该租户 Key 校验账号确实属于它，再落库 */
     @Transactional(rollbackFor = Exception.class)
-    public ChannelWaAccountDO handleCallback(Long tenantId, Long userId, String accountId) {
+    public ChannelWaAccountDO handleCallback(Long tenantId, Long userId, String provider, String accountId) {
         if (tenantId == null || StrUtil.isBlank(accountId)) {
             throw new ServiceException(1_030_015_000, "回调缺少租户或账号编号");
         }
+        String platform = platformOf(provider);
         return TenantUtils.execute(tenantId, () -> {
             ChannelUnipileCredentialDO c = credential();
             JsonNode acc = UnipileClient.getAccount(props, keyOf(c), accountId);
-            String phone = StrUtil.blankToDefault(acc.path("name").asText(null), acc.path("username").asText(null));
+            String name = StrUtil.blankToDefault(acc.path("name").asText(null), acc.path("username").asText(null));
             ChannelWaAccountDO a = accountMapper.selectByPhoneNumberId(accountId);
             if (a == null) {
                 a = ChannelWaAccountDO.builder()
-                        .platform(ChannelWaAccountDO.PLATFORM_WHATSAPP)
+                        .platform(platform)
                         .authType(ChannelWaAccountDO.AUTH_UNIPILE)
                         .phoneNumberId(accountId)
-                        .displayPhone(phone)
+                        .displayPhone(name)
                         .userId(userId)
                         .enabled(true)
                         .connState(ChannelWaAccountDO.CONN_OPEN)
@@ -151,7 +175,8 @@ public class ChannelUnipileService {
                 accountMapper.insert(a);
             } else {
                 accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId())
-                        .setDisplayPhone(phone).setConnState(ChannelWaAccountDO.CONN_OPEN).setEnabled(true));
+                        .setPlatform(platform).setDisplayPhone(name)
+                        .setConnState(ChannelWaAccountDO.CONN_OPEN).setEnabled(true));
             }
             return a;
         });

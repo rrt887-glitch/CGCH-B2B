@@ -107,6 +107,8 @@ const PLATFORM_LABEL: Record<string, string> = {
   whatsapp: 'WhatsApp',
   messenger: 'Facebook',
   instagram: 'Instagram',
+  linkedin: 'LinkedIn',
+  telegram: 'Telegram',
   web: '官网客服',
   youtube: 'YouTube 评论',
   tiktok: 'TikTok 评论',

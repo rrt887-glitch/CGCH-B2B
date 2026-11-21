@@ -38,6 +38,8 @@ import {
   updateMailAccount,
 } from '#/api/channel/mail';
 import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
+import type { ChannelUnipileApi } from '#/api/channel/unipile';
+import { connectUnipile } from '#/api/channel/unipile';
 import type { SocialPlatform } from '#/api/channel/social';
 import { getSocialPlatforms, pollSocial } from '#/api/channel/social';
 import {
@@ -143,6 +145,7 @@ type Kind =
   | 'meta'
   | 'social'
   | 'soon'
+  | 'unipile'
   | 'wa'
   | 'wa-official';
 interface Channel {
@@ -207,6 +210,22 @@ const CHANNELS: Channel[] = [
     color: '#ff0000',
     kind: 'social',
     platform: 'youtube',
+  },
+  {
+    key: 'linkedin',
+    name: 'LinkedIn',
+    abbr: 'in',
+    color: '#0a66c2',
+    kind: 'unipile',
+    provider: 'linkedin',
+  },
+  {
+    key: 'telegram',
+    name: 'Telegram',
+    abbr: 'TG',
+    color: '#229ed9',
+    kind: 'unipile',
+    provider: 'telegram',
   },
   {
     key: 'messenger',
@@ -398,6 +417,13 @@ function accountsOf(c: Channel): AccountRow[] {
       return waAccounts.value
         .filter((a) => a.platform === c.platform)
         .map(waRow);
+    case 'unipile': {
+      // provider 与平台名的对应（Facebook 在我们的库里叫 messenger）
+      const platform = c.provider === 'facebook' ? 'messenger' : c.provider;
+      return waAccounts.value
+        .filter((a) => a.platform === platform && a.authType === 'unipile')
+        .map(waRow);
+    }
     case 'wa':
       return waAccounts.value
         .filter((a) => wa(a) && a.authType === 'evolution')
@@ -457,10 +483,26 @@ function connect(c: Channel) {
       socialPlatform.value = c.platform as SocialPlatform;
       socialOpen.value = true;
       break;
+    case 'unipile':
+      void connectViaUnipile(c.provider as ChannelUnipileApi.Provider);
+      break;
     case 'im':
       imOpen.value = true;
       if (!webSites.value.length) imRef.value?.add();
       break;
+  }
+}
+
+/** 通过 Unipile 托管页连接其他渠道（LinkedIn / Telegram / Instagram / Facebook） */
+async function connectViaUnipile(provider: ChannelUnipileApi.Provider) {
+  try {
+    const res = await connectUnipile(provider);
+    if (res?.url) {
+      window.open(res.url, '_blank', 'noopener');
+      message.info('已打开授权页面，完成登录后回到本页刷新即可看到账号');
+    }
+  } catch (e) {
+    message.error((e as Error).message || '生成授权链接失败，请检查 Unipile 配置');
   }
 }
 

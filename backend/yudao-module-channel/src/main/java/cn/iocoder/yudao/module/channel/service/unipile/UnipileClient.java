@@ -80,18 +80,30 @@ public final class UnipileClient {
 
     // ==================== 托管授权（扫码） ====================
 
-    /** 生成托管授权链接：前端打开后客户扫码或输配对码 */
+    /**
+     * 生成托管授权链接：前端打开后客户扫码或输配对码 / 登录授权。
+     *
+     * @param provider whatsapp / linkedin / instagram / facebook / telegram
+     */
     public static String createAuthLink(ChannelUnipileProperties cfg, String tenantKey, String redirectUri,
-                                        String state, int expireMinutes) {
+                                        String state, int expireMinutes, String provider) {
         ObjectNode body = JSON.createObjectNode();
-        body.put("providers", "whatsapp");
+        String p = StrUtil.blankToDefault(provider, "whatsapp").trim().toLowerCase();
+        body.put("providers", p);
         body.put("expires_on", ISO_MILLIS.format(Instant.now().plus(expireMinutes, ChronoUnit.MINUTES)));
         body.put("redirect_uri", redirectUri);
         if (StrUtil.isNotBlank(state)) {
             body.put("state", state);
         }
-        ObjectNode wa = body.putObject("config").putObject("whatsapp");
-        wa.putArray("allow_methods").add("qr").add("pairing");
+        ObjectNode config = body.putObject("config");
+        if ("whatsapp".equals(p)) {
+            // WhatsApp 扫码 / 配对码
+            ObjectNode wa = config.putObject("whatsapp");
+            wa.putArray("allow_methods").add("qr").add("pairing");
+        } else {
+            // 其他渠道由 Unipile 托管页决定登录方式（LinkedIn / Instagram / Facebook / Telegram 都是账号密码或 OAuth）
+            config.putObject(p);
+        }
         JsonNode r = call(cfg, tenantKey, "POST", "/v2/auth/link", body);
         // Unipile 返回 {"object":"HostedAuthLink","link":"https://auth.unipile.com/?token=..."}
         String url = StrUtil.blankToDefault(r.path("link").asText(null),
