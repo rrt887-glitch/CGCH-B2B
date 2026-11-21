@@ -70,13 +70,20 @@ public class ChannelUnipileController {
         if (errorTitle != null) {
             return ResponseEntity.ok("授权失败：" + errorTitle + "，请回到后台重试");
         }
-        Long tenantId = parseLong(state);
-        String provider = parseProvider(state);
+        // state 是一次性令牌：换回「哪个租户、哪个成员、哪个渠道」
+        cn.iocoder.yudao.module.channel.dal.dataobject.unipile.ChannelUnipileAuthStateDO authState =
+                channelUnipileService.consumeAuthState(state);
+        if (authState == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("授权已过期或已被使用，请回到后台重新点「接入」");
+        }
         try {
-            channelUnipileService.handleCallback(tenantId, null, provider, accountId);
+            channelUnipileService.handleCallback(authState.getTenantId(), authState.getUserId(),
+                    authState.getProvider(), accountId);
             return ResponseEntity.ok("连接成功，可以回到后台查看");
         } catch (Exception e) {
-            log.warn("[callback][绑定失败] tenant={} provider={} account={} err={}", tenantId, provider, accountId, e.getMessage());
+            log.warn("[callback][绑定失败] tenant={} user={} provider={} account={} err={}",
+                    authState.getTenantId(), authState.getUserId(), authState.getProvider(), accountId, e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("绑定失败：" + e.getMessage());
         }
     }
@@ -91,29 +98,5 @@ public class ChannelUnipileController {
         String sig = signature != null ? signature : signature2;
         return channelUnipileService.handleWebhook(body, sig) ? ResponseEntity.ok("ok")
                 : ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("invalid signature");
-    }
-
-    private static Long parseLong(String s) {
-        if (s == null) {
-            return null;
-        }
-        // state 形如 "租户编号:渠道"，兼容只有租户编号的老链接
-        String head = s.contains(":") ? s.substring(0, s.indexOf(':')) : s;
-        try {
-            return Long.valueOf(head.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    /** 从 state 里取出渠道；老链接没有渠道时按 WhatsApp 处理 */
-    private static String parseProvider(String s) {
-        if (s != null && s.contains(":")) {
-            String p = s.substring(s.indexOf(':') + 1).trim();
-            if (!p.isEmpty()) {
-                return p;
-            }
-        }
-        return "whatsapp";
     }
 }

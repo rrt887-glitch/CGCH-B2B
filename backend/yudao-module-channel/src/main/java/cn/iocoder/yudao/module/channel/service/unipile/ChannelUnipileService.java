@@ -1,12 +1,16 @@
 package cn.iocoder.yudao.module.channel.service.unipile;
 
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.yudao.module.channel.dal.dataobject.unipile.ChannelUnipileAuthStateDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.unipile.ChannelUnipileCredentialDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaAccountDO;
 import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationDO;
+import cn.iocoder.yudao.module.channel.dal.mysql.unipile.ChannelUnipileAuthStateMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.unipile.ChannelUnipileCredentialMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaAccountMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationMapper;
@@ -44,6 +48,8 @@ public class ChannelUnipileService {
     private ChannelUnipileProperties props;
     @Resource
     private ChannelUnipileCredentialMapper credentialMapper;
+    @Resource
+    private ChannelUnipileAuthStateMapper authStateMapper;
     @Resource
     private ChannelWaAccountMapper accountMapper;
     @Resource
@@ -155,9 +161,13 @@ public class ChannelUnipileService {
         }
         ChannelUnipileCredentialDO c = credential();
         Long tenantId = TenantContextHolder.getRequiredTenantId();
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        if (userId == null) {
+            throw new ServiceException(1_030_015_006, "请先登录后再连接渠道");
+        }
         String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();
-        // state 带上租户和渠道，回调时才知道这个账号该落到哪个客户、哪个平台
-        String state = tenantId + ":" + p;
+        // 一次性令牌：回调时用它换回「哪个租户、哪个成员、哪个渠道」，避免伪造 state 把号绑到别人名下
+        String state = createAuthState(tenantId, userId, p);
         String url;
         try {
             url = UnipileClient.createAuthLink(props, keyOf(c), redirect, state, 15, p);
@@ -173,11 +183,46 @@ public class ChannelUnipileService {
         return m;
     }
 
+    /** 生成一次性授权令牌：记录「哪个成员、哪个渠道」，回调时换回来 */
+    private String createAuthState(Long tenantId, Long userId, String provider) {
+        String token = IdUtil.fastSimpleUUID();
+        authStateMapper.insert(ChannelUnipileAuthStateDO.builder()
+                .token(token).tenantId(tenantId).userId(userId).provider(provider)
+                .expireTime(LocalDateTime.now().plusMinutes(15)).used(false).build());
+        return token;
+    }
+
+    /**
+     * 回调时用 token 换回发起信息；无效 / 过期 / 已用返回 null。
+     * 一次性使用：换到就立刻标记已用，防止重放。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ChannelUnipileAuthStateDO consumeAuthState(String token) {
+        if (StrUtil.isBlank(token)) {
+            return null;
+        }
+        ChannelUnipileAuthStateDO state = TenantUtils.executeIgnore(() ->
+                authStateMapper.selectOne(ChannelUnipileAuthStateDO::getToken, token));
+        if (state == null || Boolean.TRUE.equals(state.getUsed())) {
+            return null;
+        }
+        if (state.getExpireTime() == null || state.getExpireTime().isBefore(LocalDateTime.now())) {
+            return null;
+        }
+        TenantUtils.executeIgnore(() -> {
+            authStateMapper.updateById(ChannelUnipileAuthStateDO.builder().id(state.getId()).used(true).build());
+        });
+        return state;
+    }
+
     /** 授权完成后的回调：用该租户 Key 校验账号确实属于它，再落库 */
     @Transactional(rollbackFor = Exception.class)
     public ChannelWaAccountDO handleCallback(Long tenantId, Long userId, String provider, String accountId) {
         if (tenantId == null || StrUtil.isBlank(accountId)) {
             throw new ServiceException(1_030_015_000, "回调缺少租户或账号编号");
+        }
+        if (userId == null) {
+            throw new ServiceException(1_030_015_006, "授权记录缺少发起人，请回到后台重新发起");
         }
         String platform = platformOf(provider);
         return TenantUtils.execute(tenantId, () -> {
