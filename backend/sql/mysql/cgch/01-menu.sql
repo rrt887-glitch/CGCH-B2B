@@ -1,4 +1,4 @@
-﻿-- CGCH 菜单骨架：6 个一级模块 + 占位页面
+-- CGCH 菜单骨架：6 个一级模块 + 占位页面
 -- 在 ruoyi-vue-pro.sql 之后执行；可重复执行（先删除本脚本的 id 段再插入）
 SET NAMES utf8mb4;
 

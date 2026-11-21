@@ -1,4 +1,4 @@
-﻿import type { PageParam, PageResult } from '@vben/request';
+import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';
 
@@ -139,6 +139,7 @@ export const searchKnowledge = (q: string) =>
 
 /** 智能体测试对话：模拟客户提问，查看数字员工的回复（不保存，按 token 扣点） */
 export const testAgentReply = (channel: 'mail' | 'whatsapp', messages: { content: string; role: 'assistant' | 'user' }[]) =>
+  requestClient.post<{ content: string; files?: string[]; forbidden?: string; handoff: boolean; knowledgeHits: number }>(
     '/channel/ai/test-reply',
     { channel, messages },
   );

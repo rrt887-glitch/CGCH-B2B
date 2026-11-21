@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.channel.controller.admin.report;
+﻿package cn.iocoder.yudao.module.channel.controller.admin.report;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
@@ -54,7 +54,6 @@ public class ChannelAiReportController {
         vo.setPeriodEnd(r.getPeriodEnd() == null ? null : r.getPeriodEnd().toString());
         vo.setSummary(r.getSummary());
         vo.setAiGenerated(r.getAiGenerated());
-        vo);
         vo.setGenerateMode(r.getGenerateMode());
         vo.setCreateTime(r.getCreateTime() == null ? null : r.getCreateTime().format(TIME));
         if (withStats && r.getStats() != null) {

@@ -1,4 +1,4 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
 /**
  * 看板 · 数据分析：流量占比、AI 接待表现、商业转化，以及 AI 需要人工支持的事项。
  */

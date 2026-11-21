@@ -1,4 +1,4 @@
-﻿package cn.iocoder.yudao.module.channel.service.ai;
+package cn.iocoder.yudao.module.channel.service.ai;
 
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;

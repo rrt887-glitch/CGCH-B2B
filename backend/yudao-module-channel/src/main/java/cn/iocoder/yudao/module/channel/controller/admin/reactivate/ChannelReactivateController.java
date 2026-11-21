@@ -1,4 +1,4 @@
-﻿package cn.iocoder.yudao.module.channel.controller.admin.reactivate;
+package cn.iocoder.yudao.module.channel.controller.admin.reactivate;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
