@@ -1,4 +1,4 @@
-import type { PageParam, PageResult } from '@vben/request';
+import type { PageParam, PageResult, RequestClientConfig } from '@vben/request';
 
 import { requestClient } from '#/api/request';
 
@@ -72,7 +72,7 @@ export namespace ChannelWaApi {
     remarkName?: string;
     /** WhatsApp 群聊 */
     group?: boolean;
-    /** 群聊是否由 AI 自动回复（默认关闭） */
+    /** WhatsApp 会话是否允许 AI 自动接待（群聊默认关闭，私聊默认允许） */
     aiEnabled?: boolean;
     /** 已公开给团队：本公司全部成员可在「团队会话」里查看 */
     teamPublic?: boolean;
@@ -216,6 +216,10 @@ export const setWaGroupAi = (id: number, enabled: boolean) =>
   requestClient.put(
     `/channel/wa/conversation/group-ai?id=${id}&enabled=${enabled}`,
   );
+export const setWaPrivateAi = (id: number, enabled: boolean) =>
+  requestClient.put<boolean>('/channel/wa/conversation/private-ai', undefined, {
+    params: { id, enabled },
+  });
 /** 公开给团队 / 取消公开（负责人或管理员） */
 export const setWaTeamPublic = (id: number, enabled: boolean) =>
   requestClient.put(
@@ -282,9 +286,15 @@ export const getWaMessages = (conversationId: number, beforeId?: number) =>
   });
 export const sendWaMessage = (data: ChannelWaApi.SendReq) =>
   requestClient.post<ChannelWaApi.Message>('/channel/wa/message/send', data);
-/** 取媒体地址（收到的媒体首次查看时由后端从 Meta 下载） */
-export const getWaMedia = (id: number) =>
-  requestClient.get<ChannelWaApi.Message>(`/channel/wa/message/media?id=${id}`);
+/** 取媒体地址（首次请求时由后端下载并保存收到的媒体） */
+export const getWaMedia = (
+  id: number,
+  options?: Pick<RequestClientConfig, 'showErrorMessage'>,
+) =>
+  requestClient.get<ChannelWaApi.Message>('/channel/wa/message/media', {
+    ...options,
+    params: { id },
+  });
 export const sendWaMedia = (
   conversationId: number,
   file: File,

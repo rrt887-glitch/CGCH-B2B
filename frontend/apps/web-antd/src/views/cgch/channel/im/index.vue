@@ -88,12 +88,15 @@ import {
   sendWaMessage,
   remarkWaConversation,
   setWaGroupAi,
+  setWaPrivateAi,
   setWaTeamPublic,
   starWaConversation,
   templateParamCount,
   transferWaConversation,
   templatePreview,
 } from '#/api/channel/whatsapp';
+
+import MessageImage from './message-image.vue';
 
 defineOptions({ name: 'CgchChannelIm' });
 
@@ -526,24 +529,28 @@ async function changeStage(v: number) {
   message.success(`客户阶段已改为「${stageLabel(v)}」`);
 }
 
-// ===== 群聊的 AI 自动回复开关 =====
-const groupAiSaving = ref(false);
-async function toggleGroupAi(on: boolean) {
+// ===== 会话的 AI 自动回复开关 =====
+const aiSaving = ref(false);
+const aiReplyLabel = computed(() =>
+  current.value?.group ? 'AI 自动回复这个群' : 'AI 自动回复此会话',
+);
+async function toggleConversationAi(on: boolean) {
   const c = current.value;
-  if (!c) return;
-  groupAiSaving.value = true;
+  if (!c || !isWa(c) || readOnly.value || aiSaving.value) return;
+  aiSaving.value = true;
   try {
-    await setWaGroupAi(c.id, on);
-    c.aiEnabled = on;
+    const save = c.group ? setWaGroupAi : setWaPrivateAi;
+    await save(c.id, on);
+    if (current.value?.id === c.id) current.value.aiEnabled = on;
     const row = conversations.value.find((x) => x.id === c.id);
     if (row) row.aiEnabled = on;
     message.success(
       on
-        ? '已开启：AI 会按「AI 接待设置」回复这个群的消息'
-        : '已关闭：AI 不再回复这个群',
+        ? '已开启：AI 会按「AI 接待设置」处理此会话'
+        : '已关闭此会话的 AI 自动回复',
     );
   } finally {
-    groupAiSaving.value = false;
+    aiSaving.value = false;
   }
 }
 
@@ -1413,11 +1420,27 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                     <Switch
                       size="small"
                       :checked="!!current.aiEnabled"
-                      :loading="groupAiSaving"
-                      @change="(v: any) => toggleGroupAi(!!v)"
+                      :disabled="readOnly"
+                      :loading="aiSaving"
+                      :aria-label="aiReplyLabel"
+                      @change="(v) => toggleConversationAi(!!v)"
                     />
                   </span>
                   <Tag v-else>未关联客户</Tag>
+                  <span
+                    v-if="isWa(current) && !current.group"
+                    class="inline-flex items-center gap-1.5 text-xs text-[#6E6E73] xl:hidden"
+                  >
+                    AI 自动回复
+                    <Switch
+                      size="small"
+                      :checked="!!current.aiEnabled"
+                      :disabled="readOnly"
+                      :loading="aiSaving"
+                      :aria-label="aiReplyLabel"
+                      @change="(v) => toggleConversationAi(!!v)"
+                    />
+                  </span>
                   <!-- 窄屏没有右侧客户栏时，阶段和标签在这里改 -->
                   <span
                     v-if="current.customerId && customerStage !== undefined"
@@ -1611,7 +1634,11 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                           : `+${it.m.senderWaId}`)
                       }}
                     </div>
-                    <template v-if="MEDIA_LABEL[it.m.type]">
+                    <MessageImage
+                      v-if="isWa(current) && it.m.type === 'image'"
+                      :message="it.m"
+                    />
+                    <template v-else-if="MEDIA_LABEL[it.m.type]">
                       <a
                         v-if="isImage(it.m)"
                         :href="it.m.fileUrl"
@@ -2017,30 +2044,34 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               }}
             </div>
           </div>
-          <!-- 群聊：AI 自动回复按群手动开启 -->
+          <!-- WhatsApp 私聊和群聊各自设置 AI 自动回复 -->
           <div
-            v-if="current.group"
+            v-if="isWa(current)"
             class="flex flex-col gap-1.5 rounded-[10px] bg-[#F5F5F7] p-3"
           >
             <div
               class="flex items-center justify-between text-[13px] font-semibold text-[#1D1D1F]"
             >
-              AI 自动回复这个群
+              {{ aiReplyLabel }}
               <Switch
                 :checked="!!current.aiEnabled"
                 :disabled="readOnly"
-                :loading="groupAiSaving"
-                @change="(v: any) => toggleGroupAi(!!v)"
+                :loading="aiSaving"
+                :aria-label="aiReplyLabel"
+                @change="(v) => toggleConversationAi(!!v)"
               />
             </div>
-            <div class="text-xs leading-5 text-[#86868B]">
+            <div v-if="current.group" class="text-xs leading-5 text-[#86868B]">
               群聊默认不由 AI 回复。开启后，群里有新消息时 AI 会按「AI
               接待设置」回复（设为「AI
               起草」时只生成草稿）。群聊不会自动建线索。
             </div>
+            <div v-else class="text-xs leading-5 text-[#86868B]">
+              关闭后，此会话交由人工接待。开启后按「AI 接待设置」处理，已建档客户自动回复还需开启「AI 托管」。
+            </div>
           </div>
           <div
-            v-else-if="!current.customerId"
+            v-if="!current.group && !current.customerId"
             class="flex items-center gap-2 text-[13px] text-[#86868B]"
           >
             <span>{{

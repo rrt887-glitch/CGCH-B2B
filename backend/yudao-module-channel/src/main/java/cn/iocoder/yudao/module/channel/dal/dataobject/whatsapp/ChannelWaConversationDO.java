@@ -91,6 +91,10 @@ public class ChannelWaConversationDO extends TenantBaseDO {
      */
     private Boolean aiEnabled;
     /**
+     * WhatsApp 私聊是否允许 AI 自动接待：默认允许，仍按 AI 接待设置处理。
+     */
+    private Boolean privateAiEnabled;
+    /**
      * 公开给团队：开启后本公司全部成员都能在「团队」里看到这个会话（只能看、写内部备注）；负责人或管理员开关
      */
     private Boolean teamPublic;
@@ -98,6 +102,14 @@ public class ChannelWaConversationDO extends TenantBaseDO {
     /** 是否 WhatsApp 群聊（客户编号是「群编号@g.us」） */
     public static boolean isGroup(String waId) {
         return waId != null && waId.endsWith("@g.us");
+    }
+
+    /** 会话是否允许 AI 自动接待。这里仅判断会话开关，全局接待和转人工规则由 AI 服务继续检查。 */
+    public boolean allowsAiReply() {
+        if (isGroup(waId)) {
+            return Boolean.TRUE.equals(aiEnabled);
+        }
+        return !isWhatsApp() || !Boolean.FALSE.equals(privateAiEnabled);
     }
     /**
      * 会话状态：open 进行中（为空也算进行中）、pending 待处理、resolved 已解决；客户再来消息时自动回到进行中

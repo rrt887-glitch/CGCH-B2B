@@ -1279,10 +1279,23 @@ public class ChannelWhatsAppService {
     public void setGroupAiEnabled(Long userId, Long id, boolean enabled) {
         ChannelWaConversationDO c = validateConversation(userId, id);
         if (!ChannelWaConversationDO.isGroup(c.getWaId())) {
-            throw exception(AI_LLM_FAIL, "只有群聊需要单独开启 AI 回复，私聊按 AI 接待设置自动回复");
+            throw exception(AI_LLM_FAIL, "此会话不是 WhatsApp 群聊");
         }
         conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setAiEnabled(enabled));
         logActivity(id, userId, enabled ? "开启了这个群的 AI 自动回复" : "关闭了这个群的 AI 自动回复");
+    }
+
+    public void setPrivateAiEnabled(Long userId, Long id, boolean enabled) {
+        ChannelWaConversationDO c = validateConversation(userId, id);
+        if (!c.isWhatsApp() || ChannelWaConversationDO.isGroup(c.getWaId())) {
+            throw exception(AI_LLM_FAIL, "此会话不是 WhatsApp 私聊");
+        }
+        if (c.allowsAiReply() == enabled) {
+            return;
+        }
+        conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setPrivateAiEnabled(enabled));
+        logActivity(id, userId, userName(userId) + (enabled ? " 开启了此会话的 AI 自动回复" : " 关闭了此会话的 AI 自动回复"));
+        channelRealtimeService.conversationChanged(id, null, "private-ai");
     }
 
     public void starConversation(Long userId, Long id, boolean starred) {
@@ -1555,7 +1568,7 @@ public class ChannelWhatsAppService {
                 }));
             }
             vo.setGroup(ChannelWaConversationDO.isGroup(c.getWaId()));
-            vo.setAiEnabled(Boolean.TRUE.equals(c.getAiEnabled()));
+            vo.setAiEnabled(c.isWhatsApp() ? c.allowsAiReply() : Boolean.TRUE.equals(c.getAiEnabled()));
             vo.setWindowOpen(windowOpen(c));
             vo.setWindowExpireTime(c.getLastInboundTime() == null || c.isWeb() ? null : c.getLastInboundTime().plusHours(WINDOW_HOURS));
             return vo;
@@ -1656,6 +1669,10 @@ public class ChannelWhatsAppService {
         }
         if (StrUtil.isBlank(target.getAvatarUrl()) && StrUtil.isNotBlank(lid.getAvatarUrl())) {
             upd.setAvatarUrl(lid.getAvatarUrl()).setAvatarKey(lid.getAvatarKey()).setAvatarTime(lid.getAvatarTime());
+        }
+        // 隐藏号码会话已由人工接手时，合并后也继续暂停 AI。
+        if (Boolean.FALSE.equals(lid.getPrivateAiEnabled())) {
+            upd.setPrivateAiEnabled(false);
         }
         conversationMapper.updateById(upd);
         conversationMapper.deleteById(lid.getId());

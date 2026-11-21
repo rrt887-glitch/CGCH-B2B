@@ -38,7 +38,7 @@ public class ChannelWaConversationRespVO {
     private String remarkName;
     @Schema(description = "是否 WhatsApp 群聊")
     private Boolean group;
-    @Schema(description = "群聊是否由 AI 自动回复（群聊默认关闭）")
+    @Schema(description = "WhatsApp 会话是否允许 AI 自动接待（群聊默认关闭，私聊默认允许）")
     private Boolean aiEnabled;
     @Schema(description = "是否已公开给团队（本公司全部成员可见）")
     private Boolean teamPublic;

@@ -757,7 +757,7 @@ public class ChannelAiService {
             return;
         }
         ChannelWaConversationDO conv = whatsAppService.getConversationInternal(conversationId);
-        if (conv == null) {
+        if (conv == null || !conv.allowsAiReply()) {
             return;
         }
         List<ChannelWaMessageDO> recent = whatsAppService.getRecentMessagesInternal(conversationId, WA_HISTORY);
@@ -788,6 +788,9 @@ public class ChannelAiService {
         }
         List<LlmClient.Message> history = waHistory(conversationId);
         Generated g = generate(withWorkTime(cfg, wt), ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history, conv.handlerUserId(account));
+        if (!allowsWhatsAppAiReply(conversationId)) {
+            return; // 生成回复期间会话可能已切换为人工接待
+        }
         String reason = blockReason(cfg.getWaMode(), g, conv.getCustomerId(),
                 humanRepliedRecently(recent.stream()
                         .filter(t -> t.getDirection() == ChannelWaMessageDO.DIRECTION_OUT && !Boolean.TRUE.equals(t.getAiGenerated()))
@@ -975,7 +978,7 @@ public class ChannelAiService {
 
     private boolean waFollowUp(ChannelAiConfigDO cfg, Long conversationId, int hours, int rounds) {
         ChannelWaConversationDO conv = whatsAppService.getConversationInternal(conversationId);
-        if (conv == null || !whatsAppService.isWindowOpen(conv)) {
+        if (conv == null || !conv.allowsAiReply() || !whatsAppService.isWindowOpen(conv)) {
             return false;
         }
         List<ChannelWaMessageDO> recent = whatsAppService.getRecentMessagesInternal(conversationId, WA_HISTORY);
@@ -1012,6 +1015,9 @@ public class ChannelAiService {
         long since = java.time.Duration.between(last.getMessageTime(), LocalDateTime.now()).toHours();
         history.add(LlmClient.Message.user(followUpPrompt(round, since, ChannelAiDraftDO.CHANNEL_WHATSAPP)));
         Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(waHistory(conversationId)), history, conv.handlerUserId(account));
+        if (!allowsWhatsAppAiReply(conversationId)) {
+            return false;
+        }
         String reason = blockReason(ChannelAiConfigDO.MODE_AUTO, g, conv.getCustomerId(), false);
         if (reason != null || StrUtil.isBlank(g.content())) {
             charge(saveDraft(ChannelAiDraftDO.CHANNEL_WHATSAPP, conversationId, g.content(), g, ChannelAiDraftDO.STATUS_DISCARDED,
@@ -1099,6 +1105,9 @@ public class ChannelAiService {
             handleMailInbound(m.getId(), true);
             return ChannelAiDeferredDO.STATUS_AI_HANDLED;
         }
+        if (!allowsWhatsAppAiReply(d.getRefId())) {
+            return ChannelAiDeferredDO.STATUS_SUPERSEDED;
+        }
         List<ChannelWaMessageDO> recent = whatsAppService.getRecentMessagesInternal(d.getRefId(), WA_HISTORY);
         Optional<ChannelWaMessageDO> lastIn = recent.stream().filter(x -> x.getDirection() == ChannelWaMessageDO.DIRECTION_IN)
                 .reduce((a, b) -> b);
@@ -1110,6 +1119,11 @@ public class ChannelAiService {
         }
         handleWhatsAppInbound(d.getRefId(), d.getMessageId(), true);
         return ChannelAiDeferredDO.STATUS_AI_HANDLED;
+    }
+
+    private boolean allowsWhatsAppAiReply(Long conversationId) {
+        ChannelWaConversationDO current = whatsAppService.getConversationInternal(conversationId);
+        return current != null && current.allowsAiReply();
     }
 
     /** 不能自动发出的原因；返回 null 表示可以发 */

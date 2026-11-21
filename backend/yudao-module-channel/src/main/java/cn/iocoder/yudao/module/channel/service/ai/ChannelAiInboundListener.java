@@ -76,7 +76,7 @@ public class ChannelAiInboundListener {
                         cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationDO conv =
                                 waConversationMapper.selectById(e.refId());
                         if (conv != null && cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaConversationDO.isGroup(conv.getWaId())) {
-                            if (Boolean.TRUE.equals(conv.getAiEnabled())) {
+                            if (conv.allowsAiReply()) {
                                 aiService.handleWhatsAppInbound(e.refId(), e.messageId());
                             }
                             return;

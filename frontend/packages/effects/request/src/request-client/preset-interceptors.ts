@@ -114,7 +114,7 @@ export const errorMessageResponseInterceptor = (
 ): ResponseInterceptorConfig => {
   return {
     rejected: (error: any) => {
-      if (axios.isCancel(error)) {
+      if (axios.isCancel(error) || error?.config?.showErrorMessage === false) {
         return Promise.reject(error);
       }
 
