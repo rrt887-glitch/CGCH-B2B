@@ -16,7 +16,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailMessageMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationMapper;
 import cn.iocoder.yudao.module.channel.service.ai.ChannelAiService;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import cn.iocoder.yudao.module.channel.service.dashboard.ChannelDashboardService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -50,7 +50,7 @@ public class ChannelAiReportService {
             Map.entry("window_closed", "WhatsApp 窗口已关闭"),
             Map.entry("send_failed", "发送失败"),
             Map.entry("manual", "手动起草"),
-            Map.entry("no_credit", "智点不足"),
+            Map.entry("no_credit", "AI 用量不足"),
             Map.entry("work_hours", "工作时间由业务员发送"),
             Map.entry("off_hours", "非工作时间只起草"));
 
@@ -67,7 +67,7 @@ public class ChannelAiReportService {
     @Resource
     private ChannelAiService channelAiService;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
 
     /** 报告覆盖的日期区间：日报为当天；周报为该日期所在的周一到周日 */
     public static LocalDate[] period(String type, LocalDate date) {
@@ -109,19 +109,19 @@ public class ChannelAiReportService {
         }
         ChannelAiReportDO r = ChannelAiReportDO.builder().periodType(type).periodStart(p[0]).periodEnd(p[1])
                 .stats(JsonUtils.toJsonString(stats)).summary(templateSummary(type, p, cur, prev, pending, handoffs, gaps))
-                .aiGenerated(false).credits(0L).generateMode(mode).userId(userId).build();
+                .aiGenerated(false).generateMode(mode).userId(userId).build();
         channelAiReportMapper.insert(r);
 
         ChannelAiConfigDO cfg = channelAiService.getConfig();
-        if (StrUtil.isAllNotBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel()) && channelCreditService.hasBalance()) {
+        if (StrUtil.isAllNotBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel()) && channelAiUsageService.hasBalance()) {
             try {
                 LlmClient.Result res = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(), List.of(
                         LlmClient.Message.system(llmSystem(cfg)),
                         LlmClient.Message.user(llmUser(type, p, cur, prev, pending, handoffs, gaps))), 0.3);
-                long credits = channelCreditService.consume("report", r.getId(), userId,
+                channelAiUsageService.consume("report", r.getId(), userId,
                         res.promptTokens() + res.completionTokens(), "AI 工作报告");
                 channelAiReportMapper.updateById(new ChannelAiReportDO().setId(r.getId())
-                        .setSummary(res.content()).setAiGenerated(true).setCredits(credits));
+                        .setSummary(res.content()).setAiGenerated(true));
             } catch (Exception e) {
                 log.warn("[generate][报告({}) 大模型总结失败，保留模板总结] {}", r.getId(), e.getMessage());
             }
@@ -206,7 +206,7 @@ public class ChannelAiReportService {
         return Math.round(v * 1000) / 10.0 + "%";
     }
 
-    /** 没有配置大模型或智点不足时使用的模板总结 */
+    /** 没有配置大模型或AI 用量不足时使用的模板总结 */
     static String templateSummary(String type, LocalDate[] p, Totals c, Totals prev, Map<String, Long> pending,
                                   List<Map<String, Object>> handoffs, List<Map<String, Object>> gaps) {
         StringBuilder sb = new StringBuilder();
@@ -216,7 +216,7 @@ public class ChannelAiReportService {
                 .append(pct(c.getReplyRate())).append("，AI 发出消息占 ").append(pct(c.getAiShare())).append("。\n");
         sb.append("【AI 处理】生成回复 ").append(c.getAiDrafts()).append(" 份，已发出 ").append(c.getAiSent())
                 .append("，待人工确认 ").append(c.getAiPending()).append("，转人工 ").append(c.getAiHandoff())
-                .append("；AI 用量（千 token）").append(c.getCreditsConsumed()).append("。\n");
+                .append("。\n");
         if (!pending.isEmpty()) {
             sb.append("【待确认原因】");
             pending.forEach((k, v) -> sb.append(REASON.getOrDefault(k, k)).append(" ").append(v).append("；"));

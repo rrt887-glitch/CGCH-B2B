@@ -59,9 +59,8 @@ public class ChannelResearchDO extends TenantBaseDO {
      */
     private String reasonDetail;
     /**
-     * 消耗的智点
+     * AI 用量
      */
-    private Long credits;
     /**
      * 发起人
      */

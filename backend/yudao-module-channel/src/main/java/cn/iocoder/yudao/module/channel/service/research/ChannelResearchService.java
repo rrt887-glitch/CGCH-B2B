@@ -21,7 +21,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaMessageMapper
 import cn.iocoder.yudao.module.channel.service.ai.ChannelAiService;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
 import cn.iocoder.yudao.module.channel.service.ai.WebSearchClient;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import cn.iocoder.yudao.module.channel.service.lead.LeadInference;
 import cn.iocoder.yudao.module.channel.service.mail.HtmlText;
 import cn.iocoder.yudao.module.crm.dal.dataobject.clue.CrmClueDO;
@@ -85,7 +85,7 @@ public class ChannelResearchService {
     @Resource
     private ChannelAiService channelAiService;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
 
     /** 允许访问的内网主机，逗号分隔（仅自动化测试使用，生产请保持为空） */
     @Value("${cgch.research.allowed-private-hosts:}")
@@ -135,7 +135,7 @@ public class ChannelResearchService {
                 customer != null ? StrUtil.blankToDefault(customer.getCompanyName(), customer.getName())
                         : clue != null ? StrUtil.blankToDefault(clue.getCompanyName(), clue.getName()) : null);
         ChannelResearchDO r = ChannelResearchDO.builder().companyName(StrUtil.maxLength(name, 200)).website(site)
-                .customerId(customerId).clueId(clueId).status(ChannelResearchDO.STATUS_RUNNING).credits(0L).userId(userId).build();
+                .customerId(customerId).clueId(clueId).status(ChannelResearchDO.STATUS_RUNNING).userId(userId).build();
         channelResearchMapper.insert(r);
         Long tenantId = TenantContextHolder.getTenantId();
         executor.submit(() -> {
@@ -172,7 +172,7 @@ public class ChannelResearchService {
         }
         ChannelResearchDO r = ChannelResearchDO.builder()
                 .companyName(StrUtil.maxLength(StrUtil.blankToDefault(c.getCompanyName(), c.getName()), 200)).website(site)
-                .customerId(customerId).status(ChannelResearchDO.STATUS_RUNNING).credits(0L).userId(userId).build();
+                .customerId(customerId).status(ChannelResearchDO.STATUS_RUNNING).userId(userId).build();
         channelResearchMapper.insert(r);
         try {
             run(r.getId());
@@ -205,8 +205,8 @@ public class ChannelResearchService {
             fail(id, "请先在数字员工设置中配置大模型");
             return;
         }
-        if (!channelCreditService.hasBalance()) {
-            fail(id, "智点余额不足");
+        if (!channelAiUsageService.hasBalance()) {
+            fail(id, "AI 用量余额不足");
             return;
         }
         // 1. 官网公开页面
@@ -240,7 +240,7 @@ public class ChannelResearchService {
             LlmClient.Result res = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(), List.of(
                     LlmClient.Message.system(systemPrompt()), LlmClient.Message.user(userPrompt(r, pages, history, hits, siteNote))), 0.2);
             JsonNode report = parseReport(res.content());
-            long credits = channelCreditService.consume("research", id, r.getUserId(), res.promptTokens() + res.completionTokens(), "深度背调");
+            channelAiUsageService.consume("research", id, r.getUserId(), res.promptTokens() + res.completionTokens(), "深度背调");
             List<Map<String, String>> sources = new ArrayList<>();
             pages.forEach(p -> sources.add(Map.of("url", p.url(), "title", StrUtil.nullToEmpty(p.title()),
                     "snippet", StrUtil.maxLength(p.text(), SNIPPET), "type", "website")));
@@ -249,7 +249,7 @@ public class ChannelResearchService {
                     "snippet", StrUtil.maxLength(h.content(), SNIPPET), "type", "search")));
             String name = StrUtil.blankToDefault(report.path("companyName").asText(null), r.getCompanyName());
             channelResearchMapper.updateById(new ChannelResearchDO().setId(id).setStatus(ChannelResearchDO.STATUS_DONE)
-                    .setReport(report.toString()).setSources(JsonUtils.toJsonString(sources)).setCredits(credits)
+                    .setReport(report.toString()).setSources(JsonUtils.toJsonString(sources))
                     .setCompanyName(StrUtil.maxLength(name, 200)).setReasonDetail(StrUtil.nullToEmpty(siteNote)));
         } catch (Exception e) {
             fail(id, "AI 整理失败：" + e.getMessage());

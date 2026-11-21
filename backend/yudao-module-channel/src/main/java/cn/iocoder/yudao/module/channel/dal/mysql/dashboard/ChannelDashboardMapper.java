@@ -66,13 +66,6 @@ public interface ChannelDashboardMapper {
     List<Map<String, Object>> waDrafts(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
                                        @Param("accountIds") Collection<Long> accountIds);
 
-    @Select("<script>SELECT DATE_FORMAT(create_time, '%Y-%m-%d') AS d, -SUM(amount) AS n FROM channel_credit_ledger "
-            + "WHERE deleted = 0 AND type = 'consume' AND create_time &gt;= #{start} AND create_time &lt; #{end}"
-            + "<if test='userIds != null'> AND user_id IN "
-            + "<foreach collection='userIds' item='x' open='(' separator=',' close=')'>#{x}</foreach></if> GROUP BY d</script>")
-    List<Map<String, Object>> credits(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
-                                      @Param("userIds") Collection<Long> userIds);
-
     @Select("<script>SELECT source AS s, COUNT(*) AS n, SUM(transform_status = 1) AS converted FROM crm_clue "
             + "WHERE deleted = 0 AND create_time &gt;= #{start} AND create_time &lt; #{end}"
             + "<if test='userIds != null'> AND owner_user_id IN "

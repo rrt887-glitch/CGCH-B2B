@@ -19,7 +19,6 @@ public class ChannelAiReportRespVO {
     private String summary;
     @Schema(description = "总结是否由大模型撰写")
     private Boolean aiGenerated;
-    private Long credits;
     @Schema(description = "auto 定时、manual 手动")
     private String generateMode;
     @Schema(description = "生成时间 yyyy-MM-dd HH:mm")

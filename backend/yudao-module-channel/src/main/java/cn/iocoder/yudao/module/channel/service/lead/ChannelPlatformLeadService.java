@@ -11,7 +11,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.lead.ChannelLeadRuleMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailAccountMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailMessageMapper;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import cn.iocoder.yudao.module.channel.service.mail.HtmlText;
 import cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService;
 import cn.iocoder.yudao.module.crm.dal.dataobject.clue.CrmClueDO;
@@ -104,7 +104,7 @@ public class ChannelPlatformLeadService {
     @Resource
     private ChannelAiConfigMapper channelAiConfigMapper;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
     @Resource
     private CrmClueMapper crmClueMapper;
     @Resource
@@ -219,7 +219,7 @@ public class ChannelPlatformLeadService {
     }
 
     private Lead llm(ChannelAiConfigDO cfg, String text, Long messageId, Long userId) {
-        if (cfg == null || StrUtil.hasBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel()) || !channelCreditService.hasBalance()) {
+        if (cfg == null || StrUtil.hasBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel()) || !channelAiUsageService.hasBalance()) {
             return null;
         }
         String system = "这是一封 B2B 平台或网站表单发来的询盘通知邮件，请提取买家信息。只输出一个 JSON 对象，字段："
@@ -229,7 +229,7 @@ public class ChannelPlatformLeadService {
         try {
             LlmClient.Result r = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(),
                     List.of(LlmClient.Message.system(system), LlmClient.Message.user(StrUtil.maxLength(text, 5000))), 0);
-            channelCreditService.consume("mail", messageId, userId, r.promptTokens() + r.completionTokens(), "平台询盘解析");
+            channelAiUsageService.consume("mail", messageId, userId, r.promptTokens() + r.completionTokens(), "平台询盘解析");
             Matcher mt = JSON_BLOCK.matcher(r.content());
             if (!mt.find()) {
                 return null;

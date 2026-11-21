@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.channel.controller.admin.assistant;
+﻿package cn.iocoder.yudao.module.channel.controller.admin.assistant;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
@@ -64,7 +64,6 @@ public class ChannelAssistantController {
             x.put("role", m.getRole());
             x.put("content", m.getContent());
             x.put("steps", m.getSteps() == null ? List.of() : JsonUtils.parseArray(m.getSteps(), Map.class));
-            x.put("credits", m.getCredits());
             x.put("createTime", m.getCreateTime() == null ? null : m.getCreateTime().format(TIME));
             return x;
         }).toList());

@@ -1,9 +1,9 @@
--- =====================================================================================================
+﻿-- =====================================================================================================
 -- 把 1 号租户（平台）里的业务数据搬到一家新客户（例如 HIG），让 1 号租户只留给平台运营。
 -- 这是手动执行的一次性脚本，不在 migrations/ 里，不会被安装脚本自动执行。
 --
 -- 会搬的：所有带 tenant_id 的 channel_* 和 crm_* 表里属于 1 号租户的数据（会话、消息、渠道账号、AI 设置、知识库、
---        草稿、智点、CRM 客户 / 线索 / 商机 / 合同 / 跟进……），以及指定的员工账号。
+--        草稿、AI 用量、CRM 客户 / 线索 / 商机 / 合同 / 跟进……），以及指定的员工账号。
 -- 不会搬的：平台管理员 admin（编号 1）、系统配置、菜单、字典、文件存储配置、支付配置。
 --
 -- 执行步骤（务必按顺序）：
@@ -87,8 +87,6 @@ BEGIN
   DELETE FROM crm_business_status WHERE tenant_id = @new_tenant_id;
   DELETE FROM crm_business_status_type WHERE tenant_id = @new_tenant_id;
   DELETE FROM crm_customer_pool_config WHERE tenant_id = @new_tenant_id;
-  DELETE FROM channel_credit_ledger WHERE tenant_id = @new_tenant_id;
-  DELETE FROM channel_credit_account WHERE tenant_id = @new_tenant_id;
   DELETE FROM channel_ai_config WHERE tenant_id = @new_tenant_id;
 
   -- 2. 业务表：tenant_id 1 → 新客户

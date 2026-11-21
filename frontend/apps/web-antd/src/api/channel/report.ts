@@ -30,7 +30,6 @@ export namespace ChannelReportApi {
     periodEnd: string;
     summary: string;
     aiGenerated: boolean;
-    credits: number;
     generateMode: 'auto' | 'manual';
     createTime: string;
     stats?: Stats;

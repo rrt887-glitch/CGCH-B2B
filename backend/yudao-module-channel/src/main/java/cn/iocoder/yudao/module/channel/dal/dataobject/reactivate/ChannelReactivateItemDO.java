@@ -84,9 +84,8 @@ public class ChannelReactivateItemDO extends TenantBaseDO {
      */
     private String reasonDetail;
     /**
-     * 生成消耗的智点
+     * 生成AI 用量
      */
-    private Long credits;
     /**
      * 发送时间
      */

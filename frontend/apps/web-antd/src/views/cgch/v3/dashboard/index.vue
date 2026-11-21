@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 /**
  * 看板 · 数据分析：流量占比、AI 接待表现、商业转化，以及 AI 需要人工支持的事项。
  */
@@ -184,7 +184,6 @@ const REASON_TEXT: Record<string, string> = {
   handoff: '转人工',
   forbidden: '回复含违禁内容',
   send_failed: '自动发送失败',
-  no_credit: '智点不足',
   window_closed: '超过 24 小时窗口',
 };
 function openItem(i: ChannelDashboardV3Api.SupportItem) {

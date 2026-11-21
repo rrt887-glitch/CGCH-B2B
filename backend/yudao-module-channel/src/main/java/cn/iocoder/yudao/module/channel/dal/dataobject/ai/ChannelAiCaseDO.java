@@ -75,9 +75,8 @@ public class ChannelAiCaseDO extends TenantBaseDO {
      */
     private String source;
     /**
-     * 生成消耗的智点
+     * 生成AI 用量
      */
-    private Long credits;
     /**
      * 创建人
      */

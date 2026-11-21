@@ -1,13 +1,13 @@
 # 草根出海 · 跨境 B2B AI 数字员工平台
 
-WhatsApp、Facebook、Instagram、邮箱、官网在线客服等多渠道询盘由 AI 数字员工自动接待，客户与对话沉淀到 CRM（线索、客户、商机、订单），按「智点」计费。
+WhatsApp、Facebook、Instagram、邮箱、官网在线客服等多渠道询盘由 AI 数字员工自动接待，客户与对话沉淀到 CRM（线索、客户、商机、订单）。AI 使用客户自己配置的大模型 API Key，费用由客户直接结算给模型厂商。
 
 ## 目录结构
 
 | 目录 | 说明 |
 | --- | --- |
 | `backend/` | Java 17 + Spring Boot 3 后端，基于开源 ruoyi-vue-pro（MIT），保留 system、infra、bpm、crm、pay、ai 模块 |
-| `backend/yudao-module-channel/` | 草根出海自研模块：渠道接入（WhatsApp 官方 API / 扫码、Messenger、Instagram、邮箱、官网 IM）、AI 接待、CRMClaw、看板、智点计费 |
+| `backend/yudao-module-channel/` | 草根出海自研模块：渠道接入（WhatsApp 官方 API / 扫码、Messenger、Instagram、邮箱、官网 IM）、AI 接待、CRMClaw、看板 |
 | `backend/sql/mysql/` | 建表与初始化脚本；`cgch/migrations/` 是已有数据库的升级脚本 |
 | `frontend/` | Vue 3 + Vite 8 + Ant Design Vue 前端，基于开源 yudao-ui-admin-vben（MIT），只保留 `apps/web-antd` |
 | `frontend/apps/web-antd/src/views/cgch/` | 草根出海的页面（`v3/` 是看板、会话、CRM、智能体、渠道、设置六个主入口） |
@@ -73,7 +73,7 @@ WhatsApp、Facebook、Instagram、邮箱、官网在线客服等多渠道询盘�
 1. **设置 → AI 接待设置**：填写大模型（服务商、API Key、模型名），选择自动回复模式。不配置大模型时 AI 接待和 CRMClaw 查询都不能用，页面会提示。
 2. **智能体**：企业信息、AI 人设、知识库（产品资料、常见问题）、话术。知识库里没有依据的问题 AI 会转人工。
 3. **渠道**：绑定 WhatsApp（扫码或官方 API）、Facebook、Instagram、邮箱、官网在线客服。各平台开发者应用的申请和回调地址见 [docs/PLATFORM-APPS.md](docs/PLATFORM-APPS.md)。
-4. **设置 → 订阅与用量**：充值或购买智点；AI 回复、CRMClaw 查询、背调等会按次扣点，流水里可查。
+4. **设置 → AI 接待设置**：填客户自己的大模型服务商、接口地址、模型名和 API Key；AI 回复、CRMClaw 查询、背调都用这个模型，费用结算在客户的模型账户。
 
 ## 部署到生产环境
 

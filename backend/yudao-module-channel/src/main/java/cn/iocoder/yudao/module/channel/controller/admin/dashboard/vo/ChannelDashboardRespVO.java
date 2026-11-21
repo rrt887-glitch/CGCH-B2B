@@ -70,7 +70,6 @@ public class ChannelDashboardRespVO {
         private long aiPending;
         private long aiDiscarded;
         private long aiHandoff;
-        private long creditsConsumed;
         private long cluesCreated;
         private long cluesFromMail;
         private long cluesFromWhatsApp;
@@ -91,7 +90,6 @@ public class ChannelDashboardRespVO {
         private long waIn;
         private long humanOut;
         private long aiOut;
-        private long credits;
     }
 
     @Data

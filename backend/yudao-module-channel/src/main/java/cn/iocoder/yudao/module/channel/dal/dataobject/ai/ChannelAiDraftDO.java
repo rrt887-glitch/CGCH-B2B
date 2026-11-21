@@ -83,9 +83,8 @@ public class ChannelAiDraftDO extends TenantBaseDO {
      */
     private Integer completionTokens;
     /**
-     * 本次扣除的智点
+     * AI 用量
      */
-    private Long credits;
     /**
      * 使用的模型
      */

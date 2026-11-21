@@ -1,4 +1,4 @@
-import type { PageParam, PageResult } from '@vben/request';
+﻿import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';
 
@@ -86,7 +86,6 @@ export const DRAFT_REASON: Record<string, string> = {
   window_closed: 'WhatsApp 24 小时窗口已关闭',
   send_failed: '自动发送失败',
   manual: '手动起草',
-  no_credit: '智点余额不足',
   work_hours: '工作时间设为由业务员发送',
   off_hours: '非工作时间设为只起草',
   condition: '命中「根据客户条件」转人工',
@@ -140,7 +139,6 @@ export const searchKnowledge = (q: string) =>
 
 /** 智能体测试对话：模拟客户提问，查看数字员工的回复（不保存，按 token 扣点） */
 export const testAgentReply = (channel: 'mail' | 'whatsapp', messages: { content: string; role: 'assistant' | 'user' }[]) =>
-  requestClient.post<{ content: string; credits: number; files?: string[]; forbidden?: string; handoff: boolean; knowledgeHits: number }>(
     '/channel/ai/test-reply',
     { channel, messages },
   );

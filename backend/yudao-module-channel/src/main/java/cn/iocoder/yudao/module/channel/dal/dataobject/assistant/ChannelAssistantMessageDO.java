@@ -42,8 +42,7 @@ public class ChannelAssistantMessageDO extends TenantBaseDO {
      */
     private String steps;
     /**
-     * 消耗的智点
+     * AI 用量
      */
-    private Long credits;
 
 }

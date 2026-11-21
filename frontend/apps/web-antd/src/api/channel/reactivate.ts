@@ -31,7 +31,6 @@ export namespace ChannelReactivateApi {
     content?: string;
     status: ItemStatus;
     reasonDetail?: string;
-    credits?: number;
     sentTime?: string;
     replied: boolean;
     /** AI 写信前的分析 */

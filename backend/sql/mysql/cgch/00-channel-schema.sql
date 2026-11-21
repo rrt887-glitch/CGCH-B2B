@@ -16,7 +16,6 @@ CREATE TABLE `channel_ai_case` (
   `phrases` mediumtext NULL COMMENT '有效话术（JSON 字符串数组）',
   `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否供 AI 参考（AI 生成的案例默认关闭，需人工确认后开启）',
   `source` varchar(255) NULL COMMENT '来源：ai、manual',
-  `credits` bigint NULL COMMENT '生成消耗的智点',
   `user_id` bigint NULL COMMENT '创建人',
   `embedding` mediumtext NULL COMMENT '向量（JSON 数组），用于语义匹配；不对外返回',
   `embedding_model` varchar(255) NULL COMMENT '生成向量所用的模型',
@@ -47,9 +46,9 @@ CREATE TABLE `channel_ai_config` (
   `human_pause_hours` int NULL COMMENT '业务员人工回复后，AI 暂停自动回复的小时数',
   `extra_instructions` varchar(1024) NULL COMMENT '补充要求，例如「报价统一用美元，不承诺交期」',
   `lead_auto_create` bit(1) NULL DEFAULT b'0' COMMENT '新询盘自动建 CRM 线索',
-  `lead_ai_extract` bit(1) NULL DEFAULT b'0' COMMENT '建档时用 AI 从询盘中提取公司、国家、需求产品等（消耗智点）',
+  `lead_ai_extract` bit(1) NULL DEFAULT b'0' COMMENT '建档时用 AI 从询盘中提取公司、国家、需求产品等',
   `report_auto` bit(1) NULL DEFAULT b'0' COMMENT '是否每天自动生成 AI 工作报告（周一另生成上周周报）',
-  `notify_muted` varchar(255) NULL COMMENT '关闭的通知类型，逗号分隔：handoff、takeover、new_lead、reactivate_reply、credit_low；为空表示全部开启',
+  `notify_muted` varchar(255) NULL COMMENT '关闭的通知类型，逗号分隔：handoff、takeover、new_lead、reactivate_reply、；为空表示全部开启',
   `skills_json` mediumtext NULL COMMENT '智能体技能配置（JSON，见 ChannelAgentSettings.Skills）',
   `handoff_json` mediumtext NULL COMMENT '转人工配置（JSON，见 ChannelAgentSettings.Handoff）：按客户意图、按客户条件、人工介入时的托管方式',
   `opening_json` mediumtext NULL COMMENT '固定开场白（JSON，见 ChannelAgentSettings.Opening）',
@@ -76,7 +75,6 @@ CREATE TABLE `channel_ai_draft` (
   `reason_detail` varchar(1024) NULL COMMENT '原因补充说明，例如命中的违禁词',
   `prompt_tokens` int NULL COMMENT '本次消耗的输入 token',
   `completion_tokens` int NULL COMMENT '本次消耗的输出 token',
-  `credits` bigint NULL COMMENT '本次扣除的智点',
   `model` varchar(255) NULL COMMENT '使用的模型',
   `knowledge_hits` int NULL COMMENT '本次回复命中的知识条目数（不含企业介绍）；为 0 表示知识库里没有相关资料',
   `question` varchar(1024) NULL COMMENT '客户本次的问题（截取），用于工作报告里的「知识库缺口」',
@@ -156,7 +154,6 @@ CREATE TABLE `channel_ai_report` (
   `stats` mediumtext NULL COMMENT '统计数据（JSON）：本期与上期汇总、转人工清单、知识库缺口',
   `summary` mediumtext NULL COMMENT '文字总结',
   `ai_generated` bit(1) NULL DEFAULT b'0' COMMENT '总结是否由大模型撰写；否则为按模板生成',
-  `credits` bigint NULL COMMENT '撰写总结消耗的智点',
   `generate_mode` varchar(255) NULL COMMENT '生成方式：auto 定时、manual 手动（trigger 是 MySQL 保留字，故用 generate_mode）',
   `user_id` bigint NULL COMMENT '手动生成的操作人',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
@@ -189,7 +186,6 @@ CREATE TABLE `channel_assistant_message` (
   `role` varchar(255) NULL COMMENT '角色：user、assistant',
   `content` mediumtext NULL COMMENT '内容',
   `steps` mediumtext NULL COMMENT '本轮调用过的工具（JSON 数组：工具名、参数），用于展示「查了什么」',
-  `credits` bigint NULL COMMENT '消耗的智点',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
@@ -220,21 +216,6 @@ CREATE TABLE `channel_cloud_file` (
   `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '云盘文件：企业云盘（全员可见，AI 可发给客户）与个人云盘（只有本人可见），支持文件夹';
-
-DROP TABLE IF EXISTS `channel_credit_account`;
-CREATE TABLE `channel_credit_account` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
-  `balance` bigint NULL COMMENT '当前余额（智点）；扣费在调用之后，可能短暂为负',
-  `total_in` bigint NULL COMMENT '累计获得',
-  `total_out` bigint NULL COMMENT '累计消耗',
-  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
-  PRIMARY KEY (`id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '租户的智点余额，每个租户一条';
 
 DROP TABLE IF EXISTS `channel_evolution_proxy`;
 CREATE TABLE `channel_evolution_proxy` (
@@ -274,47 +255,6 @@ CREATE TABLE `channel_unipile_credential` (
   UNIQUE KEY `uk_unipile_scope` (`scope_id`),
   KEY `idx_unipile_tenant` (`tenant_id`, `deleted`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Unipile 租户凭证（每家公司一条：Scope + 专属 Key）';
-
-DROP TABLE IF EXISTS `channel_credit_ledger`;
-CREATE TABLE `channel_credit_ledger` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
-  `type` varchar(255) NULL COMMENT '类型：recharge 充值、consume 消耗、adjust 调整',
-  `amount` bigint NULL COMMENT '变动数量，获得为正、消耗为负',
-  `balance_after` bigint NULL COMMENT '变动后余额',
-  `channel` varchar(255) NULL COMMENT '产生消耗的渠道：mail、whatsapp',
-  `ref_id` bigint NULL COMMENT '关联对象：AI 回复记录编号',
-  `user_id` bigint NULL COMMENT '相关业务员（手动起草为操作人，自动回复为号码/邮箱所属人）',
-  `tokens` int NULL COMMENT '本次消耗的 token 数',
-  `remark` varchar(1024) NULL COMMENT '备注',
-  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
-  PRIMARY KEY (`id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '智点流水';
-
-DROP TABLE IF EXISTS `channel_credit_order`;
-CREATE TABLE `channel_credit_order` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
-  `user_id` bigint NULL COMMENT '下单人',
-  `package_id` bigint NULL COMMENT '套餐编号',
-  `package_name` varchar(255) NULL COMMENT '套餐名',
-  `credits` bigint NULL COMMENT '到账智点',
-  `price` int NULL COMMENT '金额，单位：分',
-  `pay_order_id` bigint NULL COMMENT '支付单编号',
-  `pay_status` bit(1) NULL DEFAULT b'0' COMMENT '是否已支付',
-  `pay_time` datetime NULL COMMENT '支付时间',
-  `pay_channel_code` varchar(255) NULL COMMENT '支付渠道',
-  `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
-  PRIMARY KEY (`id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '智点在线充值订单';
 
 DROP TABLE IF EXISTS `channel_lead_rule`;
 CREATE TABLE `channel_lead_rule` (
@@ -426,7 +366,7 @@ DROP TABLE IF EXISTS `channel_notify_rule`;
 CREATE TABLE `channel_notify_rule` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `user_id` bigint NULL COMMENT '所属用户',
-  `type` varchar(255) NULL COMMENT '消息类型：handoff 转人工、takeover AI 接手、new_lead 新询盘、reactivate_reply 唤醒客户回复、credit_low 智点不足',
+  `type` varchar(255) NULL COMMENT '消息类型：handoff 转人工、takeover AI 接手、new_lead 新询盘、reactivate_reply 唤醒客户回复、 AI 用量不足',
   `channel` varchar(255) NULL COMMENT '通知方式：site 站内信、email 邮件',
   `enabled` bit(1) NULL DEFAULT b'0' COMMENT '是否开启',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
@@ -561,7 +501,6 @@ CREATE TABLE `channel_reactivate_item` (
   `insight` text NULL COMMENT 'AI 写信前的分析（JSON）：客户现状、痛点、推荐产品、切入角度、依据的背调编号',
   `status` varchar(255) NULL COMMENT '状态：generating、draft、approved、sent、failed、skipped',
   `reason_detail` varchar(1024) NULL COMMENT '失败或跳过原因',
-  `credits` bigint NULL COMMENT '生成消耗的智点',
   `sent_time` datetime NULL COMMENT '发送时间',
   `sent_ref_id` bigint NULL COMMENT '发出的邮件编号或 WhatsApp 消息编号',
   `reply_notified` bit(1) NULL DEFAULT b'0' COMMENT '是否已就客户回复发过通知',
@@ -607,7 +546,6 @@ CREATE TABLE `channel_research` (
   `report` mediumtext NULL COMMENT '背调报告（JSON）',
   `sources` mediumtext NULL COMMENT '参考来源（JSON 数组）：网址、标题、摘要',
   `reason_detail` varchar(1024) NULL COMMENT '失败原因或提示',
-  `credits` bigint NULL COMMENT '消耗的智点',
   `user_id` bigint NULL COMMENT '发起人',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

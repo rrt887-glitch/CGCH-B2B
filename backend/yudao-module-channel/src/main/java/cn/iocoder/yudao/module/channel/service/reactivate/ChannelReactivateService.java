@@ -29,7 +29,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaAccountMapper
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaMessageMapper;
 import cn.iocoder.yudao.module.channel.service.ai.ChannelAiService;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import cn.iocoder.yudao.module.channel.service.dashboard.ChannelDashboardService;
 import cn.iocoder.yudao.module.channel.service.mail.ChannelMailService;
 import cn.iocoder.yudao.module.channel.service.whatsapp.ChannelWhatsAppService;
@@ -96,7 +96,7 @@ public class ChannelReactivateService {
     @Resource
     private ChannelAiService channelAiService;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
     @Resource
     private ChannelMailService channelMailService;
     @Resource
@@ -205,7 +205,7 @@ public class ChannelReactivateService {
     private ChannelReactivateItemDO plan(ChannelReactivateTaskDO task, CrmCustomerDO c, Long creatorId) {
         ChannelReactivateItemDO item = ChannelReactivateItemDO.builder().taskId(task.getId()).customerId(c.getId())
                 .customerName(c.getName()).ownerUserId(c.getOwnerUserId())
-                .lastContactTime(c.getContactLastTime() != null ? c.getContactLastTime() : c.getCreateTime()).credits(0L).build();
+                .lastContactTime(c.getContactLastTime() != null ? c.getContactLastTime() : c.getCreateTime()).build();
         boolean hasMail = StrUtil.isNotBlank(c.getEmail());
         boolean hasWa = StrUtil.isNotBlank(c.getWhatsapp());
         boolean useMail = CHANNEL_MAIL.equals(task.getChannel()) || (CHANNEL_AUTO.equals(task.getChannel()) && hasMail);
@@ -305,8 +305,8 @@ public class ChannelReactivateService {
             fail(item, "请先在数字员工设置中配置大模型");
             return;
         }
-        if (!channelCreditService.hasBalance()) {
-            fail(item, "智点余额不足");
+        if (!channelAiUsageService.hasBalance()) {
+            fail(item, "AI 用量余额不足");
             return;
         }
         CrmCustomerDO c = crmCustomerMapper.selectById(item.getCustomerId());
@@ -333,14 +333,14 @@ public class ChannelReactivateService {
             if (StrUtil.isNotBlank(cfg.getMailSignature())) {
                 body = body.trim() + "\n\n" + cfg.getMailSignature().trim();
             }
-            long credits = channelCreditService.consume("reactivate", item.getId(), item.getOwnerUserId(),
+            channelAiUsageService.consume("reactivate", item.getId(), item.getOwnerUserId(),
                     r.promptTokens() + r.completionTokens(), "客户唤醒");
             Map<String, Object> insight = d.insight() == null ? new LinkedHashMap<>() : d.insight();
             if (research != null) {
                 insight.put("researchId", research.getId());
             }
             channelReactivateItemMapper.updateById(new ChannelReactivateItemDO().setId(item.getId())
-                    .setSubject(StrUtil.maxLength(d.subject(), 200)).setContent(body).setCredits(credits)
+                    .setSubject(StrUtil.maxLength(d.subject(), 200)).setContent(body)
                     .setInsight(insight.isEmpty() ? null : JsonUtils.toJsonString(insight))
                     .setStatus(ChannelReactivateItemDO.STATUS_DRAFT).setReasonDetail(""));
         } catch (Exception e) {

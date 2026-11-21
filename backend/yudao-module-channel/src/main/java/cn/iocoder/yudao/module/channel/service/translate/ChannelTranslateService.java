@@ -5,7 +5,7 @@ import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.channel.dal.dataobject.ai.ChannelAiConfigDO;
 import cn.iocoder.yudao.module.channel.service.ai.ChannelAiService;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
@@ -17,13 +17,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.AI_CREDIT_INSUFFICIENT;
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.AI_LLM_FAIL;
 
 /**
  * 翻译（设置 → 翻译设置）：聊天消息译成中文；输入框双语模式下把业务员输入的中文译成客户使用的语言。
- * 用数字员工配置的大模型翻译，同一段文字结果会缓存，按 token 扣智点。
+ * 用数字员工配置的大模型翻译，同一段文字结果会缓存，按 token 扣AI 用量。
  */
 @Service
 @Slf4j
@@ -40,7 +39,7 @@ public class ChannelTranslateService {
     @Resource
     private ChannelAiService channelAiService;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
 
     /**
      * @param target 目标语言，例如「中文」「English」；为空时按 sample 判断
@@ -73,10 +72,7 @@ public class ChannelTranslateService {
             ChannelAiConfigDO cfg = channelAiService.getConfig();
             if (StrUtil.hasBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel())) {
                 throw exception(AI_LLM_FAIL, "请先在「设置 → AI 接待设置」中配置大模型");
-            }
-            if (!channelCreditService.hasBalance()) {
-                throw exception(AI_CREDIT_INSUFFICIENT);
-            }
+            }
             List<String> batch = todo.stream().map(src::get).toList();
             String system = "你是专业的外贸翻译。把用户给出的 JSON 字符串数组中的每一项翻译成" + lang
                     + "。保持原意、语气和格式（换行、数字、型号、链接不变），已经是目标语言的原样返回。"
@@ -84,7 +80,7 @@ public class ChannelTranslateService {
             try {
                 LlmClient.Result r = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(),
                         List.of(LlmClient.Message.system(system), LlmClient.Message.user(JSON.writeValueAsString(batch))), 0);
-                channelCreditService.consume("translate", 0L, userId, r.promptTokens() + r.completionTokens(), "翻译");
+                channelAiUsageService.consume("translate", 0L, userId, r.promptTokens() + r.completionTokens(), "翻译");
                 Matcher m = ARRAY.matcher(r.content());
                 JsonNode arr = m.find() ? JSON.readTree(m.group()) : null;
                 for (int k = 0; k < todo.size(); k++) {

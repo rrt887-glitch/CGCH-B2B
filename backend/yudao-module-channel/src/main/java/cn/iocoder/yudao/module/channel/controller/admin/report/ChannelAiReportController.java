@@ -54,7 +54,7 @@ public class ChannelAiReportController {
         vo.setPeriodEnd(r.getPeriodEnd() == null ? null : r.getPeriodEnd().toString());
         vo.setSummary(r.getSummary());
         vo.setAiGenerated(r.getAiGenerated());
-        vo.setCredits(r.getCredits());
+        vo);
         vo.setGenerateMode(r.getGenerateMode());
         vo.setCreateTime(r.getCreateTime() == null ? null : r.getCreateTime().format(TIME));
         if (withStats && r.getStats() != null) {

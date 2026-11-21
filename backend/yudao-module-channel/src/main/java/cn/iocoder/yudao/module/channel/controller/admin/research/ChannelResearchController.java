@@ -103,7 +103,6 @@ public class ChannelResearchController {
         m.put("clueId", r.getClueId());
         m.put("status", r.getStatus());
         m.put("reasonDetail", r.getReasonDetail());
-        m.put("credits", r.getCredits());
         m.put("userId", r.getUserId());
         m.put("createTime", r.getCreateTime() == null ? null : r.getCreateTime().format(TIME));
         if (full) {

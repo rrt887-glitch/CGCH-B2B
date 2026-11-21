@@ -104,7 +104,6 @@ public class ChannelAiCaseController {
         m.put("phrases", ChannelAiCaseService.arr(k.getPhrases()));
         m.put("enabled", k.getEnabled());
         m.put("source", k.getSource());
-        m.put("credits", k.getCredits());
         m.put("indexed", k.getEmbeddingModel() != null && !k.getEmbeddingModel().isBlank());
         m.put("createTime", k.getCreateTime() == null ? null : k.getCreateTime().format(TIME));
         return m;

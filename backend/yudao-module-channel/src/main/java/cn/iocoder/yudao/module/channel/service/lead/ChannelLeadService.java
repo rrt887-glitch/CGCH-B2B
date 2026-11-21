@@ -13,7 +13,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailMessageMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaConversationMapper;
 import cn.iocoder.yudao.module.channel.service.ai.ChannelAgentSettings;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import cn.iocoder.yudao.module.channel.service.mail.ChannelMailService;
 import cn.iocoder.yudao.module.channel.service.mail.HtmlText;
 import cn.iocoder.yudao.module.channel.service.whatsapp.ChannelWhatsAppService;
@@ -106,7 +106,7 @@ public class ChannelLeadService {
     @Resource
     private ChannelWhatsAppService whatsAppService;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
     @Resource
     private CrmClueMapper crmClueMapper;
     @Resource
@@ -250,7 +250,7 @@ public class ChannelLeadService {
             return;
         }
         String site = StrUtil.blankToDefault(StrUtil.trimToNull(clue.getWebsite()), LeadInference.websiteFromEmail(clue.getEmail()));
-        if (StrUtil.isBlank(site) || !channelCreditService.hasBalance()) {
+        if (StrUtil.isBlank(site) || !channelAiUsageService.hasBalance()) {
             return;
         }
         Runnable start = () -> {
@@ -327,7 +327,7 @@ public class ChannelLeadService {
     /** 用 AI 提取公司、国家等；未开启、未配置或余额不足时返回空结果，不影响建档 */
     private Extracted extract(ChannelAiConfigDO cfg, String channel, Long refId, Long userId, String inquiry) {
         if (!Boolean.TRUE.equals(cfg.getLeadAiExtract()) || StrUtil.hasBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel())
-                || !channelCreditService.hasBalance()) {
+                || !channelAiUsageService.hasBalance()) {
             return Extracted.EMPTY;
         }
         ChannelAgentSettings.Skills skills = ChannelAgentSettings.skills(cfg);
@@ -344,7 +344,7 @@ public class ChannelLeadService {
         try {
             LlmClient.Result r = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(),
                     List.of(LlmClient.Message.system(system), LlmClient.Message.user(StrUtil.maxLength(inquiry, 4000))), 0);
-            channelCreditService.consume(channel, refId, userId, r.promptTokens() + r.completionTokens(), "线索信息提取");
+            channelAiUsageService.consume(channel, refId, userId, r.promptTokens() + r.completionTokens(), "线索信息提取");
             Matcher mt = JSON_BLOCK.matcher(r.content());
             if (!mt.find()) {
                 return Extracted.EMPTY;

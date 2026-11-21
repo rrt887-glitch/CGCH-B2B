@@ -1,4 +1,4 @@
-import { requestClient } from '#/api/request';
+﻿import { requestClient } from '#/api/request';
 
 export namespace ChannelDashboardApi {
   export interface Totals {
@@ -16,7 +16,6 @@ export namespace ChannelDashboardApi {
     aiPending: number;
     aiDiscarded: number;
     aiHandoff: number;
-    creditsConsumed: number;
     cluesCreated: number;
     cluesFromMail: number;
     cluesFromWhatsApp: number;
@@ -33,7 +32,6 @@ export namespace ChannelDashboardApi {
     waIn: number;
     humanOut: number;
     aiOut: number;
-    credits: number;
   }
 
   export interface UserRow {

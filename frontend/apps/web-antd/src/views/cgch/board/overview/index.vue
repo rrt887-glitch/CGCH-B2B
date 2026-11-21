@@ -23,6 +23,7 @@ import { fmtMoney } from '#/views/cgch/v3/crm/components/shared';
 defineOptions({ name: 'CgchBoardOverview' });
 
 const router = useRouter();
+// 预留：页面内跳转用（当前页面没有内部跳转，保留以免后续用到时再引入）
 const { isDark } = usePreferences();
 
 // 分类色（固定顺序）：1 蓝、2 橙；深色模式用为深色背景校准过的同色相阶
@@ -80,7 +81,6 @@ const tiles = computed(() => {
     { label: '新线索', value: c.cluesCreated.toLocaleString(), sub: `询盘自动建档 ${c.cluesFromMail + c.cluesFromWhatsApp} · 已转客户 ${c.cluesConverted}`, d: delta('cluesCreated'), tip: '本期新建的 CRM 线索；自动建档来源为邮件或 WhatsApp' },
     { label: '新客户', value: c.customersCreated.toLocaleString(), sub: `线索转客户 ${c.cluesConverted}`, d: delta('customersCreated'), tip: '本期新建的 CRM 客户' },
     { label: '订单', value: (data.value?.orders ?? 0).toLocaleString(), sub: `金额 ${fmtMoney(data.value?.orderAmount)}`, d: { text: '按下单日期统计', up: true, flat: true }, tip: '本期下单的订单数和金额（CRM → 订单管理）', neutral: true },
-    { label: 'AI 用量（千 token）', value: c.creditsConsumed.toLocaleString(), sub: `AI 草稿 ${c.aiDrafts} 份`, d: delta('creditsConsumed'), tip: 'AI 起草、自动回复、信息提取和知识库检索使用的 token 总量（千 token）', neutral: true },
   ];
 });
 
@@ -151,10 +151,8 @@ function exportUsers() {
 // ===== 图表 =====
 const inqRef = ref<EchartsUIType>();
 const outRef = ref<EchartsUIType>();
-const creditRef = ref<EchartsUIType>();
 const { renderEcharts: renderInq } = useEcharts(inqRef);
 const { renderEcharts: renderOut } = useEcharts(outRef);
-const { renderEcharts: renderCredit } = useEcharts(creditRef);
 
 const label = (d: string) => d.slice(5);
 
@@ -214,7 +212,6 @@ async function renderCharts() {
     { name: 'AI 发出', color: p.s1, values: d.map((x) => x.aiOut) },
     { name: '人工发出', color: p.s2, values: d.map((x) => x.humanOut) },
   ], true));
-  renderCredit(barOption([{ name: '千 token', color: p.s1, values: d.map((x) => x.credits) }], false));
 }
 
 async function load() {
@@ -289,13 +286,7 @@ onMounted(async () => {
       </Row>
 
       <Row :gutter="16">
-        <Col :xs="24" :lg="12" class="mb-4">
-          <Card title="每日 AI 用量（千 token）" size="small" :bordered="false">
-            <template #extra><Button type="link" size="small" @click="router.push('/v3/settings?tab=usage')">明细</Button></template>
-            <EchartsUI ref="creditRef" height="220px" />
-          </Card>
-        </Col>
-        <Col :xs="24" :lg="12" class="mb-4">
+        <Col :xs="24" :lg="24" class="mb-4">
           <Card title="AI 草稿处理" size="small" :bordered="false">
             <div v-if="cur" class="mb-3 grid grid-cols-4 gap-2 text-center">
               <div><div class="text-xl font-semibold tabular-nums">{{ cur.aiSent }}</div><div class="text-xs text-gray-500">已发出</div></div>

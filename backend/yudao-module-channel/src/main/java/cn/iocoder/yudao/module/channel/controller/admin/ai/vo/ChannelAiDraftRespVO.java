@@ -17,7 +17,6 @@ public class ChannelAiDraftRespVO {
     private Integer promptTokens;
     private Integer completionTokens;
     private String model;
-    private Long credits;
     private LocalDateTime createTime;
 
 }

@@ -38,7 +38,6 @@ export namespace ChannelResearchApi {
     clueId?: number;
     status: 'done' | 'failed' | 'running';
     reasonDetail?: string;
-    credits?: number;
     userId?: number;
     createTime: string;
     report?: Report;

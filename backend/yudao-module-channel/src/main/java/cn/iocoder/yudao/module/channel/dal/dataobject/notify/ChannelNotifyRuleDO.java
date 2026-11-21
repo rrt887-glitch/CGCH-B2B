@@ -34,7 +34,7 @@ public class ChannelNotifyRuleDO extends TenantBaseDO {
      */
     private Long userId;
     /**
-     * 消息类型：handoff 转人工、takeover AI 接手、new_lead 新询盘、reactivate_reply 唤醒客户回复、credit_low 智点不足
+     * 消息类型：handoff 转人工、takeover AI 接手、new_lead 新询盘、reactivate_reply 唤醒客户回复、 AI 用量不足
      */
     private String type;
     /**

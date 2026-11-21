@@ -11,7 +11,6 @@ export namespace ChannelAssistantApi {
     messageId: number;
     content: string;
     steps: Step[];
-    credits: number;
   }
 
   export interface Chat {
@@ -25,7 +24,6 @@ export namespace ChannelAssistantApi {
     role: 'assistant' | 'user';
     content: string;
     steps: Step[];
-    credits?: number;
     createTime?: string;
   }
 }

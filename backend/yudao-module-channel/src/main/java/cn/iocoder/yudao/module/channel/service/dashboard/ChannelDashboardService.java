@@ -27,7 +27,7 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.DASHBOARD_USER_FORBIDDEN;
 
 /**
- * 数据看板：询盘量、回复率、AI 处理量、智点消耗、线索转化，按天和按业务员汇总。
+ * 数据看板：询盘量、回复率、AI 处理量、AI 用量消耗、线索转化，按天和按业务员汇总。
  */
 @Service
 public class ChannelDashboardService {
@@ -280,14 +280,6 @@ public class ChannelDashboardService {
             }
             if (ChannelAiDraftDO.REASON_HANDOFF.equals(reason)) {
                 t.setAiHandoff(t.getAiHandoff() + n);
-            }
-        }
-        for (Map<String, Object> r : channelDashboardMapper.credits(start, end, f.userIds())) {
-            long n = num(r, "n");
-            t.setCreditsConsumed(t.getCreditsConsumed() + n);
-            Day d = daily == null ? null : daily.get(str(r, "d"));
-            if (d != null) {
-                d.setCredits(d.getCredits() + n);
             }
         }
         for (Map<String, Object> r : channelDashboardMapper.clues(start, end, f.userIds())) {

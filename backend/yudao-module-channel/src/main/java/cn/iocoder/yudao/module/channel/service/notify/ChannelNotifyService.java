@@ -44,7 +44,6 @@ public class ChannelNotifyService {
     public static final String TYPE_TAKEOVER = "takeover";
     public static final String TYPE_NEW_LEAD = "new_lead";
     public static final String TYPE_REACTIVATE_REPLY = "reactivate_reply";
-    public static final String TYPE_CREDIT_LOW = "credit_low";
     /** 站内信模板编码前缀，对应 03-channel-seed.sql 中的模板 */
     public static final String TEMPLATE_PREFIX = "cgch_";
     /** 同一对象同类通知的最短间隔，避免客户连发消息时刷屏 */
@@ -77,9 +76,6 @@ public class ChannelNotifyService {
     @Resource
     private ChannelReactivateTaskMapper channelReactivateTaskMapper;
 
-    @Value("${cgch.credit.low-threshold:100}")
-    private long lowThreshold;
-
     @Resource
     private cn.iocoder.yudao.module.channel.dal.mysql.notify.ChannelNotifyRuleMapper channelNotifyRuleMapper;
     @Resource
@@ -96,7 +92,6 @@ public class ChannelNotifyService {
         TYPES.put(TYPE_TAKEOVER, new String[]{"AI 接手回复", "「{customer}」的消息等待 {minutes} 分钟无人回复，AI 已接手回复"});
         TYPES.put(TYPE_NEW_LEAD, new String[]{"新询盘建档", "新询盘：已为「{name}」自动建线索（来自{source}）"});
         TYPES.put(TYPE_REACTIVATE_REPLY, new String[]{"唤醒客户回复", "「{customer}」回复了客户唤醒「{task}」，请尽快跟进"});
-        TYPES.put(TYPE_CREDIT_LOW, new String[]{"智点不足", "智点余额仅剩 {balance}，{hint}，请及时充值"});
     }
 
     // ==================== 发送 ====================
@@ -259,22 +254,6 @@ public class ChannelNotifyService {
             Target t = target(channel, "mail".equals(channel) ? messageId : refId);
             send(TYPE_REACTIVATE_REPLY, i.getOwnerUserId(), Map.of("customer", i.getCustomerName(),
                     "task", task == null ? "客户唤醒" : task.getName()), t == null ? "/claw/reactivate" : t.link(), null);
-        }
-    }
-
-    /** 智点余额跌破提醒线或用完时，通知租户联系人（未设置联系人时通知本次消耗的业务员） */
-    public void onBalanceChanged(long before, long after, Long actorUserId) {
-        boolean crossedLow = before >= lowThreshold && after < lowThreshold && after > 0;
-        boolean usedUp = before > 0 && after <= 0;
-        if (!crossedLow && !usedUp) {
-            return;
-        }
-        Long tenantId = TenantContextHolder.getTenantId();
-        TenantDO tenant = tenantId == null ? null : tenantService.getTenant(tenantId);
-        Long to = tenant != null && tenant.getContactUserId() != null ? tenant.getContactUserId() : actorUserId;
-        if (to != null) {
-            send(TYPE_CREDIT_LOW, to, Map.of("balance", Math.max(after, 0),
-                    "hint", usedUp ? "AI 已停止起草和自动回复" : "用完后 AI 将停止回复"), "/v3/settings?tab=usage", null);
         }
     }
 

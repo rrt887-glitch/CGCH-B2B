@@ -51,9 +51,8 @@ public class ChannelAiReportDO extends TenantBaseDO {
      */
     private Boolean aiGenerated;
     /**
-     * 撰写总结消耗的智点
+     * 撰写总结AI 用量
      */
-    private Long credits;
     /**
      * 生成方式：auto 定时、manual 手动（trigger 是 MySQL 保留字，故用 generate_mode）
      */

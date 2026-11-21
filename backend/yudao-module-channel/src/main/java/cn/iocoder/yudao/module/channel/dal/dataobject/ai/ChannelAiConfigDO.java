@@ -93,7 +93,7 @@ public class ChannelAiConfigDO extends TenantBaseDO {
      */
     private Boolean leadAutoCreate;
     /**
-     * 建档时用 AI 从询盘中提取公司、国家、需求产品等（消耗智点）
+     * 建档时用 AI 从询盘中提取公司、国家、需求产品等
      */
     private Boolean leadAiExtract;
     /**
@@ -101,7 +101,7 @@ public class ChannelAiConfigDO extends TenantBaseDO {
      */
     private Boolean reportAuto;
     /**
-     * 关闭的通知类型，逗号分隔：handoff、takeover、new_lead、reactivate_reply、credit_low；为空表示全部开启
+     * 关闭的通知类型，逗号分隔：handoff、takeover、new_lead、reactivate_reply、；为空表示全部开启
      */
     private String notifyMuted;
     /**

@@ -288,7 +288,6 @@ onMounted(async () => {
                 <div class="truncate text-xs text-gray-500">{{ src.url }}</div>
                 <div class="line-clamp-2 text-xs text-gray-500">{{ src.snippet }}</div>
               </div>
-              <div class="mt-2 text-xs text-gray-400">报告由 AI 根据以上公开资料整理，判断和建议仅供参考，重要信息请自行核实。约用 {{ current.credits }} 千 token。</div>
             </Card>
           </template>
         </Spin>

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 /**
- * 通知中心：需要人处理的事——AI 转人工、超时 AI 接手、新询盘建档、唤醒客户回复、智点不足。
+ * 通知中心：需要人处理的事——AI 转人工、超时 AI 接手、新询盘建档、唤醒客户回复。
  * 通知以站内信发送，顶部铃铛同步显示；管理员可按类型关闭。
  */
 import { computed, onMounted, reactive, ref } from 'vue';
@@ -26,7 +26,6 @@ const TYPES: Record<string, { color: string; desc: string; label: string }> = {
   takeover: { color: 'orange', label: 'AI 已接手', desc: '工作时间业务员优先，超时无人回复由 AI 接手' },
   new_lead: { color: 'blue', label: '新询盘', desc: '陌生人来信，已自动建线索' },
   reactivate_reply: { color: 'green', label: '客户回复', desc: '客户唤醒后客户回复了' },
-  credit_low: { color: 'purple', label: '智点不足', desc: '余额跌破 100 或用完（发给租户联系人）' },
 };
 
 const filter = ref<'all' | 'unread'>('unread');

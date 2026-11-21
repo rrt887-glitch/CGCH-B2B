@@ -9,7 +9,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.assistant.ChannelAssistantChatM
 import cn.iocoder.yudao.module.channel.dal.mysql.assistant.ChannelAssistantMessageMapper;
 import cn.iocoder.yudao.module.channel.service.ai.ChannelAiService;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -48,11 +48,11 @@ public class ChannelAssistantService {
     @Resource
     private ChannelAiService channelAiService;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
     @Resource
     private AdminUserApi adminUserApi;
 
-    public record Reply(Long chatId, Long messageId, String content, List<Map<String, String>> steps, long credits) {
+    public record Reply(Long chatId, Long messageId, String content, List<Map<String, String>> steps) {
     }
 
     public Reply ask(Long userId, Long chatId, String question) {
@@ -63,9 +63,6 @@ public class ChannelAssistantService {
         if (StrUtil.hasBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel())) {
             throw exception(ASSISTANT_INVALID, "请先在数字员工设置中配置大模型");
         }
-        if (!channelCreditService.hasBalance()) {
-            throw exception(AI_CREDIT_INSUFFICIENT);
-        }
         ChannelAssistantChatDO chat = chatId == null ? null : getChat(userId, chatId);
         if (chat == null) {
             chat = ChannelAssistantChatDO.builder().userId(userId).title(StrUtil.maxLength(question.trim(), 60)).build();
@@ -73,7 +70,7 @@ public class ChannelAssistantService {
         }
         List<ChannelAssistantMessageDO> history = channelAssistantMessageMapper.selectListByChatId(chat.getId());
         channelAssistantMessageMapper.insert(ChannelAssistantMessageDO.builder().chatId(chat.getId())
-                .role(ChannelAssistantMessageDO.ROLE_USER).content(StrUtil.maxLength(question.trim(), 2000)).credits(0L).build());
+                .role(ChannelAssistantMessageDO.ROLE_USER).content(StrUtil.maxLength(question.trim(), 2000)).build());
 
         ArrayNode messages = JSON.createArrayNode();
         messages.addObject().put("role", "system").put("content", systemPrompt(userId));
@@ -118,14 +115,14 @@ public class ChannelAssistantService {
         if (StrUtil.isBlank(answer)) {
             answer = "抱歉，这个问题我查了几次还没有得到结论，请换个问法或说得更具体一些。";
         }
-        long credits = channelCreditService.consume("assistant", chat.getId(), userId, Math.max(tokens, 1), "对话助手");
+        channelAiUsageService.consume("assistant", chat.getId(), userId, Math.max(tokens, 1), "对话助手");
         ChannelAssistantMessageDO reply = ChannelAssistantMessageDO.builder().chatId(chat.getId())
-                .role(ChannelAssistantMessageDO.ROLE_ASSISTANT).content(answer).steps(JsonUtils.toJsonString(steps)).credits(credits).build();
+                .role(ChannelAssistantMessageDO.ROLE_ASSISTANT).content(answer).steps(JsonUtils.toJsonString(steps)).build();
         channelAssistantMessageMapper.insert(reply);
         ChannelAssistantChatDO touch = new ChannelAssistantChatDO().setId(chat.getId());
         touch.setUpdateTime(LocalDateTime.now()); // 会话列表按最近使用排序
         channelAssistantChatMapper.updateById(touch);
-        return new Reply(chat.getId(), reply.getId(), answer, steps, credits);
+        return new Reply(chat.getId(), reply.getId(), answer, steps);
     }
 
     private String systemPrompt(Long userId) {

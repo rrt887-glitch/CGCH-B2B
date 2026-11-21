@@ -10,7 +10,6 @@ const groups: HubGroup[] = [
   {
     label: '设置',
     items: [
-      { key: 'usage', label: 'AI 用量', load: () => import('#/views/cgch/config/credits/entry.vue') },
       { key: 'ai', label: 'AI 接待设置', load: () => import('#/views/cgch/agent/profile/index.vue'), codes: ['channel:ai:config'] },
       { key: 'members', label: '成员', load: () => import('./members.vue'), codes: ['system:user:create'] },
       { key: 'cloud', label: '云盘文件', load: () => import('./cloud.vue') },

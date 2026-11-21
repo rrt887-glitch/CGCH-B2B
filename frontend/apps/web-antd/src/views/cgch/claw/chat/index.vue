@@ -86,7 +86,6 @@ async function send(text?: string) {
   try {
     const r = await askAssistant(q, chatId.value);
     msgs.value.pop();
-    msgs.value.push({ id: r.messageId, role: 'assistant', content: r.content, steps: r.steps, credits: r.credits });
     if (!chatId.value) {
       chatId.value = r.chatId;
     }
@@ -196,7 +195,6 @@ onMounted(() => {
                   <div v-else-if="m.role === 'assistant'" v-html="renderMd(m.content)"></div>
                   <template v-else>{{ m.content }}</template>
                 </div>
-                <div v-if="m.role === 'assistant' && m.credits" class="mt-1 text-xs text-gray-400">约 {{ m.credits }} 千 token</div>
               </div>
             </div>
           </Spin>

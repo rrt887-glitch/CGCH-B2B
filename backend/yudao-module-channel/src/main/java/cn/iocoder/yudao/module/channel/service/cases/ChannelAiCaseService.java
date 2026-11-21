@@ -17,7 +17,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaMessageMapper
 import cn.iocoder.yudao.module.channel.service.ai.AiPromptBuilder;
 import cn.iocoder.yudao.module.channel.service.ai.LlmClient;
 import cn.iocoder.yudao.module.channel.service.ai.VectorMath;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import cn.iocoder.yudao.module.channel.service.dashboard.ChannelDashboardService;
 import cn.iocoder.yudao.module.channel.service.mail.HtmlText;
 import cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO;
@@ -64,7 +64,7 @@ public class ChannelAiCaseService {
     @Resource
     private ChannelWaMessageMapper channelWaMessageMapper;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
     @Resource
     private ChannelDashboardService channelDashboardService;
 
@@ -115,10 +115,7 @@ public class ChannelAiCaseService {
         ChannelAiConfigDO cfg = config();
         if (StrUtil.hasBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel())) {
             throw exception(CASE_INVALID, "请先在数字员工设置中配置大模型");
-        }
-        if (!channelCreditService.hasBalance()) {
-            throw exception(AI_CREDIT_INSUFFICIENT);
-        }
+        }
         LlmClient.Result r;
         try {
             r = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(), List.of(
@@ -142,8 +139,8 @@ public class ChannelAiCaseService {
                 .phrases(JsonUtils.toJsonString(list(j, "phrases", names)))
                 .enabled(false).source(ChannelAiCaseDO.SOURCE_AI).userId(userId).build();
         channelAiCaseMapper.insert(k);
-        long credits = channelCreditService.consume("case", k.getId(), userId, r.promptTokens() + r.completionTokens(), "成交案例");
-        channelAiCaseMapper.updateById(new ChannelAiCaseDO().setId(k.getId()).setCredits(credits));
+        channelAiUsageService.consume("case", k.getId(), userId, r.promptTokens() + r.completionTokens(), "成交案例");
+        channelAiCaseMapper.updateById(new ChannelAiCaseDO().setId(k.getId()));
         return k.getId();
     }
 
@@ -272,7 +269,7 @@ public class ChannelAiCaseService {
                 .setKeyPoints(clean.apply(keyPoints)).setObjections(clean.apply(objections)).setPhrases(clean.apply(phrases))
                 .setEnabled(Boolean.TRUE.equals(req.getEnabled())).setEmbedding("").setEmbeddingModel("");
         if (req.getId() == null) {
-            k.setSource(ChannelAiCaseDO.SOURCE_MANUAL).setUserId(userId).setCredits(0L);
+            k.setSource(ChannelAiCaseDO.SOURCE_MANUAL).setUserId(userId);
             channelAiCaseMapper.insert(k);
         } else {
             k.setId(req.getId());
@@ -305,7 +302,7 @@ public class ChannelAiCaseService {
     /** 配置了向量模型时为案例建向量（失败只记日志，按关键词匹配） */
     private void embed(ChannelAiCaseDO k, Long userId) {
         ChannelAiConfigDO cfg = config();
-        if (StrUtil.hasBlank(cfg.getEmbeddingModel(), cfg.getLlmBaseUrl(), cfg.getLlmApiKey()) || !channelCreditService.hasBalance()) {
+        if (StrUtil.hasBlank(cfg.getEmbeddingModel(), cfg.getLlmBaseUrl(), cfg.getLlmApiKey()) || !channelAiUsageService.hasBalance()) {
             return;
         }
         try {
@@ -313,7 +310,7 @@ public class ChannelAiCaseService {
                     List.of(StrUtil.maxLength(caseText(k), 4000)));
             channelAiCaseMapper.updateById(new ChannelAiCaseDO().setId(k.getId())
                     .setEmbedding(VectorMath.toJson(e.vectors().get(0))).setEmbeddingModel(cfg.getEmbeddingModel()));
-            channelCreditService.consume("case", k.getId(), userId, Math.max(e.tokens(), 1), "成交案例向量化");
+            channelAiUsageService.consume("case", k.getId(), userId, Math.max(e.tokens(), 1), "成交案例向量化");
         } catch (Exception ex) {
             log.warn("[embed][案例({}) 生成向量失败] {}", k.getId(), ex.getMessage());
         }

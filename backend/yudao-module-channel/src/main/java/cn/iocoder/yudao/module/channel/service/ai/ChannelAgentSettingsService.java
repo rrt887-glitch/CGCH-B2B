@@ -12,7 +12,7 @@ import cn.iocoder.yudao.module.channel.dal.dataobject.whatsapp.ChannelWaMessageD
 import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiConfigMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.mail.ChannelMailMessageMapper;
 import cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaMessageMapper;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -23,8 +23,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.AI_CREDIT_INSUFFICIENT;
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.channel.enums.ErrorCodeConstants.AI_LLM_FAIL;
 
 /**
@@ -49,7 +48,7 @@ public class ChannelAgentSettingsService {
     @Resource
     private ChannelMailMessageMapper channelMailMessageMapper;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
     @Resource
     private cn.iocoder.yudao.module.channel.dal.mysql.whatsapp.ChannelWaAccountMapper channelWaAccountMapper;
     @Resource
@@ -160,10 +159,7 @@ public class ChannelAgentSettingsService {
         ChannelAiConfigDO cfg = channelAiService.getConfig();
         if (StrUtil.hasBlank(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel())) {
             throw exception(AI_LLM_FAIL, "请先在「设置」中配置大模型");
-        }
-        if (!channelCreditService.hasBalance()) {
-            throw exception(AI_CREDIT_INSUFFICIENT);
-        }
+        }
         ChannelAgentSettings.Learn learn = ChannelAgentSettings.learn(cfg);
         LocalDateTime since = LocalDateTime.now().minusDays(Math.max(1, learn.getDays()));
         List<String> threads = new ArrayList<>();
@@ -193,7 +189,7 @@ public class ChannelAgentSettingsService {
         try {
             LlmClient.Result r = LlmClient.chat(cfg.getLlmBaseUrl(), cfg.getLlmApiKey(), cfg.getLlmModel(),
                     List.of(LlmClient.Message.system(system), LlmClient.Message.user(StrUtil.maxLength(user, 40000))), 0.3);
-            channelCreditService.consume("mail", 0L, userId, r.promptTokens() + r.completionTokens(), "学习真人销售");
+            channelAiUsageService.consume("mail", 0L, userId, r.promptTokens() + r.completionTokens(), "学习真人销售");
             String style = StrUtil.maxLength(StrUtil.trim(r.content()), 3000);
             learn.setLastLearnTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
             learn.setLastSamples(threads.size());

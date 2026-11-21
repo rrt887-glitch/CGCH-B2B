@@ -1,4 +1,4 @@
--- CGCH 菜单骨架：6 个一级模块 + 占位页面
+﻿-- CGCH 菜单骨架：6 个一级模块 + 占位页面
 -- 在 ruoyi-vue-pro.sql 之后执行；可重复执行（先删除本脚本的 id 段再插入）
 SET NAMES utf8mb4;
 
@@ -34,7 +34,6 @@ INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_i
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES (20503, '模板管理', '', 2, 3, 20500, 'templates', 'lucide:layout-template', 'cgch/placeholder/index', 'CgchConfigTemplates', 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES (20504, '云盘管理', '', 2, 4, 20500, 'disk', 'lucide:hard-drive', 'cgch/placeholder/index', 'CgchConfigDisk', 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES (20505, '发送策略', '', 2, 5, 20500, 'send-policy', 'lucide:filter', 'cgch/placeholder/index', 'CgchConfigSendPolicy', 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
-INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES (20506, '智点消耗', '', 2, 6, 20500, 'credits', 'lucide:coins', 'cgch/placeholder/index', 'CgchConfigCredits', 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
 
 -- 上游 CRM 模块作为「AI-CRM」，排在第 3 位
 UPDATE `system_menu` SET `name` = 'AI-CRM', `sort` = 3 WHERE `id` = 480;

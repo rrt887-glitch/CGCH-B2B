@@ -215,7 +215,7 @@ public class ChannelPublicSiteController {
             <li><b>Acceptable use.</b> You must comply with applicable law and with the terms and policies of each connected platform, including the Meta Platform Terms, WhatsApp Business Policy and Messenger Platform policies. In particular you must not send spam or unsolicited bulk messages, must honour opt-out requests, and must only message people within the windows and rules the platforms allow.</li>
             <li><b>AI-generated content.</b> AI drafts may be inaccurate. Customers decide whether drafts are sent automatically or reviewed by a person, and remain responsible for messages sent from their accounts.</li>
             <li><b>Customer data.</b> Customers own the data in their workspace. We process it only to provide the service, as described in the <a href="/privacy">Privacy Policy</a>.</li>
-            <li><b>Fees.</b> Paid features and credits are charged as shown in the product at the time of purchase.</li>
+            <li><b>Fees.</b> Customers pay their own AI model provider directly; the platform does not resell model usage. Any paid platform features are charged as shown in the product at the time of purchase.</li>
             <li><b>Suspension and termination.</b> We may suspend accounts that violate these terms or platform policies. Customers may stop using the service at any time and request deletion of their data.</li>
             <li><b>Disclaimer and liability.</b> The service is provided "as is". To the extent permitted by law, our total liability is limited to the fees paid in the 12 months before the claim. Third-party platforms may change or interrupt their services, which may affect features.</li>
             <li><b>Changes and governing law.</b> We may update these terms and will post the new version here. These terms are governed by the laws of the place where {companyEn} is registered.</li>
@@ -230,7 +230,7 @@ public class ChannelPublicSiteController {
             <li><b>使用规范：</b>遵守法律及各平台的条款和政策（含 Meta 平台条款、WhatsApp 商业政策、Messenger 平台政策）；不得发送垃圾信息或未经同意的群发，须尊重客户的退订要求，只在平台允许的时间窗口和规则内发送消息。</li>
             <li><b>AI 内容：</b>AI 草稿可能有误，企业自行决定自动发送或人工审核，并对从其账号发出的消息负责。</li>
             <li><b>数据：</b>企业拥有其工作区中的数据，我们仅为提供服务而处理，详见<a href="/privacy">隐私政策</a>。</li>
-            <li><b>费用：</b>付费功能和智点按购买时页面所示收费。</li>
+            <li><b>费用：</b>付费功能和AI 用量按购买时页面所示收费。</li>
             <li><b>暂停与终止：</b>违反本条款或平台政策的账号可能被暂停；企业可随时停止使用并申请删除数据。</li>
             <li><b>免责与责任限制：</b>服务按现状提供；在法律允许范围内，我们的责任以索赔前 12 个月实际支付的费用为限。第三方平台的变更或中断可能影响相关功能。</li>
             <li><b>联系：</b><a href="mailto:{email}">{email}</a></li>

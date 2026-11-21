@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 /**
  * 通用占位页：菜单已建好、功能尚未开发的页面统一使用这个组件。
  * 按路由路径最后一段查找本页计划实现的功能清单。
@@ -59,7 +59,6 @@ const PLANS: Record<string, { features: string[]; phase: number }> = {
   templates: { phase: 3, features: ['WhatsApp 消息模板', '审核状态'] },
   disk: { phase: 4, features: ['企业云盘与个人云盘', '文件夹管理'] },
   'send-policy': { phase: 3, features: ['按账号或域名分类来信', '跳过内部与无效来信'] },
-  credits: { phase: 4, features: ['企业智点余额', '按员工和渠道的消耗流水'] },
 };
 
 const key = computed(() => route.path.split('/').filter(Boolean).pop() ?? '');

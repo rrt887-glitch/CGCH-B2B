@@ -45,9 +45,6 @@ CALL cgch_add_index('channel_ai_draft', 'idx_status_create', 'status', 'create_t
 CALL cgch_add_index('channel_ai_draft', 'idx_create_time', 'create_time', NULL, NULL); -- 看板按时间统计
 CALL cgch_add_index('channel_ai_deferred', 'idx_status_due', 'status', 'due_time', NULL); -- 到点执行的延后回复
 CALL cgch_add_index('channel_ai_deferred', 'idx_channel_ref', 'channel', 'ref_id', NULL); -- 消息对应的延后回复
-CALL cgch_add_index('channel_credit_ledger', 'idx_create_time', 'create_time', NULL, NULL); -- 智点流水按时间查询
-CALL cgch_add_index('channel_credit_ledger', 'idx_user_time', 'user_id', 'create_time', NULL); -- 业务员的智点流水
-CALL cgch_add_index('channel_credit_order', 'idx_pay_order', 'pay_order_id', NULL, NULL); -- 支付回调找到订单
 CALL cgch_add_index('channel_reactivate_item', 'idx_task', 'task_id', NULL, NULL); -- 唤醒任务的明细
 CALL cgch_add_index('channel_reactivate_item', 'idx_channel_sent_ref', 'channel', 'sent_ref_id', NULL); -- 客户回复后找到唤醒记录
 CALL cgch_add_index('channel_reactivate_item', 'idx_customer', 'customer_id', NULL, NULL); -- 客户的唤醒记录

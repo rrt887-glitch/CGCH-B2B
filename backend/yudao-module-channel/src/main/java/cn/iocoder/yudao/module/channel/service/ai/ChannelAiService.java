@@ -19,7 +19,7 @@ import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiForbiddenWordMapper
 import cn.iocoder.yudao.module.channel.dal.mysql.ai.ChannelAiKnowledgeMapper;
 import cn.iocoder.yudao.module.channel.controller.admin.mail.vo.ChannelMailSendReqVO;
 import cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaSendReqVO;
-import cn.iocoder.yudao.module.channel.service.credit.ChannelCreditService;
+import cn.iocoder.yudao.module.channel.service.credit.ChannelAiUsageService;
 import cn.iocoder.yudao.module.channel.dal.dataobject.worktime.ChannelAiDeferredDO;
 import cn.iocoder.yudao.module.channel.dal.mysql.worktime.ChannelAiDeferredMapper;
 import cn.iocoder.yudao.module.channel.service.worktime.ChannelWorkTimeService;
@@ -69,7 +69,7 @@ public class ChannelAiService {
     @Resource
     private CrmCustomerMapper customerMapper;
     @Resource
-    private ChannelCreditService channelCreditService;
+    private ChannelAiUsageService channelAiUsageService;
     @Resource
     private ChannelWorkTimeService channelWorkTimeService;
     @Resource
@@ -208,7 +208,7 @@ public class ChannelAiService {
             channelAiKnowledgeMapper.updateById(k);
         }
         ChannelAiConfigDO cfg = getConfig();
-        if (semanticEnabled(cfg) && channelCreditService.hasBalance()) {
+        if (semanticEnabled(cfg) && channelAiUsageService.hasBalance()) {
             try {
                 embedKnowledge(cfg, List.of(k), currentUserId());
             } catch (Exception e) {
@@ -239,7 +239,7 @@ public class ChannelAiService {
         return StrUtil.maxLength(StrUtil.nullToEmpty(k.getTitle()) + "\n" + StrUtil.nullToEmpty(k.getContent()), 4000);
     }
 
-    /** 为条目生成向量并保存，按 token 扣智点；返回处理的条数 */
+    /** 为条目生成向量并保存，按 token 扣AI 用量；返回处理的条数 */
     private int embedKnowledge(ChannelAiConfigDO cfg, List<ChannelAiKnowledgeDO> items, Long userId) {
         int tokens = 0;
         for (int i = 0; i < items.size(); i += EMBED_BATCH) {
@@ -255,7 +255,7 @@ public class ChannelAiService {
             tokens += e.tokens();
         }
         if (!items.isEmpty()) {
-            channelCreditService.consume("knowledge", null, userId, Math.max(tokens, 1), "知识库向量化");
+            channelAiUsageService.consume("knowledge", null, userId, Math.max(tokens, 1), "知识库向量化");
         }
         return items.size();
     }
@@ -263,7 +263,7 @@ public class ChannelAiService {
     /** 配置了向量模型且有余额时为这些条目生成向量；失败只记日志（之后可在知识库里「建立语义索引」补上） */
     public void embedQuietly(List<ChannelAiKnowledgeDO> items) {
         ChannelAiConfigDO cfg = getConfig();
-        if (items.isEmpty() || !semanticEnabled(cfg) || !channelCreditService.hasBalance()) {
+        if (items.isEmpty() || !semanticEnabled(cfg) || !channelAiUsageService.hasBalance()) {
             return;
         }
         try {
@@ -323,9 +323,9 @@ public class ChannelAiService {
     public List<Map<String, Object>> searchKnowledge(Long userId, String q) {
         ChannelAiConfigDO cfg = getConfig();
         List<ChannelAiKnowledgeDO> all = channelAiKnowledgeMapper.selectEnabledFor(userId);
-        Semantic sem = semanticEnabled(cfg) && channelCreditService.hasBalance() ? semanticScores(cfg, all, q) : null;
+        Semantic sem = semanticEnabled(cfg) && channelAiUsageService.hasBalance() ? semanticScores(cfg, all, q) : null;
         if (sem != null) {
-            channelCreditService.consume("knowledge", null, userId, Math.max(sem.tokens(), 1), "知识库检索测试");
+            channelAiUsageService.consume("knowledge", null, userId, Math.max(sem.tokens(), 1), "知识库检索测试");
         }
         List<Map<String, Object>> out = new ArrayList<>();
         for (AiPromptBuilder.Hit h : AiPromptBuilder.rank(all, q, sem == null ? null : sem.scores())) {
@@ -588,14 +588,13 @@ public class ChannelAiService {
             throw exception(AI_LLM_FAIL, "请先输入客户的问题");
         }
         Generated g = generate(cfg, ch, lastUserText(history), history.subList(Math.max(0, history.size() - 20), history.size()), userId);
-        long credits = channelCreditService.consume(ch, 0L, userId, g.promptTokens() + g.completionTokens(), "智能体测试对话");
+        channelAiUsageService.consume(ch, 0L, userId, g.promptTokens() + g.completionTokens(), "智能体测试对话");
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("content", ChannelAiDraftDO.CHANNEL_MAIL.equals(ch) ? withSignature(g, cfg) : g.content());
         r.put("handoff", g.handoff());
         r.put("forbidden", g.forbidden());
         r.put("knowledgeHits", g.knowledgeHits());
         r.put("files", g.files().stream().map(ChannelCloudFileDO::getName).toList());
-        r.put("credits", credits);
         return r;
     }
 
@@ -666,17 +665,14 @@ public class ChannelAiService {
     }
 
     private void requireCredit() {
-        if (!channelCreditService.hasBalance()) {
-            throw exception(AI_CREDIT_INSUFFICIENT);
-        }
     }
 
     /** 按本次 token 扣点，并记在回复记录上 */
     private ChannelAiDraftDO charge(ChannelAiDraftDO d, Long userId, String remark) {
         int tokens = (d.getPromptTokens() == null ? 0 : d.getPromptTokens()) + (d.getCompletionTokens() == null ? 0 : d.getCompletionTokens());
-        long credits = channelCreditService.consume(d.getChannel(), d.getId(), userId, tokens, remark);
-        channelAiDraftMapper.updateById(new ChannelAiDraftDO().setId(d.getId()).setCredits(credits));
-        d.setCredits(credits);
+        channelAiUsageService.consume(d.getChannel(), d.getId(), userId, tokens, remark);
+        channelAiDraftMapper.updateById(new ChannelAiDraftDO().setId(d.getId()));
+        d;
         if (!ChannelAiDraftDO.REASON_MANUAL.equals(d.getReason())) {
             channelNotifyService.onDraft(d); // 转人工、违禁词、发送失败时提醒业务员
         }
@@ -685,7 +681,7 @@ public class ChannelAiService {
 
     /** 余额不足时不调用大模型，只留一条记录提醒人工处理 */
     private boolean noCredit(String channel, Long refId) {
-        if (channelCreditService.hasBalance()) {
+        if (channelAiUsageService.hasBalance()) {
             return false;
         }
         ChannelAiDraftDO exist = channelAiDraftMapper.selectLatestPending(channel, refId);
@@ -866,7 +862,7 @@ public class ChannelAiService {
             return 0;
         }
         ChannelAgentSettings.Skills s = ChannelAgentSettings.skills(cfg);
-        if (!s.isFollowUp() || !channelCreditService.hasBalance()) {
+        if (!s.isFollowUp() || !channelAiUsageService.hasBalance()) {
             return 0;
         }
         int hours = Math.max(1, s.getFollowUpHours());

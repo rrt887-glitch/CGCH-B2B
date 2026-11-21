@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.channel.controller.admin.reactivate;
+﻿package cn.iocoder.yudao.module.channel.controller.admin.reactivate;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
@@ -145,7 +145,6 @@ public class ChannelReactivateController {
                 x.put("insight", i.getInsight() == null ? null : cn.iocoder.yudao.framework.common.util.json.JsonUtils.parseTree(i.getInsight()));
                 x.put("status", i.getStatus());
                 x.put("reasonDetail", i.getReasonDetail());
-                x.put("credits", i.getCredits());
                 x.put("sentTime", i.getSentTime() == null ? null : i.getSentTime().format(TIME));
                 x.put("sentRefId", i.getSentRefId());
                 x.put("replied", r);

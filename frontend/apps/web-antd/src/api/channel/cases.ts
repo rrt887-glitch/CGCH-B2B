@@ -15,7 +15,6 @@ export namespace ChannelCaseApi {
     phrases: string[];
     enabled: boolean;
     source?: 'ai' | 'manual';
-    credits?: number;
     indexed?: boolean;
     createTime?: string;
   }

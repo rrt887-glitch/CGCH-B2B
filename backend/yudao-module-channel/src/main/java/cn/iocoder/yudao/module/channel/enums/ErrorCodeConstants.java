@@ -49,12 +49,9 @@ public interface ErrorCodeConstants {
     ErrorCode AI_FORBIDDEN_EMPTY = new ErrorCode(1_030_003_003, "违禁词不能为空");
     ErrorCode AI_FORBIDDEN_EXISTS = new ErrorCode(1_030_003_004, "该违禁词已存在");
     ErrorCode AI_DRAFT_NOT_EXISTS = new ErrorCode(1_030_003_005, "草稿不存在");
-    ErrorCode AI_CREDIT_INSUFFICIENT = new ErrorCode(1_030_003_006, "智点余额不足，请联系管理员充值");
     ErrorCode AI_REPORT_NOT_EXISTS = new ErrorCode(1_030_003_008, "工作报告不存在");
     ErrorCode AI_EMBEDDING_NOT_CONFIGURED = new ErrorCode(1_030_003_007, "请先在数字员工档案中填写向量模型");
 
-    // ========== 智点 1-030-004-000 ==========
-    ErrorCode CREDIT_AMOUNT_ZERO = new ErrorCode(1_030_004_000, "数量不能为 0");
     ErrorCode LEAD_RULE_INVALID = new ErrorCode(1_030_012_000, "{}");
     ErrorCode MAIL_OAUTH_FAIL = new ErrorCode(1_030_000_010, "邮箱授权失败：{}");
     ErrorCode MAIL_BATCH_INVALID = new ErrorCode(1_030_013_000, "{}");
@@ -75,10 +72,5 @@ public interface ErrorCodeConstants {
     ErrorCode REACTIVATE_ITEM_STATUS = new ErrorCode(1_030_007_004, "{}");
     ErrorCode WORK_TIME_INVALID = new ErrorCode(1_030_006_000, "{}");
     ErrorCode DASHBOARD_USER_FORBIDDEN = new ErrorCode(1_030_005_000, "无权查看该业务员的数据");
-    ErrorCode CREDIT_PACKAGE_NOT_FOUND = new ErrorCode(1_030_004_001, "充值套餐不存在");
-    ErrorCode CREDIT_ORDER_NOT_FOUND = new ErrorCode(1_030_004_002, "充值订单不存在");
-    ErrorCode CREDIT_ORDER_PAY_MISMATCH = new ErrorCode(1_030_004_003, "支付单与充值订单不匹配");
-    ErrorCode CREDIT_ORDER_NOT_PAID = new ErrorCode(1_030_004_004, "支付单尚未支付成功");
-    ErrorCode CREDIT_ORDER_PRICE_MISMATCH = new ErrorCode(1_030_004_005, "支付金额与订单金额不一致");
 
 }

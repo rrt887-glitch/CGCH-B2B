@@ -91,7 +91,6 @@ const tiles = computed(() => {
     { label: 'AI 发出占比', value: pct(c.aiShare), sub: `AI 发出 ${c.mailAiOut + c.waAiOut} 条` },
     { label: '转人工', value: String(c.aiHandoff), sub: `待确认 ${c.aiPending} 份` },
     { label: '新线索', value: String(c.cluesCreated), sub: `转客户 ${c.cluesConverted}` },
-    { label: 'AI 用量（千 token）', value: String(c.creditsConsumed), sub: `较上期 ${change(c.creditsConsumed, p.creditsConsumed)}` },
   ];
 });
 function goto(item: ChannelReportApi.Item) {

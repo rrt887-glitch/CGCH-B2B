@@ -45,28 +45,8 @@ INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_i
   (22203, '知识库维护',   'channel:ai:knowledge', 3, 1, 20402, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
   (22204, '违禁词维护',   'channel:ai:forbidden', 3, 1, 20405, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
 
--- 智点：「智点消耗」从占位页切换到正式页面
-UPDATE `system_menu` SET `component` = 'cgch/config/credits/index' WHERE `id` = 20506;
-DELETE FROM `system_menu` WHERE `id` BETWEEN 22300 AND 22399;
-INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
-  (22301, '智点查询', 'channel:credit:query',    3, 1, 20506, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0'),
-  (22302, '智点充值', 'channel:credit:recharge', 3, 2, 20506, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
 
--- 默认租户赠送 1000 智点用于试用
-DELETE FROM `channel_credit_ledger` WHERE `tenant_id` = 1;
-DELETE FROM `channel_credit_account` WHERE `tenant_id` = 1;
-INSERT INTO `channel_credit_account` (`balance`, `total_in`, `total_out`, `creator`, `updater`, `tenant_id`) VALUES (1000, 1000, 0, '1', '1', 1);
-INSERT INTO `channel_credit_ledger` (`type`, `amount`, `balance_after`, `user_id`, `remark`, `creator`, `updater`, `tenant_id`)
-VALUES ('recharge', 1000, 1000, 1, '初始赠送', '1', '1', 1);
 
--- 智点在线充值：支付应用（回调地址按实际部署地址修改；支付渠道在「支付管理 → 应用信息」里配置微信/支付宝）
-DELETE FROM `pay_app` WHERE `app_key` = 'cgch-credit';
-INSERT INTO `pay_app` (`app_key`, `name`, `status`, `remark`, `order_notify_url`, `refund_notify_url`, `creator`, `updater`, `tenant_id`)
-VALUES ('cgch-credit', '智点充值', 0, 'CGCH 智点在线充值',
-        'http://127.0.0.1:48080/admin-api/channel/credit/order/update-paid',
-        NULL, '1', '1', 1);
-INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `updater`, `deleted`) VALUES
-  (22303, '在线购买智点', 'channel:credit:buy', 3, 3, 20506, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', 'admin', b'0');
 
 -- 数据看板：从占位页切换到正式页面
 UPDATE `system_menu` SET `component` = 'cgch/board/overview/index' WHERE `id` = 20001;
@@ -117,9 +97,8 @@ INSERT INTO `system_notify_template` (`name`, `code`, `nickname`, `content`, `ty
   ('AI 接手回复', 'cgch_takeover', 'CGCH 数字员工', '「{customer}」的消息等待 {minutes} 分钟无人回复，AI 已接手回复', 1, '["customer","minutes"]', 0, '工作时间业务员优先，超时由 AI 接手', '1', '1'),
   ('新询盘建档', 'cgch_new_lead', 'CGCH 数字员工', '新询盘：已为「{name}」自动建线索（来自{source}）', 1, '["name","source"]', 0, '线索自动建档', '1', '1'),
   ('唤醒客户回复', 'cgch_reactivate_reply', 'CGCH 数字员工', '「{customer}」回复了客户唤醒「{task}」，请尽快跟进', 1, '["customer","task"]', 0, '客户唤醒后客户回复', '1', '1'),
-  ('智点不足', 'cgch_credit_low', 'CGCH 数字员工', '智点余额仅剩 {balance}，{hint}，请及时充值', 1, '["balance","hint"]', 0, '余额跌破提醒线或用完', '1', '1');
 
--- 默认租户的联系人设为管理员（智点不足等租户级提醒发给联系人）
+-- 默认租户的联系人设为管理员（租户级提醒发给联系人）
 UPDATE `system_tenant` SET `contact_user_id` = 1 WHERE `id` = 1 AND `contact_user_id` IS NULL;
 
 -- 通知中心：从占位页切换到正式页面
@@ -213,7 +192,6 @@ SELECT 300, m.`id`, 'admin', 'admin', b'0', 1
    AND COALESCE(m.`permission`, '') NOT IN (
      'channel:ai:config', 'channel:ai:forbidden', 'channel:ai:knowledge', 'channel:ai:case',
      'channel:cloud:manage', 'channel:mail-template:manage', 'channel:work-time:config',
-     'channel:credit:buy', 'channel:credit:recharge',
      'crm:customer:distribute', 'crm:customer:import', 'crm:customer:export', 'crm:clue:export', 'crm:contact:export',
      'crm:business:export', 'crm:contract:export', 'crm:receivable:export', 'crm:receivable-plan:export', 'crm:product:export',
      'crm:business-status:create', 'crm:business-status:update', 'crm:business-status:delete',
@@ -251,9 +229,9 @@ CREATE TABLE IF NOT EXISTS `system_tenant_visit_log` (
   KEY `idx_user_tenant` (`user_id`, `visit_tenant_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '平台进入客户后台的记录';
 
--- 客户标准版套餐（编号 200）：草根出海全部功能 + 成员管理，不含平台功能和智点充值；开户默认选它
+-- 客户标准版套餐（编号 200）：草根出海全部功能 + 成员管理，不含平台功能；开户默认选它
 INSERT INTO `system_tenant_package` (`id`, `name`, `status`, `remark`, `menu_ids`, `creator`, `updater`, `deleted`)
-SELECT 200, '客户标准版', 0, '草根出海全部功能 + 成员管理；不含平台功能和智点充值', CAST(JSON_ARRAYAGG(m.`id`) AS CHAR), '1', '1', b'0'
+SELECT 200, '客户标准版', 0, '草根出海全部功能 + 成员管理；不含平台功能', CAST(JSON_ARRAYAGG(m.`id`) AS CHAR), '1', '1', b'0'
   FROM `system_menu` m
   LEFT JOIN (
     WITH RECURSIVE sub AS (
@@ -265,6 +243,5 @@ SELECT 200, '客户标准版', 0, '草根出海全部功能 + 成员管理；不
   ) allowed ON allowed.`id` = m.`id`
  WHERE m.`deleted` = b'0' AND m.`status` = 0
    AND (allowed.`id` IS NOT NULL OR m.`id` IN (1, 4, 23, 24, 25, 26, 29, 5, 80))
-   AND COALESCE(m.`permission`, '') <> 'channel:credit:recharge'
    AND NOT EXISTS (SELECT 1 FROM `system_tenant_package` p WHERE p.`id` = 200)
 HAVING COUNT(*) > 0;
