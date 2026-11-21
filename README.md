@@ -95,6 +95,20 @@ curl -fsSL https://raw.githubusercontent.com/rrt887-glitch/CGCH-B2B/main/deploy/
 - 字段加密密钥（`CGCH_FIELD_ENCRYPT_KEY`）用于加密邮箱密码、渠道令牌、大模型 API Key，上线后不要再改
 - 上线后立即修改默认管理员密码
 
+## 协作与推送约定
+
+仓库可能同时有多个工具/人推送（例如 AI Studio 也会往 main 提交）。**推送前必须先看远端有没有新提交**，避免覆盖或产生冲突：
+
+```bash
+git fetch origin
+git log --oneline HEAD..origin/main        # 远端比我们多的提交
+git log --oneline origin/main..HEAD        # 我们比远端多的提交
+```
+
+- 远端有新提交：先 `git rebase origin/main`（有冲突就解决），再推送
+- 推送用普通 `git push`；**不要**随手 `git push --force`，除非确认远端那份工作已经合并
+- 大改动前先建备份分支：`git branch backup/<说明> HEAD`
+
 ## 第三方许可
 
 见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。WhatsApp 扫码接入使用 [Evolution API](https://github.com/evolution-foundation/evolution-api)（Apache-2.0）。
