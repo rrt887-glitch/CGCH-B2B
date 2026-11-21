@@ -278,7 +278,6 @@ public class ChannelAiService {
         if (!semanticEnabled(cfg)) {
             throw exception(AI_EMBEDDING_NOT_CONFIGURED);
         }
-        requireCredit();
         List<ChannelAiKnowledgeDO> todo = channelAiKnowledgeMapper.selectEnabled().stream()
                 .filter(k -> !cfg.getEmbeddingModel().equals(k.getEmbeddingModel()) || StrUtil.isBlank(k.getEmbedding()))
                 .toList();
@@ -576,7 +575,6 @@ public class ChannelAiService {
      * @param messages 对话历史，role 为 user（客户）或 assistant（数字员工）
      */
     public Map<String, Object> testReply(Long userId, String channel, List<LlmClient.Message> messages) {
-        requireCredit();
         ChannelAiConfigDO cfg = getConfig();
         String ch = ChannelAiDraftDO.CHANNEL_MAIL.equals(channel) ? ChannelAiDraftDO.CHANNEL_MAIL : ChannelAiDraftDO.CHANNEL_WHATSAPP;
         List<LlmClient.Message> history = messages.stream()
@@ -600,7 +598,6 @@ public class ChannelAiService {
 
     public ChannelAiDraftDO draftForMail(Long userId, Long messageId) {
         ChannelMailMessageDO m = mailService.getMessage(userId, messageId);
-        requireCredit();
         ChannelAiConfigDO cfg = getConfig();
         List<LlmClient.Message> history = mailHistory(m);
         Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_MAIL, lastUserText(history), history, userId);
@@ -611,7 +608,6 @@ public class ChannelAiService {
 
     public ChannelAiDraftDO draftForWhatsApp(Long userId, Long conversationId) {
         whatsAppService.getConversation(userId, conversationId); // 校验归属
-        requireCredit();
         ChannelAiConfigDO cfg = getConfig();
         List<LlmClient.Message> history = waHistory(conversationId);
         Generated g = generate(cfg, ChannelAiDraftDO.CHANNEL_WHATSAPP, lastUserText(history), history, userId);
