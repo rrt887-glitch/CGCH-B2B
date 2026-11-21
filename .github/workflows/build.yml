@@ -1988,7 +1988,7 @@ jobs:
               call('DELETE', f'/channel/mail-template/delete?id={t}')
           # 通知规则：同一类型同一方式不能重复
           nr = call('GET', '/channel/notify-rule/list')
-          assert nr['rules'] == [] and len(nr['types']) == 5, nr
+          assert nr['rules'] == [] and len(nr['types']) == 4, nr
           rid = call('POST', '/channel/notify-rule/save', {'type': 'new_lead', 'channel': 'email', 'enabled': True})
           assert call('POST', '/channel/notify-rule/save', {'type': 'new_lead', 'channel': 'email'}, ok=False)['code'] != 0
           call('DELETE', f'/channel/notify-rule/delete?id={rid}')
