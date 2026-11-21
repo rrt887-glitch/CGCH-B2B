@@ -60,11 +60,18 @@ public class ChannelUnipileService {
     /** 当前公司的凭证；没有就现场建 Scope 与 Key（每个公司一个隔离边界） */
     @Transactional(rollbackFor = Exception.class)
     public ChannelUnipileCredentialDO credential() {
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
         ChannelUnipileCredentialDO saved = credentialMapper.selectCurrent();
         if (saved != null && StrUtil.isNotBlank(saved.getApiKey())) {
+            // 之前用的是 Account Key（建不了 Scope），只能降级成单 Key；换成 Service Key 后自动升级成一户一 Scope
+            if ("global".equals(saved.getScopeId())) {
+                ChannelUnipileCredentialDO upgraded = tryUpgradeToScoped(tenantId, saved);
+                if (upgraded != null) {
+                    return upgraded;
+                }
+            }
             return saved;
         }
-        Long tenantId = TenantContextHolder.getRequiredTenantId();
         ChannelUnipileCredentialDO row;
         try {
             String scopeId = UnipileClient.createScope(props, "tenant-" + tenantId, String.valueOf(tenantId));
@@ -86,6 +93,22 @@ public class ChannelUnipileService {
         }
         credentialMapper.insert(row);
         return row;
+    }
+
+    /** 单 Key 模式升级成一户一 Scope；失败返回 null（继续用单 Key） */
+    private ChannelUnipileCredentialDO tryUpgradeToScoped(Long tenantId, ChannelUnipileCredentialDO saved) {
+        try {
+            String scopeId = UnipileClient.createScope(props, "tenant-" + tenantId, String.valueOf(tenantId));
+            String apiKey = UnipileClient.createScopeKey(props, scopeId, "tenant-" + tenantId, props.getKeyExpireDays());
+            credentialMapper.updateById(ChannelUnipileCredentialDO.builder()
+                    .id(saved.getId()).scopeId(scopeId).apiKey(apiKey).apiKeyMask(mask(apiKey))
+                    .status(ChannelUnipileCredentialDO.STATUS_ACTIVE).build());
+            log.info("[credential][租户 {} 从单 Key 升级到 Scope {}]", tenantId, scopeId);
+            return credentialMapper.selectById(saved.getId());
+        } catch (Exception e) {
+            log.warn("[credential][租户 {} 升级 Scope 失败，继续用单 Key：{}]", tenantId, e.getMessage());
+            return null;
+        }
     }
 
     /** 是不是「没有权限建 Scope」这类错误（Account Key 常见） */
