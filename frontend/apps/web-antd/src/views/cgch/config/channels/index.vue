@@ -819,6 +819,7 @@ const KIND_LABEL: Record<Kind, string> = {
   mail: '邮箱',
   im: '官网在线客服',
   social: '视频评论',
+  unipile: '托管接入',
   lead: '询盘平台',
   soon: '',
 };
