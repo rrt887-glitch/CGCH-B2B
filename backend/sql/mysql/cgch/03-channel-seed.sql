@@ -96,7 +96,7 @@ INSERT INTO `system_notify_template` (`name`, `code`, `nickname`, `content`, `ty
   ('AI 转人工', 'cgch_handoff', 'CGCH 数字员工', '「{customer}」的消息需要人工处理：{reason}', 1, '["customer","reason"]', 0, 'AI 转人工、违禁词拦截、自动发送失败', '1', '1'),
   ('AI 接手回复', 'cgch_takeover', 'CGCH 数字员工', '「{customer}」的消息等待 {minutes} 分钟无人回复，AI 已接手回复', 1, '["customer","minutes"]', 0, '工作时间业务员优先，超时由 AI 接手', '1', '1'),
   ('新询盘建档', 'cgch_new_lead', 'CGCH 数字员工', '新询盘：已为「{name}」自动建线索（来自{source}）', 1, '["name","source"]', 0, '线索自动建档', '1', '1'),
-  ('唤醒客户回复', 'cgch_reactivate_reply', 'CGCH 数字员工', '「{customer}」回复了客户唤醒「{task}」，请尽快跟进', 1, '["customer","task"]', 0, '客户唤醒后客户回复', '1', '1'),
+  ('唤醒客户回复', 'cgch_reactivate_reply', 'CGCH 数字员工', '「{customer}」回复了客户唤醒「{task}」，请尽快跟进', 1, '["customer","task"]', 0, '客户唤醒后客户回复', '1', '1');
 
 -- 默认租户的联系人设为管理员（租户级提醒发给联系人）
 UPDATE `system_tenant` SET `contact_user_id` = 1 WHERE `id` = 1 AND `contact_user_id` IS NULL;
