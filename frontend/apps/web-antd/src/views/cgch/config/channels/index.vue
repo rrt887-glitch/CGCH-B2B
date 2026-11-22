@@ -229,11 +229,19 @@ const CHANNELS: Channel[] = [
   },
   {
     key: 'messenger',
-    name: 'Facebook Page',
+    name: 'Facebook（官方）',
     abbr: 'f',
     color: '#1877f2',
     kind: 'meta',
     platform: 'messenger',
+  },
+  {
+    key: 'facebook-unipile',
+    name: 'Facebook（第三方）',
+    abbr: 'f',
+    color: '#1877f2',
+    kind: 'unipile',
+    provider: 'facebook',
   },
   {
     key: '126',
@@ -417,8 +425,9 @@ function accountsOf(c: Channel): AccountRow[] {
         .filter((a) => (a.provider || 'custom') === c.provider)
         .map(mailRow);
     case 'meta':
+      // 官方接入（Meta OAuth）；第三方（Unipile）的 Facebook 也落在 messenger 平台，这里要排除掉
       return waAccounts.value
-        .filter((a) => a.platform === c.platform)
+        .filter((a) => a.platform === c.platform && a.authType !== 'unipile')
         .map(waRow);
     case 'unipile': {
       // provider 与平台名的对应（Facebook 在我们的库里叫 messenger）
@@ -810,7 +819,7 @@ const KIND_LABEL: Record<Kind, string> = {
   mail: '邮箱',
   im: '官网在线客服',
   social: '视频评论',
-  unipile: '托管接入',
+  unipile: '第三方登录',
   lead: '询盘平台',
   soon: '',
 };
