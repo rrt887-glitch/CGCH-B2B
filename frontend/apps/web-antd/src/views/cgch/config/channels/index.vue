@@ -2,7 +2,7 @@
 /**
  * 渠道账号：一张总表列出所有可接入的渠道（顺序与原网站一致），每个渠道下面列出已连接的账号。
  * 邮箱用「邮箱地址 + 授权码」绑定（高级配置里可改收发信服务器），Gmail / Outlook 配置了授权应用时走一键授权；
- * WhatsApp 用手机号配对码或二维码扫码接入（Evolution API，与原网站一致），WhatsApp Business Official API 走 Meta 官方接口；Facebook 主页、Instagram 走 Facebook 登录授权；
+ * WhatsApp 用手机号配对码或二维码扫码接入（Evolution API）；Facebook 主页、Instagram 走 Facebook 登录授权；
  * 阿里国际站、中国制造网通过留资邮箱接入；官网 IM 绑定域名后把嵌入代码放到网站上；YouTube、TikTok 授权后拉取视频评论进会话。
  */
 import type { ChannelMailApi } from '#/api/channel/mail';
@@ -146,8 +146,7 @@ type Kind =
   | 'social'
   | 'soon'
   | 'unipile'
-  | 'wa'
-  | 'wa-official';
+  | 'wa';
 interface Channel {
   key: string;
   name: string;
@@ -261,13 +260,7 @@ const CHANNELS: Channel[] = [
     oauth: 'microsoft',
   },
   {
-    key: 'wa-official',
-    name: 'WhatsApp Business Official API',
-    abbr: 'B',
-    color: '#25d366',
-    kind: 'wa-official',
-  },
-  { key: 'im', name: '官网IM', abbr: 'Ai', color: '#0066cc', kind: 'im' },
+    key: 'im', name: '官网IM', abbr: 'Ai', color: '#0066cc', kind: 'im' },
   {
     key: 'alibaba',
     name: '阿里国际',
@@ -440,10 +433,6 @@ function accountsOf(c: Channel): AccountRow[] {
       return waAccounts.value
         .filter((a) => wa(a) && a.authType === 'evolution')
         .map(waRow);
-    case 'wa-official':
-      return waAccounts.value
-        .filter((a) => wa(a) && a.authType !== 'evolution')
-        .map(waRow);
     case 'social':
       return waAccounts.value
         .filter((a) => a.platform === c.platform)
@@ -481,9 +470,6 @@ function connect(c: Channel) {
     case 'wa':
       evoAccountId.value = undefined;
       evoOpen.value = true;
-      break;
-    case 'wa-official':
-      waRef.value?.connectOfficial();
       break;
     case 'meta':
       waRef.value?.connect(c.platform as 'instagram' | 'messenger');
@@ -814,7 +800,6 @@ interface InboxRow extends AccountRow {
 }
 const KIND_LABEL: Record<Kind, string> = {
   wa: 'WhatsApp · 扫码',
-  'wa-official': 'WhatsApp · 官方 API',
   meta: '社媒私信',
   mail: '邮箱',
   im: '官网在线客服',
@@ -957,7 +942,7 @@ const addOpen = ref(false);
 const ADD_GROUPS: { keys: string[]; title: string }[] = [
   {
     title: '即时消息',
-    keys: ['whatsapp', 'wa-official', 'messenger', 'instagram', 'im'],
+    keys: ['whatsapp', 'messenger', 'instagram', 'im'],
   },
   {
     title: '邮箱',
@@ -979,7 +964,6 @@ const ADD_GROUPS: { keys: string[]; title: string }[] = [
 ];
 const CHANNEL_DESC: Record<string, string> = {
   whatsapp: '手机扫码或输入配对码，几分钟就能用，可同步历史聊天',
-  'wa-official': '通过 Meta 官方接口接入，可发审核通过的模板消息',
   messenger: '授权 Facebook 主页，接收主页私信',
   instagram: '授权专业账号，接收 Instagram 私信',
   im: '复制一段代码到网站，访客直接发起聊天',
