@@ -39,7 +39,6 @@ import {
 } from '#/api/channel/mail';
 import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
 import type { ChannelUnipileApi } from '#/api/channel/unipile';
-import { connectUnipile } from '#/api/channel/unipile';
 import type { SocialPlatform } from '#/api/channel/social';
 import { getSocialPlatforms, pollSocial } from '#/api/channel/social';
 import {
@@ -55,6 +54,7 @@ import WaAccounts from './wa-accounts.vue';
 import WebImModal from './web-im-modal.vue';
 import SocialConnectModal from './social-connect-modal.vue';
 import EvoConnectModal from './evo-connect-modal.vue';
+import UnipileConnectModal from './unipile-connect-modal.vue';
 import { CHANNEL_ICONS } from '#/assets/channel-icons';
 
 defineOptions({ name: 'CgchConfigChannels' });
@@ -330,6 +330,9 @@ const evoOpen = ref(false);
 /** 重新扫码的账号 */
 const evoAccountId = ref<number>();
 const socialPlatform = ref<SocialPlatform>('youtube');
+/** Unipile 托管接入：LinkedIn / Facebook / Instagram / Telegram */
+const unipileOpen = ref(false);
+const unipileProvider = ref<ChannelUnipileApi.Provider>('linkedin');
 const socialEnabled = ref<SocialPlatform[]>([]);
 const imRef = ref<InstanceType<typeof WebImModal>>();
 const webSites = computed(() =>
@@ -484,25 +487,13 @@ function connect(c: Channel) {
       socialOpen.value = true;
       break;
     case 'unipile':
-      void connectViaUnipile(c.provider as ChannelUnipileApi.Provider);
+      unipileProvider.value = c.provider as ChannelUnipileApi.Provider;
+      unipileOpen.value = true;
       break;
     case 'im':
       imOpen.value = true;
       if (!webSites.value.length) imRef.value?.add();
       break;
-  }
-}
-
-/** 通过 Unipile 托管页连接其他渠道（LinkedIn / Telegram / Instagram / Facebook） */
-async function connectViaUnipile(provider: ChannelUnipileApi.Provider) {
-  try {
-    const res = await connectUnipile(provider);
-    if (res?.url) {
-      window.open(res.url, '_blank', 'noopener');
-      message.info('已打开授权页面，完成登录后回到本页刷新即可看到账号');
-    }
-  } catch (e) {
-    message.error((e as Error).message || '生成授权链接失败，请检查 Unipile 配置');
   }
 }
 
@@ -1227,6 +1218,11 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
     <EvoConnectModal
       v-model:open="evoOpen"
       :account-id="evoAccountId"
+      @done="waRef?.load()"
+    />
+    <UnipileConnectModal
+      v-model:open="unipileOpen"
+      v-model:provider="unipileProvider"
       @done="waRef?.load()"
     />
     <SocialConnectModal
