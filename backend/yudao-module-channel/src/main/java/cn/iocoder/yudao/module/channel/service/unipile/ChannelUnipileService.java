@@ -229,6 +229,9 @@ public class ChannelUnipileService {
             ChannelUnipileCredentialDO c = credential();
             JsonNode acc = UnipileClient.getAccount(props, keyOf(c), accountId);
             String name = StrUtil.blankToDefault(acc.path("name").asText(null), acc.path("username").asText(null));
+            // 回调时按 Unipile 的真实状态落库：credentials 登录可能刚连上就被 FB 踢下线
+            String rawStatus = acc.path("status").asText("");
+            String conn = "running".equalsIgnoreCase(rawStatus) ? ChannelWaAccountDO.CONN_OPEN : ChannelWaAccountDO.CONN_CLOSE;
             ChannelWaAccountDO a = accountMapper.selectByPhoneNumberId(accountId);
             if (a == null) {
                 a = ChannelWaAccountDO.builder()
@@ -238,13 +241,13 @@ public class ChannelUnipileService {
                         .displayPhone(name)
                         .userId(userId)
                         .enabled(true)
-                        .connState(ChannelWaAccountDO.CONN_OPEN)
+                        .connState(conn)
                         .build();
                 accountMapper.insert(a);
             } else {
                 accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId())
                         .setPlatform(platform).setDisplayPhone(name)
-                        .setConnState(ChannelWaAccountDO.CONN_OPEN).setEnabled(true));
+                        .setConnState(conn).setEnabled(true));
             }
             return a;
         });
@@ -315,15 +318,21 @@ public class ChannelUnipileService {
     }
 
     private void dispatch(ChannelWaAccountDO a, String type, JsonNode payload) {
+        // Unipile v2 的状态事件是 account.status.running / .disconnected / .errored 这种带后缀的形式
+        if (type.startsWith("account.status")) {
+            String status = type.startsWith("account.status.")
+                    ? type.substring("account.status.".length())
+                    : payload.path("status").asText("");
+            String conn = ("running".equalsIgnoreCase(status) || "OK".equalsIgnoreCase(status))
+                    ? ChannelWaAccountDO.CONN_OPEN : ChannelWaAccountDO.CONN_CLOSE;
+            if (!conn.equals(a.getConnState())) {
+                accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setConnState(conn));
+                log.info("[dispatch][账号 {} 状态变为 {}（事件 {}）]", a.getId(), conn, type);
+            }
+            return;
+        }
         switch (type) {
             case "message.new" -> ingest(a, payload);
-            case "account.status" -> {
-                String status = payload.path("status").asText("");
-                String conn = "OK".equalsIgnoreCase(status) ? ChannelWaAccountDO.CONN_OPEN : ChannelWaAccountDO.CONN_CLOSE;
-                if (!conn.equals(a.getConnState())) {
-                    accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setConnState(conn));
-                }
-            }
             default -> log.debug("[dispatch][忽略事件 {}]", type);
         }
     }
