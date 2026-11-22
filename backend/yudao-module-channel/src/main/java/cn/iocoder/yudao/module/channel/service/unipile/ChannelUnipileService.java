@@ -276,7 +276,12 @@ public class ChannelUnipileService {
             throw new ServiceException(1_030_015_003, "这个会话还没有同步到 Unipile 的会话编号，暂时不能回复");
         }
         String key = tenantKey(a.getTenantId());
-        return UnipileClient.sendText(props, key, a.getPhoneNumberId(), chatId, text);
+        try {
+            return UnipileClient.sendText(props, key, a.getPhoneNumberId(), chatId, text);
+        } catch (UnipileClient.UnipileException e) {
+            // 把 Unipile 的真实原因返回给前端（会话已失效、对方不是好友、账号掉线等）
+            throw new ServiceException(1_030_015_007, "发送失败：" + e.getMessage());
+        }
     }
 
     // ==================== Webhook ====================
