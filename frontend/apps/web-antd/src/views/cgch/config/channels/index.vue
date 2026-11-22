@@ -51,7 +51,6 @@ import { getSimpleUserList } from '#/api/system/user';
 
 import LeadRules from './lead-rules.vue';
 import WaAccounts from './wa-accounts.vue';
-import WebImModal from './web-im-modal.vue';
 import SocialConnectModal from './social-connect-modal.vue';
 import EvoConnectModal from './evo-connect-modal.vue';
 import UnipileConnectModal from './unipile-connect-modal.vue';
@@ -139,7 +138,6 @@ const MAIL: Record<string, MailProvider> = {
 };
 
 type Kind =
-  | 'im'
   | 'lead'
   | 'mail'
   | 'meta'
@@ -171,11 +169,19 @@ const CHANNELS: Channel[] = [
   },
   {
     key: 'instagram',
-    name: 'Instagram',
+    name: 'Instagram（官方）',
     abbr: 'IG',
     color: '#d62976',
     kind: 'meta',
     platform: 'instagram',
+  },
+  {
+    key: 'instagram-unipile',
+    name: 'Instagram（第三方）',
+    abbr: 'IG',
+    color: '#d62976',
+    kind: 'unipile',
+    provider: 'instagram',
   },
   {
     key: '163',
@@ -260,8 +266,6 @@ const CHANNELS: Channel[] = [
     oauth: 'microsoft',
   },
   {
-    key: 'im', name: '官网IM', abbr: 'Ai', color: '#0066cc', kind: 'im' },
-  {
     key: 'alibaba',
     name: '阿里国际',
     abbr: '阿',
@@ -325,7 +329,6 @@ const waRef = ref<InstanceType<typeof WaAccounts>>();
 const waAccounts = ref<ChannelWaApi.Account[]>([]);
 const oauthProviders = ref<string[]>([]);
 const leadOpen = ref(false);
-const imOpen = ref(false);
 const socialOpen = ref(false);
 const evoOpen = ref(false);
 /** 重新扫码的账号 */
@@ -335,10 +338,6 @@ const socialPlatform = ref<SocialPlatform>('youtube');
 const unipileOpen = ref(false);
 const unipileProvider = ref<ChannelUnipileApi.Provider>('linkedin');
 const socialEnabled = ref<SocialPlatform[]>([]);
-const imRef = ref<InstanceType<typeof WebImModal>>();
-const webSites = computed(() =>
-  waAccounts.value.filter((a) => a.platform === 'web'),
-);
 const mailboxes = computed(() => mailAccounts.value.map((a) => a.email));
 
 async function loadMail() {
@@ -448,12 +447,6 @@ function accountsOf(c: Channel): AccountRow[] {
             r.status = { color: 'orange', text: '等待拉取评论' };
           return r;
         });
-    case 'im':
-      return webSites.value.map((a) => ({
-        ...waRow(a),
-        label: a.displayPhone || '',
-        sub: a.name,
-      }));
     default:
       return [];
   }
@@ -484,10 +477,6 @@ function connect(c: Channel) {
     case 'unipile':
       unipileProvider.value = c.provider as ChannelUnipileApi.Provider;
       unipileOpen.value = true;
-      break;
-    case 'im':
-      imOpen.value = true;
-      if (!webSites.value.length) imRef.value?.add();
       break;
   }
 }
@@ -786,9 +775,6 @@ function edit(c: Channel, r: AccountRow) {
   if (r.mail) {
     if (r.mail.authType === 'oauth2' && c.oauth) startOAuth(c.oauth);
     else openMail(c, r.mail);
-  } else if (r.wa?.platform === 'web') {
-    imOpen.value = true;
-    imRef.value?.edit(r.wa);
   } else if (r.wa) {
     waRef.value?.openForm(r.wa, (r.wa.platform as any) || 'whatsapp');
   }
@@ -802,7 +788,6 @@ const KIND_LABEL: Record<Kind, string> = {
   wa: 'WhatsApp · 扫码',
   meta: '社媒私信',
   mail: '邮箱',
-  im: '官网在线客服',
   social: '视频评论',
   unipile: '第三方登录',
   lead: '询盘平台',
@@ -869,9 +854,6 @@ function runAction(key: string, r: InboxRow) {
       break;
     case 'sync':
       if (r.mail) syncNow(r.mail);
-      break;
-    case 'code':
-      imOpen.value = true;
       break;
     case 'poll':
       if (r.wa) pollNow(r.wa);
@@ -942,7 +924,7 @@ const addOpen = ref(false);
 const ADD_GROUPS: { keys: string[]; title: string }[] = [
   {
     title: '即时消息',
-    keys: ['whatsapp', 'messenger', 'facebook-unipile', 'instagram', 'linkedin', 'telegram', 'im'],
+    keys: ['whatsapp', 'messenger', 'facebook-unipile', 'instagram', 'instagram-unipile', 'linkedin', 'telegram'],
   },
   {
     title: '邮箱',
@@ -969,7 +951,7 @@ const CHANNEL_DESC: Record<string, string> = {
   linkedin: '扫码登录 LinkedIn（第三方托管），接收私信',
   telegram: '扫码登录 Telegram（第三方托管），接收私信',
   instagram: '授权专业账号，接收 Instagram 私信',
-  im: '复制一段代码到网站，访客直接发起聊天',
+  'instagram-unipile': '用 Instagram 账号登录（第三方托管），接收私信',
   youtube: '授权频道，视频评论进会话统一回复',
   tiktok: '授权账号，视频评论进会话统一回复',
   alibaba: '通过留资邮箱把询盘转进系统',
@@ -1205,12 +1187,6 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
       @changed="onWaChanged"
     />
     <LeadRules v-model:open="leadOpen" :mailboxes="mailboxes" />
-    <WebImModal
-      ref="imRef"
-      v-model:open="imOpen"
-      :sites="webSites"
-      @changed="waRef?.load()"
-    />
     <EvoConnectModal
       v-model:open="evoOpen"
       :account-id="evoAccountId"
