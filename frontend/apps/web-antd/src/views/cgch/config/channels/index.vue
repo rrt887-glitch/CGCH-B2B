@@ -942,7 +942,7 @@ const addOpen = ref(false);
 const ADD_GROUPS: { keys: string[]; title: string }[] = [
   {
     title: '即时消息',
-    keys: ['whatsapp', 'messenger', 'instagram', 'im'],
+    keys: ['whatsapp', 'messenger', 'facebook-unipile', 'instagram', 'linkedin', 'telegram', 'im'],
   },
   {
     title: '邮箱',
@@ -965,6 +965,9 @@ const ADD_GROUPS: { keys: string[]; title: string }[] = [
 const CHANNEL_DESC: Record<string, string> = {
   whatsapp: '手机扫码或输入配对码，几分钟就能用，可同步历史聊天',
   messenger: '授权 Facebook 主页，接收主页私信',
+  'facebook-unipile': '用 Facebook 账号登录（第三方托管），接收 Messenger 私信',
+  linkedin: '扫码登录 LinkedIn（第三方托管），接收私信',
+  telegram: '扫码登录 Telegram（第三方托管），接收私信',
   instagram: '授权专业账号，接收 Instagram 私信',
   im: '复制一段代码到网站，访客直接发起聊天',
   youtube: '授权频道，视频评论进会话统一回复',
