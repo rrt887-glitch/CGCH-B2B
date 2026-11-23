@@ -255,7 +255,7 @@ public class ChannelLeadService {
         }
         Runnable start = () -> {
             try {
-                channelResearchService.create(clue.getOwnerUserId(), null, null, null, clue.getId());
+                channelResearchService.create(clue.getOwnerUserId(), null, null, null, null, null, clue.getId());
             } catch (Exception e) {
                 log.warn("[autoResearch][线索 {} 自动背调未发起] {}", clue.getId(), e.getMessage());
             }

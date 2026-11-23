@@ -622,7 +622,7 @@ const evolutionAccounts = computed(() =>
 const remarkTitle = computed(() =>
   current.value?.group ? '修改群聊名称' : '修改客户名称',
 );
-function onNewMenu({ key }: { key: string }) {
+function onNewMenu({ key }: { key: number | string }) {
   if (key === 'group') openGroup();
   else openNewChat();
 }

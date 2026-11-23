@@ -209,6 +209,17 @@ public final class EvolutionClient {
         return messageId(call(c, "POST", "/message/sendText/" + enc(name), body, 60));
     }
 
+    /** 建群，返回群 JID（形如 1203630xxx@g.us） */
+    public static String createGroup(ChannelOAuthProperties.Evolution c, String name, String subject,
+                                     java.util.List<String> participants) {
+        ObjectNode body = JSON.createObjectNode();
+        body.put("subject", subject);
+        var arr = body.putArray("participants");
+        participants.forEach(arr::add);
+        JsonNode r = call(c, "POST", "/group/create/" + enc(name), body, 60);
+        return StrUtil.blankToDefault(r.path("groupJid").asText(null), r.path("id").asText(null));
+    }
+
     /**
      * 发媒体（内容以 base64 传递），返回消息编号
      *
