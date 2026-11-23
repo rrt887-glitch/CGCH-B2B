@@ -64,6 +64,8 @@ public class ChannelUnipileService {
 
     private static final int SYNC_CHAT_LIMIT = 20;
     private static final int SYNC_MESSAGE_LIMIT = 20;
+    /** 托管授权链接有效期（分钟）：手机上登录/选主页比较慢，给足 60 分钟 */
+    private static final int AUTH_LINK_MINUTES = 60;
 
     public boolean enabled() {
         return props.ready();
@@ -178,7 +180,7 @@ public class ChannelUnipileService {
         String state = createAuthState(tenantId, userId, p);
         String url;
         try {
-            url = UnipileClient.createAuthLink(props, keyOf(c), redirect, state, 15, p);
+            url = UnipileClient.createAuthLink(props, keyOf(c), redirect, state, AUTH_LINK_MINUTES, p);
         } catch (UnipileClient.UnipileException e) {
             // 把 Unipile 的真实原因抛给前端，别只显示「系统异常」
             throw new ServiceException(1_030_015_004, "生成授权链接失败：" + e.getMessage());
@@ -187,7 +189,7 @@ public class ChannelUnipileService {
         m.put("url", url);
         m.put("provider", p);
         m.put("scopeId", c.getScopeId());
-        m.put("expiresInMinutes", 15);
+        m.put("expiresInMinutes", AUTH_LINK_MINUTES);
         return m;
     }
 
@@ -372,8 +374,11 @@ public class ChannelUnipileService {
                     continue;
                 }
                 boolean oneToOne = chat.path("is_1to1").asBoolean(false);
-                String waId = oneToOne
-                        ? StrUtil.blankToDefault(chat.path("user_id").asText(null), chatId) : chatId;
+                // 已经有这个 chat_id 的会话就沿用它，别再按对方 id 新建一个窗口
+                java.util.List<ChannelWaConversationDO> existing =
+                        conversationMapper.selectListByAccountIdAndProviderChatId(a.getId(), chatId);
+                String waId = !existing.isEmpty() ? existing.get(0).getWaId()
+                        : oneToOne ? StrUtil.blankToDefault(chat.path("user_id").asText(null), chatId) : chatId;
                 String chatName = chat.path("name").asText(null);
                 JsonNode msgs;
                 try {
@@ -464,7 +469,13 @@ public class ChannelUnipileService {
         }
     }
 
-    /** 把 Unipile 的消息转成现有入库逻辑认识的 Meta 结构，复用会话/未读/AI 回复 */
+    /**
+     * 把 Unipile 的消息转成现有入库逻辑认识的 Meta 结构。
+     *
+     * 会话身份统一用 Unipile 的 chat_id 对应到已有窗口：webhook 和补偿同步拿到的对方 id 可能是两种形式
+     * （sender_id / chat.user_id），以前各建一条就出现两个同名窗口。现在先按 chat_id 找已有会话，
+     * 找到就沿用它的 waId；找不到才按对方 id 新建，并记下 chat_id。
+     */
     private void ingest(ChannelWaAccountDO a, JsonNode p) {
         if (!Boolean.TRUE.equals(a.getEnabled())) {
             return;
@@ -474,27 +485,52 @@ public class ChannelUnipileService {
             return;
         }
         String chatId = p.path("chat_id").asText("");
+        boolean fromMe = p.path("is_sender").asBoolean(false);
         String senderId = StrUtil.blankToDefault(p.path("sender_id").asText(null), p.path("attendee_id").asText(null));
-        if (StrUtil.isBlank(senderId)) {
-            senderId = chatId;
-        }
         String text = StrUtil.blankToDefault(p.path("text").asText(null), p.path("body").asText(""));
         String name = StrUtil.blankToDefault(p.path("sender_name").asText(null), p.path("attendee_name").asText(null));
 
+        String waId = null;
+        java.util.List<ChannelWaConversationDO> same = StrUtil.isBlank(chatId) ? java.util.List.of()
+                : conversationMapper.selectListByAccountIdAndProviderChatId(a.getId(), chatId);
+        if (!same.isEmpty()) {
+            waId = same.get(0).getWaId();
+            // 历史遗留的重复窗口：把多余那条的 chat_id 清掉，后续消息只进最早那个窗口
+            for (int i = 1; i < same.size(); i++) {
+                conversationMapper.update(null,
+                        new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaConversationDO>()
+                                .eq(ChannelWaConversationDO::getId, same.get(i).getId())
+                                .set(ChannelWaConversationDO::getProviderChatId, null));
+            }
+        }
+        if (StrUtil.isBlank(waId)) {
+            if (fromMe) {
+                return; // 自己发出的消息、又找不到对应会话：忽略，别新建窗口
+            }
+            waId = StrUtil.blankToDefault(senderId, chatId);
+        }
+        if (StrUtil.isBlank(waId)) {
+            return;
+        }
+
         ObjectNode m = JSON.createObjectNode();
         m.put("id", messageId);
-        m.put("from", senderId);
+        m.put("from", waId);
         m.put("type", StrUtil.isBlank(text) ? "unknown" : "text");
         m.put("timestamp", epochSeconds(p.path("timestamp").asText(null)));
         m.put("text", JSON.createObjectNode().put("body", text));
         if (StrUtil.isNotBlank(name)) {
             m.put("sender_name", name);
         }
-        whatsAppService.evolutionInbound(a, m, name);
+        if (fromMe) {
+            whatsAppService.evolutionHistory(a, m, waId, true, name);
+        } else {
+            whatsAppService.evolutionInbound(a, m, name);
+        }
 
         // 记下 Unipile 的 chat_id，回复时要用
-        String waId = senderId;
-        ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), waId);
+        String convKey = a.isWhatsApp() ? ChannelWhatsAppService.waKey(waId) : StrUtil.trimToEmpty(waId);
+        ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), convKey);
         if (conv != null && StrUtil.isBlank(conv.getProviderChatId()) && StrUtil.isNotBlank(chatId)) {
             conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId()).setProviderChatId(chatId));
         }

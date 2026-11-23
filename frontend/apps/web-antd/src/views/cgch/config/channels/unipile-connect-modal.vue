@@ -110,7 +110,7 @@ async function refresh() {
     expireTimer = setTimeout(() => {
       stop();
       state.value = 'expired';
-    }, 9.5 * 60_000);
+    }, 55 * 60_000);
   } catch (e) {
     state.value = 'error';
     error.value = (e as Error)?.message || '生成二维码失败，请重试';

@@ -18,6 +18,17 @@ public interface ChannelWaConversationMapper extends BaseMapperX<ChannelWaConver
     }
 
     /**
+     * 按 Unipile 的 chat_id 找会话。同一个人可能因为 webhook / 补偿同步的 id 不同而建出两个窗口，
+     * 所以查找返回列表，调用方取最早的一条，其余丢弃 providerChatId（避免 selectOne 抛异常）。
+     */
+    default java.util.List<ChannelWaConversationDO> selectListByAccountIdAndProviderChatId(Long accountId, String chatId) {
+        return selectList(new LambdaQueryWrapperX<ChannelWaConversationDO>()
+                .eq(ChannelWaConversationDO::getAccountId, accountId)
+                .eq(ChannelWaConversationDO::getProviderChatId, chatId)
+                .orderByAsc(ChannelWaConversationDO::getId));
+    }
+
+    /**
      * 团队会话：处理人是同事（不是我）且在我的数据权限范围内。
      * teamUsers 为 null 表示可看全部（管理员）；teamAccounts 是这些同事名下的号码；myAccounts 是我名下的号码。
      */
