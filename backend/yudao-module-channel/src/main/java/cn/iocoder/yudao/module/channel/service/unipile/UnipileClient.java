@@ -131,6 +131,24 @@ public final class UnipileClient {
 
     // ==================== 消息 ====================
 
+    /** 最近更新的会话（补偿同步用）；after 为空时不加时间过滤 */
+    public static JsonNode listChats(ChannelUnipileProperties cfg, String tenantKey, String accountId,
+                                     String afterIso, int limit) {
+        StringBuilder p = new StringBuilder("/v2/").append(enc(accountId))
+                .append("/chats?limit=").append(limit);
+        if (StrUtil.isNotBlank(afterIso)) {
+            p.append("&after=").append(enc(afterIso));
+        }
+        return call(cfg, tenantKey, "GET", p.toString(), null);
+    }
+
+    /** 某个会话最近的若干条消息 */
+    public static JsonNode listMessages(ChannelUnipileProperties cfg, String tenantKey, String accountId,
+                                        String chatId, int limit) {
+        String p = "/v2/" + enc(accountId) + "/chats/" + enc(chatId) + "/messages?limit=" + limit;
+        return call(cfg, tenantKey, "GET", p, null);
+    }
+
     /** 发文本，返回 Unipile 的消息编号 */
     public static String sendText(ChannelUnipileProperties cfg, String tenantKey, String accountId,
                                   String chatId, String text) {

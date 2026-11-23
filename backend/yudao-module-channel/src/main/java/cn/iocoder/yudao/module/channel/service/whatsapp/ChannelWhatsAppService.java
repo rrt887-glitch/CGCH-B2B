@@ -813,7 +813,8 @@ public class ChannelWhatsAppService {
      */
     private void saveSynced(ChannelWaAccountDO a, JsonNode m, String customer, boolean outbound, String profileName) {
         String wamid = m.path("id").asText();
-        String waId = waKey(customer);
+        // 非 WhatsApp（LinkedIn / Instagram / Telegram）的会话 id 是字母数字，不能按号码归一化
+        String waId = a.isWhatsApp() ? waKey(customer) : StrUtil.trimToEmpty(customer);
         if (StrUtil.isBlank(wamid) || StrUtil.isBlank(waId) || messageMapper.selectByWaMessageId(a.getId(), wamid) != null) {
             return;
         }

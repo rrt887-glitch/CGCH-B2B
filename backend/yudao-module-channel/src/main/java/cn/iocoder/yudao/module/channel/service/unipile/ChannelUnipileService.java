@@ -56,6 +56,14 @@ public class ChannelUnipileService {
     private ChannelWaConversationMapper conversationMapper;
     @Resource
     private ChannelWhatsAppService whatsAppService;
+    @Resource
+    private cn.iocoder.yudao.module.channel.service.notify.ChannelNotifyService channelNotifyService;
+
+    /** 补偿同步：每个账号上次同步到的时间（只放内存，重启后从 15 分钟前重新对账） */
+    private final java.util.Map<Long, LocalDateTime> lastSync = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final int SYNC_CHAT_LIMIT = 20;
+    private static final int SYNC_MESSAGE_LIMIT = 20;
 
     public boolean enabled() {
         return props.ready();
@@ -287,6 +295,84 @@ public class ChannelUnipileService {
         }
     }
 
+    // ==================== 补偿同步 ====================
+
+    /**
+     * webhook 是主力，这里兜底：拉最近有更新的会话，把缺的消息补进库。
+     * 走 {@code evolutionHistory}：按消息编号去重、不计未读、不触发 AI 回复。
+     */
+    public void syncRecentMessages() {
+        java.util.List<ChannelWaAccountDO> accounts = TenantUtils.executeIgnore(() ->
+                accountMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ChannelWaAccountDO>()
+                        .eq(ChannelWaAccountDO::getAuthType, ChannelWaAccountDO.AUTH_UNIPILE)
+                        .eq(ChannelWaAccountDO::getEnabled, true)));
+        if (accounts.isEmpty()) {
+            return;
+        }
+        java.util.Map<Long, java.util.List<ChannelWaAccountDO>> byTenant = accounts.stream()
+                .filter(a -> a.getTenantId() != null)
+                .collect(java.util.stream.Collectors.groupingBy(ChannelWaAccountDO::getTenantId));
+        byTenant.forEach((tenantId, list) -> {
+            try {
+                TenantUtils.execute(tenantId, () -> list.forEach(this::syncOne));
+            } catch (Exception e) {
+                log.warn("[sync][租户 {} 补偿同步失败] {}", tenantId, e.getMessage());
+            }
+        });
+    }
+
+    private void syncOne(ChannelWaAccountDO a) {
+        if (StrUtil.isBlank(a.getPhoneNumberId())) {
+            return;
+        }
+        LocalDateTime since = lastSync.getOrDefault(a.getId(), LocalDateTime.now().minusMinutes(15));
+        try {
+            String key = keyOf(credential());
+            String after = since.atZone(ZoneId.of("UTC")).toInstant().toString();
+            JsonNode chats = UnipileClient.listChats(props, key, a.getPhoneNumberId(), after, SYNC_CHAT_LIMIT);
+            for (JsonNode chat : chats.path("data")) {
+                String chatId = chat.path("id").asText("");
+                if (StrUtil.isBlank(chatId)) {
+                    continue;
+                }
+                boolean oneToOne = chat.path("is_1to1").asBoolean(false);
+                String waId = oneToOne
+                        ? StrUtil.blankToDefault(chat.path("user_id").asText(null), chatId) : chatId;
+                String chatName = chat.path("name").asText(null);
+                JsonNode msgs;
+                try {
+                    msgs = UnipileClient.listMessages(props, key, a.getPhoneNumberId(), chatId, SYNC_MESSAGE_LIMIT);
+                } catch (UnipileClient.UnipileException e) {
+                    continue;
+                }
+                for (JsonNode msg : msgs.path("data")) {
+                    String id = msg.path("id").asText("");
+                    if (StrUtil.isBlank(id)) {
+                        continue;
+                    }
+                    String text = msg.path("text").asText("");
+                    ObjectNode m = JSON.createObjectNode();
+                    m.put("id", id);
+                    m.put("from", StrUtil.blankToDefault(msg.path("sender_id").asText(null), waId));
+                    m.put("type", StrUtil.isBlank(text) ? "unknown" : "text");
+                    m.put("timestamp", epochSeconds(msg.path("timestamp").asText(null)));
+                    m.put("text", JSON.createObjectNode().put("body", text));
+                    whatsAppService.evolutionHistory(a, m, waId, msg.path("is_sender").asBoolean(false), chatName);
+                }
+                // 老会话没记 Unipile 的 chat_id 时补上，回复要用
+                String convKey = a.isWhatsApp() ? ChannelWhatsAppService.waKey(waId) : StrUtil.trimToEmpty(waId);
+                ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), convKey);
+                if (conv != null && StrUtil.isBlank(conv.getProviderChatId())) {
+                    conversationMapper.updateById(new ChannelWaConversationDO().setId(conv.getId())
+                            .setProviderChatId(chatId));
+                }
+            }
+            lastSync.put(a.getId(), LocalDateTime.now());
+        } catch (UnipileClient.UnipileException e) {
+            log.debug("[sync][账号 {} 同步跳过：{}]", a.getId(), e.getMessage());
+        }
+    }
+
     // ==================== Webhook ====================
 
     /** 校验签名并分发事件；签名不对返回 false（调用方回 401） */
@@ -328,6 +414,11 @@ public class ChannelUnipileService {
             if (!conn.equals(a.getConnState())) {
                 accountMapper.updateById(new ChannelWaAccountDO().setId(a.getId()).setConnState(conn));
                 log.info("[dispatch][账号 {} 状态变为 {}（事件 {}）]", a.getId(), conn, type);
+                // 从「已连接」掉到「断开」时通知负责人重新授权，否则客户会以为还在收消息
+                if (ChannelWaAccountDO.CONN_CLOSE.equals(conn)
+                        && ChannelWaAccountDO.CONN_OPEN.equals(a.getConnState())) {
+                    channelNotifyService.onAccountOffline(a);
+                }
             }
             return;
         }

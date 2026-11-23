@@ -44,6 +44,8 @@ public class ChannelNotifyService {
     public static final String TYPE_TAKEOVER = "takeover";
     public static final String TYPE_NEW_LEAD = "new_lead";
     public static final String TYPE_REACTIVATE_REPLY = "reactivate_reply";
+    /** 渠道账号掉线（Unipile 托管账号被平台踢下线） */
+    public static final String TYPE_ACCOUNT_OFFLINE = "account_offline";
     /** 站内信模板编码前缀，对应 03-channel-seed.sql 中的模板 */
     public static final String TEMPLATE_PREFIX = "cgch_";
     /** 同一对象同类通知的最短间隔，避免客户连发消息时刷屏 */
@@ -92,6 +94,8 @@ public class ChannelNotifyService {
         TYPES.put(TYPE_TAKEOVER, new String[]{"AI 接手回复", "「{customer}」的消息等待 {minutes} 分钟无人回复，AI 已接手回复"});
         TYPES.put(TYPE_NEW_LEAD, new String[]{"新询盘建档", "新询盘：已为「{name}」自动建线索（来自{source}）"});
         TYPES.put(TYPE_REACTIVATE_REPLY, new String[]{"唤醒客户回复", "「{customer}」回复了客户唤醒「{task}」，请尽快跟进"});
+        TYPES.put(TYPE_ACCOUNT_OFFLINE, new String[]{"渠道掉线",
+                "「{account}」的渠道连接已断开，暂时收不到新消息，请重新授权"});
     }
 
     // ==================== 发送 ====================
@@ -204,6 +208,16 @@ public class ChannelNotifyService {
         }
     }
 
+    /** 渠道账号掉线：提醒负责人重新授权，否则会以为还在正常收消息 */
+    public void onAccountOffline(ChannelWaAccountDO a) {
+        if (a == null || a.getUserId() == null) {
+            return;
+        }
+        String label = StrUtil.blankToDefault(a.getName(),
+                StrUtil.blankToDefault(a.getDisplayPhone(), a.getPlatform()));
+        send(TYPE_ACCOUNT_OFFLINE, a.getUserId(), Map.of("account", StrUtil.blankToDefault(label, "渠道账号")),
+                "/v3/channel", "offline:" + a.getId());
+    }
     /** 业务员优先等待超时，AI 已接手 */
     public void onTakeover(String channel, Long refId, int minutes) {
         Target t = target(channel, refId);
