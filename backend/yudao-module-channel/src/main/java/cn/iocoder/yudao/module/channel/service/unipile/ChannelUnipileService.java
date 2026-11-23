@@ -321,15 +321,43 @@ public class ChannelUnipileService {
         });
     }
 
+    /** 先按通用接口拉会话；LinkedIn 这类 provider 会返回「请用 inbox 接口」，再按收件箱逐个拉 */
+    private JsonNode listChatsWithFallback(String key, String accountId, String after) {
+        try {
+            return UnipileClient.listChats(props, key, accountId, after, SYNC_CHAT_LIMIT);
+        } catch (UnipileClient.UnipileException e) {
+            JsonNode inboxes = UnipileClient.listInboxes(props, key, accountId);
+            var all = JSON.createArrayNode();
+            for (JsonNode inbox : inboxes.path("data")) {
+                String inboxId = inbox.path("id").asText("");
+                if (StrUtil.isBlank(inboxId) || inbox.path("disabled").asBoolean(false)) {
+                    continue;
+                }
+                try {
+                    JsonNode page = UnipileClient.listInboxChats(props, key, accountId, inboxId, after, SYNC_CHAT_LIMIT);
+                    page.path("data").forEach(all::add);
+                } catch (UnipileClient.UnipileException ignore) {
+                    // 某个收件箱不支持就跳过，别把整轮同步搞挂
+                }
+                if (all.size() >= SYNC_CHAT_LIMIT) {
+                    break;
+                }
+            }
+            var wrapper = JSON.createObjectNode();
+            wrapper.set("data", all);
+            return wrapper;
+        }
+    }
+
     private void syncOne(ChannelWaAccountDO a) {
         if (StrUtil.isBlank(a.getPhoneNumberId())) {
             return;
         }
-        LocalDateTime since = lastSync.getOrDefault(a.getId(), LocalDateTime.now().minusMinutes(15));
+        LocalDateTime since = lastSync.getOrDefault(a.getId(), LocalDateTime.now().minusDays(7));
         try {
             String key = keyOf(credential());
             String after = since.atZone(ZoneId.of("UTC")).toInstant().toString();
-            JsonNode chats = UnipileClient.listChats(props, key, a.getPhoneNumberId(), after, SYNC_CHAT_LIMIT);
+            JsonNode chats = listChatsWithFallback(key, a.getPhoneNumberId(), after);
             for (JsonNode chat : chats.path("data")) {
                 String chatId = chat.path("id").asText("");
                 if (StrUtil.isBlank(chatId)) {

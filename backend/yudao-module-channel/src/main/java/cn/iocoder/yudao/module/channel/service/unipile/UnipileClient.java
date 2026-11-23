@@ -149,6 +149,23 @@ public final class UnipileClient {
         return call(cfg, tenantKey, "GET", p, null);
     }
 
+    /** 账号下的收件箱（LinkedIn 这类 provider 必须按 inbox 拉会话） */
+    public static JsonNode listInboxes(ChannelUnipileProperties cfg, String tenantKey, String accountId) {
+        return call(cfg, tenantKey, "GET", "/v2/" + enc(accountId) + "/inboxes", null);
+    }
+
+    /** 某个收件箱里的会话 */
+    public static JsonNode listInboxChats(ChannelUnipileProperties cfg, String tenantKey, String accountId,
+                                          String inboxId, String afterIso, int limit) {
+        StringBuilder p = new StringBuilder("/v2/").append(enc(accountId))
+                .append("/inboxes/").append(enc(inboxId))
+                .append("/chats?limit=").append(limit);
+        if (StrUtil.isNotBlank(afterIso)) {
+            p.append("&after=").append(enc(afterIso));
+        }
+        return call(cfg, tenantKey, "GET", p.toString(), null);
+    }
+
     /** 发文本，返回 Unipile 的消息编号 */
     public static String sendText(ChannelUnipileProperties cfg, String tenantKey, String accountId,
                                   String chatId, String text) {
