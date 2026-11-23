@@ -229,6 +229,14 @@ export const setWaTeamPublic = (id: number, enabled: boolean) =>
   requestClient.put(
     `/channel/wa/conversation/team-public?id=${id}&enabled=${enabled}`,
   );
+/** 新建 WhatsApp 群聊（扫码接入的号码），返回会话编号 */
+export const createWaGroup = (data: {
+  accountId: number;
+  subject: string;
+  participants: string[];
+  message?: string;
+}) => requestClient.post<number>('/channel/wa/conversation/group', data);
+
 export const remarkWaConversation = (id: number, name: string) =>
   requestClient.put('/channel/wa/conversation/remark', null, {
     params: { id, name },

@@ -35,6 +35,9 @@ public interface ErrorCodeConstants {
     ErrorCode WA_NO_MEDIA = new ErrorCode(1_030_002_009, "该消息没有媒体文件");
     ErrorCode WA_FILE_TOO_LARGE = new ErrorCode(1_030_002_010, "文件过大：图片不超过 5MB，其他文件不超过 16MB");
     ErrorCode WA_WABA_REQUIRED = new ErrorCode(1_030_002_011, "请填写 WhatsApp Business Account ID");
+    ErrorCode WA_GROUP_ONLY_EVOLUTION = new ErrorCode(1_030_002_012, "只有扫码接入的 WhatsApp 号码可以建群");
+    ErrorCode WA_GROUP_NO_PARTICIPANTS = new ErrorCode(1_030_002_013, "请至少填写一个有效的成员号码");
+    ErrorCode WA_GROUP_CREATE_FAILED = new ErrorCode(1_030_002_014, "建群失败，请确认号码在线后重试");
     ErrorCode META_PLATFORM_INVALID = new ErrorCode(1_030_002_012, "不支持的平台：{}");
     ErrorCode META_TEMPLATE_UNSUPPORTED = new ErrorCode(1_030_002_013, "{} 不支持模板消息，只能在客户来信后 24 小时内回复");
     ErrorCode META_NEW_CONVERSATION_UNSUPPORTED = new ErrorCode(1_030_002_014, "{} 不能主动发起会话，请等待客户先发消息");

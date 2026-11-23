@@ -83,9 +83,16 @@ public class ChannelWaMessageController {
         return success(true);
     }
 
+    @PostMapping("/conversation/group")
+    @Operation(summary = "新建 WhatsApp 群聊（扫码接入的号码），返回会话编号")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:send')")
+    public CommonResult<Long> createGroup(
+            @Valid @RequestBody cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaGroupCreateReqVO req) {
+        return success(whatsAppService.createGroup(getLoginUserId(), req));
+    }
+
     @PutMapping("/conversation/remark")
-    @Operation(summary = "设置备注名（空表示清除）")
-    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
+    @Operation(summary = "设置备注名（空表示清除）")    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
     public CommonResult<Boolean> remark(@RequestParam("id") Long id, @RequestParam(value = "name", required = false) String name) {
         whatsAppService.renameConversation(getLoginUserId(), id, name);
         return success(true);

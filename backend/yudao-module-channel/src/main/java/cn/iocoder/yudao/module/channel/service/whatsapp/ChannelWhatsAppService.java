@@ -1324,6 +1324,50 @@ public class ChannelWhatsAppService {
         conversationMapper.updateById(new ChannelWaConversationDO().setId(id).setStarred(starred));
     }
 
+    /**
+     * 新建 WhatsApp 群聊：扫码接入的号码在 Evolution 里建群，然后落一条群会话，可选发第一句话。
+     * 返回会话编号，前端直接打开它。
+     */
+    public Long createGroup(Long userId,
+                            cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaGroupCreateReqVO req) {
+        ChannelWaAccountDO a = validateAccount(userId, req.getAccountId());
+        if (!a.isEvolution()) {
+            throw exception(WA_GROUP_ONLY_EVOLUTION);
+        }
+        java.util.List<String> parts = req.getParticipants().stream()
+                .map(cn.iocoder.yudao.module.channel.service.evolution.EvolutionClient::digits)
+                .filter(StrUtil::isNotBlank).distinct().toList();
+        if (parts.isEmpty()) {
+            throw exception(WA_GROUP_NO_PARTICIPANTS);
+        }
+        String jid = evolutionService.createGroup(a, StrUtil.trim(req.getSubject()), parts);
+        if (StrUtil.isBlank(jid)) {
+            throw exception(WA_GROUP_CREATE_FAILED);
+        }
+        String waId = waKey(jid);
+        ChannelWaConversationDO conv = conversationMapper.selectByAccountIdAndWaId(a.getId(), waId);
+        Long convId;
+        if (conv == null) {
+            conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(platformOf(a))
+                    .waId(waId).profileName(StrUtil.maxLength(req.getSubject(), 200))
+                    .customerId(null).unreadCount(0).build();
+            conv.setOwnerUserId(userId);
+            conversationMapper.insert(conv);
+            convId = conv.getId();
+        } else {
+            convId = conv.getId();
+            conversationMapper.updateById(new ChannelWaConversationDO().setId(convId)
+                    .setProfileName(StrUtil.maxLength(req.getSubject(), 200)));
+        }
+        if (StrUtil.isNotBlank(req.getMessage())) {
+            var send = new cn.iocoder.yudao.module.channel.controller.admin.whatsapp.vo.ChannelWaSendReqVO();
+            send.setConversationId(convId);
+            send.setText(StrUtil.trim(req.getMessage()));
+            send(userId, send);
+        }
+        return convId;
+    }
+
     public void renameConversation(Long userId, Long id, String remarkName) {
         validateConversation(userId, id);
         conversationMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaConversationDO>()

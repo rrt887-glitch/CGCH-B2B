@@ -38,6 +38,7 @@ public class ChannelResearchController {
     @PreAuthorize("@ss.hasPermission('channel:research')")
     public CommonResult<Long> create(@RequestBody Map<String, Object> req) {
         return success(channelResearchService.create(getLoginUserId(), (String) req.get("website"), (String) req.get("companyName"),
+                (String) req.get("facebookUrl"), (String) req.get("linkedinUrl"),
                 toLong(req.get("customerId")), toLong(req.get("clueId"))));
     }
 
@@ -99,6 +100,8 @@ public class ChannelResearchController {
         m.put("id", r.getId());
         m.put("companyName", r.getCompanyName());
         m.put("website", r.getWebsite());
+        m.put("facebookUrl", r.getFacebookUrl());
+        m.put("linkedinUrl", r.getLinkedinUrl());
         m.put("customerId", r.getCustomerId());
         m.put("clueId", r.getClueId());
         m.put("status", r.getStatus());

@@ -105,7 +105,8 @@ public class ChannelResearchService {
     // ==================== 发起 ====================
 
     /** 发起背调：官网、客户、线索至少提供一个；后台执行，返回编号 */
-    public Long create(Long userId, String website, String companyName, Long customerId, Long clueId) {
+    public Long create(Long userId, String website, String companyName, String facebookUrl, String linkedinUrl,
+            Long customerId, Long clueId) {
         CrmCustomerDO customer = customerId == null ? null : crmCustomerMapper.selectById(customerId);
         CrmClueDO clue = clueId == null ? null : crmClueMapper.selectById(clueId);
         if (customerId != null && customer == null) {
@@ -121,8 +122,10 @@ public class ChannelResearchService {
         if (site == null && clue != null) {
             site = StrUtil.blankToDefault(StrUtil.trimToNull(clue.getWebsite()), LeadInference.websiteFromEmail(clue.getEmail()));
         }
-        if (site == null && customer == null && clue == null && StrUtil.isBlank(companyName)) {
-            throw exception(RESEARCH_INVALID, "请填写官网或公司名称，或选择一个客户 / 线索");
+        String fb = socialUrl("facebook", facebookUrl);
+        String li = socialUrl("linkedin", linkedinUrl);
+        if (site == null && fb == null && li == null && customer == null && clue == null && StrUtil.isBlank(companyName)) {
+            throw exception(RESEARCH_INVALID, "请至少填写一项：官网、公司名称、Facebook 主页、LinkedIn 主页，或选择客户 / 线索");
         }
         if (site != null) {
             try {
@@ -134,7 +137,7 @@ public class ChannelResearchService {
         String name = StrUtil.blankToDefault(StrUtil.trimToNull(companyName),
                 customer != null ? StrUtil.blankToDefault(customer.getCompanyName(), customer.getName())
                         : clue != null ? StrUtil.blankToDefault(clue.getCompanyName(), clue.getName()) : null);
-        ChannelResearchDO r = ChannelResearchDO.builder().companyName(StrUtil.maxLength(name, 200)).website(site)
+        ChannelResearchDO r = ChannelResearchDO.builder().companyName(StrUtil.maxLength(name, 200)).website(site).facebookUrl(fb).linkedinUrl(li)
                 .customerId(customerId).clueId(clueId).status(ChannelResearchDO.STATUS_RUNNING).userId(userId).build();
         channelResearchMapper.insert(r);
         Long tenantId = TenantContextHolder.getTenantId();
@@ -231,7 +234,8 @@ public class ChannelResearchService {
         List<String> history = history(r);
         // 3. 联网搜索公开信息（配置了联网搜索时）：企业概况、采购与进口记录、规模
         List<WebSearchClient.Hit> hits = search(cfg, r);
-        if (pages.isEmpty() && history.isEmpty() && hits.isEmpty() && StrUtil.isBlank(r.getCompanyName())) {
+        if (pages.isEmpty() && history.isEmpty() && hits.isEmpty() && StrUtil.isBlank(r.getCompanyName())
+                && StrUtil.isBlank(r.getFacebookUrl()) && StrUtil.isBlank(r.getLinkedinUrl())) {
             fail(id, StrUtil.blankToDefault(siteNote, "没有可用的资料：官网无法访问，也没有往来记录"));
             return;
         }
@@ -270,6 +274,12 @@ public class ChannelResearchService {
             }
         }
         String who = StrUtil.isNotBlank(r.getCompanyName()) ? "\"" + r.getCompanyName() + "\"" : host;
+        if (StrUtil.isBlank(who)) {
+            who = socialHandle(r.getFacebookUrl());
+        }
+        if (StrUtil.isBlank(who)) {
+            who = socialHandle(r.getLinkedinUrl());
+        }
         if (StrUtil.isBlank(who)) {
             return List.of();
         }
@@ -324,6 +334,43 @@ public class ChannelResearchService {
         return out;
     }
 
+    /** 把用户填的社交主页整理成链接：支持完整链接、@handle、用户名、company/xxx 这类路径 */
+    static String socialUrl(String kind, String raw) {
+        String v = StrUtil.trimToNull(raw);
+        if (v == null) {
+            return null;
+        }
+        boolean fb = "facebook".equals(kind);
+        if (v.startsWith("http://") || v.startsWith("https://")) {
+            return StrUtil.maxLength(v, 500);
+        }
+        String host = fb ? "facebook.com" : "linkedin.com";
+        if (v.contains(".")) {
+            return StrUtil.maxLength("https://" + StrUtil.removePrefix(v, "//"), 500);
+        }
+        String handle = StrUtil.removePrefix(v, "@");
+        if (handle.contains("/")) {
+            return StrUtil.maxLength("https://" + host + "/" + handle, 500);
+        }
+        return StrUtil.maxLength("https://" + host + (fb ? "/" : "/in/") + handle, 500);
+    }
+
+    /** 从主页链接里取 handle，作为没有公司名时的搜索关键词 */
+    static String socialHandle(String url) {
+        if (StrUtil.isBlank(url)) {
+            return null;
+        }
+        try {
+            String path = StrUtil.removePrefix(URI.create(url).getPath(), "/");
+            path = StrUtil.removePrefix(path, "in/");
+            path = StrUtil.removePrefix(path, "company/");
+            path = StrUtil.removePrefix(path, "pages/");
+            return StrUtil.isBlank(path) ? null : StrUtil.subBefore(path, "/", false).replace('-', ' ');
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static String systemPrompt() {
         return "你是外贸企业的客户背调分析师。根据提供的「客户官网公开页面」「联网搜索结果」和「我方与客户的往来记录」，"
                 + "为业务员整理一份客户背调报告：判断对方是谁（贸易商还是终端工厂）、最近在哪采购、买多少、规模和付款信用如何，"
@@ -333,7 +380,9 @@ public class ChannelResearchService {
                 + "3. 判断类字段（buyerKind、painPoints、quoteAdvice、paymentAdvice、recommendedProducts）是你的分析，要写出依据；依据不足时明确说明。\n"
                 + "4. 只整理企业层面的商业信息；联系方式只记录官网公开的公司邮箱、电话、地址，不记录员工个人信息。\n"
                 + "5. 用简体中文撰写，公司名、产品名保留原文。\n"
-                + "6. 只输出 JSON，字段：companyName, countryCode（ISO 二字码）, summary（2~4 句概况）, "
+                + "6. 很多客户没有公司名和官网，只有 Facebook / LinkedIn 主页：这时以主页公开信息为主要依据——" +
+                "主页名称常是公司名或店主名，简介含行业与地址，帖子能看出产品线和经营规模；在 summary 末尾注明「信息来源：社交主页」。\n"
+                + "7. 只输出 JSON，字段：companyName, countryCode（ISO 二字码）, summary（2~4 句概况）, "
                 + "businessType（manufacturer/brand/distributor/wholesaler/retailer/e-commerce/trading/other 之一）, "
                 + "buyerKind（{\"kind\": \"trader\" 贸易商/转卖 | \"end_user\" 终端工厂/自用 | \"unknown\", \"reason\": 依据}）, "
                 + "mainProducts（数组）, markets（数组）, scale（规模线索，原文依据）, certifications（数组）, "

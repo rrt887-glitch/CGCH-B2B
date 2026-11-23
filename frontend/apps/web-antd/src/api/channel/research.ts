@@ -34,6 +34,8 @@ export namespace ChannelResearchApi {
     id: number;
     companyName?: string;
     website?: string;
+    facebookUrl?: string;
+    linkedinUrl?: string;
     customerId?: number;
     clueId?: number;
     status: 'done' | 'failed' | 'running';
@@ -47,6 +49,8 @@ export namespace ChannelResearchApi {
   export interface CreateReq {
     website?: string;
     companyName?: string;
+    facebookUrl?: string;
+    linkedinUrl?: string;
     customerId?: number;
     clueId?: number;
   }

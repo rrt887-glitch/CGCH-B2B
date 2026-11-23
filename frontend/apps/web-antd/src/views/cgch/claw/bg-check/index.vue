@@ -52,7 +52,14 @@ const CONFIDENCE: Record<string, { color: string; label: string }> = {
 
 // ===== 发起 =====
 const target = ref<'clue' | 'customer' | 'website'>('website');
-const form = reactive({ website: '', companyName: '', customerId: undefined as number | undefined, clueId: undefined as number | undefined });
+const form = reactive({
+  website: '',
+  companyName: '',
+  facebookUrl: '',
+  linkedinUrl: '',
+  customerId: undefined as number | undefined,
+  clueId: undefined as number | undefined,
+});
 const customers = ref<{ id: number; name: string }[]>([]);
 const clues = ref<{ id: number; name: string }[]>([]);
 const creating = ref(false);
@@ -65,6 +72,8 @@ async function start() {
     const id = await createResearch({
       website: form.website || undefined,
       companyName: form.companyName || undefined,
+      facebookUrl: form.facebookUrl || undefined,
+      linkedinUrl: form.linkedinUrl || undefined,
       customerId: target.value === 'customer' ? form.customerId : undefined,
       clueId: target.value === 'clue' ? form.clueId : undefined,
     });
@@ -181,13 +190,19 @@ onMounted(async () => {
               <Select v-model:value="form.clueId" show-search :filter-option="false" placeholder="搜索线索名称"
                       :options="clues.map((c) => ({ value: c.id, label: c.name }))" @search="searchClues" @focus="searchClues('')" />
             </FormItem>
-            <FormItem :label="target === 'website' ? '官网（没有可不填，只填公司名）' : '官网（不填则用客户资料里的官网或企业邮箱域名）'">
+            <FormItem label="官网（可不填）">
               <Input v-model:value="form.website" placeholder="example.com" />
             </FormItem>
-            <FormItem v-if="target === 'website'" label="公司名称"><Input v-model:value="form.companyName" placeholder="官网和公司名至少填一个" /></FormItem>
+            <FormItem label="Facebook 主页（可不填）">
+              <Input v-model:value="form.facebookUrl" placeholder="facebook.com/xxx 或 @xxx" />
+            </FormItem>
+            <FormItem label="LinkedIn 主页（可不填）">
+              <Input v-model:value="form.linkedinUrl" placeholder="linkedin.com/company/xxx 或 /in/xxx" />
+            </FormItem>
+            <FormItem v-if="target === 'website'" label="公司名称（可不填）"><Input v-model:value="form.companyName" placeholder="官网、Facebook、LinkedIn、公司名至少填一个" /></FormItem>
             <Button type="primary" block :loading="creating" @click="start">开始背调</Button>
             <div class="mt-2 text-xs text-gray-500">
-              用后台配置的大模型背调：读取对方官网少量公开页面（遵守 robots.txt）、联网搜索公开信息（需在智能体设置里配置联网搜索），并结合往来记录；只整理企业层面的商业信息。
+              很多客户没有官网和公司名，只填 Facebook / LinkedIn 主页也能背调：系统会按主页名称、简介和帖子判断对方是谁、卖什么、规模多大，并在报告里注明信息来源是社交主页。
             </div>
           </Form>
         </Card>
@@ -201,10 +216,10 @@ onMounted(async () => {
             @click="open(r.id)"
           >
             <div class="flex items-center justify-between gap-2">
-              <span class="truncate text-sm font-medium">{{ r.companyName || r.website || `#${r.id}` }}</span>
+              <span class="truncate text-sm font-medium">{{ r.companyName || r.website || r.facebookUrl || r.linkedinUrl || `#${r.id}` }}</span>
               <Tag v-if="r.status !== 'done'" :color="r.status === 'running' ? 'processing' : 'red'">{{ r.status === 'running' ? '进行中' : '失败' }}</Tag>
             </div>
-            <div class="truncate text-xs text-gray-500">{{ r.website }} · {{ fmtDateTime(r.createTime, 'MM-DD HH:mm') }}</div>
+            <div class="truncate text-xs text-gray-500">{{ r.website || r.facebookUrl || r.linkedinUrl }} · {{ fmtDateTime(r.createTime, 'MM-DD HH:mm') }}</div>
           </div>
         </Card>
       </div>
@@ -237,6 +252,15 @@ onMounted(async () => {
               <Descriptions :column="1" size="small" bordered>
                 <DescriptionsItem label="官网">
                   <a v-if="current.website" :href="current.website" target="_blank" rel="noopener noreferrer">{{ current.website }}</a>
+                  <span v-else class="text-gray-400">—</span>
+                </DescriptionsItem>
+                <DescriptionsItem label="Facebook 主页">
+                  <a v-if="current.facebookUrl" :href="current.facebookUrl" target="_blank" rel="noopener noreferrer">{{ current.facebookUrl }}</a>
+                  <span v-else class="text-gray-400">—</span>
+                </DescriptionsItem>
+                <DescriptionsItem label="LinkedIn 主页">
+                  <a v-if="current.linkedinUrl" :href="current.linkedinUrl" target="_blank" rel="noopener noreferrer">{{ current.linkedinUrl }}</a>
+                  <span v-else class="text-gray-400">—</span>
                 </DescriptionsItem>
                 <DescriptionsItem label="贸易商还是终端工厂">
                   {{ rep.buyerKind?.kind ? BUYER_KIND[rep.buyerKind.kind]?.label ?? rep.buyerKind.kind : '—' }}

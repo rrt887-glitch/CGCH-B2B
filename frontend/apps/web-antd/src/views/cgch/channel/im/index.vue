@@ -19,6 +19,7 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
+  reactive,
   ref,
   watch,
 } from 'vue';
@@ -90,6 +91,7 @@ import {
   setWaGroupAi,
   setWaPrivateAi,
   setWaTeamPublic,
+  createWaGroup,
   starWaConversation,
   templateParamCount,
   transferWaConversation,
@@ -603,6 +605,67 @@ async function saveRemark() {
   current.value.remarkName = remarkText.value.trim() || undefined;
   remarkOpen.value = false;
   await loadConversations(true);
+}
+const groupOpen = ref(false);
+const groupSending = ref(false);
+const groupForm = reactive({
+  accountId: undefined as number | undefined,
+  subject: '',
+  participants: '',
+  message: '',
+});
+/** 只有扫码接入（Evolution）的号码能建群 */
+const evolutionAccounts = computed(() =>
+  waAccounts.value.filter((a) => a.authType === 'evolution'),
+);
+/** 改名的标题：群聊改群名，单聊改客户名 */
+const remarkTitle = computed(() =>
+  current.value?.group ? '修改群聊名称' : '修改客户名称',
+);
+function onNewMenu({ key }: { key: string }) {
+  if (key === 'group') openGroup();
+  else openNewChat();
+}
+function openGroup() {
+  groupForm.accountId = evolutionAccounts.value[0]?.id;
+  groupForm.subject = '';
+  groupForm.participants = '';
+  groupForm.message = '';
+  groupOpen.value = true;
+}
+async function sendGroup() {
+  if (!groupForm.accountId) {
+    message.warning('请选择用于建群的号码');
+    return;
+  }
+  if (!groupForm.subject.trim()) {
+    message.warning('请填写群名称');
+    return;
+  }
+  const participants = groupForm.participants
+    .split(/[,，;；\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (participants.length === 0) {
+    message.warning('请至少填写一个成员号码');
+    return;
+  }
+  groupSending.value = true;
+  try {
+    const id = await createWaGroup({
+      accountId: groupForm.accountId,
+      subject: groupForm.subject.trim(),
+      participants,
+      message: groupForm.message.trim() || undefined,
+    });
+    groupOpen.value = false;
+    await loadConversations(true);
+    const conv = conversations.value.find((x) => x.id === id);
+    if (conv) current.value = conv;
+    message.success('群已建好，可以开始说话了');
+  } finally {
+    groupSending.value = false;
+  }
 }
 const transferOpen = ref(false);
 const transferTo = ref<number>();
@@ -1166,11 +1229,17 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               :options="STATUS_FILTER"
               aria-label="会话状态"
             />
-            <Tooltip v-if="waAccounts.length > 0" title="新会话">
-              <Button size="small" aria-label="新会话" @click="openNewChat"
+            <Dropdown v-if="waAccounts.length > 0" trigger="click">
+              <Button size="small" aria-label="新建会话或群聊"
                 ><IconifyIcon icon="lucide:plus" class="size-3.5"
               /></Button>
-            </Tooltip>
+              <template #overlay>
+                <Menu @click="onNewMenu">
+                  <MenuItem key="private">发起私聊</MenuItem>
+                  <MenuItem key="group">新建群聊</MenuItem>
+                </Menu>
+              </template>
+            </Dropdown>
           </div>
           <Select
             v-if="!embedded"
@@ -1373,6 +1442,14 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   <span v-if="current.starred" class="mr-1 text-amber-500"
                     >★</span
                   >{{ current.remarkName || contact(current) }}
+              <Button
+                type="text"
+                size="small"
+                class="!h-6 !px-1 align-middle"
+                :aria-label="remarkTitle"
+                @click="openRemark"
+                ><IconifyIcon icon="lucide:pencil" class="size-3.5 text-gray-400"
+              /></Button>
                   <span v-if="current.remarkName" class="text-sm text-gray-400"
                     >（{{ contact(current) }}）</span
                   >
@@ -2358,7 +2435,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
     <Modal
       v-model:open="remarkOpen"
-      title="设置备注名"
+      :title="remarkTitle"
       ok-text="保存"
       @ok="saveRemark"
     >
@@ -2366,7 +2443,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         v-model:value="remarkText"
         :maxlength="100"
         allow-clear
-        placeholder="例如：Rashid（迪拜灯具批发商），留空表示清除"
+        :placeholder="current?.group ? '群名称，例如：迪拜灯具客户群' : '例如：Rashid（迪拜灯具批发商），留空表示清除'"
       />
     </Modal>
     <Modal
@@ -2417,6 +2494,47 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         <div class="text-xs text-gray-400">
           扫码接入的号码可以直接发送普通消息。请勿短时间内群发陌生号码，以免号码被
           WhatsApp 限制。
+        </div>
+      </div>
+    </Modal>
+
+    <Modal
+      v-model:open="groupOpen"
+      title="新建群聊"
+      ok-text="建群"
+      :confirm-loading="groupSending"
+      :width="520"
+      @ok="sendGroup"
+    >
+      <div class="flex flex-col gap-3">
+        <Select
+          v-model:value="groupForm.accountId"
+          :options="
+            evolutionAccounts.map((a) => ({
+              value: a.id,
+              label: a.displayPhone || a.name || '扫码号码',
+            }))
+          "
+          placeholder="用哪个号码建群（只有扫码接入的号码可以建群）"
+        />
+        <Input
+          v-model:value="groupForm.subject"
+          :maxlength="60"
+          placeholder="群名称，例如：迪拜灯具客户群"
+        />
+        <Textarea
+          v-model:value="groupForm.participants"
+          :auto-size="{ minRows: 2, maxRows: 5 }"
+          placeholder="成员号码，含国家码，多个用逗号或换行分隔"
+        />
+        <Textarea
+          v-model:value="groupForm.message"
+          :auto-size="{ minRows: 3, maxRows: 8 }"
+          :maxlength="4096"
+          placeholder="建群后要发的第一句话（可不填）"
+        />
+        <div class="text-xs text-gray-400">
+          群会建在你的 WhatsApp 上；成员会收到入群邀请。请勿批量拉陌生号码建群，以免号码被限制。
         </div>
       </div>
     </Modal>

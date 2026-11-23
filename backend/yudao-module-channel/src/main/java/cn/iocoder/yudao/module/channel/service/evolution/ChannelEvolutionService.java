@@ -956,6 +956,12 @@ public class ChannelEvolutionService {
         return EvolutionClient.sendText(cfg(), a.getPhoneNumberId(), to, text);
     }
 
+    /** 建群，返回群 JID */
+    public String createGroup(ChannelWaAccountDO a, String subject, java.util.List<String> participants) {
+        requireEnabled();
+        return EvolutionClient.createGroup(cfg(), a.getPhoneNumberId(), subject, participants);
+    }
+
     public String sendMedia(ChannelWaAccountDO a, String to, String kind, byte[] content, String mimeType,
                             String fileName, String caption) {
         requireEnabled();

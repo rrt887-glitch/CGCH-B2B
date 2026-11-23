@@ -35,6 +35,14 @@ public class ChannelResearchDO extends TenantBaseDO {
      */
     private String website;
     /**
+     * 客户 Facebook 主页（很多小客户没有官网，只有 Facebook 主页）
+     */
+    private String facebookUrl;
+    /**
+     * 客户 LinkedIn 主页（个人主页或公司主页）
+     */
+    private String linkedinUrl;
+    /**
      * 关联的 CRM 客户
      */
     private Long customerId;

@@ -540,6 +540,8 @@ CREATE TABLE `channel_research` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `company_name` varchar(255) NULL COMMENT '公司名称（输入或识别结果）',
   `website` varchar(255) NULL COMMENT '官网',
+  `facebook_url` varchar(500) NULL COMMENT '客户 Facebook 主页',
+  `linkedin_url` varchar(500) NULL COMMENT '客户 LinkedIn 主页',
   `customer_id` bigint NULL COMMENT '关联的 CRM 客户',
   `clue_id` bigint NULL COMMENT '关联的 CRM 线索',
   `status` varchar(255) NULL COMMENT '状态：running、done、failed',
