@@ -233,6 +233,14 @@ public class ChannelUnipileService {
             throw new ServiceException(1_030_015_006, "授权记录缺少发起人，请回到后台重新发起");
         }
         String platform = platformOf(provider);
+        // 全局唯一：同一个渠道账号不能被两家公司同时接入（否则两边都会收到同一个人的消息，还双倍计费）
+        java.util.List<ChannelWaAccountDO> sameAccount = TenantUtils.executeIgnore(() ->
+                accountMapper.selectList(ChannelWaAccountDO::getPhoneNumberId, accountId));
+        for (ChannelWaAccountDO e : sameAccount) {
+            if (e.getTenantId() != null && !e.getTenantId().equals(tenantId)) {
+                throw new ServiceException(1_030_015_008, "该账号已被其他公司接入，请先在对方后台断开后再试");
+            }
+        }
         return TenantUtils.execute(tenantId, () -> {
             ChannelUnipileCredentialDO c = credential();
             JsonNode acc = UnipileClient.getAccount(props, keyOf(c), accountId);
