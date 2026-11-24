@@ -272,8 +272,10 @@ public class ChannelEvolutionService {
     // ==================== 聊天记录 ====================
 
     /** 最多导入的历史消息条数 */
-    private static final int HISTORY_MAX = 200000;
-    private static final int HISTORY_PAGE = 500;
+    /** 一次最多补多少条历史消息（20 万会把 CPU/数据库打满；改成可配置，默认 5000） */
+    @org.springframework.beans.factory.annotation.Value("${cgch.evolution.history-max:5000}")
+    private int historyMax;
+    private static final int HISTORY_PAGE = 200;
     private final java.util.concurrent.ScheduledExecutorService historyExecutor =
             java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "channel-evolution-history");
@@ -331,7 +333,7 @@ public class ChannelEvolutionService {
         }
         java.util.List<JsonNode> all = new java.util.ArrayList<>();
         try {
-            for (int page = 1; all.size() < HISTORY_MAX; page++) {
+            for (int page = 1; all.size() < historyMax; page++) {
                 EvolutionClient.MessagePage mp = EvolutionClient.findMessages(cfg(), a.getPhoneNumberId(), page, HISTORY_PAGE);
                 all.addAll(mp.records());
                 if (mp.records().size() < HISTORY_PAGE || page >= mp.pages()) {
@@ -344,12 +346,30 @@ public class ChannelEvolutionService {
         all.sort(java.util.Comparator.comparingLong(d -> d.path("messageTimestamp").asLong(0))); // 按时间先后入库，会话里按顺序显示
         int n = 0;
         int noNumber = 0;
-        for (JsonNode d : all) {
-            if (lidWithoutNumber(d)) {
-                noNumber++; // 隐藏号码的联系人：按隐藏编号建会话，对方再来消息带上真实号码时自动合并
+        // 每 200 条批量查一次已入库的消息编号；以前是每条消息查一次数据库，几万条就会把数据库和 CPU 打满
+        final int BATCH = 200;
+        java.util.Set<String> existing = new java.util.HashSet<>();
+        for (int i = 0; i < all.size(); i += BATCH) {
+            java.util.List<JsonNode> chunk = all.subList(i, Math.min(all.size(), i + BATCH));
+            java.util.List<String> ids = new java.util.ArrayList<>();
+            for (JsonNode d : chunk) {
+                String id = d.path("key").path("id").asText("");
+                if (!id.isEmpty()) {
+                    ids.add(id);
+                }
             }
-            if (history(a, d)) {
-                n++;
+            existing.addAll(whatsAppService.existingMessageIds(a.getId(), ids));
+            for (JsonNode d : chunk) {
+                String id = d.path("key").path("id").asText("");
+                if (!id.isEmpty() && existing.contains(id)) {
+                    continue; // 已经在库里，跳过
+                }
+                if (lidWithoutNumber(d)) {
+                    noNumber++; // 隐藏号码的联系人：按隐藏编号建会话，对方再来消息带上真实号码时自动合并
+                }
+                if (history(a, d)) {
+                    n++;
+                }
             }
         }
         refreshGroupNames(a);
@@ -366,6 +386,10 @@ public class ChannelEvolutionService {
     private static final long AUTO_SYNC_FIRST_SECONDS = 120;
     private static final long AUTO_SYNC_INTERVAL_SECONDS = 6 * 3600;
 
+    /** 自动补历史的总开关；出问题时可设 CGCH_EVOLUTION_AUTO_SYNC_ENABLED=false 临时关掉 */
+    @org.springframework.beans.factory.annotation.Value("${cgch.evolution.auto-sync-enabled:true}")
+    private boolean autoSyncEnabled;
+
     @EventListener(ApplicationReadyEvent.class)
     public void startAutoSync() {
         historyExecutor.scheduleWithFixedDelay(this::syncAllAccounts, AUTO_SYNC_FIRST_SECONDS, AUTO_SYNC_INTERVAL_SECONDS,
@@ -374,7 +398,7 @@ public class ChannelEvolutionService {
 
     /** 所有已连接的扫码号码：补齐聊天记录和客户头像（升级后、重启后、漏掉推送时都能自动补上，不用手动点同步） */
     void syncAllAccounts() {
-        if (!enabled()) {
+        if (!enabled() || !autoSyncEnabled) {
             return;
         }
         java.util.List<ChannelWaAccountDO> list;
@@ -388,6 +412,11 @@ public class ChannelEvolutionService {
             return;
         }
         for (ChannelWaAccountDO a : list) {
+            // 12 小时内已经补过就不再重复：频繁部署/重启时每次都全量跑，会把 CPU 打满
+            if (a.getHistorySyncTime() != null
+                    && a.getHistorySyncTime().isAfter(java.time.LocalDateTime.now().minusHours(12))) {
+                continue;
+            }
             try {
                 TenantUtils.execute(a.getTenantId(), () -> {
                     syncHistory(a);

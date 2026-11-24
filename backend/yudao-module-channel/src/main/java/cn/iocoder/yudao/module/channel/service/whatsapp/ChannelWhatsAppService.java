@@ -938,6 +938,18 @@ public class ChannelWhatsAppService {
     }
 
     /** 关联时同步过来的聊天记录（双方的消息都有）：按消息编号去重，不计未读、不触发 AI 回复 */
+    /** 批量查这些消息编号里哪些已经入库（历史同步用，避免每条消息查一次数据库） */
+    public java.util.Set<String> existingMessageIds(Long accountId, java.util.Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return messageMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ChannelWaMessageDO>()
+                        .eq(ChannelWaMessageDO::getAccountId, accountId)
+                        .in(ChannelWaMessageDO::getWaMessageId, ids))
+                .stream().map(ChannelWaMessageDO::getWaMessageId)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
     public boolean evolutionHistory(ChannelWaAccountDO a, JsonNode metaMessage, String customer, boolean fromMe, String profileName) {
         String id = metaMessage.path("id").asText("");
         if (id.isEmpty() || messageMapper.selectByWaMessageId(a.getId(), id) != null) {
