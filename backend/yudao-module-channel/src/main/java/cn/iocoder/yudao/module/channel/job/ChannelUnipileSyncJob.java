@@ -1,4 +1,4 @@
-﻿package cn.iocoder.yudao.module.channel.job;
+package cn.iocoder.yudao.module.channel.job;
 
 import cn.iocoder.yudao.module.channel.service.unipile.ChannelUnipileService;
 import jakarta.annotation.Resource;
