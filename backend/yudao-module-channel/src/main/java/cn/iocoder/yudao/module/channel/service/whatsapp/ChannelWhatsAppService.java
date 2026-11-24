@@ -1771,7 +1771,6 @@ public class ChannelWhatsAppService {
      * 号码会话已经有了（例如对方先用号码发过消息），就把消息并过去，删除隐藏编号的会话。
      */
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void mergeLidConversation(ChannelWaAccountDO a, String lidKey, String phone) {
         ChannelWaConversationDO lid = conversationMapper.selectByAccountIdAndWaId(a.getId(), lidKey);
         if (lid == null || StrUtil.isBlank(phone) || phone.endsWith("@lid")) {
