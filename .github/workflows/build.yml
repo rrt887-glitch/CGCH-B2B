@@ -808,8 +808,7 @@ jobs:
           updated = call2(permissions)['data']
           assert not updated['roles'] and not updated['permissions'] and not updated['menus'], updated
           call('POST', '/system/permission/assign-user-role', {'userId': uid, 'roleIds': [rid]})
-          # 还原：后面还有测试要按「业务员小王」这个昵称和标准业务员角色找他
-          call('POST', '/system/permission/assign-user-role', {'userId': uid, 'roleIds': [300]})
+          # 只还原昵称：后面还有测试按「业务员小王」找他；角色保持 cgch_sales_self（后续用例要验证企业级快捷回复不可维护）
           urllib.request.urlopen(urllib.request.Request(BASE + '/system/user/profile/update', method='PUT',
               headers=H2, data=json.dumps({'nickname': '业务员小王'}).encode()))
           # ---- 两种账号：超级管理员添加的「业务员」能用日常功能，不能改公司设置，看不到团队会话 ----
