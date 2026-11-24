@@ -808,6 +808,10 @@ jobs:
           updated = call2(permissions)['data']
           assert not updated['roles'] and not updated['permissions'] and not updated['menus'], updated
           call('POST', '/system/permission/assign-user-role', {'userId': uid, 'roleIds': [rid]})
+          # 还原：后面还有测试要按「业务员小王」这个昵称和标准业务员角色找他
+          call('POST', '/system/permission/assign-user-role', {'userId': uid, 'roleIds': [300]})
+          urllib.request.urlopen(urllib.request.Request(BASE + '/system/user/profile/update', method='PUT',
+              headers=H2, data=json.dumps({'nickname': '业务员小王'}).encode()))
           # ---- 两种账号：超级管理员添加的「业务员」能用日常功能，不能改公司设置，看不到团队会话 ----
           sid = call('POST', '/system/user/create', {'username': 'sales3@ci.example', 'nickname': '业务员小李', 'password': 'Sales3pass'})
           call('POST', '/system/permission/assign-user-role', {'userId': sid, 'roleIds': [300]})
