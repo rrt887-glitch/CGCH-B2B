@@ -80,13 +80,28 @@ async function reindex() {
 const q = ref('');
 const searching = ref(false);
 const hits = ref<ChannelAiApi.SearchHit[]>();
+const searchFailed = ref(false);
+let searchVersion = 0;
+watch(q, () => {
+  searchVersion++;
+  hits.value = undefined;
+  searchFailed.value = false;
+  searching.value = false;
+}, { flush: 'sync' });
 async function search() {
-  if (!q.value.trim()) return;
+  const query = q.value.trim();
+  if (!query) return;
+  const version = ++searchVersion;
+  hits.value = undefined;
+  searchFailed.value = false;
   searching.value = true;
   try {
-    hits.value = await searchKnowledge(q.value.trim());
+    const result = await searchKnowledge(query);
+    if (version === searchVersion) hits.value = result;
+  } catch {
+    if (version === searchVersion) searchFailed.value = true;
   } finally {
-    searching.value = false;
+    if (version === searchVersion) searching.value = false;
   }
 }
 
@@ -216,7 +231,8 @@ onMounted(async () => {
         <Input v-model:value="q" placeholder="例如：How many pieces must I buy at minimum?" class="w-[480px]" @press-enter="search" />
         <Button type="primary" :loading="searching" @click="search">检索</Button>
       </Space>
-      <div v-if="hits && hits.length === 0" class="text-gray-400">没有命中任何资料，AI 遇到这类问题会回复「确认后答复」。</div>
+      <div v-if="searchFailed" class="text-red-600">检索失败，请重试。</div>
+      <div v-else-if="hits && hits.length === 0" class="text-gray-400">没有命中任何资料，AI 遇到这类问题会回复「确认后答复」。</div>
       <div v-for="(h, i) in hits" :key="h.id" class="border-b py-2 last:border-b-0">
         <div class="flex items-center gap-2">
           <span class="text-gray-400">{{ i + 1 }}.</span>

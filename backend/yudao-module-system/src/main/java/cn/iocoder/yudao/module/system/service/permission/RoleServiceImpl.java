@@ -25,6 +25,7 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -80,7 +81,10 @@ public class RoleServiceImpl implements RoleService {
     }
 
     @Override
-    @CacheEvict(value = RedisKeyConstants.ROLE, key = "#updateReqVO.id")
+    @Caching(evict = {
+            @CacheEvict(value = RedisKeyConstants.ROLE, key = "#updateReqVO.id"),
+            @CacheEvict(value = RedisKeyConstants.AUTH_PERMISSION_SNAPSHOT, allEntries = true)
+    })
     @LogRecord(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_UPDATE_SUB_TYPE, bizNo = "{{#updateReqVO.id}}",
             success = SYSTEM_ROLE_UPDATE_SUCCESS)
     public void updateRole(RoleSaveReqVO updateReqVO) {
@@ -132,6 +136,7 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = RedisKeyConstants.ROLE, allEntries = true)
     public void deleteRoleList(List<Long> ids) {
         // 1. 校验是否可以删除
         ids.forEach(this::validateRoleForUpdate);

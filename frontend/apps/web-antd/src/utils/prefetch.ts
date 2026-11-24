@@ -20,14 +20,24 @@ export function setupHoverPrefetch() {
     'mouseover',
     (event) => {
       const target = event.target as HTMLElement | null;
-      const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null;
-      const href = anchor?.getAttribute('href') || '';
-      if (!href.startsWith('/') || href === '/' || prefetched.has(href)) {
+      const link = target?.closest?.('[data-prefetch-route], a[href]');
+      const href = link?.getAttribute('href') || '';
+      const path =
+        link?.getAttribute('data-prefetch-route') ||
+        (/^(?:\/[^/][^?#]*|\/)?#\//.test(href)
+          ? href.slice(href.indexOf('#') + 1)
+          : href);
+      if (
+        !path.startsWith('/') ||
+        path.startsWith('//') ||
+        path === '/' ||
+        prefetched.has(path)
+      ) {
         return;
       }
-      prefetched.add(href);
+      prefetched.add(path);
       try {
-        const resolved = router.resolve(href);
+        const resolved = router.resolve(path);
         for (const record of resolved.matched) {
           for (const component of Object.values(record.components ?? {})) {
             if (isLazyLoadable(component)) {

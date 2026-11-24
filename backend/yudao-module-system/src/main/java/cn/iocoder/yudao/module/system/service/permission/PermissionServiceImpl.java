@@ -139,6 +139,7 @@ public class PermissionServiceImpl implements PermissionService {
     @Override
     @DSTransactional // 多数据源，使用 @DSTransactional 保证本地事务，以及数据源的切换
     @Caching(evict = {
+            @CacheEvict(value = RedisKeyConstants.AUTH_PERMISSION_SNAPSHOT, allEntries = true),
             @CacheEvict(value = RedisKeyConstants.MENU_ROLE_ID_LIST,
             allEntries = true),
             @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST,

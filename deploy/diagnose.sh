@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 只读诊断：CPU / 内存 / swap / 容器占用 / 后端报错
 # 用法：bash diagnose.sh        或        curl -fsSL .../diagnose.sh | bash
-set -u
+set -uo pipefail
 
 echo "================ 基本信息 ================"
 date

@@ -184,7 +184,7 @@ public class ChannelMailService {
         Map<String, Long> customerByEmail = new HashMap<>();
         int added = 0;
         for (MailClient.ParsedMail m : fetched.getMails()) {
-            if (messageMapper.selectByAccountIdAndImapUid(account.getId(), m.getUid()) != null) {
+            if (messageMapper.selectByImapUid(account.getId(), fetched.getUidValidity(), m.getUid()) != null) {
                 continue;
             }
             if (StrUtil.isNotBlank(m.getMessageId())
@@ -196,6 +196,7 @@ public class ChannelMailService {
                     .folder(ChannelMailMessageDO.FOLDER_INBOX)
                     .direction(ChannelMailMessageDO.DIRECTION_IN)
                     .imapUid(m.getUid())
+                    .imapUidValidity(fetched.getUidValidity())
                     .messageId(m.getMessageId())
                     .inReplyTo(m.getInReplyTo())
                     .threadKey(threadKey(account.getId(), m.getMessageId(), m.getInReplyTo(), m.getReferences()))

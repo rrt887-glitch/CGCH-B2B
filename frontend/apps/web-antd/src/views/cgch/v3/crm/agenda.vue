@@ -35,6 +35,8 @@ const rows = ref<any[]>([]);
 const total = ref(0);
 const counts = reactive<Record<TabKey, number>>({ today: 0, expired: 0, pool: 0, done: 0 });
 const loading = ref(false);
+const loadFailed = ref(false);
+let loadVersion = 0;
 const pager = reactive({ no: 1, size: 20 });
 
 function fetchTab(key: TabKey, pageNo: number, pageSize: number) {
@@ -49,14 +51,23 @@ function fetchTab(key: TabKey, pageNo: number, pageSize: number) {
 }
 
 async function load() {
+  const version = ++loadVersion;
+  const requestedTab = tab.value;
   loading.value = true;
+  loadFailed.value = false;
   try {
-    const r = await fetchTab(tab.value, pager.no, pager.size);
+    const r = await fetchTab(requestedTab, pager.no, pager.size);
+    if (version !== loadVersion) return;
     rows.value = r?.list ?? [];
     total.value = r?.total ?? 0;
-    counts[tab.value] = total.value;
+    counts[requestedTab] = total.value;
+  } catch {
+    if (version !== loadVersion) return;
+    rows.value = [];
+    total.value = 0;
+    loadFailed.value = true;
   } finally {
-    loading.value = false;
+    if (version === loadVersion) loading.value = false;
   }
 }
 
@@ -73,7 +84,9 @@ async function loadCounts() {
 }
 
 const tabOptions = computed(() => TABS.map((t) => ({ label: `${t.label} ${counts[t.key] || ''}`.trim(), value: t.key })));
-const emptyText = computed(() => TABS.find((t) => t.key === tab.value)!.empty);
+const emptyText = computed(() =>
+  loadFailed.value ? '加载失败，请刷新重试' : TABS.find((t) => t.key === tab.value)!.empty,
+);
 
 const columns = computed(() => [
   { title: '客户', key: 'name', width: 200 },

@@ -47,19 +47,27 @@ const columns = computed(() =>
 // ===== 拖动改阶段 =====
 const dragging = ref<CrmBusinessApi.Business>();
 const over = ref<number>();
+const moving = ref(new Set<number>());
 
 async function drop(statusId: number) {
   const b = dragging.value;
   over.value = undefined;
   dragging.value = undefined;
-  if (!b || b.statusId === statusId) return;
+  if (!b || b.endStatus != null || b.statusId === statusId || moving.value.has(b.id)) return;
   const old = b.statusId;
+  const oldName = b.statusName;
+  const nextName = statuses.value.find((s) => s.id === statusId)?.name;
+  moving.value.add(b.id);
   b.statusId = statusId;
+  b.statusName = nextName;
   try {
     await updateBusinessStatus({ id: b.id, statusId, endStatus: undefined });
-    message.success(`已移到「${statuses.value.find((s) => s.id === statusId)?.name}」`);
+    message.success(nextName ? `已移到「${nextName}」` : '已更新商机阶段');
   } catch {
     b.statusId = old;
+    b.statusName = oldName;
+  } finally {
+    moving.value.delete(b.id);
   }
 }
 
@@ -133,8 +141,9 @@ onMounted(async () => {
               v-for="b in c.list"
               :key="b.id"
               class="biz__card"
-              draggable="true"
+              :draggable="b.endStatus == null && !moving.has(b.id)"
               @dragstart="dragging = b"
+              @dragend="dragging = over = undefined"
               @click="detail(b)"
             >
               <div class="truncate font-medium text-gray-900">{{ b.name }}</div>

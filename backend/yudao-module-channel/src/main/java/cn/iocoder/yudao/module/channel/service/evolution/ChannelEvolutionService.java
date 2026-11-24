@@ -335,7 +335,8 @@ public class ChannelEvolutionService {
         try {
             for (int page = 1; all.size() < historyMax; page++) {
                 EvolutionClient.MessagePage mp = EvolutionClient.findMessages(cfg(), a.getPhoneNumberId(), page, HISTORY_PAGE);
-                all.addAll(mp.records());
+                int remaining = historyMax - all.size();
+                all.addAll(mp.records().subList(0, Math.min(remaining, mp.records().size())));
                 if (mp.records().size() < HISTORY_PAGE || page >= mp.pages()) {
                     break;
                 }

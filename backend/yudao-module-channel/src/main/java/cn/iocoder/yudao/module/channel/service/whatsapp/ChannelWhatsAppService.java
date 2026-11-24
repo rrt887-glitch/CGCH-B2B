@@ -1407,10 +1407,15 @@ public class ChannelWhatsAppService {
 
         // target 补上 source 的 chat_id（如果自己没有）
         ChannelWaConversationDO patch = new ChannelWaConversationDO().setId(targetId)
+                .setLastInboundTime(max(target.getLastInboundTime(), source.getLastInboundTime()))
                 .setUnreadCount((target.getUnreadCount() == null ? 0 : target.getUnreadCount())
                         + (source.getUnreadCount() == null ? 0 : source.getUnreadCount()));
         if (StrUtil.isBlank(target.getProviderChatId()) && StrUtil.isNotBlank(source.getProviderChatId())) {
             patch.setProviderChatId(source.getProviderChatId());
+        }
+        if (target.isWhatsApp() && !ChannelWaConversationDO.isGroup(target.getWaId())
+                && Boolean.FALSE.equals(source.getPrivateAiEnabled())) {
+            patch.setPrivateAiEnabled(false);
         }
         // 最新一条消息的时间与预览
         ChannelWaMessageDO latest = messageMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ChannelWaMessageDO>()
@@ -1766,6 +1771,7 @@ public class ChannelWhatsAppService {
      * 号码会话已经有了（例如对方先用号码发过消息），就把消息并过去，删除隐藏编号的会话。
      */
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void mergeLidConversation(ChannelWaAccountDO a, String lidKey, String phone) {
         ChannelWaConversationDO lid = conversationMapper.selectByAccountIdAndWaId(a.getId(), lidKey);
         if (lid == null || StrUtil.isBlank(phone) || phone.endsWith("@lid")) {
@@ -1782,9 +1788,15 @@ public class ChannelWhatsAppService {
         }
         messageMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaMessageDO>()
                 .set(ChannelWaMessageDO::getConversationId, target.getId()).eq(ChannelWaMessageDO::getConversationId, lid.getId()));
+        conversationEventMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaConversationEventDO>()
+                        .eq(ChannelWaConversationEventDO::getConversationId, lid.getId())
+                        .set(ChannelWaConversationEventDO::getConversationId, target.getId()));
         ChannelWaConversationDO upd = new ChannelWaConversationDO().setId(target.getId())
                 .setLastMessageTime(max(target.getLastMessageTime(), lid.getLastMessageTime()))
-                .setLastInboundTime(max(target.getLastInboundTime(), lid.getLastInboundTime()));
+                .setLastInboundTime(max(target.getLastInboundTime(), lid.getLastInboundTime()))
+                .setUnreadCount((target.getUnreadCount() == null ? 0 : target.getUnreadCount())
+                        + (lid.getUnreadCount() == null ? 0 : lid.getUnreadCount()));
         if (lid.getLastMessageTime() != null && (target.getLastMessageTime() == null || lid.getLastMessageTime().isAfter(target.getLastMessageTime()))) {
             upd.setLastMessagePreview(lid.getLastMessagePreview());
         }

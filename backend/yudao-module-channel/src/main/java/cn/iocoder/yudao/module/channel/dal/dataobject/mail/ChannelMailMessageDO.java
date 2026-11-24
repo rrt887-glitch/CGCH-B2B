@@ -50,6 +50,8 @@ public class ChannelMailMessageDO extends TenantBaseDO {
      * 收件箱中的 IMAP UID，发出的邮件为空
      */
     private Long imapUid;
+    /** IMAP UID 所属的收件箱代次 */
+    private Long imapUidValidity;
     /**
      * 邮件头 Message-ID
      */

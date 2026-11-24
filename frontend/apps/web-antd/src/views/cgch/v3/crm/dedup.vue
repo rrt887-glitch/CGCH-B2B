@@ -2,7 +2,7 @@
 /** 查重：在客户与线索中查找可能重复的记录（与原网站布局一致） */
 import type { CgchCrmApi } from '#/api/crm/cgch';
 
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Button, Empty, Input, message, Select, Table, Tag } from 'ant-design-vue';
@@ -15,14 +15,16 @@ const field = ref('name');
 const keyword = ref('');
 const loading = ref(false);
 const searched = ref(false);
+const loadFailed = ref(false);
+let searchVersion = 0;
 const rows = ref<CgchCrmApi.DedupItem[]>([]);
 const pageSize = ref(10);
 
 const FIELDS = [
-  { value: 'name', label: '名称或简称', match: ['name', 'companyName'] },
-  { value: 'email', label: '邮箱', match: ['email'] },
-  { value: 'mobile', label: '电话', match: ['mobile', 'telephone', 'whatsapp'] },
-  { value: 'website', label: '官网', match: ['website'] },
+  { value: 'name', label: '名称或简称' },
+  { value: 'email', label: '邮箱' },
+  { value: 'mobile', label: '电话' },
+  { value: 'website', label: '官网' },
 ];
 
 const SCOPES = [
@@ -30,11 +32,6 @@ const SCOPES = [
   { value: 'customer', label: '客户' },
   { value: 'clue', label: '线索' },
 ] as const;
-
-const filtered = computed(() => {
-  const m = FIELDS.find((f) => f.value === field.value)?.match ?? [];
-  return rows.value.filter((r) => !r.matchedFields?.length || r.matchedFields.some((x) => m.includes(x)));
-});
 
 const columns = [
   { title: '类型', key: 'type', width: 80 },
@@ -47,17 +44,25 @@ const columns = [
 ];
 
 async function search() {
+  const version = ++searchVersion;
   const k = keyword.value.trim();
+  loadFailed.value = false;
+  rows.value = [];
   if (k.length < 2 || k.length > 100) {
+    loading.value = false;
+    searched.value = false;
     message.info('请输入 2-100 个字符');
     return;
   }
+  searched.value = true;
   loading.value = true;
   try {
-    rows.value = await searchDedup(k, scope.value);
-    searched.value = true;
+    const result = await searchDedup(k, scope.value, field.value);
+    if (version === searchVersion) rows.value = result;
+  } catch {
+    if (version === searchVersion) loadFailed.value = true;
   } finally {
-    loading.value = false;
+    if (version === searchVersion) loading.value = false;
   }
 }
 
@@ -81,7 +86,7 @@ function view(r: CgchCrmApi.DedupItem) {
             {{ s.label }}
           </button>
         </div>
-        <Select v-model:value="field" class="w-28" :options="FIELDS" />
+        <Select v-model:value="field" class="w-28" :options="FIELDS" @change="searched && search()" />
         <div class="dd__input">
           <Input v-model:value="keyword" :bordered="false" allow-clear placeholder="请输入 2-100 个字符" :maxlength="100" @press-enter="search" />
           <Button type="primary" :loading="loading" @click="search">搜 索</Button>
@@ -89,7 +94,7 @@ function view(r: CgchCrmApi.DedupItem) {
       </div>
       <Table
         :columns="columns"
-        :data-source="filtered"
+        :data-source="rows"
         :loading="loading"
         :pagination="{ pageSize, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'], onShowSizeChange: (_c: number, s: number) => (pageSize = s) }"
         :row-key="(r: any) => `${r.type}-${r.id}`"
@@ -107,7 +112,7 @@ function view(r: CgchCrmApi.DedupItem) {
           <a v-else-if="column.key === 'action'" @click="view(record as any)">查看</a>
         </template>
         <template #emptyText>
-          <Empty :description="searched ? '没有找到重复记录' : '暂无数据'" />
+          <Empty :description="loadFailed ? '搜索失败，请重试' : searched ? '没有找到重复记录' : '暂无数据'" />
         </template>
       </Table>
     </div>

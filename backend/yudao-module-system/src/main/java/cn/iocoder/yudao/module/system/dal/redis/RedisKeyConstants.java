@@ -49,6 +49,9 @@ public interface RedisKeyConstants {
      */
     String PERMISSION_MENU_ID_LIST = "permission_menu_ids";
 
+    /** 登录权限快照：缓存键包含租户、用户和当前角色，TTL 为两分钟。 */
+    String AUTH_PERMISSION_SNAPSHOT = "auth_permission_snapshot#2m";
+
     /**
      * OAuth2 客户端的缓存
      * <p>

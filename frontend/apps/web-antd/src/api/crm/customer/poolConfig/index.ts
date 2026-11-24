@@ -13,7 +13,7 @@ export namespace CrmCustomerPoolConfigApi {
 
 /** 获取客户公海规则设置 */
 export function getCustomerPoolConfig() {
-  return requestClient.get<CrmCustomerPoolConfigApi.CustomerPoolConfig>(
+  return requestClient.get<CrmCustomerPoolConfigApi.CustomerPoolConfig | null>(
     '/crm/customer-pool-config/get',
   );
 }

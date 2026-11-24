@@ -174,6 +174,7 @@ async function doExport() {
 
 // ===== 背调结果 =====
 const research = ref<Record<number, LatestResearch>>({});
+let researchVersion = 0;
 const RESEARCH_STATUS: Record<string, { color: string; text: string }> = {
   done: { color: 'text-green-600', text: '已背调' },
   running: { color: 'text-amber-500', text: '背调中' },
@@ -181,12 +182,16 @@ const RESEARCH_STATUS: Record<string, { color: string; text: string }> = {
 };
 
 async function loadResearch(rows: any[]) {
+  const version = ++researchVersion;
+  research.value = {};
   if (props.pool || !rows.length) return;
   try {
     const list = await getLatestResearch(rows.map((r) => r.id));
-    research.value = Object.fromEntries(list.map((x) => [x.customerId, x]));
+    if (version === researchVersion) {
+      research.value = Object.fromEntries(list.map((x) => [x.customerId, x]));
+    }
   } catch {
-    research.value = {};
+    // 背调状态加载失败时，客户列表仍可使用。
   }
 }
 

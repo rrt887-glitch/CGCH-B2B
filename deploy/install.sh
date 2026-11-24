@@ -146,7 +146,7 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\$\$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", 'mysql -h 127.0.0.1 -uroot -p"\$\$MYSQL_ROOT_PASSWORD" -Nse "SELECT 1" ruoyi-vue-pro']
       interval: 10s
       retries: 60
 
@@ -274,10 +274,18 @@ if ! docker compose pull; then
 fi
 say "启动数据库（首次启动需要导入数据，约 1～3 分钟）"
 docker compose up -d mysql redis
+mysql_ready=false
 for i in $(seq 1 120); do
-  [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q mysql)" 2>/dev/null)" = healthy ] && break
+  if [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q mysql)" 2>/dev/null)" = healthy ]; then
+    mysql_ready=true
+    break
+  fi
   sleep 3
 done
+if [ "$mysql_ready" = false ]; then
+  docker compose logs --tail 80 mysql >&2 || true
+  die "数据库没有在预期时间内就绪，未执行数据库升级"
+fi
 say "检查数据库升级"
 docker compose exec -T mysql cgch-migrate </dev/null || die "数据库升级失败，请把上面的输出发给技术支持"
 say "启动服务"

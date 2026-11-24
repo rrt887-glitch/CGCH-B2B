@@ -12,6 +12,8 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
@@ -44,6 +46,8 @@ public class ChannelKnowledgeFileService {
     private ChannelFileHelper channelFileHelper;
     @Resource
     private ChannelAiService channelAiService;
+    @Resource
+    private TransactionTemplate transactionTemplate;
 
     public List<ChannelAiKnowledgeFileDO> list() {
         return channelKnowledgeFileMapper.selectAll();
@@ -84,6 +88,7 @@ public class ChannelKnowledgeFileService {
         return channelKnowledgeFileMapper.selectById(id);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         channelKnowledgeMapper.delete(new LambdaQueryWrapperX<ChannelAiKnowledgeDO>().eq(ChannelAiKnowledgeDO::getFileId, id));
         channelKnowledgeFileMapper.deleteById(id);
@@ -105,18 +110,27 @@ public class ChannelKnowledgeFileService {
             fail(f, "没有识别到文字（可能是扫描件或图片），请上传可复制文字的文件");
             return;
         }
-        channelKnowledgeMapper.delete(new LambdaQueryWrapperX<ChannelAiKnowledgeDO>().eq(ChannelAiKnowledgeDO::getFileId, f.getId()));
-        String base = StrUtil.removeSuffix(f.getName(), "." + f.getFileType());
+        String base = StrUtil.removeSuffixIgnoreCase(f.getName(), "." + f.getFileType());
         List<ChannelAiKnowledgeDO> rows = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i++) {
             ChannelAiKnowledgeDO k = ChannelAiKnowledgeDO.builder().type(ChannelAiKnowledgeDO.TYPE_FILE).fileId(f.getId())
                     .title(chunks.size() == 1 ? base : base + "（第 " + (i + 1) + " 段）").content(chunks.get(i))
                     .enabled(true).sort(100).embedding("").embeddingModel("").build();
-            channelKnowledgeMapper.insert(k);
             rows.add(k);
         }
-        channelKnowledgeFileMapper.updateById(new ChannelAiKnowledgeFileDO().setId(f.getId()).setStatus(ChannelAiKnowledgeFileDO.STATUS_DONE)
-                .setChunks(rows.size()).setErrorMsg(""));
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                channelKnowledgeMapper.delete(new LambdaQueryWrapperX<ChannelAiKnowledgeDO>()
+                        .eq(ChannelAiKnowledgeDO::getFileId, f.getId()));
+                rows.forEach(channelKnowledgeMapper::insert);
+                channelKnowledgeFileMapper.updateById(new ChannelAiKnowledgeFileDO().setId(f.getId())
+                        .setStatus(ChannelAiKnowledgeFileDO.STATUS_DONE).setChunks(rows.size()).setErrorMsg(""));
+            });
+        } catch (Exception e) {
+            log.warn("[learn][资料文件({}) 保存条目失败]", f.getId(), e);
+            fail(f, "保存知识条目失败，请重新学习");
+            return;
+        }
         channelAiService.embedQuietly(rows);
     }
 

@@ -42,8 +42,11 @@ public interface ChannelMailMessageMapper extends BaseMapperX<ChannelMailMessage
         return selectOne(ChannelMailMessageDO::getAccountId, accountId, ChannelMailMessageDO::getMessageId, messageId);
     }
 
-    default ChannelMailMessageDO selectByAccountIdAndImapUid(Long accountId, Long imapUid) {
-        return selectOne(ChannelMailMessageDO::getAccountId, accountId, ChannelMailMessageDO::getImapUid, imapUid);
+    default ChannelMailMessageDO selectByImapUid(Long accountId, Long uidValidity, Long imapUid) {
+        return selectOne(new LambdaQueryWrapperX<ChannelMailMessageDO>()
+                .eq(ChannelMailMessageDO::getAccountId, accountId)
+                .eq(ChannelMailMessageDO::getImapUidValidity, uidValidity)
+                .eq(ChannelMailMessageDO::getImapUid, imapUid));
     }
 
     default Long selectUnrepliedCount(Collection<Long> accountIds) {

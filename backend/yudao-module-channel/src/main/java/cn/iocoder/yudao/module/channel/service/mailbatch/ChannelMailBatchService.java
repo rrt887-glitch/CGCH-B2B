@@ -195,18 +195,27 @@ public class ChannelMailBatchService {
             throw exception(MAIL_BATCH_INVALID, "没有可以发送的收件人");
         }
         LocalDateTime now = LocalDateTime.now().withNano(0); // 数据库时间精确到秒，统一按整秒计算
-        batchMapper.updateById(new ChannelMailBatchDO().setId(id).setStatus(ChannelMailBatchDO.STATUS_SENDING)
-                .setStartTime(now).setNextSendTime(now));
+        int updated = batchMapper.update(new ChannelMailBatchDO().setStatus(ChannelMailBatchDO.STATUS_SENDING)
+                        .setStartTime(now).setNextSendTime(now),
+                new LambdaQueryWrapperX<ChannelMailBatchDO>().eq(ChannelMailBatchDO::getId, id)
+                        .eq(ChannelMailBatchDO::getStatus, ChannelMailBatchDO.STATUS_DRAFT));
+        if (updated == 0) {
+            throw exception(MAIL_BATCH_INVALID, "只有草稿可以开始发送");
+        }
     }
 
     /** 取消：没发的标为已取消，已发的保留 */
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void cancel(Long userId, Long id) {
-        ChannelMailBatchDO b = validate(userId, id);
-        if (ChannelMailBatchDO.STATUS_DONE.equals(b.getStatus()) || ChannelMailBatchDO.STATUS_CANCELLED.equals(b.getStatus())) {
+        validate(userId, id);
+        int updated = batchMapper.update(new ChannelMailBatchDO().setStatus(ChannelMailBatchDO.STATUS_CANCELLED)
+                        .setFinishTime(LocalDateTime.now()),
+                new LambdaQueryWrapperX<ChannelMailBatchDO>().eq(ChannelMailBatchDO::getId, id)
+                        .in(ChannelMailBatchDO::getStatus,
+                                List.of(ChannelMailBatchDO.STATUS_DRAFT, ChannelMailBatchDO.STATUS_SENDING)));
+        if (updated == 0) {
             return;
         }
-        batchMapper.updateById(new ChannelMailBatchDO().setId(id).setStatus(ChannelMailBatchDO.STATUS_CANCELLED)
-                .setFinishTime(LocalDateTime.now()));
         itemMapper.update(new ChannelMailBatchItemDO().setStatus(ChannelMailBatchItemDO.STATUS_CANCELLED),
                 new LambdaQueryWrapperX<ChannelMailBatchItemDO>().eq(ChannelMailBatchItemDO::getBatchId, id)
                         .eq(ChannelMailBatchItemDO::getStatus, ChannelMailBatchItemDO.STATUS_PENDING));
@@ -244,19 +253,21 @@ public class ChannelMailBatchService {
         }
         ChannelMailBatchItemDO i = itemMapper.selectNextPending(b.getId());
         if (i == null) {
-            batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId()).setStatus(ChannelMailBatchDO.STATUS_DONE)
-                    .setFinishTime(now.withNano(0)).setNextSendTime(null));
+            batchMapper.update(new ChannelMailBatchDO().setStatus(ChannelMailBatchDO.STATUS_DONE)
+                            .setFinishTime(now.withNano(0)),
+                    new LambdaQueryWrapperX<ChannelMailBatchDO>().eq(ChannelMailBatchDO::getId, b.getId())
+                            .eq(ChannelMailBatchDO::getStatus, ChannelMailBatchDO.STATUS_SENDING));
             return;
         }
-        LocalDateTime sentAt = now.withNano(0); // 数据库时间精确到秒，统一按整秒计算
         try {
             Long ref = sendOne(fresh, i);
             itemMapper.updateById(new ChannelMailBatchItemDO().setId(i.getId()).setStatus(ChannelMailBatchItemDO.STATUS_SENT)
-                    .setSentTime(sentAt).setSentRefId(ref).setReason(""));
+                    .setSentTime(LocalDateTime.now().withNano(0)).setSentRefId(ref).setReason(""));
         } catch (ServiceException e) {
             if (Objects.equals(e.getCode(), SEND_RATE_LIMITED.getCode())) {
                 // 邮箱达到发送上限：这封保留，过一会儿再发
-                batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId()).setNextSendTime(sentAt.plus(RATE_LIMIT_BACKOFF)));
+                batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId())
+                        .setNextSendTime(ceilSecond(LocalDateTime.now().plus(RATE_LIMIT_BACKOFF))));
                 log.info("[sendNext][群发任务 {} 达到发送上限，{} 分钟后继续] {}", b.getId(), RATE_LIMIT_BACKOFF.toMinutes(), e.getMessage());
                 return;
             }
@@ -268,8 +279,9 @@ public class ChannelMailBatchService {
             itemMapper.updateById(new ChannelMailBatchItemDO().setId(i.getId()).setStatus(ChannelMailBatchItemDO.STATUS_FAILED)
                     .setReason(StrUtil.maxLength(StrUtil.blankToDefault(e.getMessage(), "发送失败"), 250)));
         }
-        // 从这封发出的整秒起算，向上取整，保证两封之间至少隔设定的时间
-        batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId()).setNextSendTime(ceilSecond(sentAt.plus(Duration.ofMillis(gapMs)))));
+        // 从本封处理完成时起算，数据库取整后仍保留完整的发送间隔。
+        batchMapper.updateById(new ChannelMailBatchDO().setId(b.getId())
+                .setNextSendTime(ceilSecond(LocalDateTime.now().plus(Duration.ofMillis(gapMs)))));
     }
 
     /** 向上取整到秒，保证两封之间至少间隔设定的时间 */

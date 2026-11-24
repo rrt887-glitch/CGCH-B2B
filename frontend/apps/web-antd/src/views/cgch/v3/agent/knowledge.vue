@@ -37,6 +37,8 @@ const { settings, load, save } = useAgentSettings();
 const view = ref<'files' | 'text'>('files');
 const files = ref<AgentApi.KnowledgeFile[]>([]);
 const loading = ref(true);
+const loadFailed = ref(false);
+let fileLoadVersion = 0;
 const uploading = ref(0);
 const keyword = ref('');
 const kind = ref('');
@@ -74,15 +76,26 @@ const columns = [
 ];
 
 async function loadFiles() {
+  const version = ++fileLoadVersion;
   loading.value = true;
+  loadFailed.value = false;
   try {
-    files.value = await getKnowledgeFiles();
+    const result = await getKnowledgeFiles();
+    if (version !== fileLoadVersion) return;
+    files.value = result;
+    page.no = Math.min(page.no, Math.max(1, Math.ceil(filtered.value.length / page.size)));
+  } catch {
+    if (version === fileLoadVersion) loadFailed.value = true;
   } finally {
-    loading.value = false;
+    if (version === fileLoadVersion) loading.value = false;
   }
 }
 
 async function beforeUpload(file: File) {
+  if (file.size === 0) {
+    message.warning(`${file.name} 是空文件，请选择有内容的资料`);
+    return false;
+  }
   if (file.size > 20 * 1024 * 1024) {
     message.warning(`${file.name} 超过 20MB，请拆分后上传`);
     return false;
@@ -91,8 +104,11 @@ async function beforeUpload(file: File) {
   try {
     const f = await uploadKnowledgeFile(file);
     if (f.status === 'failed') message.warning(`${f.name}：${f.errorMsg || '学习失败'}`);
-    else message.success(`${f.name} 学习完成，拆成 ${f.chunks} 段资料`);
+    else if (f.status === 'done') message.success(`${f.name} 学习完成，拆成 ${f.chunks} 段资料`);
+    else message.info(`${f.name} 正在学习`);
     await loadFiles();
+  } catch {
+    // 请求层已经提示上传失败，返回 false 阻止控件再次发送。
   } finally {
     uploading.value--;
   }
@@ -173,13 +189,17 @@ onMounted(() => {
         </Input>
         <div class="flex-1"></div>
         <Select v-model:value="kind" class="w-32" :options="KINDS" @change="page.no = 1" />
-        <Upload :show-upload-list="false" multiple :before-upload="beforeUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.md,.html,.rtf">
+        <Upload :show-upload-list="false" multiple :before-upload="beforeUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.md,.html,.htm,.rtf">
           <Button type="primary" :loading="uploading > 0"><IconifyIcon icon="lucide:upload" class="mr-1 inline size-4" />上传资料</Button>
         </Upload>
       </template>
     </div>
 
     <template v-if="view === 'files'">
+      <div v-if="loadFailed" class="mb-2 flex items-center gap-2 text-sm text-red-600">
+        资料列表加载失败
+        <Button size="small" @click="loadFiles">重试</Button>
+      </div>
       <Table :columns="columns" :data-source="paged" :loading="loading" :pagination="false" row-key="id" size="middle">
         <template #bodyCell="{ column, record }">
           <div v-if="column.key === 'name'" class="flex min-w-0 items-center gap-2">

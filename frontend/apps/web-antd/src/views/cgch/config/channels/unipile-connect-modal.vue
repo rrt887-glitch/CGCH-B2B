@@ -27,8 +27,12 @@ const error = ref('');
 
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 let expireTimer: ReturnType<typeof setTimeout> | undefined;
-let baseline: Set<number> = new Set();
-let polling = false;
+interface AuthorizationAttempt {
+  baseline: Set<number>;
+  polling: boolean;
+  provider: ChannelUnipileApi.Provider;
+}
+let activeAttempt: AuthorizationAttempt | undefined;
 
 const PROVIDERS: Record<
   ChannelUnipileApi.Provider,
@@ -88,6 +92,7 @@ const tip = computed(() => {
 });
 
 function stop() {
+  activeAttempt = undefined;
   if (pollTimer) clearInterval(pollTimer);
   if (expireTimer) clearTimeout(expireTimer);
   pollTimer = undefined;
@@ -96,49 +101,65 @@ function stop() {
 
 async function refresh() {
   stop();
+  const attempt: AuthorizationAttempt = {
+    baseline: new Set(),
+    polling: false,
+    provider: provider.value,
+  };
+  activeAttempt = attempt;
   state.value = 'loading';
   error.value = '';
   url.value = '';
   try {
-    const res = await connectUnipile(provider.value);
+    // 获取授权链接前记录已有账号，避免刚连接的账号被误记为已有账号。
+    const list = await getWaAccountList();
+    if (!isActive(attempt)) return;
+    attempt.baseline = new Set((list || []).map((a) => Number(a.id)));
+    const res = await connectUnipile(attempt.provider);
+    if (!isActive(attempt)) return;
     url.value = res.url;
     state.value = 'ready';
-    // 记录当前已有的账号，之后出现新的才算连接成功
-    const list = await getWaAccountList();
-    baseline = new Set((list || []).map((a) => Number(a.id)));
-    pollTimer = setInterval(() => void poll(), 2000);
+    pollTimer = setInterval(() => void poll(attempt), 2000);
     expireTimer = setTimeout(() => {
+      if (!isActive(attempt)) return;
       stop();
       state.value = 'expired';
     }, 55 * 60_000);
   } catch (e) {
+    if (!isActive(attempt)) return;
     state.value = 'error';
     error.value = (e as Error)?.message || '生成二维码失败，请重试';
   }
 }
 
-async function poll() {
-  if (polling) return;
-  polling = true;
+function isActive(attempt: AuthorizationAttempt) {
+  return activeAttempt === attempt && open.value && provider.value === attempt.provider;
+}
+
+async function poll(attempt: AuthorizationAttempt) {
+  if (!isActive(attempt) || attempt.polling) return;
+  attempt.polling = true;
   try {
     const list = await getWaAccountList();
+    if (!isActive(attempt)) return;
+    const channel = PROVIDERS[attempt.provider];
     const found = (list || []).find(
       (a) =>
         Number(a.id) &&
-        !baseline.has(Number(a.id)) &&
+        !attempt.baseline.has(Number(a.id)) &&
         a.authType === 'unipile' &&
-        (a.platform || 'whatsapp') === meta.value.platform,
+        (a.platform || 'whatsapp') === channel.platform,
     );
     if (found) {
       stop();
-      message.success(`已连接 ${meta.value.name}：${found.displayPhone || found.name || ''}`);
+      message.success(`已连接 ${channel.name}：${found.displayPhone || found.name || ''}`);
       emit('done');
       open.value = false;
     }
   } catch {
     // 轮询失败不打扰用户，下一轮再试
   } finally {
-    polling = false;
+    attempt.polling = false;
   }
 }
 
@@ -147,7 +168,7 @@ function openHere() {
   window.open(url.value, 'cgch-unipile', 'width=560,height=760');
 }
 
-watch(open, (v) => {
+watch([open, provider], ([v]) => {
   if (v) {
     void refresh();
   } else {

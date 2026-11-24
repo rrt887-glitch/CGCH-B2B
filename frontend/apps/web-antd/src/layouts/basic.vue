@@ -185,6 +185,7 @@ function onUserMenu({ key }: { key: number | string }) {
             class="cgch-rail__item"
             :class="{ 'is-active': activeKey === item.key }"
             :aria-label="item.label"
+            :data-prefetch-route="item.path"
             :title="item.label"
             @click="go(item)"
           >
@@ -201,6 +202,7 @@ function onUserMenu({ key }: { key: number | string }) {
           class="cgch-rail__item"
           :class="{ 'is-active': activeKey === 'settings' }"
           :aria-label="SETTINGS.label"
+          :data-prefetch-route="SETTINGS.path"
           :title="SETTINGS.label"
           @click="go(SETTINGS)"
         >

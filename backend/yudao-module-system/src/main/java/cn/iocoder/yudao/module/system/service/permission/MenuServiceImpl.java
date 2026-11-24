@@ -18,6 +18,7 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,8 +49,11 @@ public class MenuServiceImpl implements MenuService {
     private TenantService tenantService;
 
     @Override
-    @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST, key = "#createReqVO.permission",
-            condition = "#createReqVO.permission != null")
+    @Caching(evict = {
+            @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST, key = "#createReqVO.permission",
+                    condition = "#createReqVO.permission != null"),
+            @CacheEvict(value = RedisKeyConstants.AUTH_PERMISSION_SNAPSHOT, allEntries = true)
+    })
     public Long createMenu(MenuSaveVO createReqVO) {
         // 校验父菜单存在
         validateParentMenu(createReqVO.getParentId(), null);
@@ -66,7 +70,7 @@ public class MenuServiceImpl implements MenuService {
     }
 
     @Override
-    @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST,
+    @CacheEvict(value = {RedisKeyConstants.PERMISSION_MENU_ID_LIST, RedisKeyConstants.AUTH_PERMISSION_SNAPSHOT},
             allEntries = true) // allEntries 清空所有缓存，因为 permission 如果变更，涉及到新老两个 permission。直接清理，简单有效
     public void updateMenu(MenuSaveVO updateReqVO) {
         // 校验更新的菜单是否存在
@@ -87,7 +91,7 @@ public class MenuServiceImpl implements MenuService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST,
+    @CacheEvict(value = {RedisKeyConstants.PERMISSION_MENU_ID_LIST, RedisKeyConstants.AUTH_PERMISSION_SNAPSHOT},
             allEntries = true) // allEntries 清空所有缓存，因为此时不知道 id 对应的 permission 是多少。直接清理，简单有效
     public void deleteMenu(Long id) {
         // 校验是否还有子菜单
@@ -106,7 +110,7 @@ public class MenuServiceImpl implements MenuService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST,
+    @CacheEvict(value = {RedisKeyConstants.PERMISSION_MENU_ID_LIST, RedisKeyConstants.AUTH_PERMISSION_SNAPSHOT},
             allEntries = true) // allEntries 清空所有缓存，因为 Spring Cache 不支持按照 ids 批量删除
     public void deleteMenuList(List<Long> ids) {
         // 校验是否还有子菜单

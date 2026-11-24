@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -160,6 +162,11 @@ public final class MailClient {
                 } else {
                     messages = uf.getMessagesByUID(lastUid + 1, UIDFolder.LASTUID);
                 }
+                if (messages.length > BATCH_LIMIT) {
+                    // 先处理旧邮件，避免服务端返回顺序不同导致游标跳过剩余邮件。
+                    Arrays.sort(messages, Comparator.comparingInt(Message::getMessageNumber));
+                    messages = Arrays.copyOf(messages, BATCH_LIMIT);
+                }
                 FetchProfile fp = new FetchProfile();
                 fp.add(FetchProfile.Item.ENVELOPE);
                 fp.add(UIDFolder.FetchProfileItem.UID);
@@ -172,12 +179,13 @@ public final class MailClient {
                     if (uid <= lastUid) {
                         continue; // "n:*" 在没有新邮件时会返回最后一封，跳过
                     }
-                    if (result.size() >= BATCH_LIMIT) {
-                        break;
-                    }
                     try {
                         result.add(parse((MimeMessage) m, uid));
                     } catch (Exception e) {
+                        if (isConnectionFailure(e)) {
+                            // 连接中断时保留原有同步进度，让下一轮重新拉取。
+                            throw new MessagingException("读取邮件时 IMAP 连接中断", e);
+                        }
                         log.warn("[fetchInbox][{}] 解析 UID {} 失败", a.getEmail(), uid, e);
                     }
                     maxUid = Math.max(maxUid, uid);
@@ -187,6 +195,16 @@ public final class MailClient {
                 folder.close(false);
             }
         }
+    }
+
+    private static boolean isConnectionFailure(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof FolderClosedException || cause instanceof StoreClosedException
+                    || cause instanceof SocketException || cause instanceof SocketTimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static ParsedMail parse(MimeMessage m, long uid) throws MessagingException, IOException {
@@ -272,7 +290,9 @@ public final class MailClient {
             return s;
         }
         if (content instanceof java.io.InputStream in) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            try (in) {
+                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
         }
         return content == null ? null : content.toString();
     }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.mzt.logapi.starter.annotation.DiffLogField;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -21,10 +22,12 @@ public class CrmCustomerPoolConfigSaveReqVO {
 
     @Schema(description = "未跟进放入公海天数", example = "2")
     @DiffLogField(name = "未跟进放入公海天数")
+    @Min(value = 0, message = "未跟进放入公海天数不能小于 0")
     private Integer contactExpireDays;
 
     @Schema(description = "未成交放入公海天数", example = "2")
     @DiffLogField(name = "未成交放入公海天数")
+    @Min(value = 0, message = "未成交放入公海天数不能小于 0")
     private Integer dealExpireDays;
 
     @Schema(description = "是否开启提前提醒", example = "true")
@@ -33,6 +36,7 @@ public class CrmCustomerPoolConfigSaveReqVO {
 
     @Schema(description = "提前提醒天数", example = "2")
     @DiffLogField(name = "提前提醒天数")
+    @Min(value = 0, message = "提前提醒天数不能小于 0")
     private Integer notifyDays;
 
     @AssertTrue(message = "未成交放入公海天数不能为空")

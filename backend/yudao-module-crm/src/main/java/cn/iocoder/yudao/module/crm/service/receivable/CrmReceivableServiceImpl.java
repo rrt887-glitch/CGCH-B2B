@@ -149,7 +149,7 @@ public class CrmReceivableServiceImpl implements CrmReceivableService {
         }
         if (reqVO.getPlanId() != null) {
             CrmReceivablePlanDO receivablePlan = receivablePlanService.getReceivablePlan(reqVO.getPlanId());
-            if (receivablePlan == null) {
+            if (receivablePlan == null || !ObjectUtil.equal(receivablePlan.getContractId(), reqVO.getContractId())) {
                 throw exception(RECEIVABLE_PLAN_NOT_EXISTS);
             }
             if (receivablePlan.getReceivableId() != null) {

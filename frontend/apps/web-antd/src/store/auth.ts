@@ -127,12 +127,16 @@ export const useAuthStore = defineStore('auth', () => {
     resetAllStores();
     accessStore.setLoginExpired(false);
 
-    // 回登录页带上当前路由地址
+    const currentRoute = router.currentRoute.value;
+    // 多个请求同时失效时，保留首次跳转的目标，避免把登录页再嵌入 redirect。
+    if (redirect && currentRoute.path === LOGIN_PATH) {
+      return;
+    }
     await router.replace({
       path: LOGIN_PATH,
       query: redirect
         ? {
-            redirect: encodeURIComponent(router.currentRoute.value.fullPath),
+            redirect: encodeURIComponent(currentRoute.fullPath),
           }
         : {},
     });

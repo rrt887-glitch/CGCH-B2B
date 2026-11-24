@@ -62,21 +62,27 @@ const emptyForm = (): ChannelLeadRuleApi.Rule => ({ name: '', matchField: 'from'
 const form = reactive<ChannelLeadRuleApi.Rule>(emptyForm());
 
 function edit(row?: ChannelLeadRuleApi.Rule) {
+  if (saving.value) return;
   Object.assign(form, emptyForm(), row ? { ...row } : { id: undefined });
   editing.value = true;
 }
 
 async function save() {
-  if (!form.name || !form.keyword || form.keyword.trim().length < 3) {
+  if (saving.value) return;
+  const name = form.name.trim();
+  const keyword = form.keyword.trim();
+  if (!name || keyword.length < 3) {
     message.warning('请填写名称，关键词至少 3 个字符');
     return;
   }
   saving.value = true;
   try {
-    await saveLeadRule({ ...form, keyword: form.keyword.trim() });
+    await saveLeadRule({ ...form, name, keyword });
     message.success('已保存');
     editing.value = false;
     await load();
+  } catch {
+    // 请求层已提示错误，保留未保存的规则供重试。
   } finally {
     saving.value = false;
   }
@@ -159,7 +165,7 @@ defineExpose({ load });
         </FormItem>
       </div>
       <div class="flex justify-end gap-2">
-        <Button @click="editing = false">取消</Button>
+        <Button :disabled="saving" @click="editing = false">取消</Button>
         <Button type="primary" :loading="saving" @click="save">保存</Button>
       </div>
     </Form>

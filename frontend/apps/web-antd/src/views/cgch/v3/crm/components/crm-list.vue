@@ -125,6 +125,8 @@ const keyword = ref('');
 const range = ref<[Dayjs, Dayjs]>();
 const page = reactive({ no: 1, size: 20 });
 const loading = ref(false);
+const loadFailed = ref(false);
+let loadVersion = 0;
 const rows = ref<any[]>([]);
 const total = ref(0);
 const selectedKeys = ref<number[]>([]);
@@ -218,17 +220,26 @@ function params() {
 }
 
 async function load() {
+  const version = ++loadVersion;
   saveState();
   loading.value = true;
+  loadFailed.value = false;
+  selectedKeys.value = [];
+  emit('select', []);
   try {
     const r = await props.fetch(params());
+    if (version !== loadVersion) return;
     rows.value = r.list ?? [];
     total.value = r.total ?? 0;
-    selectedKeys.value = [];
-    emit('select', []);
     emit('loaded', rows.value);
+  } catch {
+    if (version !== loadVersion) return;
+    rows.value = [];
+    total.value = 0;
+    loadFailed.value = true;
+    emit('loaded', []);
   } finally {
-    loading.value = false;
+    if (version === loadVersion) loading.value = false;
   }
 }
 
@@ -458,7 +469,7 @@ defineExpose({ reload, setExtra, currentParams: params });
             <template #emptyText>
               <Empty
                 :image="Empty.PRESENTED_IMAGE_SIMPLE"
-                description="暂无数据"
+                :description="loadFailed ? '加载失败，请刷新重试' : '暂无数据'"
               />
             </template>
           </Table>

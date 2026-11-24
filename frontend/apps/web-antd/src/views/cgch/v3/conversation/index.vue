@@ -27,6 +27,7 @@ const route = useRoute();
 const router = useRouter();
 
 const loading = ref(true);
+const loadFailed = ref(false);
 const filtersOpen = ref(false);
 const waAccounts = ref<ChannelWaApi.Account[]>([]);
 const mailAccounts = ref<ChannelMailApi.Account[]>([]);
@@ -148,33 +149,39 @@ function pick(kind: 'im' | 'mail', id?: number) {
   });
 }
 
-onMounted(async () => {
+async function loadInbox() {
+  loading.value = true;
+  loadFailed.value = false;
   try {
     [waAccounts.value, mailAccounts.value] = await Promise.all([
       getWaAccountList(),
       getMailAccountList(),
     ]);
-    if (waAccounts.value.length === 0) {
-      hasTransferred.value =
-        (
-          await getWaConversationPage({ pageNo: 1, pageSize: 1 }).catch(() => ({
-            total: 0,
-          }))
-        ).total > 0;
+    if (waAccounts.value.length > 0) {
+      hasTransferred.value = false;
+      void loadCounts();
+    } else {
+      const [conversations] = await Promise.all([
+        getWaConversationPage({ pageNo: 1, pageSize: 1 }),
+        loadCounts(),
+      ]);
+      hasTransferred.value = conversations.total > 0;
     }
+    // 从看板、通知跳转过来：?channel=mail|whatsapp&ref=编号
+    if (route.query.channel === 'mail' || (!showIm.value && mailAccounts.value.length)) {
+      selected.value = { kind: 'mail' };
+    }
+    const refId = Number(route.query.ref);
+    if (refId) openId.value = refId;
+  } catch {
+    loadFailed.value = true;
   } finally {
     loading.value = false;
   }
-  // 从看板、通知跳转过来：?channel=mail|whatsapp&ref=编号
-  const refId = Number(route.query.ref);
-  if (
-    route.query.channel === 'mail' ||
-    (!showIm.value && mailAccounts.value.length)
-  ) {
-    selected.value = { kind: 'mail' };
-  }
-  if (refId) openId.value = refId;
-  loadCounts();
+}
+
+onMounted(() => {
+  void loadInbox();
   countTimer = setInterval(() => !document.hidden && loadCounts(), 30_000);
 });
 </script>
@@ -182,7 +189,13 @@ onMounted(async () => {
 <template>
   <div class="v3-conv" @keydown.esc="filtersOpen = false">
     <Spin :spinning="loading" wrapper-class-name="h-full">
-      <div v-if="!loading && !hasAny" class="v3-conv__empty">
+      <div v-if="loading" class="v3-conv__empty"></div>
+      <div v-else-if="loadFailed" class="v3-conv__empty">
+        <Empty description="会话加载失败">
+          <Button type="primary" @click="loadInbox">重试</Button>
+        </Empty>
+      </div>
+      <div v-else-if="!hasAny" class="v3-conv__empty">
         <Empty description="还没有接入任何渠道账号"
           ><Button type="primary" @click="router.push('/v3/channel')"
             >连接渠道账号</Button

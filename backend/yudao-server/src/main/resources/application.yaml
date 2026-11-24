@@ -338,6 +338,7 @@ yudao:
     ignore-caches:
       - user_role_ids
       - permission_menu_ids
+      - auth_permission_snapshot # 缓存键已有租户编号，全局菜单修改时统一失效
       - oauth_client
       - notify_template
       - mail_account

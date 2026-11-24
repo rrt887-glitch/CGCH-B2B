@@ -334,6 +334,7 @@ CREATE TABLE `channel_mail_message` (
   `folder` varchar(255) NULL COMMENT '文件夹：INBOX、SENT、DRAFT、TRASH',
   `direction` int NULL COMMENT '方向：1 收到，2 发出',
   `imap_uid` bigint NULL COMMENT '收件箱中的 IMAP UID，发出的邮件为空',
+  `imap_uid_validity` bigint NULL COMMENT '该 IMAP UID 所属的收件箱代次',
   `message_id` varchar(255) NULL COMMENT '邮件头 Message-ID',
   `in_reply_to` varchar(255) NULL COMMENT '邮件头 In-Reply-To',
   `thread_key` varchar(255) NULL COMMENT '会话标识：同一来回往复的邮件相同',

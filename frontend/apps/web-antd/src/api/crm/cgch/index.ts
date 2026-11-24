@@ -55,9 +55,9 @@ export function getCustomerGroupList() {
 }
 
 /** 查重搜索 */
-export function searchDedup(keyword: string, scope: 'all' | 'clue' | 'customer' = 'all') {
+export function searchDedup(keyword: string, scope: 'all' | 'clue' | 'customer' = 'all', field?: string) {
   return requestClient.get<CgchCrmApi.DedupItem[]>('/crm/dedup/search', {
-    params: { keyword, scope },
+    params: { keyword, scope, field },
   });
 }
 

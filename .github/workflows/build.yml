@@ -205,6 +205,11 @@ jobs:
           kinds = sorted((h['type'], h['id']) for h in hits)
           assert ('customer', cid) in kinds and ('clue', lid) in kinds, f'查重结果不完整: {hits}'
           assert 'whatsapp' in next(h for h in hits if h['type'] == 'customer')['matchedFields']
+          phone_hits = call('GET', '/crm/dedup/search?keyword=4155550100&scope=customer&field=mobile')
+          assert ('customer', cid) in [(h['type'], h['id']) for h in phone_hits]
+          assert all(h['type'] == 'customer' for h in phone_hits), phone_hits
+          email_hits = call('GET', '/crm/dedup/search?keyword=4155550100&field=email')
+          assert all((h['type'], h['id']) not in [('customer', cid), ('clue', lid)] for h in email_hits), email_hits
           print('查重正常', kinds)
           req = urllib.request.Request(BASE + f'/crm/tag/delete?id={tag}', method='DELETE', headers=H)
           d = json.load(urllib.request.urlopen(req))
@@ -352,7 +357,7 @@ jobs:
           b = wait(lambda: (lambda x: x if x['status'] == 'done' else None)(call('GET', f'/channel/mail-batch/get?id={bid}')), '群发发完', timeout=40)
           assert b['counts'] == {'sent': 3, 'invalid': 2}, b['counts']
           times = sorted(i['sentTime'] for i in b['items'] if i['status'] == 'sent')
-          assert times[-1] - times[0] >= 1500, f'按每分钟 60 封，三封至少间隔 2 秒：{times}'
+          assert all(later - earlier >= 1000 for earlier, later in zip(times, times[1:])), f'按每分钟 60 封，相邻两封至少间隔 1 秒：{times}'
           time.sleep(1)
           imap = imaplib.IMAP4('127.0.0.1', 3143); imap.login('a1@batch.example', 'pw'); imap.select('INBOX')
           typ, data = imap.search(None, 'SUBJECT', '"New models for"')
@@ -787,6 +792,22 @@ jobs:
           other = call('GET', f'/channel/dashboard/overview?days=30&userId={uid}')['current']
           assert other['cluesCreated'] == 1 and other['inquiries'] == 0, '管理员可按业务员筛选'
           print('看板数据权限：仅本人角色只看到自己的线索与消息，不能查看他人；管理员可看全部或按人筛选')
+          # 权限菜单命中缓存时仍返回最新个人资料，调整角色后立即返回新的权限信息。
+          permissions = '/system/auth/get-permission-info'
+          assert 'cgch_sales_self' in call2(permissions)['data']['roles']
+          profile = urllib.request.Request(BASE + '/system/user/profile/update', method='PUT',
+              headers=H2, data=json.dumps({'nickname': '小王已更新'}).encode())
+          assert json.load(urllib.request.urlopen(profile))['code'] == 0
+          assert call2(permissions)['data']['user']['nickname'] == '小王已更新'
+          call('POST', '/system/permission/assign-role-menu', {'roleId': rid, 'menuIds': []})
+          updated = call2(permissions)['data']
+          assert 'cgch_sales_self' in updated['roles'] and not updated['menus'] and not updated['permissions'], updated
+          call('POST', '/system/permission/assign-role-menu', {'roleId': rid, 'menuIds': [20000, 20001, 22401]})
+          assert 'channel:dashboard:query' in call2(permissions)['data']['permissions']
+          call('POST', '/system/permission/assign-user-role', {'userId': uid, 'roleIds': []})
+          updated = call2(permissions)['data']
+          assert not updated['roles'] and not updated['permissions'] and not updated['menus'], updated
+          call('POST', '/system/permission/assign-user-role', {'userId': uid, 'roleIds': [rid]})
           # ---- 两种账号：超级管理员添加的「业务员」能用日常功能，不能改公司设置，看不到团队会话 ----
           sid = call('POST', '/system/user/create', {'username': 'sales3@ci.example', 'nickname': '业务员小李', 'password': 'Sales3pass'})
           call('POST', '/system/permission/assign-user-role', {'userId': sid, 'roleIds': [300]})
@@ -3044,6 +3065,15 @@ jobs:
           grep -qi '^x-content-type-options: nosniff' /tmp/h3.txt || { echo "::error::接口响应缺少安全响应头"; cat /tmp/h3.txt; exit 1; }
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro -e \"SELECT config FROM infra_file_config WHERE id=4\""' | grep -q '"domain": *"http://'
           echo "--- 模拟老数据库：删掉 v3 新增字段并清除升级记录，验证升级脚本 ---"
+          dbq() { sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro"' 2>/dev/null; }
+          dbq <<'SQL'
+          ALTER TABLE channel_mail_message DROP COLUMN imap_uid_validity;
+          DELETE FROM cgch_migration WHERE name = '045-mail-imap-uid-validity.sql';
+          INSERT INTO channel_mail_account (email, uid_validity, tenant_id)
+          VALUES ('imap-upgrade@example.invalid', 12345, 1);
+          INSERT INTO channel_mail_message (account_id, imap_uid, message_id, tenant_id)
+          VALUES (LAST_INSERT_ID(), 42, '<imap-upgrade@example.invalid>', 1);
+          SQL
           sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD ruoyi-vue-pro -e \"ALTER TABLE channel_wa_conversation DROP COLUMN intent; ALTER TABLE channel_mail_message DROP COLUMN intent; ALTER TABLE channel_wa_message DROP INDEX idx_account_wamid; DELETE FROM cgch_migration WHERE name IN (\\\"001-v3-brand-intent.sql\\\", \\\"016-indexes.sql\\\");\""'
           echo "--- 再执行一次（升级场景）---"
           set -o pipefail
@@ -3051,8 +3081,9 @@ jobs:
             || { echo "::error title=升级安装失败::$(grep -E '执行数据库升级|ERROR|错误' /tmp/install2.log | tail -15 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"; exit 1; }
           wait_page /terms 'Terms of Service'
           grep -q '执行数据库升级：001-v3-brand-intent.sql' /tmp/install2.log || { echo "::error::升级脚本没有执行"; exit 1; }
+          grep -q '执行数据库升级：045-mail-imap-uid-validity.sql' /tmp/install2.log
+          test "$(echo "SELECT imap_uid_validity FROM channel_mail_message WHERE message_id = '<imap-upgrade@example.invalid>';" | dbq)" = 12345
           # 升级脚本补的索引：去重查询要走索引
-          dbq() { sudo bash -c 'cd /opt/cgch && docker compose exec -T mysql sh -c "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -N ruoyi-vue-pro"' 2>/dev/null; }
           idx=$(echo "SELECT COUNT(DISTINCT TABLE_NAME, INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND (TABLE_NAME LIKE 'channel\\_%' OR TABLE_NAME LIKE 'crm\\_%') AND INDEX_NAME LIKE 'idx%';" | dbq | tail -1)
           echo "索引数：$idx"
           grep -oE "^CALL cgch_add_index\('[a-z_]+', '[a-z_]+'" backend/sql/mysql/cgch/04-indexes.sql | sed -E "s/.*\('([a-z_]+)', '([a-z_]+)'/\1 \2/" | sort > /tmp/idx-want.txt

@@ -13,16 +13,28 @@ set -euo pipefail
 
 APPLY=0
 KEEP_IMAGES=2
-for arg in "$@"; do
-  case "$arg" in
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --apply) APPLY=1 ;;
-    --keep=*) KEEP_IMAGES="${arg#*=}" ;;
+    --keep)
+      if [ "$#" -lt 2 ]; then
+        echo "--keep 需要指定保留的版本数" >&2
+        exit 1
+      fi
+      shift
+      KEEP_IMAGES="$1"
+      ;;
+    --keep=*) KEEP_IMAGES="${1#*=}" ;;
     -h|--help)
       sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
-    *) echo "未知参数：$arg（用 --help 看用法）"; exit 1 ;;
+    *) echo "未知参数：$1（用 --help 看用法）" >&2; exit 1 ;;
   esac
+  shift
 done
+case "$KEEP_IMAGES" in
+  ''|*[!0-9]*) echo "--keep 必须是非负整数" >&2; exit 1 ;;
+esac
 
 say() { printf '\n\033[1;32m==> %s\033[0m\n' "$1"; }
 warn() { printf '\033[1;33m%s\033[0m\n' "$1"; }

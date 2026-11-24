@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.crm.dal.dataobject.clue.CrmClueDO;
 import cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.yudao.module.crm.dal.mysql.clue.CrmClueMapper;
 import cn.iocoder.yudao.module.crm.dal.mysql.customer.CrmCustomerMapper;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,20 +48,20 @@ public class CrmDedupController {
     @Operation(summary = "查重搜索")
     @Parameter(name = "keyword", description = "关键字，至少 2 个字符", required = true, example = "acme")
     @Parameter(name = "scope", description = "范围：all 全部，customer 客户，clue 线索", example = "all")
+    @Parameter(name = "field", description = "字段：all、name、email、mobile、website", example = "mobile")
     @PreAuthorize("@ss.hasPermission('crm:dedup:query')")
     public CommonResult<List<CrmDedupRespVO>> search(@RequestParam("keyword") String keyword,
-                                                     @RequestParam(value = "scope", defaultValue = "all") String scope) {
+                                                     @RequestParam(value = "scope", defaultValue = "all") String scope,
+                                                     @RequestParam(value = "field", defaultValue = "all") String field) {
         String kw = StrUtil.trim(keyword);
         List<CrmDedupRespVO> result = new ArrayList<>();
         if (StrUtil.length(kw) < 2) {
             return success(result);
         }
         if (!"clue".equals(scope)) {
-            List<CrmCustomerDO> customers = customerMapper.selectList(new LambdaQueryWrapperX<CrmCustomerDO>()
-                    .and(w -> w.like(CrmCustomerDO::getName, kw).or().like(CrmCustomerDO::getCompanyName, kw)
-                            .or().like(CrmCustomerDO::getEmail, kw).or().like(CrmCustomerDO::getMobile, kw)
-                            .or().like(CrmCustomerDO::getTelephone, kw).or().like(CrmCustomerDO::getWebsite, kw)
-                            .or().like(CrmCustomerDO::getWhatsapp, kw))
+            List<CrmCustomerDO> customers = customerMapper.selectList(matchQuery(field, kw,
+                    CrmCustomerDO::getName, CrmCustomerDO::getCompanyName, CrmCustomerDO::getEmail,
+                    CrmCustomerDO::getMobile, CrmCustomerDO::getTelephone, CrmCustomerDO::getWebsite, CrmCustomerDO::getWhatsapp)
                     .orderByDesc(CrmCustomerDO::getId).last("LIMIT " + LIMIT));
             for (CrmCustomerDO c : customers) {
                 result.add(toResp("customer", c.getId(), c.getName(), c.getCompanyName(), c.getEmail(), c.getMobile(),
@@ -69,11 +70,9 @@ public class CrmDedupController {
             }
         }
         if (!"customer".equals(scope)) {
-            List<CrmClueDO> clues = clueMapper.selectList(new LambdaQueryWrapperX<CrmClueDO>()
-                    .and(w -> w.like(CrmClueDO::getName, kw).or().like(CrmClueDO::getCompanyName, kw)
-                            .or().like(CrmClueDO::getEmail, kw).or().like(CrmClueDO::getMobile, kw)
-                            .or().like(CrmClueDO::getTelephone, kw).or().like(CrmClueDO::getWebsite, kw)
-                            .or().like(CrmClueDO::getWhatsapp, kw))
+            List<CrmClueDO> clues = clueMapper.selectList(matchQuery(field, kw,
+                    CrmClueDO::getName, CrmClueDO::getCompanyName, CrmClueDO::getEmail,
+                    CrmClueDO::getMobile, CrmClueDO::getTelephone, CrmClueDO::getWebsite, CrmClueDO::getWhatsapp)
                     .orderByDesc(CrmClueDO::getId).last("LIMIT " + LIMIT));
             for (CrmClueDO c : clues) {
                 result.add(toResp("clue", c.getId(), c.getName(), c.getCompanyName(), c.getEmail(), c.getMobile(),
@@ -82,6 +81,26 @@ public class CrmDedupController {
             }
         }
         return success(result);
+    }
+
+    private static <T> LambdaQueryWrapperX<T> matchQuery(String field, String keyword,
+            SFunction<T, ?> name, SFunction<T, ?> companyName, SFunction<T, ?> email,
+            SFunction<T, ?> mobile, SFunction<T, ?> telephone, SFunction<T, ?> website, SFunction<T, ?> whatsapp) {
+        List<SFunction<T, ?>> columns = switch (field) {
+            case "name" -> List.of(name, companyName);
+            case "email" -> List.of(email);
+            case "mobile" -> List.of(mobile, telephone, whatsapp);
+            case "website" -> List.of(website);
+            default -> List.of(name, companyName, email, mobile, telephone, website, whatsapp);
+        };
+        LambdaQueryWrapperX<T> query = new LambdaQueryWrapperX<>();
+        query.and(w -> {
+            w.like(columns.get(0), keyword);
+            for (int i = 1; i < columns.size(); i++) {
+                w.or().like(columns.get(i), keyword);
+            }
+        });
+        return query;
     }
 
     private static Map<String, String> fields(String name, String companyName, String email, String mobile,
