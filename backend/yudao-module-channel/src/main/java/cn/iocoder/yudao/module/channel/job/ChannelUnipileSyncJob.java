@@ -1,4 +1,4 @@
-package cn.iocoder.yudao.module.channel.job;
+﻿package cn.iocoder.yudao.module.channel.job;
 
 import cn.iocoder.yudao.module.channel.service.unipile.ChannelUnipileService;
 import jakarta.annotation.Resource;
@@ -18,8 +18,8 @@ public class ChannelUnipileSyncJob {
     @Resource
     private ChannelUnipileService channelUnipileService;
 
-    @Scheduled(initialDelayString = "${cgch.unipile.sync-initial-ms:300000}",
-            fixedDelayString = "${cgch.unipile.sync-interval-ms:3600000}")
+    @Scheduled(initialDelayString = "${cgch.unipile.sync-initial-ms:600000}",
+            fixedDelayString = "${cgch.unipile.sync-interval-ms:7200000}")
     public void sync() {
         if (!channelUnipileService.enabled()) {
             return;

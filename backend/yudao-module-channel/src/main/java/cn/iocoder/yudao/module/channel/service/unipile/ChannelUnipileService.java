@@ -62,12 +62,12 @@ public class ChannelUnipileService {
     /** 补偿同步：每个账号上次同步到的时间（只放内存，重启后从 15 分钟前重新对账） */
     private final java.util.Map<Long, LocalDateTime> lastSync = new java.util.concurrent.ConcurrentHashMap<>();
 
-    private static final int SYNC_CHAT_LIMIT = 10;
+    private static final int SYNC_CHAT_LIMIT = 5;
     private static final int SYNC_MESSAGE_LIMIT = 20;
     /** 托管授权链接有效期（分钟）：手机上登录/选主页比较慢，给足 60 分钟 */
     private static final int AUTH_LINK_MINUTES = 60;
-    /** Unipile 限流（免费试用 100 次/8 小时）时整轮熔断，别继续打接口 */
-    private volatile boolean quotaBlocked = false;
+    /** 撞到 Unipile 限流的账号（每账号 100 次/天），本轮跳过它、不影响其它账号 */
+    private final java.util.Set<Long> quotaBlockedAccounts = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public boolean enabled() {
         return props.ready();
@@ -329,15 +329,16 @@ public class ChannelUnipileService {
         java.util.Map<Long, java.util.List<ChannelWaAccountDO>> byTenant = accounts.stream()
                 .filter(a -> a.getTenantId() != null)
                 .collect(java.util.stream.Collectors.groupingBy(ChannelWaAccountDO::getTenantId));
+        quotaBlockedAccounts.clear();
         byTenant.forEach((tenantId, list) -> {
             try {
                 TenantUtils.execute(tenantId, () -> list.forEach(a -> {
-                    // webhook 是主力：最近 2 小时有过消息推送的账号不必再主动拉取，省配额
+                    // webhook 是主力：最近 6 小时有过消息推送的账号不必再主动拉取，省配额
                     if (a.getLastWebhookTime() != null
-                            && a.getLastWebhookTime().isAfter(LocalDateTime.now().minusHours(2))) {
+                            && a.getLastWebhookTime().isAfter(LocalDateTime.now().minusHours(6))) {
                         return;
                     }
-                    if (!quotaBlocked) {
+                    if (!quotaBlockedAccounts.contains(a.getId())) {
                         syncOne(a);
                     }
                 }));
@@ -428,8 +429,8 @@ public class ChannelUnipileService {
         } catch (UnipileClient.UnipileException e) {
             String msg = StrUtil.nullToEmpty(e.getMessage());
             if (msg.contains("too_many_requests") || msg.contains("429") || msg.contains("Retry in")) {
-                quotaBlocked = true;
-                log.warn("[sync][Unipile 限流，本次同步整体停止] {}", msg);
+                quotaBlockedAccounts.add(a.getId());
+                log.warn("[sync][账号 {} 撞到 Unipile 限流，本轮跳过它] {}", a.getId(), msg);
             } else {
                 log.debug("[sync][账号 {} 同步跳过：{}]", a.getId(), msg);
             }
