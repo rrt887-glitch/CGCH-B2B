@@ -1,6 +1,8 @@
 # CGCH_SITE 为域名（如 crm.example.com）时自动启用 HTTPS（Let's Encrypt）；未设置时按 IP 用 HTTP 访问
 {$CGCH_SITE::80} {
 	encode zstd gzip
+	# 同时支持 HTTP/3（QUIC）：跨境丢包时握手更快；不支持 QUIC 的客户端会自动回退到 HTTP/2
+	protocols h1 h2 h3
 
 	# 安全响应头：禁止浏览器猜测文件类型、禁止被其他网站用框架嵌入（防点击劫持）、跨站跳转只带域名、
 	# 只允许通过 HTTPS 访问（HTTP 访问时浏览器会忽略此项）、关闭用不到的摄像头 / 定位等权限，并去掉服务器版本信息。

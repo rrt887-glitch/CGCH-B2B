@@ -9,6 +9,8 @@ import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.framework.security.config.SecurityProperties;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.framework.tenant.core.aop.TenantIgnore;
+import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import cn.iocoder.yudao.module.system.controller.admin.auth.vo.*;
 import cn.iocoder.yudao.module.system.convert.auth.AuthConvert;
 import cn.iocoder.yudao.module.system.dal.dataobject.permission.MenuDO;
@@ -33,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -52,6 +55,8 @@ public class AuthController {
     private AdminAuthService authService;
     @Resource
     private AdminUserService userService;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
     @Resource
     private RoleService roleService;
     @Resource
@@ -96,27 +101,49 @@ public class AuthController {
     @Operation(summary = "获取登录用户的权限信息")
     @DataPermission(enable = false) // 忽略数据权限，避免因为过滤，导致无法查询用户。类似：https://t.zsxq.com/LHnrp
     public CommonResult<AuthPermissionInfoRespVO> getPermissionInfo() {
+        // 菜单树计算较重（每次要查角色、菜单并组装），同一用户 2 分钟内直接复用结果
+        Long userId = getLoginUserId();
+        Long tenantId = cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder.getTenantId();
+        String cacheKey = "cgch:perm:" + tenantId + ":" + userId;
+        try {
+            String cached = stringRedisTemplate.opsForValue().get(cacheKey);
+            if (StrUtil.isNotBlank(cached)) {
+                AuthPermissionInfoRespVO cachedVo = JsonUtils.parseObject(cached, AuthPermissionInfoRespVO.class);
+                if (cachedVo != null) {
+                    return success(cachedVo);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[getPermissionInfo][读取缓存失败，直接查库] {}", e.getMessage());
+        }
+
+        AuthPermissionInfoRespVO result;
         // 1.1 获得用户信息
-        AdminUserDO user = userService.getUser(getLoginUserId());
+        AdminUserDO user = userService.getUser(userId);
         if (user == null) {
             return success(null);
         }
-
         // 1.2 获得角色列表
-        Set<Long> roleIds = permissionService.getUserRoleIdListByUserId(getLoginUserId());
+        Set<Long> roleIds = permissionService.getUserRoleIdListByUserId(userId);
         if (CollUtil.isEmpty(roleIds)) {
-            return success(AuthConvert.INSTANCE.convert(user, Collections.emptyList(), Collections.emptyList()));
+            result = AuthConvert.INSTANCE.convert(user, Collections.emptyList(), Collections.emptyList());
+        } else {
+            List<RoleDO> roles = roleService.getRoleList(roleIds);
+            roles.removeIf(role -> !CommonStatusEnum.ENABLE.getStatus().equals(role.getStatus())); // 移除禁用的角色
+            // 1.3 获得菜单列表
+            Set<Long> menuIds = permissionService.getRoleMenuListByRoleId(convertSet(roles, RoleDO::getId));
+            List<MenuDO> menuList = menuService.filterDisableMenus(menuService.getMenuList(menuIds));
+            // 2. 拼接结果返回
+            result = AuthConvert.INSTANCE.convert(user, roles, menuList);
         }
-        List<RoleDO> roles = roleService.getRoleList(roleIds);
-        roles.removeIf(role -> !CommonStatusEnum.ENABLE.getStatus().equals(role.getStatus())); // 移除禁用的角色
-
-        // 1.3 获得菜单列表
-        Set<Long> menuIds = permissionService.getRoleMenuListByRoleId(convertSet(roles, RoleDO::getId));
-        List<MenuDO> menuList = menuService.getMenuList(menuIds);
-        menuList = menuService.filterDisableMenus(menuList);
-
-        // 2. 拼接结果返回
-        return success(AuthConvert.INSTANCE.convert(user, roles, menuList));
+        if (result != null) {
+            try {
+                stringRedisTemplate.opsForValue().set(cacheKey, JsonUtils.toJsonString(result), Duration.ofMinutes(2));
+            } catch (Exception e) {
+                log.warn("[getPermissionInfo][写缓存失败] {}", e.getMessage());
+            }
+        }
+        return success(result);
     }
 
     @PostMapping("/register")
