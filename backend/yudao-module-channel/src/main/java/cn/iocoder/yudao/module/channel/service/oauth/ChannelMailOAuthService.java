@@ -85,12 +85,12 @@ public class ChannelMailOAuthService {
                 + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8)).collect(Collectors.joining("&"));
     }
 
-    /** 生成授权地址；state 记录租户和用户，10 分钟内有效、只能用一次 */
+    /** 生成授权地址；state 记录租户和用户，30 分钟内有效、只能用一次 */
     public String authorizeUrl(Long userId, String providerName) {
         Provider p = provider(providerName);
         String state = IdUtil.fastSimpleUUID();
         stringRedisTemplate.opsForValue().set(STATE_KEY + state,
-                TenantContextHolder.getTenantId() + ":" + userId + ":" + providerName, 10, TimeUnit.MINUTES);
+                TenantContextHolder.getTenantId() + ":" + userId + ":" + providerName, 30, TimeUnit.MINUTES);
         Map<String, String> q = new LinkedHashMap<>();
         q.put("client_id", p.getClientId());
         q.put("redirect_uri", redirectUri(providerName));
@@ -113,7 +113,7 @@ public class ChannelMailOAuthService {
         }
         String saved = StrUtil.isBlank(state) ? null : stringRedisTemplate.opsForValue().getAndDelete(STATE_KEY + state);
         if (saved == null) {
-            throw exception(MAIL_OAUTH_FAIL, "授权链接已过期，请重新发起授权");
+            throw exception(MAIL_OAUTH_FAIL, "授权链接已过期（30 分钟内有效，且只能用一次），请回到渠道页重新点「一键授权登录」");
         }
         String[] parts = saved.split(":");
         Long tenantId = Long.valueOf(parts[0]);
