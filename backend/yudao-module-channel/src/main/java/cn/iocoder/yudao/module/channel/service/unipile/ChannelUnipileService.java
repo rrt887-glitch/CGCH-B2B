@@ -62,10 +62,12 @@ public class ChannelUnipileService {
     /** 补偿同步：每个账号上次同步到的时间（只放内存，重启后从 15 分钟前重新对账） */
     private final java.util.Map<Long, LocalDateTime> lastSync = new java.util.concurrent.ConcurrentHashMap<>();
 
-    private static final int SYNC_CHAT_LIMIT = 20;
+    private static final int SYNC_CHAT_LIMIT = 10;
     private static final int SYNC_MESSAGE_LIMIT = 20;
     /** 托管授权链接有效期（分钟）：手机上登录/选主页比较慢，给足 60 分钟 */
     private static final int AUTH_LINK_MINUTES = 60;
+    /** Unipile 限流（免费试用 100 次/8 小时）时整轮熔断，别继续打接口 */
+    private volatile boolean quotaBlocked = false;
 
     public boolean enabled() {
         return props.ready();
@@ -183,7 +185,12 @@ public class ChannelUnipileService {
             url = UnipileClient.createAuthLink(props, keyOf(c), redirect, state, AUTH_LINK_MINUTES, p);
         } catch (UnipileClient.UnipileException e) {
             // 把 Unipile 的真实原因抛给前端，别只显示「系统异常」
-            throw new ServiceException(1_030_015_004, "生成授权链接失败：" + e.getMessage());
+            String msg = StrUtil.nullToEmpty(e.getMessage());
+            if (msg.contains("too_many_requests") || msg.contains("Retry in")) {
+                throw new ServiceException(1_030_015_004,
+                        "Unipile 请求额度已用完（免费试用每 8 小时 100 次），请稍后再试或升级套餐");
+            }
+            throw new ServiceException(1_030_015_004, "生成授权链接失败：" + msg);
         }
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("url", url);
@@ -324,7 +331,16 @@ public class ChannelUnipileService {
                 .collect(java.util.stream.Collectors.groupingBy(ChannelWaAccountDO::getTenantId));
         byTenant.forEach((tenantId, list) -> {
             try {
-                TenantUtils.execute(tenantId, () -> list.forEach(this::syncOne));
+                TenantUtils.execute(tenantId, () -> list.forEach(a -> {
+                    // webhook 是主力：最近 2 小时有过消息推送的账号不必再主动拉取，省配额
+                    if (a.getLastWebhookTime() != null
+                            && a.getLastWebhookTime().isAfter(LocalDateTime.now().minusHours(2))) {
+                        return;
+                    }
+                    if (!quotaBlocked) {
+                        syncOne(a);
+                    }
+                }));
             } catch (Exception e) {
                 log.warn("[sync][租户 {} 补偿同步失败] {}", tenantId, e.getMessage());
             }
@@ -410,7 +426,13 @@ public class ChannelUnipileService {
             }
             lastSync.put(a.getId(), LocalDateTime.now());
         } catch (UnipileClient.UnipileException e) {
-            log.debug("[sync][账号 {} 同步跳过：{}]", a.getId(), e.getMessage());
+            String msg = StrUtil.nullToEmpty(e.getMessage());
+            if (msg.contains("too_many_requests") || msg.contains("429") || msg.contains("Retry in")) {
+                quotaBlocked = true;
+                log.warn("[sync][Unipile 限流，本次同步整体停止] {}", msg);
+            } else {
+                log.debug("[sync][账号 {} 同步跳过：{}]", a.getId(), msg);
+            }
         }
     }
 

@@ -18,8 +18,8 @@ public class ChannelUnipileSyncJob {
     @Resource
     private ChannelUnipileService channelUnipileService;
 
-    @Scheduled(initialDelayString = "${cgch.unipile.sync-initial-ms:90000}",
-            fixedDelayString = "${cgch.unipile.sync-interval-ms:300000}")
+    @Scheduled(initialDelayString = "${cgch.unipile.sync-initial-ms:300000}",
+            fixedDelayString = "${cgch.unipile.sync-interval-ms:3600000}")
     public void sync() {
         if (!channelUnipileService.enabled()) {
             return;
