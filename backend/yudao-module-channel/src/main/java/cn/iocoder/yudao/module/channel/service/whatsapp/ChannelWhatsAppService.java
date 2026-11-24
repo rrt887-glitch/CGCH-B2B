@@ -1368,6 +1368,53 @@ public class ChannelWhatsAppService {
         return convId;
     }
 
+    /**
+     * 合并两个重复会话（同一个人因为不同 id 建出了两个窗口）：
+     * 把 source 的消息与事件并到 target，再把 source 删掉。返回 target 编号。
+     */
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public Long mergeConversations(Long userId, Long sourceId, Long targetId) {
+        if (sourceId == null || targetId == null || sourceId.equals(targetId)) {
+            throw exception(WA_CONVERSATION_MERGE_INVALID);
+        }
+        ChannelWaConversationDO source = conversationMapper.selectById(sourceId);
+        ChannelWaConversationDO target = conversationMapper.selectById(targetId);
+        if (source == null || target == null || !Objects.equals(source.getAccountId(), target.getAccountId())) {
+            throw exception(WA_CONVERSATION_MERGE_INVALID);
+        }
+        validateAccount(userId, source.getAccountId());
+
+        // 消息与事件改挂到 target
+        messageMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaMessageDO>()
+                .eq(ChannelWaMessageDO::getConversationId, sourceId)
+                .set(ChannelWaMessageDO::getConversationId, targetId));
+        conversationEventMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaConversationEventDO>()
+                        .eq(ChannelWaConversationEventDO::getConversationId, sourceId)
+                        .set(ChannelWaConversationEventDO::getConversationId, targetId));
+
+        // target 补上 source 的 chat_id（如果自己没有）
+        ChannelWaConversationDO patch = new ChannelWaConversationDO().setId(targetId)
+                .setUnreadCount((target.getUnreadCount() == null ? 0 : target.getUnreadCount())
+                        + (source.getUnreadCount() == null ? 0 : source.getUnreadCount()));
+        if (StrUtil.isBlank(target.getProviderChatId()) && StrUtil.isNotBlank(source.getProviderChatId())) {
+            patch.setProviderChatId(source.getProviderChatId());
+        }
+        // 最新一条消息的时间与预览
+        ChannelWaMessageDO latest = messageMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ChannelWaMessageDO>()
+                .eq(ChannelWaMessageDO::getConversationId, targetId)
+                .orderByDesc(ChannelWaMessageDO::getMessageTime).last("limit 1"));
+        if (latest != null) {
+            patch.setLastMessageTime(latest.getMessageTime());
+            patch.setLastMessagePreview(StrUtil.maxLength(
+                    StrUtil.blankToDefault(latest.getTextBody(), "[" + latest.getType() + "]"), 200));
+        }
+        conversationMapper.updateById(patch);
+        conversationMapper.deleteById(sourceId);
+        log.info("[mergeConversations][{} 并入 {}，操作人 {}]", sourceId, targetId, userId);
+        return targetId;
+    }
+
     public void renameConversation(Long userId, Long id, String remarkName) {
         validateConversation(userId, id);
         conversationMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaConversationDO>()

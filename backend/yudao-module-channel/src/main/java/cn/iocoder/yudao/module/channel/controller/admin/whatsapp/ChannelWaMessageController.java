@@ -91,6 +91,14 @@ public class ChannelWaMessageController {
         return success(whatsAppService.createGroup(getLoginUserId(), req));
     }
 
+    @PostMapping("/conversation/merge")
+    @Operation(summary = "合并两个重复会话（把 source 的消息并到 target）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-message:send')")
+    public CommonResult<Long> merge(@RequestParam("sourceId") Long sourceId,
+                                    @RequestParam("targetId") Long targetId) {
+        return success(whatsAppService.mergeConversations(getLoginUserId(), sourceId, targetId));
+    }
+
     @PutMapping("/conversation/remark")
     @Operation(summary = "设置备注名（空表示清除）")    @PreAuthorize("@ss.hasPermission('channel:wa-message:query')")
     public CommonResult<Boolean> remark(@RequestParam("id") Long id, @RequestParam(value = "name", required = false) String name) {
