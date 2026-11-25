@@ -48,7 +48,15 @@ const dictLabel = (type: string, key: string) =>
   key === '0' ? '未填写' : (getDictOptions(type, 'string').find((o: any) => String(o.value) === key)?.label as string) ?? key;
 const pct = (v = 0) => `${(v * 100).toFixed(1)}%`;
 
-const tiles = computed(() => {
+interface OverviewTile {
+  label: string;
+  link?: string;
+  sub: string;
+  tip?: string;
+  value: number;
+}
+
+const tiles = computed<OverviewTile[]>(() => {
   const t = data.value?.totals;
   if (!t) return [];
   return [
@@ -56,7 +64,14 @@ const tiles = computed(() => {
     { label: `近 ${data.value!.days} 天新增`, value: t.created, sub: '新建档的客户' },
     { label: '已成交', value: t.dealt, sub: `成交率 ${pct(t.dealRate)}` },
     { label: '近 30 天有联系', value: t.active30, sub: `占 ${t.total ? pct(t.active30 / t.total) : '0%'}` },
-    { label: '沉睡客户', value: t.dormant, sub: '超过 90 天未联系或从未联系', link: '/claw/reactivate' },
+    {
+      label: '沉睡客户',
+      value: t.dormant,
+      sub: '超过 90 天未联系，或从未联系',
+      // 「客户唤醒」的候选还要看有没有联系方式，口径不同，这里必须说清楚，否则点过去看到 0 会以为数据错了
+      tip: '统计全部客户，不要求留有邮箱或 WhatsApp；「客户唤醒」的候选需要客户留有邮箱 / WhatsApp，所以候选数通常更少。',
+      link: '/claw/reactivate',
+    },
     { label: '跟进已逾期', value: t.overdueFollowUp, sub: '下次联系时间已过' },
   ];
 });
@@ -185,7 +200,13 @@ onMounted(async () => {
               :class="t.link ? 'cursor-pointer' : ''" @click="t.link && router.push(t.link)">
           <div class="text-sm text-gray-500">{{ t.label }}</div>
           <div class="my-1 text-2xl font-semibold tabular-nums">{{ t.value }}</div>
-          <div class="text-xs text-gray-500">{{ t.sub }}<span v-if="t.link" class="text-blue-500"> · 去唤醒</span></div>
+          <div class="text-xs text-gray-500">
+            <Tooltip v-if="t.tip" :title="t.tip">
+              <span class="cursor-help underline decoration-dotted">{{ t.sub }}</span>
+            </Tooltip>
+            <span v-else>{{ t.sub }}</span>
+            <span v-if="t.link" class="text-blue-500"> · 去唤醒</span>
+          </div>
         </Card>
       </div>
 

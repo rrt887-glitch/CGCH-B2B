@@ -295,6 +295,11 @@ onMounted(async () => {
           <Input v-model:value="filter.keyword" placeholder="客户或公司名称" class="w-48" @press-enter="searchCandidates" />
           <Button type="primary" @click="searchCandidates">筛选</Button>
         </Space>
+        <!-- 沉睡客户的口径和这里不同：概览统计全部客户，这里只算有联系方式、能发出去的 -->
+        <p class="mb-3 mt-0 text-xs text-gray-500">
+          候选条件：距上次联系超过 {{ filter.inactiveDays }} 天（从未联系过的按建档时间计算），并且客户留有邮箱或
+          WhatsApp。因此人数会少于「客户概览」里的沉睡客户——那边统计全部客户、不看有没有联系方式。
+        </p>
         <Table
           :columns="candColumns"
           :data-source="candidates"
