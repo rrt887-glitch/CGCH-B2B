@@ -915,60 +915,107 @@ onMounted(async () => {
 
     <Modal
       v-model:open="composeOpen"
-      title="写邮件"
+      title="撰写新邮件"
       :width="680"
-      ok-text="发送"
+      ok-text="发送邮件"
+      wrap-class-name="ap-modal-sheet"
       @ok="sendCompose"
     >
-      <div class="flex flex-col gap-3">
-        <Select
-          v-model:value="compose.accountId"
-          :options="accounts.map((a) => ({ label: a.email, value: a.id }))"
-          placeholder="发件邮箱"
-        />
-        <Input
-          v-model:value="compose.to"
-          placeholder="收件人，多个用逗号分隔"
-        />
-        <Input v-model:value="compose.cc" placeholder="抄送（可选）" />
-        <Select
-          :value="templateId"
-          allow-clear
-          placeholder="套用邮件模板（可选，在「设置 → 邮件模板」里管理）"
-          :options="
-            templates.map((t) => ({
-              label: `${t.name}${t.defaulted ? '（默认）' : ''}`,
-              value: t.id,
-            }))
-          "
-          @change="(v: any) => applyTemplate(v)"
-        />
-        <Input v-model:value="compose.subject" placeholder="主题" />
-        <Tinymce
-          v-if="compose.html || templateId"
-          v-model="compose.html"
-          :height="320"
-        />
-        <Textarea
-          v-else
-          v-model:value="compose.text"
-          :rows="10"
-          placeholder="正文"
-        />
-        <div class="flex flex-wrap items-center gap-2">
-          <Button
-            size="small"
-            :loading="uploading"
+      <div class="ap-sheet-lead">
+        <span class="ap-sheet-icon ap-sheet-icon--purple">
+          <IconifyIcon icon="lucide:mail-plus" class="size-5" />
+        </span>
+        <div class="ap-sheet-subtitle">
+          通过已绑定的企业邮箱向外贸客户发送开发信或商务邮件，支持一键套用邮件模板。
+        </div>
+      </div>
+      <div class="ap-sheet-body">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div class="ap-sheet-field">
+            <label class="ap-sheet-label">发件邮箱</label>
+            <Select
+              v-model:value="compose.accountId"
+              :options="accounts.map((a) => ({ label: a.email, value: a.id }))"
+              placeholder="选择发件邮箱"
+            />
+          </div>
+          <div class="ap-sheet-field">
+            <label class="ap-sheet-label">
+              <span>邮件模板</span>
+              <span class="ap-sheet-optional">选填</span>
+            </label>
+            <Select
+              :value="templateId"
+              allow-clear
+              placeholder="不套用模板"
+              :options="
+                templates.map((t) => ({
+                  label: `${t.name}${t.defaulted ? '（默认）' : ''}`,
+                  value: t.id,
+                }))
+              "
+              @change="(v: any) => applyTemplate(v)"
+            />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div class="ap-sheet-field">
+            <label class="ap-sheet-label">
+              <span>收件人</span>
+              <span class="ap-sheet-optional">多个用逗号分隔</span>
+            </label>
+            <Input
+              v-model:value="compose.to"
+              placeholder="customer@company.com"
+            />
+          </div>
+          <div class="ap-sheet-field">
+            <label class="ap-sheet-label">
+              <span>抄送 CC</span>
+              <span class="ap-sheet-optional">选填</span>
+            </label>
+            <Input v-model:value="compose.cc" placeholder="colleague@company.com" />
+          </div>
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">邮件主题</label>
+          <Input v-model:value="compose.subject" placeholder="输入清晰专业的邮件主题" />
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">邮件正文</label>
+          <Tinymce
+            v-if="compose.html || templateId"
+            v-model="compose.html"
+            :height="300"
+          />
+          <Textarea
+            v-else
+            v-model:value="compose.text"
+            :rows="8"
+            placeholder="输入邮件正文内容…"
+          />
+        </div>
+        <div class="flex flex-wrap items-center gap-2 pt-1">
+          <button
+            type="button"
+            class="mail-tool-btn"
+            :disabled="uploading"
             @click="pickFiles(composeFiles)"
-            >添加附件</Button
           >
+            <IconifyIcon icon="lucide:paperclip" class="size-3.5" />
+            <span>{{ uploading ? '上传中…' : '添加附件' }}</span>
+          </button>
           <Tag
             v-for="a in composeFiles"
             :key="a.id"
             closable
+            class="!m-0 !rounded-full"
             @close="removeFile(composeFiles, a.id)"
           >
-            📎 {{ a.fileName }} {{ formatSize(a.fileSize) }}
+            <IconifyIcon icon="lucide:paperclip" class="mr-1 inline size-3" />{{
+              a.fileName
+            }}
+            {{ formatSize(a.fileSize) }}
           </Tag>
         </div>
       </div>

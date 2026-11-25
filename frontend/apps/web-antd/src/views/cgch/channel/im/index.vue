@@ -1305,8 +1305,18 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               </button>
               <template #overlay>
                 <Menu @click="onNewMenu">
-                  <MenuItem key="private">发起私聊</MenuItem>
-                  <MenuItem key="group">新建群聊</MenuItem>
+                  <MenuItem key="private">
+                    <span class="inline-flex items-center gap-2">
+                      <IconifyIcon icon="lucide:message-square-plus" class="size-3.5 text-[#007AFF]" />
+                      <span>发起私聊</span>
+                    </span>
+                  </MenuItem>
+                  <MenuItem key="group">
+                    <span class="inline-flex items-center gap-2">
+                      <IconifyIcon icon="lucide:users" class="size-3.5 text-[#28CD41]" />
+                      <span>新建群聊</span>
+                    </span>
+                  </MenuItem>
                 </Menu>
               </template>
             </Dropdown>
@@ -2574,25 +2584,39 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
     <Modal
       v-model:open="followOpen"
-      title="写跟进"
-      ok-text="保存"
+      title="写客户跟进"
+      ok-text="保存记录"
+      :width="480"
+      wrap-class-name="ap-modal-sheet"
       :confirm-loading="followSaving"
       @ok="saveFollow"
     >
-      <div class="flex flex-col gap-3">
-        <Textarea
-          v-model:value="followForm.content"
-          :auto-size="{ minRows: 4, maxRows: 8 }"
-          :maxlength="2000"
-          placeholder="这次聊了什么、客户的反馈、下一步要做什么"
-        />
-        <div class="flex flex-wrap items-center gap-2 text-sm">
-          <span class="text-[#6E6E73]">下次联系</span>
-          <Segmented
-            v-model:value="followForm.days"
-            :options="FOLLOW_DAYS"
-            size="small"
+      <div class="ap-sheet-lead">
+        <span class="ap-sheet-icon ap-sheet-icon--purple">
+          <IconifyIcon icon="lucide:notebook-pen" class="size-5" />
+        </span>
+        <div class="ap-sheet-subtitle">
+          记录本次沟通重点与客户意向，同步沉淀至 CRM 客户档案。
+        </div>
+      </div>
+      <div class="ap-sheet-body">
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">跟进内容</label>
+          <Textarea
+            v-model:value="followForm.content"
+            :auto-size="{ minRows: 4, maxRows: 8 }"
+            :maxlength="2000"
+            placeholder="这次聊了什么、客户的反馈、下一步要推进的事项…"
           />
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">下次联系提醒</label>
+          <div>
+            <Segmented
+              v-model:value="followForm.days"
+              :options="FOLLOW_DAYS"
+            />
+          </div>
         </div>
       </div>
     </Modal>
@@ -2601,63 +2625,126 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
       v-model:open="remarkOpen"
       :title="remarkTitle"
       ok-text="保存"
+      :width="440"
+      wrap-class-name="ap-modal-sheet"
       @ok="saveRemark"
     >
-      <Input
-        v-model:value="remarkText"
-        :maxlength="100"
-        allow-clear
-        :placeholder="current?.group ? '群名称，例如：迪拜灯具客户群' : '例如：Rashid（迪拜灯具批发商），留空表示清除'"
-      />
+      <div class="ap-sheet-body">
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">
+            <span>{{ current?.group ? '群聊显示名称' : '客户备注名称' }}</span>
+            <span class="ap-sheet-optional">留空恢复默认名称</span>
+          </label>
+          <Input
+            v-model:value="remarkText"
+            :maxlength="100"
+            allow-clear
+            :placeholder="
+              current?.group
+                ? '例如：迪拜灯具客户群'
+                : '例如：Rashid（迪拜灯具批发商）'
+            "
+          />
+        </div>
+      </div>
     </Modal>
+
     <Modal
       v-model:open="transferOpen"
       title="转交给同事"
-      ok-text="转交"
+      ok-text="确认转交"
+      :width="460"
+      wrap-class-name="ap-modal-sheet"
       @ok="doTransfer"
     >
-      <div class="mb-2 text-sm text-gray-500">
-        转交后由对方处理这个会话，你的列表里不再显示；AI 接待设置不变。
+      <div class="ap-sheet-lead">
+        <span class="ap-sheet-icon">
+          <IconifyIcon icon="lucide:arrow-right-left" class="size-5" />
+        </span>
+        <div class="ap-sheet-subtitle">
+          转交后由所选同事继续接待此会话，你的「我的会话」列表中将不再显示；当前 AI 托管开关保持不变。
+        </div>
       </div>
-      <Select
-        v-model:value="transferTo"
-        show-search
-        option-filter-prop="label"
-        class="w-full"
-        placeholder="选择同事"
-        :options="users.map((u) => ({ value: u.id, label: u.nickname }))"
-      />
+      <div class="ap-sheet-body">
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">接收同事</label>
+          <Select
+            v-model:value="transferTo"
+            show-search
+            option-filter-prop="label"
+            class="w-full"
+            placeholder="搜索并选择同事姓名"
+            :options="users.map((u) => ({ value: u.id, label: u.nickname }))"
+          />
+        </div>
+      </div>
     </Modal>
 
     <Modal
       v-model:open="newOpen"
-      title="新会话"
-      ok-text="发送"
+      title="发起新会话"
+      ok-text="发送消息"
       :confirm-loading="newSending"
-      :width="520"
+      :width="500"
+      wrap-class-name="ap-modal-sheet"
       @ok="sendNewChat"
     >
-      <div class="flex flex-col gap-3">
-        <Select
-          v-if="waAccounts.length > 1"
-          v-model:value="newForm.accountId"
-          :options="newAccountOptions"
-          placeholder="用哪个号码发送"
-          @change="(v: any) => onNewAccountChange(v)"
-        />
-        <Input
-          v-model:value="newForm.to"
-          placeholder="客户号码，含国家码，如 +8613800001111"
-        />
-        <Textarea
-          v-model:value="newForm.text"
-          :auto-size="{ minRows: 4, maxRows: 10 }"
-          :maxlength="4096"
-          placeholder="消息内容"
-        />
-        <div class="text-xs text-gray-400">
-          扫码接入的号码可以直接发送普通消息。请勿短时间内群发陌生号码，以免号码被
-          WhatsApp 限制。
+      <div class="ap-sheet-lead">
+        <span class="ap-sheet-icon">
+          <IconifyIcon icon="lucide:message-square-plus" class="size-5" />
+        </span>
+        <div class="ap-sheet-subtitle">
+          向全球客户主动发送首条 WhatsApp 消息，发出后自动创建并打开会话。
+        </div>
+      </div>
+      <div class="ap-sheet-body">
+        <div v-if="waAccounts.length > 1" class="ap-sheet-field">
+          <label class="ap-sheet-label">发送账号</label>
+          <Select
+            v-model:value="newForm.accountId"
+            :options="newAccountOptions"
+            placeholder="选择用于发送的 WhatsApp 号码"
+            @change="(v: any) => onNewAccountChange(v)"
+          />
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">
+            <span>客户号码</span>
+            <span class="ap-sheet-optional">需包含国际区号</span>
+          </label>
+          <Input
+            v-model:value="newForm.to"
+            allow-clear
+            placeholder="例如 +971501234567 或 +8613800001111"
+          >
+            <template #prefix>
+              <IconifyIcon icon="lucide:phone" class="mr-1 size-4 text-[#8E8E93]" />
+            </template>
+          </Input>
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">
+            <span>消息内容</span>
+            <span class="ap-sheet-optional tabular-nums"
+              >{{ newForm.text.length }} / 4096</span
+            >
+          </label>
+          <Textarea
+            v-model:value="newForm.text"
+            :auto-size="{ minRows: 4, maxRows: 9 }"
+            :maxlength="4096"
+            placeholder="输入首条问候或业务消息…"
+          />
+        </div>
+        <div class="ap-sheet-tip">
+          <IconifyIcon
+            icon="lucide:shield-alert"
+            class="mt-0.5 size-4 shrink-0 text-[#FF9500]"
+          />
+          <span>
+            扫码接入的号码可直接发送普通消息；请避免短时间内高频群发陌生号码，以防触发
+            WhatsApp 风控限制。
+          </span>
         </div>
       </div>
     </Modal>
@@ -2665,40 +2752,82 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
     <Modal
       v-model:open="groupOpen"
       title="新建群聊"
-      ok-text="建群"
+      ok-text="创建群聊"
       :confirm-loading="groupSending"
       :width="520"
+      wrap-class-name="ap-modal-sheet"
       @ok="sendGroup"
     >
-      <div class="flex flex-col gap-3">
-        <Select
-          v-model:value="groupForm.accountId"
-          :options="
-            evolutionAccounts.map((a) => ({
-              value: a.id,
-              label: a.displayPhone || a.name || '扫码号码',
-            }))
-          "
-          placeholder="用哪个号码建群（只有扫码接入的号码可以建群）"
-        />
-        <Input
-          v-model:value="groupForm.subject"
-          :maxlength="60"
-          placeholder="群名称，例如：迪拜灯具客户群"
-        />
-        <Textarea
-          v-model:value="groupForm.participants"
-          :auto-size="{ minRows: 2, maxRows: 5 }"
-          placeholder="成员号码，含国家码，多个用逗号或换行分隔"
-        />
-        <Textarea
-          v-model:value="groupForm.message"
-          :auto-size="{ minRows: 3, maxRows: 8 }"
-          :maxlength="4096"
-          placeholder="建群后要发的第一句话（可不填）"
-        />
-        <div class="text-xs text-gray-400">
-          群会建在你的 WhatsApp 上；成员会收到入群邀请。请勿批量拉陌生号码建群，以免号码被限制。
+      <div class="ap-sheet-lead">
+        <span class="ap-sheet-icon ap-sheet-icon--green">
+          <IconifyIcon icon="lucide:users" class="size-5" />
+        </span>
+        <div class="ap-sheet-subtitle">
+          在你的 WhatsApp 账号上创建专属客户沟通群，并向成员发出入群邀请。
+        </div>
+      </div>
+      <div class="ap-sheet-body">
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">
+            <span>建群号码</span>
+            <span class="ap-sheet-optional">仅支持扫码接入号码</span>
+          </label>
+          <Select
+            v-model:value="groupForm.accountId"
+            :options="
+              evolutionAccounts.map((a) => ({
+                value: a.id,
+                label: a.displayPhone || a.name || '扫码号码',
+              }))
+            "
+            placeholder="选择用于建群的 WhatsApp 号码"
+          />
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">
+            <span>群聊名称</span>
+            <span class="ap-sheet-optional tabular-nums"
+              >{{ groupForm.subject.length }} / 60</span
+            >
+          </label>
+          <Input
+            v-model:value="groupForm.subject"
+            :maxlength="60"
+            allow-clear
+            placeholder="例如：迪拜灯具项目对接群"
+          />
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">
+            <span>成员号码</span>
+            <span class="ap-sheet-optional">含国际区号，逗号或换行分隔</span>
+          </label>
+          <Textarea
+            v-model:value="groupForm.participants"
+            :auto-size="{ minRows: 2, maxRows: 5 }"
+            placeholder="例如：+971501234567, +971509876543"
+          />
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">
+            <span>入群首条消息</span>
+            <span class="ap-sheet-optional">选填</span>
+          </label>
+          <Textarea
+            v-model:value="groupForm.message"
+            :auto-size="{ minRows: 3, maxRows: 6 }"
+            :maxlength="4096"
+            placeholder="建群后自动发送的第一句欢迎语（可留空）"
+          />
+        </div>
+        <div class="ap-sheet-tip">
+          <IconifyIcon
+            icon="lucide:shield-alert"
+            class="mt-0.5 size-4 shrink-0 text-[#FF9500]"
+          />
+          <span>
+            成员会收到 WhatsApp 入群邀请；请勿批量拉未联系过的陌生号码建群，以免账号受限。
+          </span>
         </div>
       </div>
     </Modal>
@@ -2706,41 +2835,68 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
     <Modal
       v-model:open="tplOpen"
       title="发送模板消息"
-      ok-text="发送"
-      :width="560"
+      ok-text="发送模板"
+      :width="540"
+      wrap-class-name="ap-modal-sheet"
       @ok="sendTemplate"
     >
       <Spin :spinning="tplLoading">
-        <div class="flex flex-col gap-3">
-          <Input
-            v-model:value="newTo"
-            :disabled="!!current && newTo === current.waId"
-            placeholder="客户号码，含国家码，如 +14155550100"
-          />
-          <Select
-            v-model:value="tplKey"
-            placeholder="选择已审核的模板"
-            :options="
-              approved.map((t) => ({
-                label: `${t.name}（${t.language}）`,
-                value: `${t.name}|${t.language}`,
-              }))
-            "
-            :not-found-content="
-              tplLoading ? '加载中…' : '没有已审核的模板，请先在 Meta 后台创建'
-            "
-          />
-          <Input
+        <div class="ap-sheet-lead">
+          <span class="ap-sheet-icon ap-sheet-icon--purple">
+            <IconifyIcon icon="lucide:file-text" class="size-5" />
+          </span>
+          <div class="ap-sheet-subtitle">
+            超出 24 小时会话窗口或使用官方 API 主动触达客户时，可发送已通过 Meta 审核的模板消息。
+          </div>
+        </div>
+        <div class="ap-sheet-body">
+          <div class="ap-sheet-field">
+            <label class="ap-sheet-label">客户号码</label>
+            <Input
+              v-model:value="newTo"
+              :disabled="!!current && newTo === current.waId"
+              placeholder="含国家码，例如 +14155550100"
+            />
+          </div>
+          <div class="ap-sheet-field">
+            <label class="ap-sheet-label">消息模板</label>
+            <Select
+              v-model:value="tplKey"
+              placeholder="选择已审核通过的模板"
+              :options="
+                approved.map((t) => ({
+                  label: `${t.name}（${t.language}）`,
+                  value: `${t.name}|${t.language}`,
+                }))
+              "
+              :not-found-content="
+                tplLoading ? '加载中…' : '没有已审核的模板，请先在 Meta 后台创建'
+              "
+            />
+          </div>
+          <div
             v-for="(_, i) in tplParams"
             :key="i"
-            v-model:value="tplParams[i]"
-            :placeholder="`变量 {{${i + 1}}}`"
-          />
+            class="ap-sheet-field"
+          >
+            <label class="ap-sheet-label">模板变量 #{{ i + 1 }}</label>
+            <Input
+              v-model:value="tplParams[i]"
+              :placeholder="`填写变量 {{${i + 1}}} 的内容`"
+            />
+          </div>
           <div
             v-if="chosen"
-            class="rounded bg-[#d9fdd3] p-3 text-sm whitespace-pre-wrap"
+            class="rounded-2xl bg-[#F5F5F8] p-3.5"
           >
-            {{ templatePreview(chosen, tplParams) }}
+            <div class="mb-2 text-[11px] font-semibold text-[#86868B]">
+              发送效果预览
+            </div>
+            <div
+              class="ml-auto max-w-[88%] rounded-[16px_16px_4px_16px] bg-[#007AFF] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-white whitespace-pre-wrap shadow-sm"
+            >
+              {{ templatePreview(chosen, tplParams) }}
+            </div>
           </div>
         </div>
       </Spin>
