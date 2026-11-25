@@ -216,7 +216,7 @@ onMounted(async () => {
         </Col>
         <Col :xs="24" :lg="8" class="mb-4">
           <Card title="客户来源" size="small" :bordered="false">
-            <Empty v-if="!sourceRows.length" :image="Empty.PRESENTED_IMAGE_SIMPLE" />
+            <Empty v-if="!loading && !sourceRows.length" :image="Empty.PRESENTED_IMAGE_SIMPLE" />
             <div v-for="r in sourceRows" :key="r.key" class="py-1.5">
               <div class="flex justify-between text-sm">
                 <span>{{ r.label }}</span>
@@ -230,7 +230,7 @@ onMounted(async () => {
         </Col>
         <Col :xs="24" :lg="8" class="mb-4">
           <Card title="客户等级" size="small" :bordered="false">
-            <Empty v-if="!levelRows.length" :image="Empty.PRESENTED_IMAGE_SIMPLE" />
+            <Empty v-if="!loading && !levelRows.length" :image="Empty.PRESENTED_IMAGE_SIMPLE" />
             <div v-for="r in levelRows" :key="r.key" class="py-1.5">
               <div class="flex justify-between text-sm">
                 <span>{{ r.label }}</span>
@@ -250,7 +250,9 @@ onMounted(async () => {
             <template #extra>
               <span v-if="won" class="text-xs text-gray-500">已赢单 {{ won.count }} 个 · {{ won.amount.toLocaleString() }}</span>
             </template>
-            <Empty v-if="!funnelRows.length" :image="Empty.PRESENTED_IMAGE_SIMPLE" description="还没有配置商机阶段" />
+            <!-- 数据没回来之前 funnelRows 一定是空的，此时不能下“没有配置阶段”的结论 -->
+            <div v-if="loading && !funnelRows.length" class="py-6 text-center text-xs text-gray-400">加载中…</div>
+            <Empty v-else-if="!funnelRows.length" :image="Empty.PRESENTED_IMAGE_SIMPLE" description="还没有配置商机阶段" />
             <div v-for="f in funnelRows" :key="f.id" class="py-1.5">
               <div class="flex justify-between text-sm">
                 <span>{{ f.name }} <span class="text-xs text-gray-400">赢率 {{ f.percent }}%</span></span>
