@@ -195,6 +195,7 @@ onMounted(load);
         <div v-else class="flex justify-center rounded bg-gray-100 p-3">
           <iframe
             :srcdoc="previewDoc"
+            :title="view === 'mobile' ? '邮件模板手机预览' : '邮件模板电脑预览'"
             sandbox=""
             class="rounded border-0 bg-white shadow-sm"
             :style="{ width: view === 'mobile' ? '375px' : '100%', height: '420px' }"

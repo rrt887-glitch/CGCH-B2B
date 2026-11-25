@@ -578,6 +578,7 @@ onMounted(async () => {
               <iframe
                 v-if="current.htmlBody"
                 :srcdoc="iframeDoc(current.htmlBody)"
+                :title="`邮件正文：${current.subject || '无标题'}`"
                 sandbox="allow-popups allow-popups-to-escape-sandbox"
                 class="h-[420px] w-full border-0"
               ></iframe>
