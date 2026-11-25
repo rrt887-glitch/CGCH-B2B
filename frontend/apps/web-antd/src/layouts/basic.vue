@@ -337,7 +337,11 @@ function onUserMenu({ key }: { key: number | string }) {
   height: 100vh;
   padding: 0;
   overflow: hidden;
-  background: var(--ap-bg);
+  background:
+    radial-gradient(ellipse 52% 48% at 6% 4%, rgb(196 224 255 / 72%), transparent 68%),
+    radial-gradient(ellipse 46% 46% at 95% 94%, rgb(246 214 236 / 65%), transparent 65%),
+    radial-gradient(ellipse 40% 38% at 88% 8%, rgb(224 218 255 / 45%), transparent 64%),
+    #f2f3f8;
 }
 
 .cgch-rail {
@@ -346,8 +350,9 @@ function onUserMenu({ key }: { key: number | string }) {
   flex: 0 0 var(--ap-rail-width);
   flex-direction: column;
   padding: 12px 8px 10px;
-  background: var(--ap-bg-sidebar);
-  border-right: 0.5px solid var(--ap-separator);
+  background: rgb(255 255 255 / 58%);
+  border-right: 0.5px solid rgb(0 0 0 / 7%);
+  backdrop-filter: blur(28px) saturate(180%);
   transition: flex-basis var(--ap-dur) var(--ap-ease);
 }
 

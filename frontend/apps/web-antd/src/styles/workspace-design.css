@@ -23,10 +23,10 @@
   min-width: 0;
 }
 
-/* CRM 列表页：贴合 macOS 工作台，干净留白、无大圆角套娃 */
+/* CRM 列表页：透明画布透出柔和渐变氛围，干净留白 */
 .is-apple .crm-list {
   padding: 18px 22px 14px;
-  background: var(--ap-bg);
+  background: transparent;
 }
 
 .is-apple .crm-list__head {

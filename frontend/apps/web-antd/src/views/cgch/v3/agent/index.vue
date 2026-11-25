@@ -124,8 +124,9 @@ function goStep(key: string) {
   flex-direction: column;
   gap: 2px;
   padding: 12px 8px;
-  background: var(--ap-bg-subbar);
-  border-right: 0.5px solid var(--ap-separator);
+  background: rgb(255 255 255 / 48%);
+  border-right: 0.5px solid rgb(0 0 0 / 6.5%);
+  backdrop-filter: blur(22px) saturate(160%);
 }
 
 .agent__indicator {
