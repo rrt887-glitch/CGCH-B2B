@@ -51,46 +51,13 @@ import {
 import { getWaAccountList, getWaTemplates } from '#/api/channel/whatsapp';
 import { getSimpleUserList } from '#/api/system/user';
 
+import { approvedCount, draftCount, ITEM_STATUS, taskTag } from './task-status';
+
 defineOptions({ name: 'CgchClawReactivate' });
 
 const router = useRouter();
 const users = ref<{ id: number; nickname: string }[]>([]);
 const userName = (id?: number) => users.value.find((u) => u.id === id)?.nickname ?? (id ? `#${id}` : '—');
-
-const TASK_STATUS: Record<string, { color: string; label: string }> = {
-  generating: { color: 'processing', label: 'AI 撰写中' },
-  ready: { color: 'orange', label: '待确认' },
-  sending: { color: 'processing', label: '发送中' },
-  done: { color: 'green', label: '已完成' },
-};
-const ITEM_STATUS: Record<string, { color: string; label: string }> = {
-  generating: { color: 'processing', label: '撰写中' },
-  draft: { color: 'orange', label: '待确认' },
-  approved: { color: 'blue', label: '已确认' },
-  sent: { color: 'green', label: '已发送' },
-  failed: { color: 'red', label: '失败' },
-  skipped: { color: 'default', label: '已跳过' },
-};
-
-/** 待确认 = 草稿 + 已确认未发送 */
-const pendingCount = (t: ChannelReactivateApi.Task) =>
-  (t.counts?.draft ?? 0) + (t.counts?.approved ?? 0);
-
-/**
- * 任务标签。
- *
- * 后端 status=ready 只表示「AI 写完了」，不代表一定有内容等人确认：如果候选全都因为
- * 缺邮箱/WhatsApp、负责人没有可用发件账号、或没选 WhatsApp 模板而被跳过，待确认就是 0。
- * 这时继续显示「待确认」会和卡片上的「待确认 0」自相矛盾，所以按实际计数推导标签。
- */
-function taskTag(t: ChannelReactivateApi.Task): { color: string; label: string } {
-  if (t.status === 'ready' && pendingCount(t) === 0) {
-    if ((t.counts?.failed ?? 0) > 0) return { color: 'red', label: '生成失败' };
-    if ((t.counts?.skipped ?? 0) > 0) return { color: 'default', label: '无可发送内容' };
-    return { color: 'default', label: '没有候选人' };
-  }
-  return TASK_STATUS[t.status] ?? { color: 'default', label: t.status };
-}
 
 // ===== 任务列表 =====
 const tasks = ref<ChannelReactivateApi.Task[]>([]);
@@ -212,6 +179,12 @@ const itemColumns = [
   { title: '状态', key: 'status', width: 110 },
   { title: '操作', key: 'action', width: 170 },
 ];
+const ACTION_TEXT: Record<'approve' | 'draft' | 'skip', string> = {
+  approve: '确认',
+  draft: '撤回确认',
+  skip: '跳过',
+};
+
 async function batch(action: 'approve' | 'draft' | 'skip', ids?: number[]) {
   const list = ids ?? itemSel.value;
   if (list.length === 0) {
