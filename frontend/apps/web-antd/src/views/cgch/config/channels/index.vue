@@ -833,6 +833,13 @@ const stats = computed(() => [
     color: '#248A3D',
   },
   {
+    // 等待首次收信 / 等待消息 / 等待拉取评论：还没跑起来，既不正常也不算异常，
+    // 必须单列一项，否则各分项加起来会少于「收件箱」总数，看起来像漏了一个账号。
+    label: '待激活',
+    value: inboxes.value.filter((r) => r.status.color === 'orange').length,
+    color: '#C93400',
+  },
+  {
     label: '需要处理',
     value: inboxes.value.filter((r) => r.status.color === 'red').length,
     color: '#C93400',
@@ -1030,7 +1037,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
       >
     </div>
 
-    <div class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
       <div
         v-for="st in stats"
         :key="st.label"
