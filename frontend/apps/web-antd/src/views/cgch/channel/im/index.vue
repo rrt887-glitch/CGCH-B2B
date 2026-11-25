@@ -126,6 +126,8 @@ const accountId = ref<number | undefined>(props.accountId);
 // Watch sources are evaluated synchronously during setup.
 const text = ref('');
 const keyword = ref('');
+/** 最近一次实际提交给后端的关键词，用于空结果提示（避免边打字边改提示） */
+const searchedKeyword = ref('');
 /** 列表筛选：全部、未读、未回复（客户最后发言）、收藏、已归档 */
 type ListFilter =
   | 'all'
@@ -152,6 +154,17 @@ const STATUS_FILTER = [
 const teamView = computed(
   () => props.view === 'team' || listFilter.value === 'team',
 );
+/**
+ * 列表为空时的提示。有搜索词时必须说“没有匹配结果”，
+ * 否则会显示“没有进行中的会话”，让人误以为收件箱本身是空的。
+ */
+const emptyDescription = computed(() => {
+  if (searchedKeyword.value)
+    return `没有找到与“${searchedKeyword.value}”匹配的会话`;
+  if (teamView.value)
+    return '没有同事负责的会话（需要部门数据权限才能看到下属的会话）';
+  return statusFilter.value === 'open' ? '没有进行中的会话' : '暂无会话';
+});
 const listTitle = computed(() => {
   if (props.embedded) return '会话';
   if (props.accountId) {
@@ -283,7 +296,10 @@ async function loadConversations(silent = false) {
       highPriority: props.highPriority || undefined,
       status: statusFilter.value || undefined,
     });
-    if (request === listRequest) conversations.value = res.list;
+    if (request === listRequest) {
+      conversations.value = res.list;
+      searchedKeyword.value = (keyword.value || '').trim();
+    }
   } finally {
     if (request === listRequest) listLoading.value = false;
   }
@@ -1280,15 +1296,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         <div class="flex-1 overflow-auto">
           <Spin :spinning="listLoading">
             <div v-if="conversations.length === 0" class="p-8">
-              <Empty
-                :description="
-                  teamView
-                    ? '没有同事负责的会话（需要部门数据权限才能看到下属的会话）'
-                    : statusFilter === 'open'
-                      ? '没有进行中的会话'
-                      : '暂无会话'
-                "
-              />
+              <Empty :description="emptyDescription" />
             </div>
             <div
               v-for="c in conversations"
