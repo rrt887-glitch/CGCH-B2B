@@ -54,6 +54,12 @@ public class ChannelWaAccountController {
         return success(true);
     }
 
+    @GetMapping("/handover-check")
+    @Operation(summary = "离职检查：成员名下还有多少号码、会话、客户")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:query')")
+    public CommonResult<java.util.Map<String, Object>> handoverCheck(@RequestParam("userId") Long userId) {
+        return CommonResult.success(whatsAppService.handoverCheck(getLoginUserId(), userId));
+    }
     @PutMapping("/transfer")
     @Operation(summary = "把号码转交给同事（号码归属人与其名下会话一起换人）")
     @PreAuthorize("@ss.hasPermission('channel:wa-account:update')")

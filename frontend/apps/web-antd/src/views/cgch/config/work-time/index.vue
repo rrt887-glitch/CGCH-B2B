@@ -72,9 +72,26 @@ function copyMonday() {
 
 const holidayPick = ref<any>();
 const workdayPick = ref<any>();
-function addDate(list: string[], v: any) {
-  if (!v) return;
+
+/**
+ * 同一天不能既是「节假日」又是「调休上班日」。
+ * 后端判断顺序是「先看节假日」，所以两边都填时这一天仍按休息处理、调休不生效，
+ * 用户却以为已经调休了，所以要在录入时就挡住，保存前再兜底检查一次。
+ */
+const dateConflicts = computed(() =>
+  form.value ? form.value.holidays.filter((d) => form.value!.extraWorkdays.includes(d)) : [],
+);
+
+function addDate(field: 'extraWorkdays' | 'holidays', v: any) {
+  if (!form.value || !v) return;
   const s = dayjs(v).format('YYYY-MM-DD');
+  const isHoliday = field === 'holidays';
+  const other = isHoliday ? form.value.extraWorkdays : form.value.holidays;
+  if (other.includes(s)) {
+    message.warning(`${s} 已填在「${isHoliday ? '调休上班日' : '节假日'}」里，同一天不能既是节假日又是调休上班日`);
+    return;
+  }
+  const list = form.value[field];
   if (!list.includes(s)) list.push(s);
   list.sort();
 }
@@ -84,6 +101,11 @@ async function load() {
 }
 async function save() {
   if (!form.value) return;
+  // 历史数据可能已经存在冲突，保存前必须挡住，否则调休设置依旧是「保存成功但不生效」
+  if (dateConflicts.value.length) {
+    message.warning(`以下日期同时是节假日和调休上班日，请先删掉一边：${dateConflicts.value.join('、')}`);
+    return;
+  }
   saving.value = true;
   try {
     await saveWorkTime(form.value);
@@ -151,14 +173,19 @@ onMounted(load);
         <FormItem label="节假日（全天休息）">
           <Space wrap>
             <Tag v-for="h in form.holidays" :key="h" closable @close="form!.holidays = form!.holidays.filter((x) => x !== h)">{{ h }}</Tag>
-            <DatePicker v-model:value="holidayPick" size="small" placeholder="添加日期" @change="(v: any) => { addDate(form!.holidays, v); holidayPick = undefined; }" />
+            <DatePicker v-model:value="holidayPick" size="small" placeholder="添加日期" @change="(v: any) => { addDate('holidays', v); holidayPick = undefined; }" />
           </Space>
+          <div class="mt-1 text-xs text-gray-500">这一天全天按休息处理，优先于调休设置。</div>
         </FormItem>
         <FormItem label="调休上班日（按周一的时间上班）">
           <Space wrap>
             <Tag v-for="h in form.extraWorkdays" :key="h" closable @close="form!.extraWorkdays = form!.extraWorkdays.filter((x) => x !== h)">{{ h }}</Tag>
-            <DatePicker v-model:value="workdayPick" size="small" placeholder="添加日期" @change="(v: any) => { addDate(form!.extraWorkdays, v); workdayPick = undefined; }" />
+            <DatePicker v-model:value="workdayPick" size="small" placeholder="添加日期" @change="(v: any) => { addDate('extraWorkdays', v); workdayPick = undefined; }" />
           </Space>
+          <div class="mt-1 text-xs text-gray-500">这一天的休息日会改成按周一的时间上班。</div>
+          <div v-if="dateConflicts.length" class="mt-1 text-xs text-red-500">
+            {{ dateConflicts.join('、') }} 同时出现在「节假日」和「调休上班日」里，这一天会按休息处理、调休不生效，请删掉一边。
+          </div>
         </FormItem>
 
         <FormItem label="工作时间内，新消息怎么处理">

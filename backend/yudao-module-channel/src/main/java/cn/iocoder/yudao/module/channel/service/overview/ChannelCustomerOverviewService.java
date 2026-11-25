@@ -61,18 +61,34 @@ public class ChannelCustomerOverviewService {
             monthly.computeIfPresent(String.valueOf(r.get("m")), (k, v) -> v + num(r, "n"));
         }
 
-        Long typeId = channelCustomerOverviewMapper.defaultStatusType();
+        // 商机阶段要覆盖所有流程：只取第一个流程会漏掉其他流程的商机与金额
         List<Map<String, Object>> funnel = new ArrayList<>();
         Map<String, Object> ended = new LinkedHashMap<>();
-        if (typeId != null) {
+        List<Map<String, Object>> statusTypes = channelCustomerOverviewMapper.statusTypes();
+        boolean multiPipeline = statusTypes.size() > 1;
+        Map<String, long[]> endedCount = new LinkedHashMap<>();
+        Map<String, Double> endedAmount = new LinkedHashMap<>();
+        Map<Long, String> endedLabel = Map.of(1L, "won", 2L, "lost", 3L, "invalid");
+        for (Map<String, Object> type : statusTypes) {
+            long typeId = num(type, "id");
+            String typeName = String.valueOf(type.get("name"));
             for (Map<String, Object> r : channelCustomerOverviewMapper.funnel(typeId, users)) {
-                funnel.add(Map.of("id", num(r, "id"), "name", String.valueOf(r.get("name")), "percent", num(r, "percent"),
+                // 多个流程时阶段名前加上流程名，否则「初步接洽」会出现好几行分不清
+                String stageName = String.valueOf(r.get("name"));
+                funnel.add(Map.of("id", num(r, "id"),
+                        "name", multiPipeline && typeName != null && !"null".equals(typeName) ? typeName + " · " + stageName : stageName,
+                        "percent", num(r, "percent"),
                         "count", num(r, "n"), "amount", dec(r, "amount")));
             }
-            Map<Long, String> label = Map.of(1L, "won", 2L, "lost", 3L, "invalid");
             for (Map<String, Object> r : channelCustomerOverviewMapper.ended(typeId, users)) {
-                ended.put(label.getOrDefault(num(r, "k"), "other"), Map.of("count", num(r, "n"), "amount", dec(r, "amount")));
+                String key = endedLabel.getOrDefault(num(r, "k"), "other");
+                endedCount.computeIfAbsent(key, k -> new long[1])[0] += num(r, "n");
+                endedAmount.merge(key, dec(r, "amount"), Double::sum);
             }
+        }
+        for (Map.Entry<String, long[]> e : endedCount.entrySet()) {
+            ended.put(e.getKey(), Map.of("count", e.getValue()[0],
+                    "amount", Math.round(endedAmount.getOrDefault(e.getKey(), 0.0) * 100) / 100.0));
         }
 
         List<Map<String, Object>> top = new ArrayList<>();

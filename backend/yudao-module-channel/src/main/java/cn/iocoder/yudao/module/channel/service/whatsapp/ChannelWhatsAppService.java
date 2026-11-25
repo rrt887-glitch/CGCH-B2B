@@ -1463,6 +1463,37 @@ public class ChannelWhatsAppService {
      * 返回一起转交的会话数。
      */
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    /**
+     * 离职检查：成员名下还有多少号码、会话、客户。
+     * 停用/删除成员前用它提示管理员先转交，避免「人走了，号码和客户没人接」。
+     */
+    public java.util.Map<String, Object> handoverCheck(Long operatorId, Long userId) {
+        boolean allScope = channelDashboardService.resolveScope(operatorId, null).isAll();
+        if (!allScope && !Objects.equals(operatorId, userId)) {
+            throw exception(WA_ACCOUNT_TRANSFER_FORBIDDEN);
+        }
+        java.util.List<ChannelWaAccountDO> accounts = accountMapper.selectList(
+                new LambdaQueryWrapperX<ChannelWaAccountDO>().eq(ChannelWaAccountDO::getUserId, userId));
+        java.util.List<Long> accountIds = accounts.stream().map(ChannelWaAccountDO::getId).toList();
+        long conversations;
+        if (accountIds.isEmpty()) {
+            conversations = conversationMapper.selectCount(new LambdaQueryWrapperX<ChannelWaConversationDO>()
+                    .eq(ChannelWaConversationDO::getOwnerUserId, userId));
+        } else {
+            conversations = conversationMapper.selectCount(new LambdaQueryWrapperX<ChannelWaConversationDO>()
+                    .and(w -> w.eq(ChannelWaConversationDO::getOwnerUserId, userId)
+                            .or(o -> o.isNull(ChannelWaConversationDO::getOwnerUserId)
+                                    .in(ChannelWaConversationDO::getAccountId, accountIds))));
+        }
+        long customers = customerMapper.selectCount(
+                new LambdaQueryWrapperX<cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO>()
+                        .eq(cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO::getOwnerUserId, userId));
+        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("accounts", accounts.size());
+        m.put("conversations", conversations);
+        m.put("customers", customers);
+        return m;
+    }
     public int transferAccount(Long userId, Long accountId, Long toUserId) {
         ChannelWaAccountDO a = validateAccount(userId, accountId);
         cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO to =
