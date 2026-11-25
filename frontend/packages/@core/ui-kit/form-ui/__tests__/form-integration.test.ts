@@ -101,7 +101,11 @@ describe('useVbenForm integration', () => {
     await flushPromises();
 
     expect(await formApi.getValues()).toEqual({ name: '' });
-    expect(validateValue).toHaveBeenCalledTimes(initialValidationCount + 1);
+    // zod 的 superRefine 是异步校验，一次 flushPromises 不保证已经跑完
+    await vi.waitFor(
+      () => expect(validateValue).toHaveBeenCalledTimes(initialValidationCount + 1),
+      { timeout: 2000 },
+    );
   });
 
   it('keeps only the active model protocol in field slot componentProps', async () => {
@@ -1014,9 +1018,12 @@ describe('useVbenForm integration', () => {
 
     await formApi.setFieldValue('name', ' raw ');
     await wrapper.get('form').trigger('submit');
-    await flushPromises();
+    // 原生 submit 会被 vee-validate 的 handleSubmit 接管，校验完成才回调：
+    // CI 机器慢时一次 flushPromises 不够，等到回调真正发生再断言
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledOnce(), {
+      timeout: 2000,
+    });
 
-    expect(onSubmit).toHaveBeenCalledOnce();
     expect(onSubmit).toHaveBeenCalledWith(undefined);
   });
 
