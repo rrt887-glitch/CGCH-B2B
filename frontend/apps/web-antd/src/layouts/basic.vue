@@ -8,7 +8,6 @@ import { useRoute } from 'vue-router';
 
 import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
-import { preferences } from '@vben/preferences';
 import { useAccessStore, useUserStore } from '@vben/stores';
 
 import { Avatar, Dropdown, Menu, MenuItem, Tooltip } from 'ant-design-vue';
@@ -317,9 +316,9 @@ function onUserMenu({ key }: { key: number | string }) {
         </button>
       </div>
       <RouterView v-slot="{ Component, route: r }">
-        <Transition name="cg-page">
-          <component :is="Component" :key="r.path" />
-        </Transition>
+        <div v-if="Component" :key="r.path" class="cgch-view">
+          <component :is="Component" />
+        </div>
       </RouterView>
     </main>
 
@@ -675,6 +674,12 @@ function onUserMenu({ key }: { key: number | string }) {
   height: 100%;
   padding: 0;
   overflow: auto;
+}
+
+.cgch-view {
+  height: 100%;
+  min-height: 0;
+  animation: ap-fade-up 220ms var(--ap-ease-out) both;
 }
 
 .cgch-visit-bar {

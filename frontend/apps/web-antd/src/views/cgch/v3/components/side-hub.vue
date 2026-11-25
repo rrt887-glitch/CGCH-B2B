@@ -132,9 +132,9 @@ provide('cgchHubSelect', select);
         </Dropdown>
       </div>
       <div class="side-hub__body">
-        <Transition name="ap-swap">
-          <component :is="view" v-if="view" :key="activeKey" />
-        </Transition>
+        <div v-if="view" :key="activeKey" class="side-hub__view">
+          <component :is="view" />
+        </div>
       </div>
     </section>
   </div>
@@ -279,6 +279,11 @@ provide('cgchHubSelect', select);
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.side-hub__view {
+  height: 100%;
+  animation: ap-fade-up 200ms var(--ap-ease-out) both;
 }
 
 @media (width <= 960px) {

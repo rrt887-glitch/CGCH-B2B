@@ -99,9 +99,9 @@ function goStep(key: string) {
       </button>
     </aside>
     <section class="agent__main">
-      <Transition name="ap-swap">
-        <component :is="step.view" :key="step.key" />
-      </Transition>
+      <div :key="step.key" class="agent__view">
+        <component :is="step.view" />
+      </div>
     </section>
     <aside class="agent__test">
       <TestChat :suggestions="SUGGESTIONS[step.key] ?? SUGGESTIONS.knowledge!" />
@@ -204,6 +204,10 @@ function goStep(key: string) {
   padding: 20px 24px;
   overflow: auto;
   background: var(--ap-surface);
+}
+
+.agent__view {
+  animation: ap-fade-up 200ms var(--ap-ease-out) both;
 }
 
 .agent__test {
