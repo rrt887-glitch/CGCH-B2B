@@ -19,6 +19,7 @@ import { assignUserRole, getUserRoleList } from '#/api/system/permission';
 import { getSimpleRoleList } from '#/api/system/role';
 import { getMyVisitLogPage } from '#/api/system/tenant-visit';
 import { createUser, deleteUser, getUserPage, resetUserPassword, updateUser, updateUserStatus } from '#/api/system/user';
+import { getHandoverCheck } from '#/api/channel/whatsapp';
 import { isStrongPassword, PASSWORD_TIP } from '#/utils/password';
 import { fmtDateTime } from '#/utils/datetime';
 
@@ -141,8 +142,30 @@ async function save() {
   }
 }
 
+/** 停用/删除前检查名下是否还有号码、会话、客户；有就提示先转交，用户仍可强行继续 */
+async function confirmHandover(row: any, action: string): Promise<boolean> {
+  const r = await getHandoverCheck(row.id).catch(() => null);
+  if (!r) return true;
+  const total = (r.accounts || 0) + (r.conversations || 0) + (r.customers || 0);
+  if (!total) return true;
+  return await new Promise<boolean>((resolve) => {
+    Modal.confirm({
+      title: `「${row.nickname}」名下还有数据`,
+      content: `号码 ${r.accounts} 个、会话 ${r.conversations} 个、客户 ${r.customers} 个。建议先到「渠道」把号码转交给同事，再${action}，否则这些数据会没人跟进。`,
+      okText: `仍然${action}`,
+      cancelText: '去转交',
+      onOk: () => resolve(true),
+      onCancel: () => {
+        resolve(false);
+        window.open('/v3/channel', '_blank');
+      },
+    });
+  });
+}
+
 async function toggleStatus(row: any, on: boolean) {
   if (row.id === myId.value) return message.warning('不能停用自己的账号');
+  if (!on && !(await confirmHandover(row, '停用'))) return;
   await updateUserStatus(row.id!, on ? 0 : 1);
   row.status = on ? 0 : 1;
   message.success(on ? '已启用' : '已停用，这个账号将无法登录');
@@ -164,8 +187,9 @@ async function savePwd() {
   pwdOpen.value = false;
 }
 
-function remove(row: any) {
+async function remove(row: any) {
   if (row.id === myId.value) return message.warning('不能删除自己的账号');
+  if (!(await confirmHandover(row, '删除'))) return;
   Modal.confirm({
     title: `删除成员「${row.nickname}」？`,
     content: '删除后这个账号无法登录。他负责的客户和会话不会删除，可以在客户、会话里转给其他人。',
