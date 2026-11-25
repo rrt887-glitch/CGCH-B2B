@@ -1848,87 +1848,77 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             </Spin>
           </div>
 
-          <div
-            class="im-composer border-0 border-t border-solid border-[#E5E5EA] px-5 pb-4 pt-3"
-          >
-            <div
-              v-if="aiDraft"
-              class="im-draft mb-3 rounded-xl border border-solid border-[#B8D7F5] bg-white p-3.5 text-sm"
-            >
-              <div class="mb-1.5 text-xs font-semibold text-[#0066CC]">
-                <IconifyIcon
-                  icon="lucide:sparkles"
-                  class="mr-1 inline size-3.5 align-[-2px]"
-                />
-                AI 已准备回复，未自动发出：{{
-                  DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason
-                }}
-                <span v-if="aiDraft.reasonDetail"
+          <!-- AI 草稿独立悬浮卡片（参考图：紫边白卡置于输入框上方） -->
+          <div v-if="aiDraft" class="im-draft-wrap">
+            <div class="im-draft p-3.5 text-sm">
+              <div
+                class="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[#8B5CF6]"
+              >
+                <IconifyIcon icon="lucide:sparkles" class="size-3.5" />
+                <span
+                  >AI 草稿 ·
+                  {{
+                    DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason
+                  }}</span
+                >
+                <span
+                  v-if="aiDraft.reasonDetail"
+                  class="font-normal text-[#86868B]"
                   >（{{ aiDraft.reasonDetail }}）</span
                 >
               </div>
               <div
                 v-if="aiDraft.content"
-                class="line-clamp-4 whitespace-pre-wrap leading-[22px] text-[#1D1D1F]"
+                class="line-clamp-4 whitespace-pre-wrap text-[13.5px] leading-[22px] text-[#1D1D1F]"
               >
                 {{ aiDraft.content }}
               </div>
-              <div class="mt-2.5 flex justify-end gap-2">
-                <Button size="small" @click="discardDraft">不用</Button>
+              <div class="mt-3 flex items-center gap-2">
                 <Button
                   v-if="aiDraft.content && current.windowOpen"
                   size="small"
                   type="primary"
+                  shape="round"
                   @click="useDraft"
-                  >填入输入框修改后发送</Button
+                  >放进输入框修改</Button
+                >
+                <Button size="small" shape="round" @click="discardDraft"
+                  >不用</Button
                 >
               </div>
             </div>
-            <div
-              class="mb-2 flex items-center gap-4"
-              role="tablist"
-              aria-label="输入方式"
-            >
-              <button
-                v-for="t in readOnly
-                  ? [{ k: 'note', label: '内部备注' }]
-                  : [
-                      { k: 'reply', label: '回复' },
-                      { k: 'note', label: '内部备注' },
-                    ]"
-                :key="t.k"
-                type="button"
-                role="tab"
-                :aria-selected="composeMode === t.k"
-                class="cursor-pointer border-0 border-b-2 border-solid bg-transparent px-0 pb-1.5 text-[13px]"
-                :class="
-                  composeMode === t.k
-                    ? t.k === 'note'
-                      ? 'border-[#FF9F0A] font-semibold text-[#A05A00]'
-                      : 'border-[#0071E3] font-semibold text-[#1D1D1F]'
-                    : 'border-transparent text-[#86868B]'
-                "
-                @click="composeMode = t.k as any"
-              >
-                {{ t.label }}
-              </button>
-              <span class="flex-1"></span>
-              <span v-if="composeMode === 'note'" class="text-xs text-[#A05A00]"
-                >只有团队能看到，不会发给客户</span
-              >
-            </div>
+          </div>
+
+          <div class="im-composer">
             <template v-if="composeMode === 'note'">
+              <div
+                class="mb-1.5 flex items-center justify-between text-xs text-[#A05A00]"
+              >
+                <span class="font-medium"
+                  >内部备注 · 只有团队能看到，不会发给客户</span
+                >
+                <button
+                  v-if="!readOnly"
+                  type="button"
+                  class="cursor-pointer border-0 bg-transparent text-xs text-[#007AFF]"
+                  @click="composeMode = 'reply'"
+                >
+                  切回回复
+                </button>
+              </div>
               <Textarea
                 v-model:value="noteText"
-                :auto-size="{ minRows: 2, maxRows: 6 }"
+                :auto-size="{ minRows: 2, maxRows: 5 }"
                 :maxlength="1990"
-                class="!border-[#FFE7A3] !bg-[#FFF8E0]"
-                placeholder="写给同事看的备注，例如：报价前先确认起订量。Enter 保存，Shift+Enter 换行"
+                class="!rounded-lg !bg-[#FFF9E6] !px-2.5 !py-2"
+                placeholder="写给同事看的备注，Enter 保存，Shift+Enter 换行"
                 @keydown="onNoteKeydown"
               />
               <div class="mt-2 flex justify-end">
                 <Button
                   type="primary"
+                  size="small"
+                  shape="round"
                   class="!border-[#FF9F0A] !bg-[#FF9F0A]"
                   :loading="noteSaving"
                   :disabled="!noteText.trim()"
@@ -1940,7 +1930,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             <template v-else-if="current.windowOpen">
               <div
                 v-if="slashOpen"
-                class="mb-2 overflow-hidden rounded-lg border border-solid border-[#E5E5EA] bg-white shadow-sm"
+                class="mb-2 overflow-hidden rounded-xl border border-solid border-black/[0.08] bg-white shadow-md"
                 role="listbox"
                 aria-label="快捷回复"
               >
@@ -1971,18 +1961,18 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               </div>
               <Textarea
                 v-model:value="text"
-                :auto-size="{ minRows: 2, maxRows: 6 }"
+                :auto-size="{ minRows: 1, maxRows: 5 }"
                 :maxlength="4096"
-                placeholder="输入消息，Enter 发送，Shift+Enter 换行；输入 / 搜索快捷回复"
+                placeholder="输入消息，/ 调出快捷回复"
                 @keydown="onKeydown"
                 @change="onInputChange"
               />
               <div
                 v-if="tPrefs.input && (inputTranslation || inputTranslating)"
-                class="mt-2 rounded bg-gray-50 px-3 py-2 text-sm"
+                class="mt-2 rounded-lg bg-[#F5F5F7] px-3 py-2 text-sm"
               >
                 <div
-                  class="mb-1 flex items-center justify-between text-xs text-gray-500"
+                  class="mb-1 flex items-center justify-between text-xs text-[#86868B]"
                 >
                   <span>{{
                     inputTranslating ? '正在翻译…' : '译文（客户的语言）'
@@ -1991,15 +1981,23 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                     >用译文替换</a
                   >
                 </div>
-                <div class="whitespace-pre-wrap text-gray-700">
+                <div class="whitespace-pre-wrap text-[#1D1D1F]">
                   {{ inputTranslation }}
                 </div>
               </div>
-              <div class="im-send-tools mt-2 flex justify-between">
-                <Space wrap>
-                  <Button :loading="fileSending" @click="pickAndSend"
-                    >发送文件</Button
-                  >
+              <div class="im-send-tools mt-2 flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <Tooltip title="发送文件">
+                    <button
+                      type="button"
+                      class="im-tool-btn"
+                      :disabled="fileSending"
+                      aria-label="发送文件"
+                      @click="pickAndSend"
+                    >
+                      <IconifyIcon icon="lucide:paperclip" class="size-4" />
+                    </button>
+                  </Tooltip>
                   <Popover
                     v-model:open="quickOpen"
                     trigger="click"
@@ -2042,24 +2040,60 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                         </div>
                       </div>
                     </template>
-                    <Button>快捷回复</Button>
+                    <Tooltip title="快捷回复">
+                      <button
+                        type="button"
+                        class="im-tool-btn"
+                        aria-label="快捷回复"
+                      >
+                        <IconifyIcon icon="lucide:zap" class="size-4" />
+                      </button>
+                    </Tooltip>
                   </Popover>
-                  <Button
+                  <Tooltip
                     v-if="isWa(current) && !isScanAccount(current.accountId)"
-                    @click="openTemplate()"
-                    >发送模板</Button
+                    title="发送模板"
                   >
-                  <Button :loading="aiLoading" @click="aiCompose"
-                    >AI 起草</Button
-                  >
-                </Space>
-                <Button
-                  type="primary"
-                  :loading="sending"
-                  :disabled="!text.trim()"
+                    <button
+                      type="button"
+                      class="im-tool-btn"
+                      aria-label="发送模板"
+                      @click="openTemplate()"
+                    >
+                      <IconifyIcon icon="lucide:file-text" class="size-4" />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="AI 起草">
+                    <button
+                      type="button"
+                      class="im-tool-btn im-tool-btn--ai"
+                      :disabled="aiLoading"
+                      aria-label="AI 起草"
+                      @click="aiCompose"
+                    >
+                      <IconifyIcon icon="lucide:sparkles" class="size-4" />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="写内部备注（客户看不到）">
+                    <button
+                      type="button"
+                      class="im-tool-btn"
+                      aria-label="内部备注"
+                      @click="composeMode = 'note'"
+                    >
+                      <IconifyIcon icon="lucide:lock" class="size-3.5" />
+                    </button>
+                  </Tooltip>
+                </div>
+                <button
+                  type="button"
+                  class="im-send-circle"
+                  :disabled="!text.trim() || sending"
+                  aria-label="发送消息"
                   @click="sendText"
-                  >发送</Button
                 >
+                  <IconifyIcon icon="lucide:arrow-up" class="size-4" />
+                </button>
               </div>
             </template>
             <Alert
