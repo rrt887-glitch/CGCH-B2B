@@ -961,30 +961,14 @@ export interface VbenFormAdapterOptions<
     emptyStateValue?: null | undefined;
     modelPropNameMap?: Partial<Record<T, string>>;
   };
-  defineRules?: {
-    mobile?: (
-      value: any,
-      params: any,
-      ctx: Record<string, any>,
-    ) => boolean | string;
-    mobileRequired?: (
-      value: any,
-      params: any,
-      ctx: Record<string, any>,
-    ) => boolean | string;
-    required?: (
-      value: any,
-      params: any,
-      ctx: Record<string, any>,
-    ) => boolean | string;
-    selectRequired?: (
-      value: any,
-      params: any,
-      ctx: Record<string, any>,
-    ) => boolean | string;
-  };
-  /** @deprecated Use `rules` instead. */
-  // defineRules?: Partial<Record<string, FormRuleValidator>>;
+  /**
+   * @deprecated Use `rules` instead.
+   *
+   * 与 `rules` 一样允许任意规则名：运行时的 registerFormRules 只按 key 注册，
+   * 业务方可以定义自己的规则名（例如 legacy），旧类型写死 mobile/mobileRequired/
+   * required/selectRequired 四个键，会让这类自定义规则在类型层报错。
+   */
+  defineRules?: Partial<Record<string, FormRuleValidator>>;
   rules?: Partial<Record<string, FormRuleValidator>>;
 }
 
