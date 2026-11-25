@@ -23,7 +23,7 @@ const emit = defineEmits<{
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {
-    labelWidth: 70,
+    labelWidth: 96,
   },
   schema: [
     {
@@ -102,7 +102,7 @@ watch(
 </script>
 
 <template>
-  <div class="mt-4 md:w-full lg:w-1/2 2xl:w-2/5">
+  <div class="mt-4 w-full max-w-lg">
     <Form />
   </div>
 </template>

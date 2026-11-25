@@ -1,0 +1,152 @@
+/*
+ * 草根出海 · 苹果风格设计规范（Design Tokens）
+ * 所有页面只引用这里的变量，不再写死颜色、字号、圆角、阴影和动效曲线。
+ * 旧变量 --cg-* 保留为别名，老页面无需改动即可跟随新规范。
+ */
+:root {
+  /* ===== 颜色：iOS / macOS 系统色 ===== */
+  --ap-accent: #007aff;
+  --ap-accent-hover: #0a84ff;
+  --ap-accent-press: #0062cc;
+  --ap-accent-soft: rgb(0 122 255 / 10%);
+  --ap-accent-softer: rgb(0 122 255 / 6%);
+  --ap-accent-ring: rgb(0 122 255 / 24%);
+
+  --ap-label: #1d1d1f;
+  --ap-label-2: #6e6e73;
+  --ap-label-3: #86868b;
+  --ap-label-4: #aeaeb2;
+
+  --ap-fill: rgb(120 120 128 / 20%);
+  --ap-fill-2: rgb(120 120 128 / 16%);
+  --ap-fill-3: rgb(120 120 128 / 12%);
+  --ap-fill-4: rgb(120 120 128 / 8%);
+
+  --ap-bg: #f5f5f7;
+  --ap-bg-grouped: #f2f2f7;
+  --ap-surface: #fff;
+  --ap-surface-2: #fbfbfd;
+  --ap-glass: rgb(255 255 255 / 72%);
+  --ap-glass-strong: rgb(255 255 255 / 86%);
+  --ap-separator: rgb(60 60 67 / 12%);
+  --ap-separator-strong: rgb(60 60 67 / 20%);
+
+  --ap-green: #34c759;
+  --ap-green-text: #248a3d;
+  --ap-orange: #ff9500;
+  --ap-orange-text: #c93400;
+  --ap-red: #ff3b30;
+  --ap-red-text: #d70015;
+  --ap-yellow: #ffcc00;
+  --ap-purple: #af52de;
+  --ap-pink: #ff2d55;
+  --ap-teal: #30b0c7;
+  --ap-indigo: #5856d6;
+  --ap-intelligence: linear-gradient(
+    120deg,
+    #ff9500,
+    #ff2d92 35%,
+    #af52de 68%,
+    #007aff
+  );
+
+  /* ===== 字体 ===== */
+  --ap-font:
+    -apple-system, blinkmacsystemfont, 'SF Pro Text', 'SF Pro Display',
+    'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', 'Microsoft YaHei',
+    'Noto Sans SC', system-ui, sans-serif;
+  --ap-font-mono: 'SF Mono', ui-monospace, menlo, consolas, monospace;
+
+  --ap-text-large: 34px; /* Large Title */
+  --ap-text-title1: 28px;
+  --ap-text-title2: 22px;
+  --ap-text-title3: 20px;
+  --ap-text-headline: 17px;
+  --ap-text-body: 15px;
+  --ap-text-callout: 14px;
+  --ap-text-subhead: 13px;
+  --ap-text-footnote: 12px;
+  --ap-text-caption: 11px;
+
+  /* ===== 间距（4pt 栅格） ===== */
+  --ap-space-1: 4px;
+  --ap-space-2: 8px;
+  --ap-space-3: 12px;
+  --ap-space-4: 16px;
+  --ap-space-5: 20px;
+  --ap-space-6: 24px;
+  --ap-space-8: 32px;
+  --ap-space-10: 40px;
+
+  /* ===== 圆角 ===== */
+  --ap-radius-xs: 6px;
+  --ap-radius-sm: 8px;
+  --ap-radius: 10px;
+  --ap-radius-md: 14px;
+  --ap-radius-lg: 18px;
+  --ap-radius-xl: 22px;
+  --ap-radius-pill: 999px;
+
+  /* ===== 阴影：只用两级 + 浮层 ===== */
+  --ap-shadow-rest: 0 0 0 0.5px rgb(0 0 0 / 4%), 0 1px 3px rgb(0 0 0 / 4%),
+    0 4px 14px rgb(0 0 0 / 3%);
+  --ap-shadow-lift: 0 0 0 0.5px rgb(0 0 0 / 4%), 0 4px 10px rgb(0 0 0 / 5%),
+    0 18px 40px rgb(0 0 0 / 9%);
+  --ap-shadow-pop: 0 0 0 0.5px rgb(0 0 0 / 6%), 0 10px 24px rgb(0 0 0 / 10%),
+    0 28px 70px rgb(0 0 0 / 16%);
+  --ap-blur: blur(24px) saturate(180%);
+
+  /* ===== 动效 ===== */
+  --ap-ease: cubic-bezier(0.32, 0.72, 0, 1); /* iOS 面板 */
+  --ap-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ap-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* 轻微回弹的弹簧（选中块、开关、徽标） */
+  --ap-spring: linear(
+    0,
+    0.009,
+    0.035 2.1%,
+    0.141 4.4%,
+    0.723 12.9%,
+    0.938 16.7%,
+    1.017 19.4%,
+    1.067,
+    1.089 24.6%,
+    1.096 26.7%,
+    1.08 30.5%,
+    1.026 37.4%,
+    1.003 42.5%,
+    0.993 48.9%,
+    1.001 65.1%,
+    1
+  );
+  --ap-dur-fast: 160ms;
+  --ap-dur: 280ms;
+  --ap-dur-slow: 450ms;
+
+  /* ===== 布局 ===== */
+  --ap-rail-width: 232px;
+  --ap-rail-collapsed: 68px;
+  --ap-page-pad: 24px;
+
+  /* ===== 旧变量别名（老页面继续可用） ===== */
+  --cg-primary: var(--ap-accent);
+  --cg-primary-strong: var(--ap-accent-press);
+  --cg-primary-soft: var(--ap-accent-soft);
+  --cg-text: var(--ap-label);
+  --cg-text-2: var(--ap-label-2);
+  --cg-text-3: var(--ap-label-3);
+  --cg-canvas: var(--ap-bg);
+  --cg-surface: var(--ap-surface);
+  --cg-border: #e5e5ea;
+  --cg-hairline: var(--ap-separator);
+  --cg-fill: var(--ap-fill-3);
+  --cg-fill-2: var(--ap-fill-4);
+  --cg-success: var(--ap-green-text);
+  --cg-warning: var(--ap-orange-text);
+  --cg-danger: var(--ap-red-text);
+  --cg-shadow: var(--ap-shadow-rest);
+  --cg-shadow-lift: var(--ap-shadow-lift);
+  --cg-ease: var(--ap-ease);
+  --cg-glass: var(--ap-glass);
+  --cg-font: var(--ap-font);
+}

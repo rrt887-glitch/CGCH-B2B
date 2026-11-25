@@ -21,6 +21,7 @@ import {
 import dayjs from 'dayjs';
 
 import { getDashboardV3 } from '#/api/channel/dashboard';
+import { ApSkeleton } from '#/components/apple';
 import { stageOptions } from '#/views/cgch/v3/crm/components/shared';
 
 defineOptions({ name: 'CgchV3Dashboard' });
@@ -50,10 +51,22 @@ watch(tab, (v) =>
   }),
 );
 const range = ref<[Dayjs, Dayjs]>([dayjs(), dayjs()]);
+const activePreset = ref<number | string>(1);
+const PRESETS = [
+  { label: '今天', value: 1 },
+  { label: '近 7 天', value: 7 },
+  { label: '近 30 天', value: 30 },
+];
 const loading = ref(false);
 const detailsOpen = ref(false);
-function preset(days: number) {
-  range.value = [dayjs().subtract(days - 1, 'day'), dayjs()];
+function preset(days: number | string) {
+  const n = Number(days);
+  activePreset.value = n;
+  range.value = [dayjs().subtract(n - 1, 'day'), dayjs()];
+  load();
+}
+function onRangeChange() {
+  activePreset.value = '';
   load();
 }
 const pendingCount = computed(
@@ -194,7 +207,7 @@ function openItem(i: ChannelDashboardV3Api.SupportItem) {
 }
 
 /** 详情区在今日概览下方，展开后要把它滚到视口里，否则用户看不到内容已经展开 */
-const detailsEl = ref<HTMLDetailsElement>();
+const detailsEl = ref<HTMLElement>();
 async function openDetails() {
   detailsOpen.value = true;
   await nextTick();
@@ -209,53 +222,61 @@ onMounted(load);
     <div class="mb-2 px-1">
       <Segmented v-model:value="tab" :options="TABS" />
     </div>
-    <BusinessAnalysis v-if="tab === 'business'" />
-    <CustomerOverview v-else-if="tab === 'customers'" />
-    <template v-else>
-      <div class="v3-dash__bar">
-        <div class="today-heading">
-          <small>{{ dayjs().format('MM 月 DD 日') }}</small>
-          <h1>
-            你好，{{
-              pendingCount
-                ? `有 ${pendingCount} 件事等你处理`
-                : '开始今天的工作'
-            }}
-          </h1>
+    <Transition name="ap-swap">
+      <BusinessAnalysis v-if="tab === 'business'" key="business" />
+      <CustomerOverview v-else-if="tab === 'customers'" key="customers" />
+      <div v-else key="data">
+        <div class="v3-dash__bar">
+          <div class="today-heading">
+            <small>{{ dayjs().format('MM 月 DD 日') }}</small>
+            <h1>
+              你好，{{
+                pendingCount
+                  ? `有 ${pendingCount} 件事等你处理`
+                  : '开始今天的工作'
+              }}
+            </h1>
+          </div>
+          <div class="v3-dash__controls">
+            <Segmented
+              :value="activePreset"
+              :options="PRESETS"
+              @change="preset"
+            />
+            <RangePicker
+              v-model:value="range"
+              :allow-clear="false"
+              size="small"
+              format="MM月DD日"
+              :disabled-date="(d: Dayjs) => d.isAfter(dayjs(), 'day')"
+              class="w-52"
+              @change="onRangeChange"
+            />
+            <span class="text-xs text-gray-500">
+              更新于 {{ updated || '—' }}
+              <a class="ml-1" @click="load">刷新</a>
+            </span>
+          </div>
         </div>
-        <div class="range-presets">
-          <button @click="preset(1)">今天</button
-          ><button @click="preset(7)">近 7 天</button
-          ><button @click="preset(30)">近 30 天</button>
-        </div>
-        <RangePicker
-          v-model:value="range"
-          :allow-clear="false"
-          size="small"
-          format="MM月DD日"
-          :disabled-date="(d: Dayjs) => d.isAfter(dayjs(), 'day')"
-          class="ml-3 w-56"
-          @change="load"
-        />
-        <span class="ml-auto text-xs text-gray-500">
-          数据更新于：{{ updated }}
-          <a class="ml-1" @click="load">刷新</a>
-        </span>
-      </div>
 
-      <Spin :spinning="loading"
-        ><AppleToday
-          :data="data"
-          @open="openItem"
-          @details="openDetails"
-      /></Spin>
-      <details
-        ref="detailsEl"
-        :open="detailsOpen"
-        @toggle="detailsOpen = ($event.target as HTMLDetailsElement).open"
-      >
-        <summary class="details-toggle">详细分析与全部待办</summary>
-        <Spin :spinning="loading">
+        <ApSkeleton v-if="loading && !data" variant="cards" :rows="4" />
+        <Spin v-else :spinning="loading">
+          <AppleToday :data="data" @open="openItem" @details="openDetails" />
+        </Spin>
+
+        <div ref="detailsEl" class="mt-4">
+          <button
+            type="button"
+            class="details-toggle ap-press"
+            :aria-expanded="detailsOpen"
+            @click="detailsOpen = !detailsOpen"
+          >
+            <span>{{ detailsOpen ? '收起详细分析与全部待办' : '展开详细分析与全部待办' }}</span>
+            <span class="details-toggle__arrow" :class="{ 'is-open': detailsOpen }">⌄</span>
+          </button>
+          <Transition name="ap-collapse">
+            <div v-if="detailsOpen" class="pt-3">
+              <Spin :spinning="loading">
           <div class="v3-dash__cards">
             <!-- 流量占比 -->
             <section class="v3-card">
@@ -581,33 +602,36 @@ onMounted(load);
               />
             </div>
           </section>
-        </Spin>
-      </details>
-
-      <Modal
-        v-model:open="trendOpen"
-        title="有效流量趋势 · 近 7 天"
-        :footer="null"
-        :width="640"
-      >
-        <div class="flex h-48 items-end gap-3 px-2 pt-4">
-          <div
-            v-for="d in data?.trend ?? []"
-            :key="d.date"
-            class="flex flex-1 flex-col items-center gap-1"
-          >
-            <span class="text-xs text-gray-500">{{
-              d.total ? pct(d.rate) : '—'
-            }}</span>
-            <div
-              class="w-full rounded-t bg-blue-500/80"
-              :style="{ height: `${(d.rate ?? 0) * 120 + 2}px` }"
-            ></div>
-            <span class="text-xs text-gray-500">{{ d.date.slice(5) }}</span>
-          </div>
+              </Spin>
+            </div>
+          </Transition>
         </div>
-      </Modal>
-    </template>
+
+        <Modal
+          v-model:open="trendOpen"
+          title="有效流量趋势 · 近 7 天"
+          :footer="null"
+          :width="640"
+        >
+          <div class="flex h-48 items-end gap-3 px-2 pt-4">
+            <div
+              v-for="d in data?.trend ?? []"
+              :key="d.date"
+              class="flex flex-1 flex-col items-center gap-1"
+            >
+              <span class="text-xs text-gray-500">{{
+                d.total ? pct(d.rate) : '—'
+              }}</span>
+              <div
+                class="w-full rounded-t bg-[#007aff]/85"
+                :style="{ height: `${(d.rate ?? 0) * 120 + 2}px` }"
+              ></div>
+              <span class="text-xs text-gray-500">{{ d.date.slice(5) }}</span>
+            </div>
+          </div>
+        </Modal>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -800,36 +824,51 @@ onMounted(load);
   margin: 5px 0;
 }
 .v3-dash__bar {
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 14px 0 20px;
-}
-.range-presets {
   display: flex;
-  border-radius: 10px;
-  background: #e5e5eb;
-  padding: 3px;
-  margin-left: auto;
-}
-.range-presets button {
-  border: 0;
-  background: transparent;
-  border-radius: 8px;
-  padding: 5px 10px;
-  cursor: pointer;
-}
-.range-presets button:hover {
-  background: white;
-}
-.details-toggle {
-  padding: 20px 4px;
-  color: #007aff;
-  cursor: pointer;
-  font-size: 13px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 12px 2px 20px;
 }
 
-/* 从「全部」展开详情时 scrollIntoView 到顶部，留一点间距避免贴边 */
-.v3-dash details {
-  scroll-margin-top: 12px;
+.v3-dash__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.details-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ap-accent);
+  cursor: pointer;
+  background: var(--ap-surface);
+  border: 0;
+  border-radius: var(--ap-radius-pill);
+  box-shadow: var(--ap-shadow-rest);
+  transition:
+    background-color var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+
+.details-toggle:hover {
+  background: var(--ap-accent-softer);
+}
+
+.details-toggle__arrow {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1;
+  transition: transform var(--ap-dur) var(--ap-ease);
+}
+
+.details-toggle__arrow.is-open {
+  transform: rotate(180deg);
 }
 </style>

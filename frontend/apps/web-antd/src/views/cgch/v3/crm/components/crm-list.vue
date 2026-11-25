@@ -463,7 +463,7 @@ defineExpose({ reload, setExtra, currentParams: params });
             :loading="loading"
             :pagination="false"
             :row-selection="rowSelection"
-            :scroll="{ x: scrollX, y: 'calc(100vh - 290px)' }"
+            :scroll="rows.length ? { x: scrollX, y: 'calc(100vh - 290px)' } : { x: scrollX }"
             row-key="id"
             size="middle"
           >

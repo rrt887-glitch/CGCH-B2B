@@ -19,7 +19,6 @@ import {
   InputNumber,
   InputPassword,
   message,
-  RadioButton,
   RadioGroup,
   Row,
   Select,
@@ -31,6 +30,7 @@ import {
 } from 'ant-design-vue';
 
 import { DRAFT_REASON, getAiConfig, getDraftPage, saveAiConfig, testAiConfig } from '#/api/channel/ai';
+import { fmtDateTime } from '#/utils/datetime';
 
 defineOptions({ name: 'CgchAgentProfile' });
 
@@ -149,11 +149,18 @@ onMounted(() => {
               </Col>
             </Row>
             <FormItem label="个性">
-              <RadioGroup v-model:value="form.personality" button-style="solid">
+              <div class="flex flex-wrap gap-2">
                 <Tooltip v-for="p in PERSONALITIES" :key="p.value" :title="p.desc">
-                  <RadioButton :value="p.value">{{ p.label }}</RadioButton>
+                  <button
+                    type="button"
+                    class="ap-chip"
+                    :class="{ on: form.personality === p.value }"
+                    @click="form.personality = p.value"
+                  >
+                    {{ p.label }}
+                  </button>
                 </Tooltip>
-              </RadioGroup>
+              </div>
             </FormItem>
             <FormItem label="补充要求" help="例如：报价统一用美元；不主动提及竞品">
               <Textarea v-model:value="form.extraInstructions" :rows="3" :maxlength="1000" />
@@ -186,29 +193,39 @@ onMounted(() => {
             <FormItem label="AI 提取公司、国家和需求" extra="用大模型从询盘内容里识别公司名、国家、联系人、产品和数量，每次会调用一次大模型；关闭时只按邮箱域名和电话区号推断。">
               <Switch v-model:checked="form.leadAiExtract" :disabled="!form.leadAutoCreate" />
             </FormItem>
-
-            <h4 class="mb-3 mt-6 font-medium">大模型</h4>
-            <FormItem label="快速填写">
-              <Select placeholder="选择服务商自动填写地址与模型" :options="PROVIDERS.map((p) => ({ value: p.label, label: p.label }))" @change="(v: any) => useProvider(String(v))" />
-            </FormItem>
-            <FormItem label="接口地址（OpenAI 兼容）"><Input v-model:value="form.llmBaseUrl" placeholder="https://api.deepseek.com/v1" /></FormItem>
-            <Row :gutter="16">
-              <Col :span="12"><FormItem label="模型名称"><Input v-model:value="form.llmModel" placeholder="deepseek-chat" /></FormItem></Col>
-              <Col :span="12">
-                <FormItem :label="form.hasApiKey ? 'API Key（已填写，不改请留空）' : 'API Key'">
-                  <InputPassword v-model:value="form.llmApiKey" autocomplete="new-password" />
-                </FormItem>
-              </Col>
-            </Row>
-            <FormItem
-              label="向量模型（知识库语义检索，可留空）"
-              extra="填写后，客户换一种说法提问也能找到对应资料（例如问「最少买多少」能命中起订量）。与对话模型共用上面的接口地址和 Key；所选服务商不提供向量模型时留空，按关键词检索。修改后到知识库点「建立语义索引」。"
-            >
-              <Input v-model:value="form.embeddingModel" placeholder="text-embedding-v3" />
-            </FormItem>
-            <Button :loading="testing" @click="test">测试连接</Button>
           </Col>
         </Row>
+
+        <div class="mt-4 border-t border-black/10 pt-5">
+          <div class="mb-3 flex items-center justify-between">
+            <h4 class="m-0 font-medium">大模型连接</h4>
+            <Button :loading="testing" @click="test">测试连接</Button>
+          </div>
+          <Row :gutter="24">
+            <Col :xs="24" :lg="12">
+              <FormItem label="快速填写">
+                <Select placeholder="选择服务商自动填写地址与模型" :options="PROVIDERS.map((p) => ({ value: p.label, label: p.label }))" @change="(v: any) => useProvider(String(v))" />
+              </FormItem>
+              <FormItem label="接口地址（OpenAI 兼容）"><Input v-model:value="form.llmBaseUrl" placeholder="https://api.deepseek.com/v1" /></FormItem>
+            </Col>
+            <Col :xs="24" :lg="12">
+              <Row :gutter="16">
+                <Col :span="12"><FormItem label="模型名称"><Input v-model:value="form.llmModel" placeholder="deepseek-chat" /></FormItem></Col>
+                <Col :span="12">
+                  <FormItem :label="form.hasApiKey ? 'API Key（已填写，不改请留空）' : 'API Key'">
+                    <InputPassword v-model:value="form.llmApiKey" autocomplete="new-password" />
+                  </FormItem>
+                </Col>
+              </Row>
+              <FormItem
+                label="向量模型（知识库语义检索，可留空）"
+                extra="填写后，客户换一种说法提问也能找到对应资料。修改后到知识库点「建立语义索引」。"
+              >
+                <Input v-model:value="form.embeddingModel" placeholder="text-embedding-v3" />
+              </FormItem>
+            </Col>
+          </Row>
+        </div>
       </Form>
     </Card>
 
@@ -223,7 +240,8 @@ onMounted(() => {
         :pagination="{ current: logPage, pageSize: 10, total: logTotal, onChange: (p: number) => { logPage = p; loadLogs(); } }"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'channel'">{{ record.channel === 'mail' ? '邮件' : 'WhatsApp' }}</template>
+          <template v-if="column.key === 'time'">{{ fmtDateTime(record.createTime) }}</template>
+          <template v-else-if="column.key === 'channel'">{{ record.channel === 'mail' ? '邮件' : 'WhatsApp' }}</template>
           <template v-else-if="column.key === 'status'">
             <Tag :color="STATUS[record.status]?.color">{{ STATUS[record.status]?.label }}</Tag>
           </template>

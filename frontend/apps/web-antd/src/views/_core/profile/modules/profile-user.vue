@@ -55,8 +55,8 @@ async function handelUpload({
         />
       </Tooltip>
     </div>
-    <div class="mt-8">
-      <Descriptions :column="2">
+    <div class="mt-6">
+      <Descriptions :column="1" size="small">
         <DescriptionsItem>
           <template #label>
             <div class="flex items-center">

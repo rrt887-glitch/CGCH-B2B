@@ -23,11 +23,11 @@ defineOptions({ name: 'CgchBoardOverview' });
 
 const { isDark } = usePreferences();
 
-// 分类色（固定顺序）：1 蓝、2 橙；深色模式用为深色背景校准过的同色相阶
+// 分类色（固定顺序）：苹果蓝、苹果橙
 const palette = computed(() =>
   isDark.value
-    ? { s1: '#3987e5', s2: '#d95926', grid: '#2e2e2c', axis: '#8a8984', text: '#c3c2b7', surface: '#1a1a19' }
-    : { s1: '#2a78d6', s2: '#eb6834', grid: '#ecebe8', axis: '#9a9993', text: '#52514e', surface: '#ffffff' },
+    ? { s1: '#0a84ff', s2: '#ff9f0a', grid: '#2e2e2c', axis: '#8a8984', text: '#c3c2b7', surface: '#1a1a19' }
+    : { s1: '#007aff', s2: '#ff9500', grid: '#ebebf0', axis: '#86868b', text: '#6e6e73', surface: '#ffffff' },
 );
 
 const days = ref(30);
@@ -260,8 +260,8 @@ onMounted(async () => {
     </div>
 
     <Spin :spinning="loading">
-      <div class="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4 2xl:grid-cols-7">
-        <Card v-for="t in tiles" :key="t.label" size="small" :bordered="false">
+      <div class="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <Card v-for="(t, i) in tiles" :key="t.label" size="small" :bordered="false" class="ap-lift ap-rise h-full" :style="{ animationDelay: `${i * 40}ms` }">
           <Tooltip :title="t.tip"><div class="text-sm text-gray-500">{{ t.label }}</div></Tooltip>
           <div class="my-1 text-2xl font-semibold tabular-nums">{{ t.value }}</div>
           <div class="text-xs text-gray-500">{{ t.sub }}</div>

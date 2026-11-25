@@ -1,12 +1,13 @@
 <script lang="ts" setup>
 /**
- * 智能体：左侧 1～5 步（知识库、角色人设、配技能、教话术、转人工），中间为配置，
- * 右侧随时测试数字员工的回复效果（配技能页不显示）。与原网站布局一致。
+ * 智能体：左侧 1～5 步（毛玻璃步骤栏 + 选中块弹簧滑动），中间配置带平滑过渡，
+ * 右侧测试对话全程可用（1～5 步均可随时测试数字员工回复效果）。
  */
-import { computed, defineAsyncComponent, markRaw } from 'vue';
+import { computed, defineAsyncComponent, markRaw, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { Spin } from 'ant-design-vue';
+import { ApSkeleton } from '#/components/apple';
+import { useSlidingIndicator } from '#/utils/motion';
 
 import TestChat from './test-chat.vue';
 
@@ -15,24 +16,61 @@ defineOptions({ name: 'CgchV3Agent' });
 const route = useRoute();
 const router = useRouter();
 
-const lazy = (loader: () => Promise<any>) => markRaw(defineAsyncComponent({ loader, loadingComponent: Spin, delay: 120 }));
+const lazy = (loader: () => Promise<any>) =>
+  markRaw(
+    defineAsyncComponent({
+      loader,
+      loadingComponent: ApSkeleton,
+      delay: 140,
+    }),
+  );
 
 const STEPS = [
-  { key: 'knowledge', label: '知识库', view: lazy(() => import('./knowledge.vue')), chat: true },
-  { key: 'persona', label: '角色人设', view: lazy(() => import('./persona.vue')), chat: true },
-  { key: 'skills', label: '配技能', view: lazy(() => import('./skills.vue')), chat: false },
-  { key: 'scripts', label: '教话术', view: lazy(() => import('./scripts.vue')), chat: true },
-  { key: 'handoff', label: '转人工', view: lazy(() => import('./handoff.vue')), chat: true },
+  { key: 'knowledge', label: '知识库', view: lazy(() => import('./knowledge.vue')) },
+  { key: 'persona', label: '角色人设', view: lazy(() => import('./persona.vue')) },
+  { key: 'skills', label: '配技能', view: lazy(() => import('./skills.vue')) },
+  { key: 'scripts', label: '教话术', view: lazy(() => import('./scripts.vue')) },
+  { key: 'handoff', label: '转人工', view: lazy(() => import('./handoff.vue')) },
 ];
 
 const SUGGESTIONS: Record<string, string[]> = {
-  knowledge: ['Do you have certificates for the products?', 'Could you send me a product catalog first?', 'Which countries do you mainly export to?'],
-  persona: ['Where do your product materials come from?', 'Is there a discount if I order 100 units?', 'Do your products support customization?'],
-  scripts: ['Hi, I am interested in your products.', 'What is your MOQ?', 'Can you share the price list?'],
-  handoff: ['I want to talk to a real person.', 'Please send me a sample.', 'I am very disappointed with the last order.'],
+  knowledge: [
+    'Do you have certificates for the products?',
+    'Could you send me a product catalog first?',
+    'Which countries do you mainly export to?',
+  ],
+  persona: [
+    'Where do your product materials come from?',
+    'Is there a discount if I order 100 units?',
+    'Do your products support customization?',
+  ],
+  skills: [
+    'Can you send me the latest catalog PDF?',
+    'What is the estimated FOB price for 500 pcs?',
+    'We need OEM packaging with our logo.',
+  ],
+  scripts: [
+    'Hi, I am interested in your products.',
+    'What is your MOQ?',
+    'Can you share the price list?',
+  ],
+  handoff: [
+    'I want to talk to a real person.',
+    'Please send me a sample.',
+    'I am very disappointed with the last order.',
+  ],
 };
 
-const step = computed(() => STEPS.find((s) => s.key === route.query.tab) ?? STEPS[0]!);
+const step = computed(
+  () => STEPS.find((s) => s.key === route.query.tab) ?? STEPS[0]!,
+);
+const activeStepKey = computed(() => step.value.key);
+const stepsRef = ref<HTMLElement>();
+const { style: indicatorStyle } = useSlidingIndicator(
+  stepsRef,
+  activeStepKey,
+  '.on',
+);
 
 function goStep(key: string) {
   if (key !== step.value.key) router.replace({ query: { tab: key } });
@@ -41,7 +79,13 @@ function goStep(key: string) {
 
 <template>
   <div class="agent">
-    <aside class="agent__steps">
+    <aside ref="stepsRef" class="agent__steps">
+      <div
+        class="agent__indicator"
+        :style="indicatorStyle"
+        aria-hidden="true"
+      ></div>
+      <div class="agent__group">配置步骤</div>
       <button
         v-for="(s, i) in STEPS"
         :key="s.key"
@@ -50,13 +94,16 @@ function goStep(key: string) {
         :class="{ on: s.key === step.key }"
         @click="goStep(s.key)"
       >
-        <span class="agent__num">{{ i + 1 }}</span>{{ s.label }}
+        <span class="agent__num">{{ i + 1 }}</span>
+        <span>{{ s.label }}</span>
       </button>
     </aside>
     <section class="agent__main">
-      <component :is="step.view" :key="step.key" />
+      <Transition name="ap-swap">
+        <component :is="step.view" :key="step.key" />
+      </Transition>
     </section>
-    <aside v-if="step.chat" class="agent__test">
+    <aside class="agent__test">
       <TestChat :suggestions="SUGGESTIONS[step.key] ?? SUGGESTIONS.knowledge!" />
     </aside>
   </div>
@@ -65,77 +112,130 @@ function goStep(key: string) {
 <style scoped>
 .agent {
   display: flex;
-  gap: 6px;
-  height: calc(100vh - 32px);
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
 }
 
 .agent__steps {
+  position: relative;
   display: flex;
-  flex: 0 0 148px;
+  flex: 0 0 184px;
   flex-direction: column;
-  gap: 4px;
-  padding: 52px 8px 12px;
-  background: rgb(255 255 255 / 75%);
-  border-radius: 12px;
+  gap: 3px;
+  padding: 14px 10px;
+  background: var(--ap-glass);
+  border: 0.5px solid rgb(255 255 255 / 85%);
+  border-radius: var(--ap-radius-xl);
+  box-shadow: var(--ap-shadow-rest);
+  backdrop-filter: var(--ap-blur);
+}
+
+.agent__indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--ap-surface);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 6%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
+}
+
+.agent__group {
+  padding: 4px 10px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ap-label-3);
+  letter-spacing: 0.02em;
 }
 
 .agent__step {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 8px 12px;
-  font-size: 14px;
-  color: #1f2937;
+  padding: 9px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ap-label-2);
   text-align: left;
   cursor: pointer;
-  background: none;
+  background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
+  transition:
+    color var(--ap-dur-fast) linear,
+    background-color var(--ap-dur-fast) linear,
+    transform var(--ap-dur-fast) var(--ap-ease);
 }
 
-.agent__step:hover {
-  background: #F2F2F7;
+.agent__step:hover:not(.on) {
+  color: var(--ap-label);
+  background: rgb(0 0 0 / 4%);
+}
+
+.agent__step:active {
+  transform: scale(0.98);
 }
 
 .agent__step.on {
-  color: #0071E3;
-  background: #E8F2FC;
+  font-weight: 600;
+  color: var(--ap-label);
 }
 
 .agent__num {
   display: inline-flex;
-  flex: 0 0 18px;
+  flex: 0 0 22px;
   align-items: center;
   justify-content: center;
-  height: 18px;
+  height: 22px;
   font-size: 11px;
-  color: #86868b;
-  background: #fff;
-  border: 1px solid #e5e5ea;
+  font-weight: 600;
+  color: var(--ap-label-3);
+  background: var(--ap-fill-4);
   border-radius: 50%;
+  transition:
+    background-color var(--ap-dur-fast),
+    color var(--ap-dur-fast);
 }
 
 .agent__step.on .agent__num {
-  color: #0071E3;
-  border-color: #0071E3;
+  color: #fff;
+  background: var(--ap-accent);
 }
 
 .agent__main {
   flex: 1;
   min-width: 0;
+  padding: 20px 22px;
   overflow: auto;
-  background: #fff;
-  border-radius: 12px;
+  background: var(--ap-surface);
+  border-radius: var(--ap-radius-xl);
+  box-shadow: var(--ap-shadow-rest);
 }
 
 .agent__test {
-  flex: 0 0 340px;
+  flex: 0 0 320px;
+  padding: 16px;
   overflow: hidden;
-  background: #fff;
-  border-radius: 12px;
+  background: var(--ap-glass-strong);
+  border: 0.5px solid rgb(255 255 255 / 85%);
+  border-radius: var(--ap-radius-xl);
+  box-shadow: var(--ap-shadow-rest);
+  backdrop-filter: var(--ap-blur);
 }
 
-@media (width <= 1200px) {
+@media (width <= 1280px) {
+  .agent__test {
+    flex-basis: 270px;
+  }
+}
+
+@media (width <= 1080px) {
   .agent__test {
     display: none;
   }
@@ -151,6 +251,10 @@ function goStep(key: string) {
     flex-direction: row;
     padding: 8px;
     overflow-x: auto;
+  }
+
+  .agent__group {
+    display: none;
   }
 
   .agent__step {

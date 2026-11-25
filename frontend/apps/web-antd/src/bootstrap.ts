@@ -7,7 +7,9 @@ import { preferences } from '@vben/preferences';
 import { initStores } from '@vben/stores';
 import '@vben/styles';
 import '@vben/styles/antd';
-import './styles/cgch.css';
+import './styles/apple/tokens.css';
+import './styles/apple/components.css';
+import './styles/apple/motion.css';
 import './styles/workspace-design.css';
 // 图标打包进网站，不再从国外图标网站临时下载（见 build/offline-icons.ts）
 import 'virtual:cgch-offline-icons';
@@ -16,6 +18,7 @@ import { useTitle } from '@vueuse/core';
 
 import { $t, setupI18n } from '#/locales';
 import { bindFormCreateApp } from '#/plugins/form-create/lazy';
+import { registerMotionDirectives } from '#/utils/motion';
 import { setupHoverPrefetch } from '#/utils/prefetch';
 import { setupVxeTableA11y } from '#/utils/vxe-a11y';
 import { initComponentAdapter } from './adapter/component';
@@ -56,6 +59,9 @@ async function bootstrap(namespace: string) {
 
   // 安装权限指令
   registerAccessDirective(app);
+
+  // 注册苹果风格动效指令（v-reveal）
+  registerMotionDirectives(app);
 
   // 初始化 tippy
   const { initTippy } = await import('@vben/common-ui/es/tippy');

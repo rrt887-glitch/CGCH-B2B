@@ -1,0 +1,571 @@
+/*
+ * 草根出海 · 动效与通用版式
+ * 原则：只动 transform / opacity（GPU 合成不掉帧）；统一弹簧曲线；系统「减少动态效果」时关闭。
+ */
+
+/* ===== 关键帧 ===== */
+@keyframes ap-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ap-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ap-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ap-modal-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+
+  40% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ap-modal-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes ap-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ap-island-in {
+  from {
+    opacity: 0;
+    transform: translateY(-24px) scale(0.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ap-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ap-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@keyframes ap-glow-border {
+  to {
+    --ap-angle: 360deg;
+  }
+}
+
+@keyframes ap-draw {
+  from {
+    stroke-dashoffset: var(--ap-path-len, 1200);
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ap-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ap-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@property --ap-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* ===== 兼容旧类名 ===== */
+@keyframes cg-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cg-bubble {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.cg-rise,
+.ap-rise {
+  animation: ap-fade-up 600ms var(--ap-ease-out) both;
+}
+
+.cg-bubble,
+.ap-bubble {
+  animation: ap-bubble-in 420ms var(--ap-spring) both;
+}
+
+.cg-lift,
+.ap-lift {
+  transition:
+    transform var(--ap-dur-slow) var(--ap-ease),
+    box-shadow var(--ap-dur-slow) var(--ap-ease);
+}
+
+.cg-lift:hover,
+.ap-lift:hover {
+  box-shadow: var(--ap-shadow-lift);
+  transform: translateY(-2px);
+}
+
+.ap-press {
+  transition: transform var(--ap-dur-fast) var(--ap-ease);
+}
+
+.ap-press:active {
+  transform: scale(0.97);
+}
+
+/* ===== 页面切换（Vue Transition 名 cg-page / ap-page） ===== */
+.cg-page-enter-active,
+.ap-page-enter-active {
+  transition:
+    opacity 380ms var(--ap-ease-out),
+    transform 480ms var(--ap-ease);
+}
+
+.cg-page-enter-from,
+.ap-page-enter-from {
+  opacity: 0;
+  transform: translate3d(0, 10px, 0) scale(0.995);
+}
+
+.cg-page-leave-active,
+.ap-page-leave-active {
+  display: none;
+}
+
+/* 子页面内容交叉淡化 */
+.ap-swap-enter-active {
+  transition:
+    opacity 300ms var(--ap-ease-out),
+    transform 380ms var(--ap-ease);
+}
+
+.ap-swap-enter-from {
+  opacity: 0;
+  transform: translate3d(0, 8px, 0);
+}
+
+.ap-swap-leave-active {
+  display: none;
+}
+
+/* 列表依次浮现（TransitionGroup name="ap-list"） */
+.ap-list-enter-active {
+  transition:
+    opacity 360ms var(--ap-ease-out),
+    transform 420ms var(--ap-ease);
+  transition-delay: calc(var(--i, 0) * 30ms);
+}
+
+.ap-list-enter-from {
+  opacity: 0;
+  transform: translate3d(0, 8px, 0);
+}
+
+.ap-list-leave-active {
+  position: absolute;
+  transition:
+    opacity 200ms linear,
+    transform 200ms var(--ap-ease);
+}
+
+.ap-list-leave-to {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+.ap-list-move {
+  transition: transform 420ms var(--ap-ease);
+}
+
+/* 折叠展开（Transition name="ap-collapse"，配合 grid-template-rows） */
+.ap-collapse-enter-active,
+.ap-collapse-leave-active {
+  overflow: hidden;
+  transition:
+    opacity var(--ap-dur) var(--ap-ease),
+    grid-template-rows var(--ap-dur-slow) var(--ap-ease),
+    max-height var(--ap-dur-slow) var(--ap-ease);
+}
+
+.ap-collapse-enter-from,
+.ap-collapse-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+.ap-collapse-enter-to,
+.ap-collapse-leave-from {
+  max-height: 4000px;
+}
+
+/* 侧滑面板（Transition name="ap-slide-right"） */
+.ap-slide-right-enter-active,
+.ap-slide-right-leave-active {
+  transition:
+    transform var(--ap-dur-slow) var(--ap-ease),
+    opacity var(--ap-dur) var(--ap-ease);
+}
+
+.ap-slide-right-enter-from,
+.ap-slide-right-leave-to {
+  opacity: 0;
+  transform: translate3d(24px, 0, 0);
+}
+
+/* v-reveal 指令：进入视口时浮现 */
+[data-ap-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+}
+
+[data-ap-reveal='in'] {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 600ms var(--ap-ease-out),
+    transform 700ms var(--ap-ease);
+  transition-delay: var(--ap-delay, 0ms);
+}
+
+/* 原生 View Transitions：页面级交叉淡化 */
+::view-transition-old(root) {
+  animation: 180ms var(--ap-ease) both ap-vt-out;
+}
+
+::view-transition-new(root) {
+  animation: 380ms var(--ap-ease) both ap-vt-in;
+}
+
+@keyframes ap-vt-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ap-vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ================================================================
+ * 通用版式（页面可直接使用的类）
+ * ================================================================ */
+
+/* 骨架屏 */
+.ap-skeleton {
+  background: linear-gradient(
+      90deg,
+      rgb(120 120 128 / 8%) 25%,
+      rgb(120 120 128 / 16%) 37%,
+      rgb(120 120 128 / 8%) 63%
+    )
+    0 0 / 400% 100%;
+  border-radius: var(--ap-radius-sm);
+  animation: ap-shimmer 1.4s ease infinite;
+}
+
+/* 卡片 */
+.ap-card {
+  padding: var(--ap-space-5);
+  background: var(--ap-surface);
+  border-radius: var(--ap-radius-lg);
+  box-shadow: var(--ap-shadow-rest);
+}
+
+.ap-card--hover {
+  transition:
+    transform var(--ap-dur-slow) var(--ap-ease),
+    box-shadow var(--ap-dur-slow) var(--ap-ease);
+}
+
+.ap-card--hover:hover {
+  box-shadow: var(--ap-shadow-lift);
+  transform: translateY(-2px);
+}
+
+.ap-glass {
+  background: var(--ap-glass);
+  backdrop-filter: var(--ap-blur);
+}
+
+/* Apple Intelligence 流光边框 */
+.ap-glow {
+  position: relative;
+  isolation: isolate;
+}
+
+.ap-glow::before {
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  padding: 1.5px;
+  content: '';
+  background: conic-gradient(
+    from var(--ap-angle),
+    #ff9500,
+    #ff2d92,
+    #af52de,
+    #007aff,
+    #34c759,
+    #ff9500
+  );
+  border-radius: inherit;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  animation: ap-glow-border 4s linear infinite;
+}
+
+/* 文字层级 */
+.ap-large-title {
+  margin: 0;
+  font-size: var(--ap-text-large);
+  font-weight: 700;
+  line-height: 1.18;
+  color: var(--ap-label);
+  letter-spacing: -0.022em;
+}
+
+.ap-title2 {
+  margin: 0;
+  font-size: var(--ap-text-title2);
+  font-weight: 700;
+  letter-spacing: -0.018em;
+}
+
+.ap-headline {
+  margin: 0;
+  font-size: var(--ap-text-headline);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ap-subhead {
+  font-size: var(--ap-text-subhead);
+  color: var(--ap-label-2);
+}
+
+.ap-footnote {
+  font-size: var(--ap-text-footnote);
+  color: var(--ap-label-3);
+}
+
+.ap-caption {
+  font-size: var(--ap-text-caption);
+  font-weight: 600;
+  color: var(--ap-label-3);
+  letter-spacing: 0.02em;
+}
+
+/* iOS 分组列表（Inset Grouped） */
+.ap-group {
+  overflow: hidden;
+  background: var(--ap-surface);
+  border-radius: var(--ap-radius-md);
+  box-shadow: var(--ap-shadow-rest);
+}
+
+.ap-group__title {
+  padding: 0 16px 6px;
+  font-size: var(--ap-text-footnote);
+  font-weight: 500;
+  color: var(--ap-label-3);
+}
+
+.ap-group__row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 48px;
+  padding: 10px 16px;
+}
+
+.ap-group__row + .ap-group__row {
+  box-shadow: inset 16px 0.5px 0 0 var(--ap-surface), inset 0 0.5px 0 0 var(--ap-separator);
+}
+
+/* 状态圆点 */
+.ap-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--ap-label-4);
+  border-radius: 50%;
+}
+
+.ap-dot--green {
+  background: var(--ap-green);
+  box-shadow: 0 0 0 3px rgb(52 199 89 / 18%);
+}
+
+.ap-dot--orange {
+  background: var(--ap-orange);
+  box-shadow: 0 0 0 3px rgb(255 149 0 / 18%);
+}
+
+.ap-dot--red {
+  background: var(--ap-red);
+  box-shadow: 0 0 0 3px rgb(255 59 48 / 18%);
+}
+
+/* 胶囊筛选按钮 */
+.ap-chip {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  font-size: var(--ap-text-subhead);
+  font-weight: 500;
+  color: var(--ap-label);
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--ap-fill-4);
+  border: 0;
+  border-radius: var(--ap-radius-pill);
+  transition:
+    background-color var(--ap-dur-fast) linear,
+    color var(--ap-dur-fast) linear,
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+
+.ap-chip:hover {
+  background: var(--ap-fill-3);
+}
+
+.ap-chip:active {
+  transform: scale(0.96);
+}
+
+.ap-chip.on,
+.ap-chip[aria-pressed='true'] {
+  color: #fff;
+  background: var(--ap-label);
+}
+
+.ap-chip span,
+.ap-chip small {
+  color: var(--ap-label-3);
+}
+
+.ap-chip.on span,
+.ap-chip.on small {
+  color: rgb(255 255 255 / 70%);
+}
+
+/* ===== 减少动态效果 ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  [data-ap-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+}

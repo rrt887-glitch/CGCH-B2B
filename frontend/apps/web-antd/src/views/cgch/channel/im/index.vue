@@ -2600,97 +2600,129 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 .apple-im .im-panes {
   gap: 0;
   min-height: 0;
+  overflow: hidden;
+  background: var(--ap-surface);
+  border-radius: var(--ap-radius-xl);
+  box-shadow: var(--ap-shadow-rest);
 }
 .apple-im .im-list {
   width: 280px;
-  background: #f7f7fa;
+  background: var(--ap-surface-2);
   border: 0;
-  border-right: 0.5px solid #dedee5;
+  border-right: 0.5px solid var(--ap-separator);
   border-radius: 0;
 }
 .apple-im .im-list h2 {
-  font-size: 25px;
-  line-height: 1.4;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
 }
 .apple-im .im-contact {
-  margin: 4px 8px;
-  padding: 12px 10px;
+  position: relative;
+  margin: 3px 8px;
+  padding: 11px 12px;
   border: 0;
   border-radius: 12px;
-  transition: background 0.2s;
+  transition:
+    background-color var(--ap-dur-fast) linear,
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+.apple-im .im-contact:hover:not(.im-selected) {
+  background: rgb(0 0 0 / 3.5%);
+}
+.apple-im .im-contact:active {
+  transform: scale(0.99);
 }
 .apple-im .im-selected {
-  background: #007aff;
-  color: white;
-  box-shadow: none;
-}
-.apple-im .im-selected :deep(.text-\[\#86868B\]),
-.apple-im .im-selected :deep(.text-\[\#6E6E73\]),
-.apple-im .im-selected :deep(.text-\[\#1D1D1F\]) {
-  color: white;
+  background: var(--ap-accent-soft);
+  color: var(--ap-label);
+  box-shadow: inset 3px 0 0 var(--ap-accent);
 }
 .apple-im .im-thread {
   border: 0;
   border-radius: 0;
   min-height: 0;
+  background: var(--ap-surface);
 }
 .apple-im .im-toolbar {
   margin: 12px 14px 0;
   padding: 10px 14px;
-  border: 1px solid #ffffffb3;
-  border-radius: 22px;
-  background: #ffffffab;
-  box-shadow: 0 6px 24px #00000009;
-  backdrop-filter: blur(24px);
+  border: 0.5px solid var(--ap-separator);
+  border-radius: 18px;
+  background: var(--ap-glass-strong);
+  box-shadow: var(--ap-shadow-rest);
+  backdrop-filter: var(--ap-blur);
   flex-wrap: wrap;
   gap: 8px;
 }
 .apple-im .im-toolbar :deep(.ant-btn) {
-  border-radius: 99px;
+  border-radius: 999px;
 }
 .apple-im .im-messages {
   min-height: 100px;
-  padding: 24px;
+  padding: 20px 24px;
   flex: 1;
 }
 .apple-im .cg-bubble {
-  line-height: 1.5;
+  line-height: 1.55;
+  animation: ap-bubble-in 380ms var(--ap-spring) both;
 }
 .apple-im .im-composer {
   flex-shrink: 0;
   max-height: 52%;
   overflow: auto;
   margin: 0 16px 16px;
-  padding: 13px 15px;
-  background: #ffffffb3;
-  border: 1px solid #eeeef4;
-  border-radius: 22px;
-  box-shadow: 0 5px 25px #00000009;
-  backdrop-filter: blur(24px);
+  padding: 12px 16px;
+  background: var(--ap-glass-strong);
+  border: 0.5px solid var(--ap-separator);
+  border-radius: 20px;
+  box-shadow: var(--ap-shadow-rest);
+  backdrop-filter: var(--ap-blur);
+  transition:
+    box-shadow var(--ap-dur) var(--ap-ease),
+    border-color var(--ap-dur) var(--ap-ease);
+}
+.apple-im .im-composer:focus-within {
+  border-color: rgb(0 122 255 / 35%);
+  box-shadow:
+    0 0 0 4px var(--ap-accent-softer),
+    var(--ap-shadow-lift);
 }
 .apple-im .im-composer :deep(.ant-input) {
   border: 0;
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 .apple-im .im-composer :deep(.ant-btn) {
-  border-radius: 99px;
+  border-radius: 999px;
 }
 .apple-im .im-draft {
-  border: 1px solid transparent;
+  border: 1.5px solid transparent;
   background:
-    linear-gradient(white, white) padding-box,
-    linear-gradient(120deg, #ff9500, #ff2d92, #af52de, #007aff) border-box;
+    linear-gradient(var(--ap-surface), var(--ap-surface)) padding-box,
+    conic-gradient(
+        from var(--ap-angle),
+        #ff9500,
+        #ff2d92,
+        #af52de,
+        #007aff,
+        #34c759,
+        #ff9500
+      )
+      border-box;
   border-radius: 18px;
-  box-shadow: 0 3px 18px #af52de12;
+  box-shadow: 0 4px 20px rgb(175 82 222 / 10%);
+  animation: ap-glow-border 5s linear infinite;
 }
 .apple-im .im-inspector {
   width: 274px;
   border: 0;
-  border-left: 0.5px solid #e5e5ea;
+  border-left: 0.5px solid var(--ap-separator);
   border-radius: 0;
   padding: 20px 17px;
-  gap: 17px;
+  gap: 16px;
+  background: var(--ap-surface-2);
 }
 .apple-im .im-inspector > div:first-child {
   align-items: center;

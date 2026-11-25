@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-/** 设置：AI 用量、AI 接待设置（大模型、自动回复模式，只有超级管理员可见）、成员（超级管理员添加业务员）、云盘文件、消息模板、邮件模板、快捷回复、消息分流、通知、翻译，通过左侧常驻菜单切换（窄屏收起为「设置菜单」按钮） */
+/** 设置：macOS 系统设置风格分组二级侧栏 */
 import type { HubGroup } from '../components/types';
 
 import SideHub from '../components/side-hub.vue';
@@ -8,18 +8,80 @@ defineOptions({ name: 'CgchV3Settings' });
 
 const groups: HubGroup[] = [
   {
-    label: '设置',
+    label: 'AI 与团队',
     items: [
-      { key: 'ai', label: 'AI 接待设置', load: () => import('#/views/cgch/agent/profile/index.vue'), codes: ['channel:ai:config'] },
-      { key: 'members', label: '成员', load: () => import('./members.vue'), codes: ['system:user:create'] },
-      { key: 'cloud', label: '云盘文件', load: () => import('./cloud.vue') },
-      { key: 'templates', label: '消息模板', load: () => import('#/views/cgch/config/templates/index.vue') },
-      { key: 'emailTemplates', label: '邮件模板', load: () => import('./email-templates.vue') },
-      { key: 'quickReplies', label: '快捷回复', load: () => import('./quick-replies.vue') },
-      { key: 'materials', label: '我的物料', load: () => import('./my-materials.vue') },
-      { key: 'routing', label: '消息分流设置', load: () => import('./routing.vue') },
-      { key: 'notifications', label: '通知设置', load: () => import('./notifications.vue') },
-      { key: 'translate', label: '翻译设置', load: () => import('./translate.vue') },
+      {
+        key: 'ai',
+        label: 'AI 接待设置',
+        icon: 'lucide:sparkles',
+        load: () => import('#/views/cgch/agent/profile/index.vue'),
+        codes: ['channel:ai:config'],
+      },
+      {
+        key: 'members',
+        label: '成员',
+        icon: 'lucide:users',
+        load: () => import('./members.vue'),
+        codes: ['system:user:create'],
+      },
+      {
+        key: 'routing',
+        label: '消息分流设置',
+        icon: 'lucide:git-branch',
+        load: () => import('./routing.vue'),
+      },
+    ],
+  },
+  {
+    label: '模板与物料',
+    items: [
+      {
+        key: 'cloud',
+        label: '云盘文件',
+        icon: 'lucide:folder',
+        load: () => import('./cloud.vue'),
+      },
+      {
+        key: 'templates',
+        label: '消息模板',
+        icon: 'lucide:message-square',
+        load: () => import('#/views/cgch/config/templates/index.vue'),
+      },
+      {
+        key: 'emailTemplates',
+        label: '邮件模板',
+        icon: 'lucide:mail',
+        load: () => import('./email-templates.vue'),
+      },
+      {
+        key: 'quickReplies',
+        label: '快捷回复',
+        icon: 'lucide:zap',
+        load: () => import('./quick-replies.vue'),
+      },
+      {
+        key: 'materials',
+        label: '我的物料',
+        icon: 'lucide:book-open',
+        load: () => import('./my-materials.vue'),
+      },
+    ],
+  },
+  {
+    label: '偏好',
+    items: [
+      {
+        key: 'notifications',
+        label: '通知设置',
+        icon: 'lucide:bell',
+        load: () => import('./notifications.vue'),
+      },
+      {
+        key: 'translate',
+        label: '翻译设置',
+        icon: 'lucide:languages',
+        load: () => import('./translate.vue'),
+      },
     ],
   },
 ];

@@ -27,8 +27,8 @@ const router = useRouter();
 const { isDark } = usePreferences();
 const palette = computed(() =>
   isDark.value
-    ? { s1: '#3987e5', grid: '#2e2e2c', axis: '#8a8984', text: '#c3c2b7', track: '#2a2a28' }
-    : { s1: '#2a78d6', grid: '#ecebe8', axis: '#9a9993', text: '#52514e', track: '#f0efec' },
+    ? { s1: '#0a84ff', grid: '#2e2e2c', axis: '#8a8984', text: '#c3c2b7', track: '#2a2a28' }
+    : { s1: '#007aff', grid: '#ebebf0', axis: '#86868b', text: '#6e6e73', track: '#f2f2f7' },
 );
 
 const days = ref(30);
@@ -196,8 +196,8 @@ onMounted(async () => {
 
     <Spin :spinning="loading">
       <div class="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <Card v-for="t in tiles" :key="t.label" size="small" :bordered="false"
-              :class="t.link ? 'cursor-pointer' : ''" @click="t.link && router.push(t.link)">
+        <Card v-for="(t, i) in tiles" :key="t.label" size="small" :bordered="false"
+              class="ap-lift ap-rise h-full" :class="t.link ? 'cursor-pointer' : ''" :style="{ animationDelay: `${i * 40}ms` }" @click="t.link && router.push(t.link)">
           <div class="text-sm text-gray-500">{{ t.label }}</div>
           <div class="my-1 text-2xl font-semibold tabular-nums">{{ t.value }}</div>
           <div class="text-xs text-gray-500">

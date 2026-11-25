@@ -193,10 +193,12 @@ const logo = computed(() => preferences.logo.source);
 
 <style scoped>
 .cg-auth {
-  background: #f2f2f7;
+  background: var(--ap-bg);
 }
 .cg-auth__blob {
-  display: none;
+  display: block;
+  opacity: 0.7;
+  filter: blur(40px);
 }
 .cg-auth__col {
   display: grid;

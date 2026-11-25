@@ -1,26 +1,29 @@
 <script lang="ts" setup>
 /**
- * 模块页的常驻左侧子菜单（与原网站 CRM 一致）：宽屏时菜单固定在左侧，窄屏收起为「页面菜单」按钮。
- * 子页面通过地址参数 ?tab= 记住，刷新或分享链接时停留在同一页。
+ * 统一二级侧栏（macOS 系统设置风格）：
+ * 宽屏左侧毛玻璃分组菜单 + 选中块弹簧滑动，窄屏收起为「页面菜单」按钮；
+ * 子页切换带平滑交叉淡入，异步加载显示骨架屏。
  */
 import type { Component } from 'vue';
 
 import type { HubGroup } from './types';
 
-import { computed, defineAsyncComponent, markRaw, provide } from 'vue';
+import { computed, defineAsyncComponent, markRaw, provide, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { IconifyIcon } from '@vben/icons';
 
-import { Dropdown, Spin } from 'ant-design-vue';
+import { Dropdown } from 'ant-design-vue';
+
+import { ApSkeleton } from '#/components/apple';
+import { useSlidingIndicator } from '#/utils/motion';
 
 const props = defineProps<{ groups: HubGroup[]; menuLabel?: string }>();
 
 const route = useRoute();
 const router = useRouter();
 
-// 没有权限的项不显示（例如业务员看不到「成员」「AI 接待设置」）
 const { hasAccessByCodes } = useAccess();
 const allowed = (it: { codes?: string[] }) =>
   !it.codes?.length || hasAccessByCodes(it.codes);
@@ -38,6 +41,9 @@ const active = computed(() =>
   items.value.find((i) => i.key === activeKey.value),
 );
 
+const menuRef = ref<HTMLElement>();
+const { style: indicatorStyle } = useSlidingIndicator(menuRef, activeKey, '.on');
+
 const cache = new Map<string, Component>();
 const view = computed(() => {
   const item = active.value;
@@ -48,8 +54,8 @@ const view = computed(() => {
       markRaw(
         defineAsyncComponent({
           loader: item.load,
-          loadingComponent: Spin,
-          delay: 120,
+          loadingComponent: ApSkeleton,
+          delay: 140,
         }),
       ),
     );
@@ -61,25 +67,35 @@ function select(key: string, extra?: Record<string, string>) {
   if (key !== activeKey.value || extra)
     router.replace({ query: { tab: key, ...extra } });
 }
-/** 子页面之间跳转（例如线索转客户后打开客户列表） */
 provide('cgchHubSelect', select);
 </script>
 
 <template>
-  <div class="side-hub" :class="{ 'side-hub--crm': route.path === '/v3/crm' }">
-    <aside class="side-hub__menu">
+  <div class="side-hub">
+    <aside ref="menuRef" class="side-hub__menu">
+      <div
+        class="side-hub__indicator"
+        :style="indicatorStyle"
+        aria-hidden="true"
+      ></div>
       <template v-for="(g, gi) in visibleGroups" :key="gi">
         <div v-if="gi > 0 && !g.label" class="side-hub__sep"></div>
         <div v-if="g.label" class="side-hub__group">{{ g.label }}</div>
-        <div
+        <button
           v-for="it in g.items"
           :key="it.key"
+          type="button"
           class="side-hub__item"
           :class="{ on: it.key === activeKey }"
           @click="select(it.key)"
         >
-          {{ it.label }}
-        </div>
+          <IconifyIcon
+            v-if="it.icon"
+            :icon="it.icon"
+            class="side-hub__icon"
+          />
+          <span>{{ it.label }}</span>
+        </button>
       </template>
     </aside>
 
@@ -88,28 +104,37 @@ provide('cgchHubSelect', select);
         <Dropdown :trigger="['click']" placement="bottomLeft">
           <button type="button" class="side-hub__btn">
             <IconifyIcon icon="lucide:menu" class="size-4" />
-            <span>{{ menuLabel || '页面菜单' }}</span>
+            <span>{{ active?.label || menuLabel || '页面菜单' }}</span>
+            <IconifyIcon icon="lucide:chevron-down" class="size-3.5 opacity-60" />
           </button>
           <template #overlay>
             <div class="side-hub__pop">
               <template v-for="(g, gi) in visibleGroups" :key="gi">
                 <div v-if="g.label" class="side-hub__group">{{ g.label }}</div>
-                <div
+                <button
                   v-for="it in g.items"
                   :key="it.key"
+                  type="button"
                   class="side-hub__item"
                   :class="{ on: it.key === activeKey }"
                   @click="select(it.key)"
                 >
-                  {{ it.label }}
-                </div>
+                  <IconifyIcon
+                    v-if="it.icon"
+                    :icon="it.icon"
+                    class="side-hub__icon"
+                  />
+                  <span>{{ it.label }}</span>
+                </button>
               </template>
             </div>
           </template>
         </Dropdown>
       </div>
       <div class="side-hub__body">
-        <component :is="view" v-if="view" :key="activeKey" />
+        <Transition name="ap-swap">
+          <component :is="view" v-if="view" :key="activeKey" />
+        </Transition>
       </div>
     </section>
   </div>
@@ -118,51 +143,103 @@ provide('cgchHubSelect', select);
 <style scoped>
 .side-hub {
   display: flex;
-  gap: 12px;
-  height: calc(100vh - 32px);
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
 }
 
 .side-hub__menu {
-  flex: 0 0 188px;
+  position: relative;
+  display: flex;
+  flex: 0 0 204px;
+  flex-direction: column;
+  gap: 2px;
   padding: 12px 10px;
   overflow: auto;
-  background: #fff;
-  border-radius: 18px;
-  box-shadow: var(--cg-shadow);
+  background: var(--ap-glass);
+  border: 0.5px solid rgb(255 255 255 / 85%);
+  border-radius: var(--ap-radius-xl);
+  box-shadow: var(--ap-shadow-rest);
+  backdrop-filter: var(--ap-blur);
+}
+
+.side-hub__indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--ap-surface);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 6%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
 }
 
 .side-hub__group {
-  padding: 14px 10px 6px;
-  font-size: 12px;
-  color: #86868b;
+  padding: 12px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ap-label-3);
+  letter-spacing: 0.02em;
+}
+
+.side-hub__group:first-of-type {
+  padding-top: 4px;
 }
 
 .side-hub__sep {
-  height: 1px;
-  margin: 10px 8px;
-  background: #e5e5ea;
+  height: 0.5px;
+  margin: 8px 10px;
+  background: var(--ap-separator);
 }
 
 .side-hub__item {
-  transition:
-    background-color 0.25s var(--cg-ease),
-    color 0.25s var(--cg-ease);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  width: 100%;
   padding: 8px 10px;
   font-size: 13px;
-  color: #424245;
+  font-weight: 500;
+  color: var(--ap-label-2);
+  text-align: left;
   cursor: pointer;
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  transition:
+    color var(--ap-dur-fast) linear,
+    background-color var(--ap-dur-fast) linear,
+    transform var(--ap-dur-fast) var(--ap-ease);
 }
 
-.side-hub__item:hover {
-  color: #1d1d1f;
-  background: #f2f2f7;
+.side-hub__item:hover:not(.on) {
+  color: var(--ap-label);
+  background: rgb(0 0 0 / 4%);
+}
+
+.side-hub__item:active {
+  transform: scale(0.98);
 }
 
 .side-hub__item.on {
   font-weight: 600;
-  color: #fff;
-  background: #0071e3;
+  color: var(--ap-label);
+}
+
+.side-hub__icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--ap-label-3);
+  transition: color var(--ap-dur-fast) linear;
+}
+
+.side-hub__item.on .side-hub__icon {
+  color: var(--ap-accent);
 }
 
 .side-hub__main {
@@ -171,35 +248,41 @@ provide('cgchHubSelect', select);
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #e5e5ea;
-  border-radius: 12px;
+  border-radius: var(--ap-radius-xl);
 }
 
 .side-hub__mobile {
   display: none;
-  padding: 10px 12px 0;
+  padding: 0 2px 10px;
 }
 
 .side-hub__btn {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  padding: 4px 10px;
+  padding: 6px 12px;
   font-size: 13px;
-  color: #6e6e73;
+  font-weight: 500;
+  color: var(--ap-label);
   cursor: pointer;
-  background: #f2f2f7;
+  background: var(--ap-surface);
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--ap-radius-pill);
+  box-shadow: var(--ap-shadow-rest);
 }
 
 .side-hub__pop {
-  min-width: 180px;
-  padding: 8px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgb(15 23 42 / 12%);
+  min-width: 196px;
+  padding: 6px;
+  background: var(--ap-glass-strong);
+  border-radius: var(--ap-radius-md);
+  box-shadow: var(--ap-shadow-pop);
+  backdrop-filter: var(--ap-blur);
+}
+
+.side-hub__pop .side-hub__item.on {
+  color: var(--ap-accent);
+  background: var(--ap-accent-soft);
 }
 
 .side-hub__body {
@@ -208,7 +291,7 @@ provide('cgchHubSelect', select);
   overflow: auto;
 }
 
-@media (max-width: 960px) {
+@media (width <= 960px) {
   .side-hub__menu {
     display: none;
   }

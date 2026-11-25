@@ -38,17 +38,18 @@ const tokenTheme = computed(() => {
         colorFillTertiary: 'rgba(118,118,128,0.08)',
         colorFillSecondary: 'rgba(118,118,128,0.12)',
         colorSuccess: '#34C759',
-        colorWarning: '#FF9F0A',
+        colorWarning: '#FF9500',
         colorError: '#FF3B30',
-        colorInfo: '#0071E3',
-        colorLink: '#0066CC',
+        colorInfo: '#007AFF',
+        colorLink: '#007AFF',
+        colorLinkHover: '#0A84FF',
       };
   return {
     algorithm,
     token: {
       ...tokens,
       ...brand,
-      colorPrimary: '#0071E3',
+      colorPrimary: '#007AFF',
       borderRadius: 10,
       borderRadiusLG: 18,
       borderRadiusSM: 8,
@@ -58,27 +59,27 @@ const tokenTheme = computed(() => {
       lineWidth: 1,
       motionEaseOut: 'cubic-bezier(0.32, 0.72, 0, 1)',
       motionEaseInOut: 'cubic-bezier(0.32, 0.72, 0, 1)',
-      motionDurationMid: '0.25s',
+      motionDurationMid: '0.28s',
       motionDurationSlow: '0.45s',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.10)',
-      boxShadowSecondary: '0 1px 2px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.12)',
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif",
+      boxShadow: '0 0 0 0.5px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.06)',
+      boxShadowSecondary: '0 0 0 0.5px rgba(0,0,0,0.06), 0 12px 32px rgba(0,0,0,0.12)',
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif",
     },
     components: {
       Button: { primaryShadow: 'none', defaultShadow: 'none', dangerShadow: 'none', fontWeight: 500 },
-      Segmented: { itemSelectedBg: '#FFFFFF', trackBg: 'rgba(118,118,128,0.12)', borderRadius: 9, borderRadiusSM: 7 },
+      Segmented: { itemSelectedBg: '#FFFFFF', trackBg: 'rgba(120,120,128,0.12)', borderRadius: 9, borderRadiusSM: 7 },
       Switch: { colorPrimary: '#34C759', colorPrimaryHover: '#30B350' },
-      Table: { headerBg: 'transparent', headerColor: '#86868B', rowHoverBg: '#F5F5F7', borderColor: 'rgba(0,0,0,0.06)' },
+      Table: { headerBg: '#FBFBFD', headerColor: '#86868B', rowHoverBg: 'rgba(0,0,0,0.025)', borderColor: 'rgba(60,60,67,0.12)' },
       Card: { headerFontSize: 17 },
-      Modal: { borderRadiusLG: 20 },
-      Tag: { borderRadiusSM: 980 },
+      Modal: { borderRadiusLG: 22 },
+      Tag: { borderRadiusSM: 999 },
     },
   };
 });
 </script>
 
 <template>
-  <ConfigProvider :locale="antdLocale" :theme="tokenTheme">
+  <ConfigProvider :auto-insert-space-in-button="false" :locale="antdLocale" :theme="tokenTheme">
     <App>
       <RouterView />
     </App>

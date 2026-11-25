@@ -125,68 +125,18 @@
   font-size: 11px;
 }
 .is-apple .side-hub {
-  gap: 20px;
+  gap: 16px;
   height: 100%;
   min-height: 0;
 }
-.is-apple .side-hub__menu {
-  flex-basis: 165px;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  padding: 12px 0;
-}
-.is-apple .side-hub__item {
-  margin: 3px 0;
-  padding: 10px 12px;
-  border-radius: 11px;
-  color: #6e6e73;
-  font-size: 13px;
-}
-.is-apple .side-hub__item.on {
-  color: #007aff;
-  background: #007aff14;
-  font-weight: 600;
-}
 .is-apple .side-hub__main {
   background: transparent;
-  border-radius: 22px;
+  border-radius: var(--ap-radius-xl);
   min-width: 0;
 }
 .is-apple .side-hub__body {
   height: 100%;
   padding: 0;
-}
-.is-apple .side-hub--crm {
-  flex-direction: column;
-  gap: 10px;
-}
-.is-apple .side-hub--crm .side-hub__menu {
-  flex: none;
-  display: flex;
-  gap: 3px;
-  align-items: center;
-  padding: 4px;
-  max-width: 100%;
-  width: max-content;
-  overflow-x: auto;
-  background: #7878800c;
-  border-radius: 12px;
-}
-.is-apple .side-hub--crm .side-hub__group,
-.is-apple .side-hub--crm .side-hub__sep {
-  display: none;
-}
-.is-apple .side-hub--crm .side-hub__item {
-  white-space: nowrap;
-  margin: 0;
-  padding: 7px 12px;
-  font-size: 12px;
-}
-.is-apple .side-hub--crm .side-hub__item.on {
-  background: white;
-  color: #1d1d1f;
-  box-shadow: 0 1px 4px #0000000c;
 }
 .is-apple .crm-list {
   padding: 12px 3px 0;
@@ -303,10 +253,17 @@
   grid-template-columns: 1fr auto;
   gap: 15px 10px;
   padding: 22px;
-  background: white;
-  border-radius: 22px;
-  box-shadow: var(--cg-shadow);
+  background: var(--ap-surface);
+  border-radius: var(--ap-radius-xl);
+  box-shadow: var(--ap-shadow-rest);
   min-width: 0;
+  transition:
+    transform var(--ap-dur-slow) var(--ap-ease),
+    box-shadow var(--ap-dur-slow) var(--ap-ease);
+}
+.is-apple .channel-account-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ap-shadow-lift);
 }
 .is-apple .channel-account-card > div:first-child {
   grid-column: 1 / -1;
@@ -349,15 +306,16 @@
   gap: 0;
   height: 100%;
   min-height: 0;
-  border-radius: 22px;
+  border-radius: var(--ap-radius-xl);
   overflow: hidden;
-  background: white;
+  background: var(--ap-surface);
+  box-shadow: var(--ap-shadow-rest);
 }
 .is-apple .mail-list {
-  background: #f7f7fa;
+  background: var(--ap-surface-2);
   border-radius: 0;
-  border-right: 0.5px solid #e5e5ea;
-  width: 285px;
+  border-right: 0.5px solid var(--ap-separator);
+  width: 300px;
 }
 .is-apple .mail-reader {
   border-radius: 0;
@@ -365,34 +323,50 @@
 }
 .is-apple .mail-row {
   border: 0;
-  margin: 4px 8px;
-  padding: 14px 12px;
+  margin: 3px 8px;
+  padding: 13px 12px;
   border-radius: 12px;
-  transition: background 0.2s;
+  transition:
+    background-color var(--ap-dur-fast) linear,
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+.is-apple .mail-row:hover:not(.is-selected) {
+  background: rgb(0 0 0 / 3.5%);
+}
+.is-apple .mail-row:active {
+  transform: scale(0.99);
 }
 .is-apple .mail-row.is-selected {
-  background: #007aff;
-  color: white;
-}
-.is-apple
-  .mail-row.is-selected
-  :where(.text-gray-400, .text-gray-500, .text-gray-600) {
-  color: #ffffffcf;
+  background: var(--ap-accent-soft);
+  color: var(--ap-label);
+  box-shadow: inset 3px 0 0 var(--ap-accent);
 }
 .is-apple .mail-reply {
   margin: 0 22px 22px;
-  padding: 18px;
-  border: 1px solid #eeeef4;
+  padding: 16px 18px;
+  border: 0.5px solid var(--ap-separator);
   border-radius: 20px;
-  box-shadow: var(--cg-shadow);
+  background: var(--ap-glass-strong);
+  box-shadow: var(--ap-shadow-rest);
+  backdrop-filter: var(--ap-blur);
 }
 .is-apple .mail-ai-draft {
   padding: 16px;
-  border: 1px solid transparent;
+  border: 1.5px solid transparent;
   border-radius: 18px;
   background:
-    linear-gradient(white, white) padding-box,
-    linear-gradient(120deg, #ff9500, #ff2d92, #af52de, #007aff) border-box;
+    linear-gradient(var(--ap-surface), var(--ap-surface)) padding-box,
+    conic-gradient(
+        from var(--ap-angle),
+        #ff9500,
+        #ff2d92,
+        #af52de,
+        #007aff,
+        #34c759,
+        #ff9500
+      )
+      border-box;
+  animation: ap-glow-border 5s linear infinite;
 }
 @media (width <= 1450px) {
   .is-apple .channel-account-grid {

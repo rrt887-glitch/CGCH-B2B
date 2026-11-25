@@ -400,9 +400,13 @@ const me = computed(() => userStore.userInfo?.id);
 
 <style scoped>
 .crm-ai-btn {
-  color: #0071E3;
-  background: #E8F2FC;
-  border-color: #B8D7F5;
+  color: var(--ap-accent);
+  background: var(--ap-accent-soft);
+  border-color: transparent;
+}
+.crm-ai-btn:hover {
+  color: var(--ap-accent);
+  background: rgb(0 122 255 / 16%);
 }
 .crm-stage-chips {
   display: flex;
@@ -414,33 +418,46 @@ const me = computed(() => userStore.userInfo?.id);
 /* 说明阶段数字的统计口径，避免搜索命中 0 条时把数字误读成筛选结果 */
 .crm-stage-hint {
   font-size: 12px;
-  color: #86868b;
+  color: var(--ap-label-3);
 }
 
 .crm-stage-chips button {
   height: 28px;
   padding: 0 12px;
   font-size: 12px;
-  color: #424245;
+  font-weight: 500;
+  color: var(--ap-label-2);
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #e5e5ea;
-  border-radius: 14px;
+  background: var(--ap-fill-4);
+  border: 0;
+  border-radius: var(--ap-radius-pill);
+  transition:
+    background-color var(--ap-dur-fast) linear,
+    color var(--ap-dur-fast) linear,
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+
+.crm-stage-chips button:hover:not(.on) {
+  color: var(--ap-label);
+  background: var(--ap-fill-3);
+}
+
+.crm-stage-chips button:active {
+  transform: scale(0.96);
 }
 
 .crm-stage-chips button span {
   margin-left: 4px;
-  color: #86868b;
+  color: var(--ap-label-3);
 }
 
 .crm-stage-chips button.on {
-  font-weight: 500;
+  font-weight: 600;
   color: #fff;
-  background: #1D1D1F;
-  border-color: #1D1D1F;
+  background: var(--ap-label);
 }
 
 .crm-stage-chips button.on span {
-  color: #d2d2d7;
+  color: rgb(255 255 255 / 72%);
 }
 </style>
