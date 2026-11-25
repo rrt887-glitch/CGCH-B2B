@@ -66,7 +66,7 @@ DROP TEMPORARY TABLE IF EXISTS `tmp_conv_dup`;
 -- ---------- 2. 唯一索引 ----------
 -- 生成列：未删除的行固定 0（于是三元组唯一），已删除的行用自身 id 错开（允许删了再建）
 SET @ddl = (SELECT IF(COUNT(*) = 0,
-    'ALTER TABLE `channel_wa_conversation` ADD COLUMN `active_key` bigint GENERATED ALWAYS AS (IF(`deleted` = b''0'', 0, `id`)) STORED COMMENT ''唯一索引辅助列：删除行用自身 id 错开''',
+    'ALTER TABLE `channel_wa_conversation` ADD COLUMN `active_key` bigint GENERATED ALWAYS AS (IF(`deleted` = b''0'', 0, NULL)) STORED COMMENT ''唯一索引辅助列：删除行置 NULL，唯一索引允许多个 NULL''',
     'SELECT 1')
   FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'channel_wa_conversation' AND COLUMN_NAME = 'active_key');

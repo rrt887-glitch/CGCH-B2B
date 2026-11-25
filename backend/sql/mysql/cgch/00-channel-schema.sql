@@ -669,7 +669,7 @@ CREATE TABLE `channel_wa_conversation` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
-  `active_key` bigint GENERATED ALWAYS AS (IF(`deleted` = b'0', 0, `id`)) STORED COMMENT '唯一索引辅助列：删除行用自身 id 错开',
+  `active_key` bigint GENERATED ALWAYS AS (IF(`deleted` = b'0', 0, NULL)) STORED COMMENT '唯一索引辅助列：删除行置 NULL，唯一索引允许多个 NULL',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_conv_tenant_account_waid` (`tenant_id`, `account_id`, `wa_id`, `active_key`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'WhatsApp 会话：一个业务号码与一位客户之间的聊天';
