@@ -16,8 +16,10 @@ import {
   getPendingDraft,
 } from '#/api/channel/ai';
 
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { createMailDraftStore } from './mail-drafts';
+
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
@@ -128,11 +130,19 @@ async function loadList() {
 
 watch([accountId, view], () => {
   pageNo.value = 1;
+  if (current.value && hasReplyContent()) {
+    stashReply(current.value.id);
+    message.info('这封邮件的回复已暂存，重新打开可以接着写');
+  }
   current.value = undefined;
   loadList();
 });
 
 async function open(item: ChannelMailApi.Message) {
+  // 同一封邮件只是刷新详情时，保留正在编辑的内容，不走暂存/恢复
+  const sameMail = current.value?.id === item.id;
+  // 切到别的邮件前，先把当前这封没发出去的回复存起来，重开时能接着写
+  if (current.value && !sameMail) stashReply(current.value.id);
   detailLoading.value = true;
   try {
     const [detail, history] = await Promise.all([
@@ -142,9 +152,10 @@ async function open(item: ChannelMailApi.Message) {
     current.value = detail;
     thread.value = history;
     item.readStatus = true;
-    resetReply();
+    if (!sameMail) restoreReply(detail.id);
+    // 已经填过内容（或已经采用过草稿）就不再弹 AI 草稿卡片，避免重复
     aiDraft.value =
-      detail.direction === 1
+      detail.direction === 1 && !replyText.value.trim()
         ? ((await getPendingDraft('mail', detail.id)) ?? undefined)
         : undefined;
   } finally {
@@ -244,9 +255,69 @@ async function discardDraft() {
 const replyText = ref('');
 const replySending = ref(false);
 const replyFiles = ref<ChannelMailApi.Attachment[]>([]);
+/** 每封邮件各自暂存未发送的回复（含该邮件已采用的 AI 草稿） */
+const replyDrafts = createMailDraftStore<ChannelMailApi.Attachment>();
 function resetReply() {
   replyText.value = '';
   replyFiles.value = [];
+  usedDraftId.value = undefined;
+}
+
+/** 有没有还没发出去的回复内容 */
+function hasReplyContent() {
+  return !!replyText.value.trim() || replyFiles.value.length > 0;
+}
+
+/** 把当前回复框的内容存到这封邮件名下 */
+function stashReply(mailId?: number) {
+  if (!mailId) return;
+  replyDrafts.stash(mailId, {
+    text: replyText.value,
+    files: replyFiles.value,
+    usedDraftId: usedDraftId.value,
+  });
+}
+
+/** 重新打开这封邮件时把之前写的回复放回来（AI 草稿归属也跟着这封邮件走） */
+function restoreReply(mailId: number) {
+  const d = replyDrafts.take(mailId);
+  replyText.value = d.text;
+  replyFiles.value = [...d.files];
+  usedDraftId.value = d.usedDraftId;
+}
+
+/** 真正会丢内容的场景（离开页面、刷新、关标签）才打断用户 */
+function confirmLeave() {
+  return new Promise<boolean>((resolve) => {
+    Modal.confirm({
+      title: '这封邮件的回复还没发送',
+      content: '离开后未发送的内容会丢失，确定要离开吗？',
+      okText: '放弃回复',
+      okButtonProps: { danger: true },
+      cancelText: '继续编辑',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    });
+  });
+}
+
+function onBeforeUnload(e: BeforeUnloadEvent) {
+  if (!hasReplyContent()) return;
+  e.preventDefault();
+  // 兼容旧浏览器
+  e.returnValue = '';
+}
+
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload));
+onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload));
+
+// 只在独立路由下注册：嵌入「会话」页时本组件不是路由组件，注册了也收不到离开事件
+if (!props.embedded) {
+  onBeforeRouteLeave(async () => {
+    if (!hasReplyContent() || !current.value) return true;
+    stashReply(current.value.id);
+    return await confirmLeave();
+  });
 }
 function quote(m: ChannelMailApi.Message) {
   const body = (m.textBody || '')
@@ -275,10 +346,11 @@ async function reply() {
       replyToId: m.id,
       attachmentIds: replyFiles.value.map((a) => a.id),
     });
+    // 只关闭这封邮件对应的草稿（usedDraftId 随邮件恢复，不会误标别人）
     if (usedDraftId.value) await closeDraft(usedDraftId.value, true);
-    usedDraftId.value = undefined;
-    message.success('已发送');
+    replyDrafts.clear(m.id);
     resetReply();
+    message.success('已发送');
     await Promise.all([open(m), loadList(), loadAccounts()]);
   } finally {
     replySending.value = false;
