@@ -192,10 +192,21 @@ const columns = [
 // ===== 平台访问记录：平台客服进入本公司后台的记录（每次进入都要填写原因） =====
 const visits = ref<TenantVisitLog[]>([]);
 const visitTotal = ref(0);
+/** 访问记录分页：之前固定取前 20 条且表格没有翻页，总数 23 时后 3 条永远看不到 */
+const visitPage = reactive({ no: 1, size: 10 });
 async function loadVisits() {
-  const r = await getMyVisitLogPage({ pageNo: 1, pageSize: 20 }).catch(() => null);
+  const r = await getMyVisitLogPage({ pageNo: visitPage.no, pageSize: visitPage.size }).catch(() => null);
   visits.value = r?.list ?? [];
   visitTotal.value = r?.total ?? 0;
+}
+function onVisitPageChange(no: number, size: number) {
+  if (size !== visitPage.size) {
+    visitPage.no = 1;
+    visitPage.size = size;
+  } else {
+    visitPage.no = no;
+  }
+  loadVisits();
 }
 const visitColumns = [
   { title: '进入时间', dataIndex: 'enterTime', width: 170 },
@@ -266,7 +277,14 @@ onMounted(async () => {
         <p class="m-0 mb-2 text-[13px] text-[#6E6E73]">
           平台客服默认看不到你公司的数据。只有在你需要帮助时，客服登记原因后才能进入，每次进入都会记录在这里，2 小时后自动失效。
         </p>
-        <Table row-key="id" size="small" :data-source="visits" :columns="visitColumns" :pagination="false" :scroll="{ x: 600 }">
+        <Table
+          row-key="id"
+          size="small"
+          :data-source="visits"
+          :columns="visitColumns"
+          :scroll="{ x: 600 }"
+          :pagination="visitTotal > visitPage.size ? { current: visitPage.no, pageSize: visitPage.size, total: visitTotal, size: 'small', showSizeChanger: true, pageSizeOptions: ['10', '20', '50'], showTotal: (t: number) => `共 ${t} 条`, onChange: onVisitPageChange } : false"
+        >
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'enterTime'">{{ fmtDateTime(record.enterTime) }}</template>
             <template v-else-if="column.dataIndex === 'exitTime'">{{ record.exitTime ? fmtDateTime(record.exitTime) : '到期自动结束' }}</template>
