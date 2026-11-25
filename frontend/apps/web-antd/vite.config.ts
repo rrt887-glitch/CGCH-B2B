@@ -12,9 +12,11 @@ export default defineConfig(async () => {
         proxy: {
           '/admin-api': {
             changeOrigin: true,
+            cookieDomainRewrite: '',
             rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            // mock代理目标地址
-            target: 'http://localhost:48080/admin-api',
+            // 支持通过 VITE_PROXY_TARGET 指向线上/测试环境便于本地 UI 预览
+            target:
+              process.env.VITE_PROXY_TARGET || 'http://localhost:48080/admin-api',
             ws: true,
           },
         },

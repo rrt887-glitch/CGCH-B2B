@@ -320,18 +320,15 @@ function onUserMenu({ key }: { key: number | string }) {
 
 <style scoped>
 .cgch-shell {
-  --vben-content-height: calc(100vh - 28px);
+  --vben-content-height: 100vh;
 
   display: flex;
-  gap: 14px;
+  gap: 0;
   width: 100%;
   height: 100vh;
-  padding: 14px 16px;
+  padding: 0;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 4% 0%, rgb(0 122 255 / 9%), transparent 42%),
-    radial-gradient(ellipse at 96% 96%, rgb(175 82 222 / 7%), transparent 40%),
-    var(--ap-bg);
+  background: var(--ap-bg);
 }
 
 .cgch-rail {
@@ -339,18 +336,15 @@ function onUserMenu({ key }: { key: number | string }) {
   display: flex;
   flex: 0 0 var(--ap-rail-width);
   flex-direction: column;
-  padding: 14px 10px 10px;
-  background: var(--ap-glass);
-  border: 0.5px solid rgb(255 255 255 / 85%);
-  border-radius: var(--ap-radius-xl);
-  box-shadow: var(--ap-shadow-rest);
-  backdrop-filter: var(--ap-blur);
+  padding: 12px 8px 10px;
+  background: var(--ap-bg-sidebar);
+  border-right: 0.5px solid var(--ap-separator);
   transition: flex-basis var(--ap-dur) var(--ap-ease);
 }
 
 .is-collapsed .cgch-rail {
   flex-basis: var(--ap-rail-collapsed);
-  padding-inline: 8px;
+  padding-inline: 7px;
 }
 
 .cgch-rail__top {
@@ -358,42 +352,41 @@ function onUserMenu({ key }: { key: number | string }) {
   gap: 6px;
   align-items: center;
   justify-content: space-between;
-  margin: 2px 4px 12px;
+  padding: 2px 6px 10px;
 }
 
 .is-collapsed .cgch-rail__top {
   flex-direction: column;
   gap: 8px;
-  margin-inline: 0;
+  padding-inline: 0;
 }
 
 .cgch-rail__logo {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   min-width: 0;
   cursor: pointer;
-  transition: transform var(--ap-dur) var(--ap-ease);
+  transition: opacity var(--ap-dur-fast);
 }
 
 .cgch-rail__logo:hover {
-  transform: scale(1.02);
+  opacity: 0.85;
 }
 
 .cgch-rail__logo img {
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
-  border-radius: 8px;
-  box-shadow: 0 3px 10px rgb(0 122 255 / 18%);
+  border-radius: 6px;
 }
 
 .cgch-rail__brand {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--ap-label);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
   white-space: nowrap;
 }
 
@@ -401,55 +394,48 @@ function onUserMenu({ key }: { key: number | string }) {
   display: grid;
   flex: none;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   color: var(--ap-label-3);
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   transition:
     background-color var(--ap-dur-fast),
-    color var(--ap-dur-fast),
-    transform var(--ap-dur-fast) var(--ap-ease);
+    color var(--ap-dur-fast);
 }
 
 .cgch-rail__collapse:hover {
   color: var(--ap-label);
-  background: var(--ap-fill-4);
-}
-
-.cgch-rail__collapse:active {
-  transform: scale(0.92);
+  background: rgb(0 0 0 / 5%);
 }
 
 .cgch-rail__search {
   display: flex;
-  gap: 8px;
+  gap: 7px;
   align-items: center;
   width: 100%;
-  height: 34px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 9px;
   margin-bottom: 10px;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--ap-label-3);
   cursor: pointer;
-  background: var(--ap-fill-4);
+  background: rgb(255 255 255 / 72%);
   border: 0;
-  border-radius: 10px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 8%);
   transition:
     background-color var(--ap-dur-fast),
-    color var(--ap-dur-fast),
-    transform var(--ap-dur-fast) var(--ap-ease);
+    box-shadow var(--ap-dur-fast),
+    color var(--ap-dur-fast);
 }
 
 .cgch-rail__search:hover {
   color: var(--ap-label-2);
-  background: var(--ap-fill-3);
-}
-
-.cgch-rail__search:active {
-  transform: scale(0.98);
+  background: var(--ap-surface);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 13%);
 }
 
 .cgch-rail__search-text {
@@ -458,12 +444,13 @@ function onUserMenu({ key }: { key: number | string }) {
 }
 
 .cgch-rail__kbd {
-  padding: 1px 5px;
+  padding: 0 4px;
   font-family: var(--ap-font-mono);
   font-size: 10px;
+  line-height: 16px;
   color: var(--ap-label-3);
-  background: rgb(255 255 255 / 70%);
-  border-radius: 5px;
+  background: rgb(0 0 0 / 4.5%);
+  border-radius: 4px;
 }
 
 .cgch-rail__nav {
@@ -471,7 +458,7 @@ function onUserMenu({ key }: { key: number | string }) {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-height: 0;
   overflow: auto;
 }
@@ -483,22 +470,21 @@ function onUserMenu({ key }: { key: number | string }) {
   z-index: 0;
   pointer-events: none;
   background: var(--ap-surface);
-  border-radius: 10px;
+  border-radius: 7px;
   box-shadow:
-    0 1px 3px rgb(0 0 0 / 6%),
-    0 0 0 0.5px rgb(0 0 0 / 4%);
+    0 0.5px 1.5px rgb(0 0 0 / 7%),
+    0 0 0 0.5px rgb(0 0 0 / 5%);
 }
 
 .rail-group {
-  padding: 12px 12px 4px;
+  padding: 12px 10px 4px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ap-label-3);
-  letter-spacing: 0.02em;
 }
 
 .rail-group:first-of-type {
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .cgch-rail__item {
@@ -506,18 +492,18 @@ function onUserMenu({ key }: { key: number | string }) {
   z-index: 1;
   display: flex;
   flex-shrink: 0;
-  gap: 10px;
+  gap: 9px;
   align-items: center;
   width: 100%;
-  height: 38px;
-  padding: 0 12px;
-  font-size: 14px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ap-label-2);
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 7px;
   transition:
     color var(--ap-dur-fast) linear,
     background-color var(--ap-dur-fast) linear,
@@ -526,11 +512,11 @@ function onUserMenu({ key }: { key: number | string }) {
 
 .cgch-rail__item:hover:not(.is-active) {
   color: var(--ap-label);
-  background: rgb(0 0 0 / 4%);
+  background: rgb(0 0 0 / 4.5%);
 }
 
 .cgch-rail__item:active {
-  transform: scale(0.97);
+  transform: scale(0.985);
 }
 
 .cgch-rail__item.is-active {
@@ -541,18 +527,16 @@ function onUserMenu({ key }: { key: number | string }) {
 .cgch-rail__bottom .cgch-rail__item.is-active {
   background: var(--ap-surface);
   box-shadow:
-    0 1px 3px rgb(0 0 0 / 6%),
-    0 0 0 0.5px rgb(0 0 0 / 4%);
+    0 0.5px 1.5px rgb(0 0 0 / 7%),
+    0 0 0 0.5px rgb(0 0 0 / 5%);
 }
 
 .cgch-rail__icon {
   flex: none;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   color: var(--ap-label-3);
-  transition:
-    color var(--ap-dur-fast) linear,
-    transform var(--ap-dur) var(--ap-spring);
+  transition: color var(--ap-dur-fast) linear;
 }
 
 .cgch-rail__item:hover .cgch-rail__icon {
@@ -561,7 +545,6 @@ function onUserMenu({ key }: { key: number | string }) {
 
 .cgch-rail__item.is-active .cgch-rail__icon {
   color: var(--ap-accent);
-  transform: scale(1.06);
 }
 
 .cgch-rail__label {
@@ -573,7 +556,7 @@ function onUserMenu({ key }: { key: number | string }) {
 .cgch-rail__bottom {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   padding-top: 8px;
   margin-top: 8px;
   border-top: 0.5px solid var(--ap-separator);
@@ -581,27 +564,21 @@ function onUserMenu({ key }: { key: number | string }) {
 
 .cgch-rail__avatar {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   width: 100%;
-  padding: 6px 8px;
+  padding: 5px 6px;
   text-align: left;
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 12px;
-  transition:
-    background-color var(--ap-dur-fast),
-    transform var(--ap-dur-fast) var(--ap-ease);
+  border-radius: 8px;
+  transition: background-color var(--ap-dur-fast);
 }
 
 .cgch-rail__avatar:hover,
 .cgch-rail__avatar.is-active {
   background: rgb(0 0 0 / 4.5%);
-}
-
-.cgch-rail__avatar:active {
-  transform: scale(0.98);
 }
 
 .rail-user {
@@ -613,7 +590,7 @@ function onUserMenu({ key }: { key: number | string }) {
 
 .rail-name {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--ap-label);
   text-overflow: ellipsis;
@@ -630,8 +607,8 @@ function onUserMenu({ key }: { key: number | string }) {
 
 .rail-chevron {
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   color: var(--ap-label-3);
 }
 
@@ -661,7 +638,6 @@ function onUserMenu({ key }: { key: number | string }) {
   overflow: auto;
 }
 
-/* 平台运营正在查看某家客户的后台 */
 .cgch-visit-bar {
   position: sticky;
   top: 0;
@@ -671,47 +647,35 @@ function onUserMenu({ key }: { key: number | string }) {
   gap: 8px 16px;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  margin-bottom: 12px;
-  font-size: 13px;
+  padding: 8px 16px;
+  font-size: 12.5px;
   color: var(--ap-orange-text);
-  background: rgb(255 244 229 / 92%);
-  border: 0.5px solid rgb(255 149 0 / 35%);
-  border-radius: var(--ap-radius-md);
+  background: rgb(255 244 229 / 94%);
+  border-bottom: 0.5px solid rgb(255 149 0 / 28%);
   backdrop-filter: var(--ap-blur);
 }
 
 .cgch-visit-bar__exit {
-  padding: 5px 14px;
-  font-size: 13px;
+  padding: 3px 10px;
+  font-size: 12px;
   font-weight: 500;
   color: #fff;
   cursor: pointer;
   background: var(--ap-orange);
   border: 0;
-  border-radius: var(--ap-radius-pill);
-  transition: transform var(--ap-dur-fast) var(--ap-ease);
-}
-
-.cgch-visit-bar__exit:active {
-  transform: scale(0.96);
+  border-radius: 6px;
 }
 
 @media (width <= 1200px) {
   .cgch-rail {
-    flex-basis: 188px;
+    flex-basis: 184px;
   }
 }
 
 @media (width <= 760px) {
-  .cgch-shell {
-    gap: 8px;
-    padding: 8px;
-  }
-
   .cgch-rail {
-    flex-basis: 58px;
-    padding: 12px 5px;
+    flex-basis: 54px;
+    padding: 10px 5px;
   }
 
   .cgch-rail__brand,
@@ -727,7 +691,7 @@ function onUserMenu({ key }: { key: number | string }) {
 
   .cgch-rail__top {
     justify-content: center;
-    margin-inline: 0;
+    padding-inline: 0;
   }
 
   .cgch-rail__search,

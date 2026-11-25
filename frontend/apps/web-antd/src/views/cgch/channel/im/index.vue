@@ -2602,28 +2602,29 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   min-height: 0;
   overflow: hidden;
   background: var(--ap-surface);
-  border-radius: var(--ap-radius-xl);
-  box-shadow: var(--ap-shadow-rest);
+  border-radius: 0;
+  box-shadow: none;
 }
 .apple-im .im-list {
-  width: 280px;
-  background: var(--ap-surface-2);
+  width: 304px;
+  background: var(--ap-bg-subbar);
   border: 0;
   border-right: 0.5px solid var(--ap-separator);
   border-radius: 0;
 }
 .apple-im .im-list h2 {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
   line-height: 1.3;
 }
 .apple-im .im-contact {
   position: relative;
-  margin: 3px 8px;
-  padding: 11px 12px;
+  margin: 2px 8px;
+  padding: 10px 11px;
+  min-height: 66px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 8px;
   transition:
     background-color var(--ap-dur-fast) linear,
     transform var(--ap-dur-fast) var(--ap-ease);
@@ -2632,12 +2633,12 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   background: rgb(0 0 0 / 3.5%);
 }
 .apple-im .im-contact:active {
-  transform: scale(0.99);
+  transform: scale(0.992);
 }
 .apple-im .im-selected {
   background: var(--ap-accent-soft);
   color: var(--ap-label);
-  box-shadow: inset 3px 0 0 var(--ap-accent);
+  box-shadow: inset 2.5px 0 0 var(--ap-accent);
 }
 .apple-im .im-thread {
   border: 0;
@@ -2646,48 +2647,55 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   background: var(--ap-surface);
 }
 .apple-im .im-toolbar {
-  margin: 12px 14px 0;
-  padding: 10px 14px;
-  border: 0.5px solid var(--ap-separator);
-  border-radius: 18px;
+  margin: 0;
+  padding: 10px 18px;
+  border: 0;
+  border-bottom: 0.5px solid var(--ap-separator);
+  border-radius: 0;
   background: var(--ap-glass-strong);
-  box-shadow: var(--ap-shadow-rest);
+  box-shadow: none;
   backdrop-filter: var(--ap-blur);
   flex-wrap: wrap;
   gap: 8px;
 }
-.apple-im .im-toolbar :deep(.ant-btn) {
-  border-radius: 999px;
+/* 顶栏工具按钮：macOS Messages 静默透明质感，不再满排灰药丸，只让主操作突出 */
+.apple-im .im-toolbar :deep(.ant-btn-default) {
+  background: transparent;
+  box-shadow: none !important;
+  color: var(--ap-label-2);
+}
+.apple-im .im-toolbar :deep(.ant-btn-default:hover) {
+  background: rgb(0 0 0 / 5%);
+  color: var(--ap-label);
+  box-shadow: none !important;
 }
 .apple-im .im-messages {
   min-height: 100px;
-  padding: 20px 24px;
+  padding: 18px 22px;
   flex: 1;
 }
 .apple-im .cg-bubble {
   line-height: 1.55;
-  animation: ap-bubble-in 380ms var(--ap-spring) both;
+  font-size: 13.5px;
+  animation: ap-bubble-in 340ms var(--ap-spring) both;
 }
 .apple-im .im-composer {
   flex-shrink: 0;
   max-height: 52%;
   overflow: auto;
-  margin: 0 16px 16px;
-  padding: 12px 16px;
-  background: var(--ap-glass-strong);
-  border: 0.5px solid var(--ap-separator);
-  border-radius: 20px;
+  margin: 0 18px 16px;
+  padding: 10px 14px;
+  background: var(--ap-surface);
+  border: 0.5px solid var(--ap-separator-strong);
+  border-radius: 12px;
   box-shadow: var(--ap-shadow-rest);
-  backdrop-filter: var(--ap-blur);
   transition:
-    box-shadow var(--ap-dur) var(--ap-ease),
-    border-color var(--ap-dur) var(--ap-ease);
+    box-shadow var(--ap-dur-fast) var(--ap-ease),
+    border-color var(--ap-dur-fast) linear;
 }
 .apple-im .im-composer:focus-within {
-  border-color: rgb(0 122 255 / 35%);
-  box-shadow:
-    0 0 0 4px var(--ap-accent-softer),
-    var(--ap-shadow-lift);
+  border-color: rgb(0 122 255 / 60%);
+  box-shadow: 0 0 0 2.5px var(--ap-accent-ring);
 }
 .apple-im .im-composer :deep(.ant-input) {
   border: 0;
@@ -2695,10 +2703,10 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   box-shadow: none !important;
 }
 .apple-im .im-composer :deep(.ant-btn) {
-  border-radius: 999px;
+  border-radius: 7px;
 }
 .apple-im .im-draft {
-  border: 1.5px solid transparent;
+  border: 1px solid transparent;
   background:
     linear-gradient(var(--ap-surface), var(--ap-surface)) padding-box,
     conic-gradient(
@@ -2711,25 +2719,25 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         #ff9500
       )
       border-box;
-  border-radius: 18px;
-  box-shadow: 0 4px 20px rgb(175 82 222 / 10%);
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgb(175 82 222 / 8%);
   animation: ap-glow-border 5s linear infinite;
 }
 .apple-im .im-inspector {
-  width: 274px;
+  width: 268px;
   border: 0;
   border-left: 0.5px solid var(--ap-separator);
   border-radius: 0;
-  padding: 20px 17px;
-  gap: 16px;
-  background: var(--ap-surface-2);
+  padding: 18px 16px;
+  gap: 14px;
+  background: var(--ap-bg-subbar);
 }
 .apple-im .im-inspector > div:first-child {
   align-items: center;
   text-align: center;
 }
 .apple-im .im-inspector :deep(.ant-btn) {
-  border-radius: 99px;
+  border-radius: 8px;
 }
 @media (width <= 1450px) {
   .apple-im .im-list {
@@ -2795,11 +2803,11 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
 <style scoped>
 .apple-im .im-list {
-  width: 330px;
+  width: 304px;
 }
 .apple-im .im-list-tabs {
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   overflow: visible;
 }
 .im-list-tab {
@@ -2810,12 +2818,13 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   font-size: 12px;
 }
 .apple-im .im-contact {
-  min-height: 85px;
+  min-height: 64px;
 }
 .apple-im .im-list :deep(.ant-input-search-button) {
   border: 0;
   background: transparent;
-  color: #8c8c98;
+  color: var(--ap-label-3);
+  box-shadow: none !important;
 }
 .apple-im .im-list :deep(.ant-input-group-addon) {
   background: transparent;
@@ -2824,8 +2833,8 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   font-size: 13px;
 }
 .apple-im .im-list > div:first-child {
-  padding-top: 22px;
-  gap: 12px;
+  padding-top: 14px;
+  gap: 10px;
 }
 @media (width <= 1450px) {
   .apple-im .im-toolbar > div:first-child {

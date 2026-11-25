@@ -441,22 +441,31 @@ onMounted(() => {
   position: relative;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid #e5e5ed;
-  border-radius: 10px;
-  background: white;
-  color: #777780;
+  width: 30px;
+  height: 30px;
+  border: 0.5px solid rgb(0 0 0 / 12%);
+  border-radius: 8px;
+  background: var(--ap-surface);
+  color: var(--ap-label-2);
+  box-shadow: 0 0.5px 1px rgb(0 0 0 / 4%);
   cursor: pointer;
+  transition:
+    background-color var(--ap-dur-fast),
+    border-color var(--ap-dur-fast),
+    color var(--ap-dur-fast);
+}
+.filter-trigger:hover {
+  border-color: rgb(0 0 0 / 20%);
+  color: var(--ap-label);
 }
 .filter-trigger :deep(svg) {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 .filter-trigger.on {
-  background: #e8f2ff;
-  color: #007aff;
-  border-color: #c5dfff;
+  background: var(--ap-accent-soft);
+  color: var(--ap-accent);
+  border-color: rgb(0 122 255 / 35%);
 }
 .filter-trigger span {
   position: absolute;

@@ -457,10 +457,10 @@ const channels = computed(() => [
 
 .today-card {
   min-width: 0;
-  padding: 22px;
+  padding: 18px 20px;
   background: var(--ap-surface);
   border: 0;
-  border-radius: var(--ap-radius-xl);
+  border-radius: var(--ap-radius-lg);
   box-shadow: var(--ap-shadow-rest);
 }
 

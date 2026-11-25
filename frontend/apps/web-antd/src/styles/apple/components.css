@@ -71,35 +71,37 @@ h3 {
 }
 
 /* ================================================================
- * 按钮：胶囊形；主按钮实色，普通按钮浅灰填充；悬停提亮、按下回弹
+ * 按钮：macOS 精致控件圆角（8~9px，非大药丸）；白底细描边微立体 + 透明工具栏质感
  * ================================================================ */
 .ant-btn {
   font-weight: 500;
   letter-spacing: 0;
-  border-radius: var(--ap-radius-pill);
-  box-shadow: none !important;
+  border-radius: 8px;
   transition:
     transform var(--ap-dur-fast) var(--ap-ease),
     background-color var(--ap-dur-fast) linear,
     color var(--ap-dur-fast) linear,
     border-color var(--ap-dur-fast) linear,
-    opacity var(--ap-dur-fast) linear,
-    filter var(--ap-dur-fast) linear;
+    box-shadow var(--ap-dur-fast) linear,
+    opacity var(--ap-dur-fast) linear;
   will-change: transform;
 }
 
 .ant-btn:not(:disabled):active {
-  transform: scale(0.965);
-  transition-duration: 80ms;
+  transform: scale(0.97);
+  transition-duration: 70ms;
 }
 
 .ant-btn-primary:not(:disabled, .ant-btn-dangerous, .ant-btn-background-ghost) {
-  background: var(--ap-accent);
+  background: linear-gradient(180deg, #1285ff 0%, #007aff 100%);
   border-color: transparent;
+  box-shadow:
+    inset 0 0.5px 0 rgb(255 255 255 / 26%),
+    0 1px 2px rgb(0 122 255 / 24%) !important;
 }
 
 .ant-btn-primary:not(:disabled, .ant-btn-dangerous, .ant-btn-background-ghost):hover {
-  background: var(--ap-accent-hover);
+  background: linear-gradient(180deg, #218eff 0%, #0a84ff 100%);
 }
 
 .ant-btn-primary:not(:disabled, .ant-btn-dangerous, .ant-btn-background-ghost):active {
@@ -109,30 +111,40 @@ h3 {
 .ant-btn-default:not(.ant-btn-dangerous, :disabled, .ant-btn-background-ghost),
 .ant-btn-dashed:not(.ant-btn-dangerous, :disabled) {
   color: var(--ap-label);
-  background: var(--ap-fill-3);
+  background: var(--ap-surface);
   border-color: transparent;
+  box-shadow:
+    0 0.5px 1.5px rgb(0 0 0 / 7%),
+    inset 0 0 0 0.5px rgb(0 0 0 / 13%) !important;
 }
 
 .ant-btn-default:not(.ant-btn-dangerous, :disabled, .ant-btn-background-ghost):hover,
 .ant-btn-dashed:not(.ant-btn-dangerous, :disabled):hover {
   color: var(--ap-label);
-  background: var(--ap-fill);
+  background: #fafafa;
   border-color: transparent;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 9%),
+    inset 0 0 0 0.5px rgb(0 0 0 / 18%) !important;
 }
 
 .ant-btn-default.ant-btn-dangerous:not(:disabled) {
   color: var(--ap-red-text);
-  background: rgb(255 59 48 / 10%);
+  background: rgb(255 59 48 / 8%);
   border-color: transparent;
+  box-shadow: inset 0 0 0 0.5px rgb(255 59 48 / 22%) !important;
 }
 
 .ant-btn-default.ant-btn-dangerous:not(:disabled):hover {
-  background: rgb(255 59 48 / 16%);
+  background: rgb(255 59 48 / 14%);
 }
 
 .ant-btn-primary.ant-btn-dangerous:not(:disabled) {
-  background: var(--ap-red);
+  background: linear-gradient(180deg, #ff4d42 0%, #ff3b30 100%);
   border-color: transparent;
+  box-shadow:
+    inset 0 0.5px 0 rgb(255 255 255 / 22%),
+    0 1px 2px rgb(255 59 48 / 22%) !important;
 }
 
 .ant-btn:disabled,
@@ -140,6 +152,7 @@ h3 {
   color: var(--ap-label-4) !important;
   background: var(--ap-fill-4) !important;
   border-color: transparent !important;
+  box-shadow: none !important;
 }
 
 .ant-btn-link:disabled,
@@ -148,12 +161,39 @@ h3 {
 }
 
 .ant-btn-icon-only {
-  border-radius: 50%;
+  border-radius: 8px;
+}
+
+.ant-btn-circle {
+  border-radius: 50% !important;
+}
+
+.ant-btn-round {
+  border-radius: var(--ap-radius-pill) !important;
+}
+
+/* 组合按钮 / DropdownButton：严丝合缝合为一体，不再裂成两个球 */
+.ant-btn-compact-item:not(.ant-btn-compact-first-item) {
+  border-start-start-radius: 0 !important;
+  border-end-start-radius: 0 !important;
+}
+
+.ant-btn-compact-item:not(.ant-btn-compact-last-item) {
+  border-start-end-radius: 0 !important;
+  border-end-end-radius: 0 !important;
+}
+
+.ant-btn-compact-item.ant-btn-primary:not(.ant-btn-compact-first-item) {
+  box-shadow:
+    inset 0.5px 0 0 rgb(255 255 255 / 28%),
+    inset 0 0.5px 0 rgb(255 255 255 / 26%),
+    0 1px 2px rgb(0 122 255 / 24%) !important;
 }
 
 .ant-btn-link,
 .ant-btn-text {
-  border-radius: var(--ap-radius-sm);
+  border-radius: 8px;
+  box-shadow: none !important;
 }
 
 .ant-btn-link {
@@ -166,12 +206,13 @@ h3 {
 }
 
 .ant-btn-text:not(:disabled):hover {
-  background: var(--ap-fill-4);
+  background: rgb(0 0 0 / 5%);
 }
 
 .ant-btn-sm {
   padding-inline: 10px;
-  font-size: var(--ap-text-footnote);
+  font-size: 12.5px;
+  border-radius: 7px;
 }
 
 .ant-btn .anticon + span,
@@ -180,7 +221,7 @@ h3 {
 }
 
 /* ================================================================
- * 输入：浅灰填充、无边框；聚焦白底 + 蓝色光圈（带过渡）
+ * 输入与下拉：macOS 纤细边框 + 克制单层焦点光晕（不再双层胖蓝框）
  * ================================================================ */
 .ant-input:not(.ant-input-borderless),
 .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-borderless),
@@ -188,17 +229,22 @@ h3 {
 .ant-picker:not(.ant-picker-borderless),
 .ant-select:not(.ant-select-borderless, .ant-select-customize-input) .ant-select-selector,
 .ant-mentions:not(.ant-mentions-borderless) {
-  background: var(--ap-fill-4) !important;
-  border-color: transparent !important;
+  background: var(--ap-surface) !important;
+  border-color: rgb(0 0 0 / 11%) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0.5px 1px rgb(0 0 0 / 4%) !important;
   transition:
-    background-color var(--ap-dur) var(--ap-ease),
-    box-shadow var(--ap-dur) var(--ap-ease) !important;
+    background-color var(--ap-dur-fast) linear,
+    border-color var(--ap-dur-fast) linear,
+    box-shadow var(--ap-dur-fast) var(--ap-ease) !important;
 }
 
 .ant-input-affix-wrapper > .ant-input,
 .ant-input-number-group-wrapper .ant-input-number,
 .ant-input-group .ant-input {
   background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 
 .ant-input-affix-wrapper > .ant-input {
@@ -210,7 +256,7 @@ h3 {
 .ant-input-number:not(.ant-input-number-disabled):hover,
 .ant-picker:not(.ant-picker-disabled):hover,
 .ant-select:not(.ant-select-disabled, .ant-select-borderless):hover .ant-select-selector {
-  background: var(--ap-fill-3) !important;
+  border-color: rgb(0 0 0 / 20%) !important;
 }
 
 .ant-input:focus,
@@ -221,13 +267,17 @@ h3 {
 .ant-select-focused:not(.ant-select-borderless) .ant-select-selector,
 .ant-mentions-focused {
   background: var(--ap-surface) !important;
-  box-shadow:
-    0 0 0 4px var(--ap-accent-ring),
-    inset 0 0 0 1px var(--ap-accent) !important;
+  border-color: rgb(0 122 255 / 72%) !important;
+  box-shadow: 0 0 0 2.5px rgb(0 122 255 / 15%) !important;
+}
+
+.ant-select-open .ant-select-selection-item {
+  color: var(--ap-label) !important;
 }
 
 .ant-input-affix-wrapper-focused > .ant-input:focus {
   background: transparent !important;
+  border-color: transparent !important;
   box-shadow: none !important;
 }
 
@@ -235,7 +285,8 @@ h3 {
 .ant-input-affix-wrapper-status-error,
 .ant-select-status-error .ant-select-selector,
 .ant-picker-status-error {
-  box-shadow: inset 0 0 0 1px var(--ap-red) !important;
+  border-color: var(--ap-red) !important;
+  box-shadow: 0 0 0 2.5px rgb(255 59 48 / 14%) !important;
 }
 
 .ant-input-disabled,
@@ -279,9 +330,13 @@ textarea.ant-input {
  * ================================================================ */
 .ant-switch {
   width: auto !important;
-  min-width: 44px;
-  background: var(--ap-fill);
+  min-width: 40px;
+  background: rgb(0 0 0 / 14%);
   transition: background-color var(--ap-dur) var(--ap-ease);
+}
+
+.ant-switch.ant-switch-small {
+  min-width: 28px;
 }
 
 .ant-switch:hover:not(.ant-switch-disabled) {
@@ -564,30 +619,36 @@ textarea.ant-input {
 .ant-picker-dropdown .ant-picker-panel-container,
 .ant-cascader-dropdown,
 .ant-tree-select-dropdown {
-  padding: 5px;
-  background: var(--ap-glass-strong) !important;
-  border-radius: var(--ap-radius-md) !important;
-  box-shadow: var(--ap-shadow-pop) !important;
-  backdrop-filter: var(--ap-blur);
+  padding: 4px;
+  background: rgb(255 255 255 / 92%) !important;
+  border: 0.5px solid rgb(0 0 0 / 8%);
+  border-radius: 11px !important;
+  box-shadow:
+    0 4px 12px rgb(0 0 0 / 8%),
+    0 14px 36px rgb(0 0 0 / 12%) !important;
+  backdrop-filter: blur(24px) saturate(180%);
 }
 
 .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item,
 .ant-select-dropdown .ant-select-item {
-  min-height: 32px;
-  padding-block: 6px;
-  border-radius: var(--ap-radius-sm);
-  transition: background-color 120ms linear;
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ap-label);
+  border-radius: 6px;
+  transition: background-color 100ms linear;
 }
 
 .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item:hover,
 .ant-select-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
-  background: var(--ap-fill-4);
+  background: rgb(0 0 0 / 5%);
 }
 
 .ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ap-accent);
-  background: var(--ap-accent-softer);
+  background: rgb(0 122 255 / 8%);
 }
 
 /* 浮层：从触发点轻微放大淡入 */
@@ -647,8 +708,8 @@ textarea.ant-input {
 
 .ant-table-wrapper .ant-table-thead > tr > th,
 .ant-table-wrapper .ant-table-thead > tr > td {
-  padding-block: 11px;
-  font-size: var(--ap-text-footnote);
+  padding-block: 10px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--ap-label-3);
   white-space: nowrap;
@@ -661,9 +722,10 @@ textarea.ant-input {
 }
 
 .ant-table-wrapper .ant-table-tbody > tr > td {
-  padding-block: 14px;
+  padding-block: 11px;
+  font-size: 13px;
   border-bottom: 0.5px solid var(--ap-separator);
-  transition: background-color 120ms linear;
+  transition: background-color 100ms linear;
 }
 
 .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td,
@@ -724,20 +786,47 @@ textarea.ant-input {
 }
 
 /* ================================================================
- * 标签、徽标、提示条、空状态、加载
+ * 标签、徽标：克制 macOS 淡色徽标（5px 圆角、柔和底色、清晰文字）
  * ================================================================ */
 .ant-tag {
-  padding-inline: 8px;
-  font-size: var(--ap-text-footnote);
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 11.5px;
   font-weight: 500;
-  line-height: 20px;
-  border-color: transparent;
-  border-radius: var(--ap-radius-pill);
+  line-height: 18px;
+  border: 0 !important;
+  border-radius: 5px;
 }
 
 .ant-tag:not([class*='ant-tag-']) {
   color: var(--ap-label-2);
-  background: var(--ap-fill-3);
+  background: rgb(0 0 0 / 5%);
+}
+
+.ant-tag.ant-tag-green {
+  color: var(--ap-green-text);
+  background: rgb(52 199 89 / 11%);
+}
+
+.ant-tag.ant-tag-blue {
+  color: var(--ap-accent);
+  background: rgb(0 122 255 / 10%);
+}
+
+.ant-tag.ant-tag-orange {
+  color: var(--ap-orange-text);
+  background: rgb(255 149 0 / 12%);
+}
+
+.ant-tag.ant-tag-red {
+  color: var(--ap-red-text);
+  background: rgb(255 59 48 / 10%);
+}
+
+.ant-tag.ant-tag-cyan {
+  color: #0e7490;
+  background: rgb(48 176 199 / 12%);
 }
 
 .ant-badge .ant-badge-count {

@@ -637,7 +637,7 @@ onMounted(load);
 
 <style scoped>
 .v3-dash {
-  padding: 4px 12px 16px;
+  padding: 18px 24px 24px;
 }
 
 .v3-dash__bar {
@@ -814,14 +814,14 @@ onMounted(load);
 
 <style scoped>
 .today-heading small {
-  color: #86868b;
+  color: var(--ap-label-3);
   font-size: 12px;
 }
 .today-heading h1 {
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -1px;
-  margin: 5px 0;
+  letter-spacing: -0.015em;
+  margin: 4px 0 0;
 }
 .v3-dash__bar {
   display: flex;

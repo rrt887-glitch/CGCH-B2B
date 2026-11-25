@@ -112,7 +112,7 @@ function goStep(key: string) {
 <style scoped>
 .agent {
   display: flex;
-  gap: 16px;
+  gap: 0;
   height: 100%;
   min-height: 0;
 }
@@ -122,13 +122,10 @@ function goStep(key: string) {
   display: flex;
   flex: 0 0 184px;
   flex-direction: column;
-  gap: 3px;
-  padding: 14px 10px;
-  background: var(--ap-glass);
-  border: 0.5px solid rgb(255 255 255 / 85%);
-  border-radius: var(--ap-radius-xl);
-  box-shadow: var(--ap-shadow-rest);
-  backdrop-filter: var(--ap-blur);
+  gap: 2px;
+  padding: 12px 8px;
+  background: var(--ap-bg-subbar);
+  border-right: 0.5px solid var(--ap-separator);
 }
 
 .agent__indicator {
@@ -137,28 +134,25 @@ function goStep(key: string) {
   left: 0;
   z-index: 0;
   pointer-events: none;
-  background: var(--ap-surface);
-  border-radius: 10px;
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 6%),
-    0 0 0 0.5px rgb(0 0 0 / 4%);
+  background: var(--ap-accent-soft);
+  border-radius: 7px;
 }
 
 .agent__group {
-  padding: 4px 10px 6px;
+  padding: 2px 10px 6px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ap-label-3);
-  letter-spacing: 0.02em;
 }
 
 .agent__step {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 10px;
+  gap: 9px;
   align-items: center;
-  padding: 9px 10px;
+  height: 34px;
+  padding: 0 10px;
   font-size: 13px;
   font-weight: 500;
   color: var(--ap-label-2);
@@ -166,11 +160,10 @@ function goStep(key: string) {
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 7px;
   transition:
     color var(--ap-dur-fast) linear,
-    background-color var(--ap-dur-fast) linear,
-    transform var(--ap-dur-fast) var(--ap-ease);
+    background-color var(--ap-dur-fast) linear;
 }
 
 .agent__step:hover:not(.on) {
@@ -178,25 +171,21 @@ function goStep(key: string) {
   background: rgb(0 0 0 / 4%);
 }
 
-.agent__step:active {
-  transform: scale(0.98);
-}
-
 .agent__step.on {
   font-weight: 600;
-  color: var(--ap-label);
+  color: var(--ap-accent);
 }
 
 .agent__num {
   display: inline-flex;
-  flex: 0 0 22px;
+  flex: 0 0 20px;
   align-items: center;
   justify-content: center;
-  height: 22px;
+  height: 20px;
   font-size: 11px;
   font-weight: 600;
   color: var(--ap-label-3);
-  background: var(--ap-fill-4);
+  background: rgb(0 0 0 / 5%);
   border-radius: 50%;
   transition:
     background-color var(--ap-dur-fast),
@@ -211,22 +200,17 @@ function goStep(key: string) {
 .agent__main {
   flex: 1;
   min-width: 0;
-  padding: 20px 22px;
+  padding: 20px 24px;
   overflow: auto;
   background: var(--ap-surface);
-  border-radius: var(--ap-radius-xl);
-  box-shadow: var(--ap-shadow-rest);
 }
 
 .agent__test {
-  flex: 0 0 320px;
+  flex: 0 0 316px;
   padding: 16px;
   overflow: hidden;
-  background: var(--ap-glass-strong);
-  border: 0.5px solid rgb(255 255 255 / 85%);
-  border-radius: var(--ap-radius-xl);
-  box-shadow: var(--ap-shadow-rest);
-  backdrop-filter: var(--ap-blur);
+  background: var(--ap-bg-subbar);
+  border-left: 0.5px solid var(--ap-separator);
 }
 
 @media (width <= 1280px) {

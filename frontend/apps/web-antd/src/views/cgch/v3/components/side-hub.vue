@@ -143,7 +143,7 @@ provide('cgchHubSelect', select);
 <style scoped>
 .side-hub {
   display: flex;
-  gap: 16px;
+  gap: 0;
   height: 100%;
   min-height: 0;
 }
@@ -151,16 +151,13 @@ provide('cgchHubSelect', select);
 .side-hub__menu {
   position: relative;
   display: flex;
-  flex: 0 0 204px;
+  flex: 0 0 192px;
   flex-direction: column;
-  gap: 2px;
-  padding: 12px 10px;
+  gap: 1px;
+  padding: 12px 8px;
   overflow: auto;
-  background: var(--ap-glass);
-  border: 0.5px solid rgb(255 255 255 / 85%);
-  border-radius: var(--ap-radius-xl);
-  box-shadow: var(--ap-shadow-rest);
-  backdrop-filter: var(--ap-blur);
+  background: var(--ap-bg-subbar);
+  border-right: 0.5px solid var(--ap-separator);
 }
 
 .side-hub__indicator {
@@ -169,23 +166,19 @@ provide('cgchHubSelect', select);
   left: 0;
   z-index: 0;
   pointer-events: none;
-  background: var(--ap-surface);
-  border-radius: 10px;
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 6%),
-    0 0 0 0.5px rgb(0 0 0 / 4%);
+  background: var(--ap-accent-soft);
+  border-radius: 7px;
 }
 
 .side-hub__group {
   padding: 12px 10px 4px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ap-label-3);
-  letter-spacing: 0.02em;
 }
 
 .side-hub__group:first-of-type {
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .side-hub__sep {
@@ -198,10 +191,11 @@ provide('cgchHubSelect', select);
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 9px;
+  gap: 8px;
   align-items: center;
   width: 100%;
-  padding: 8px 10px;
+  height: 31px;
+  padding: 0 10px;
   font-size: 13px;
   font-weight: 500;
   color: var(--ap-label-2);
@@ -209,11 +203,10 @@ provide('cgchHubSelect', select);
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 7px;
   transition:
     color var(--ap-dur-fast) linear,
-    background-color var(--ap-dur-fast) linear,
-    transform var(--ap-dur-fast) var(--ap-ease);
+    background-color var(--ap-dur-fast) linear;
 }
 
 .side-hub__item:hover:not(.on) {
@@ -221,13 +214,9 @@ provide('cgchHubSelect', select);
   background: rgb(0 0 0 / 4%);
 }
 
-.side-hub__item:active {
-  transform: scale(0.98);
-}
-
 .side-hub__item.on {
   font-weight: 600;
-  color: var(--ap-label);
+  color: var(--ap-accent);
 }
 
 .side-hub__icon {
@@ -248,34 +237,34 @@ provide('cgchHubSelect', select);
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
-  border-radius: var(--ap-radius-xl);
 }
 
 .side-hub__mobile {
   display: none;
-  padding: 0 2px 10px;
+  padding: 10px 14px 0;
 }
 
 .side-hub__btn {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 5px 11px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--ap-label);
   cursor: pointer;
   background: var(--ap-surface);
   border: 0;
-  border-radius: var(--ap-radius-pill);
+  border-radius: 7px;
   box-shadow: var(--ap-shadow-rest);
 }
 
 .side-hub__pop {
-  min-width: 196px;
-  padding: 6px;
+  min-width: 188px;
+  padding: 4px;
   background: var(--ap-glass-strong);
-  border-radius: var(--ap-radius-md);
+  border: 0.5px solid var(--ap-separator);
+  border-radius: 10px;
   box-shadow: var(--ap-shadow-pop);
   backdrop-filter: var(--ap-blur);
 }
