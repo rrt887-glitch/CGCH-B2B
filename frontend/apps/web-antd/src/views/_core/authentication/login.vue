@@ -104,6 +104,8 @@ const formSchema = computed((): VbenFormSchema[] => {
   <div>
     <AuthenticationLogin
       ref="loginRef"
+      title="登录"
+      sub-title="使用管理员给你的账号"
       :form-schema="formSchema"
       :loading="authStore.loginLoading"
       :show-code-login="false"
