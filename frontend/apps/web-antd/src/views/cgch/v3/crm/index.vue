@@ -1,12 +1,26 @@
 <script lang="ts" setup>
-/** CRM：统一分组二级侧栏（智能 / 线索 / 客户 / 销售 / 设置），右侧为所选页面 */
+/**
+ * 管理客户（CRM）：左侧分组二级侧栏（线索 / 客户 / 销售与营销 / 配置）。
+ * CRM 智枢已提升为左侧主导航独立入口，访问 ?tab=salesmind 时直接全宽展示。
+ */
 import type { HubGroup } from '../components/types';
 
-import { defineComponent, h } from 'vue';
+import { computed, defineAsyncComponent, defineComponent, h } from 'vue';
+import { useRoute } from 'vue-router';
+
+import { ApSkeleton } from '#/components/apple';
 
 import SideHub from '../components/side-hub.vue';
 
 defineOptions({ name: 'CgchV3Crm' });
+
+const route = useRoute();
+const isSalesmind = computed(() => route.query.tab === 'salesmind');
+const SalesmindView = defineAsyncComponent({
+  loader: () => import('./claw.vue'),
+  loadingComponent: ApSkeleton,
+  delay: 140,
+});
 
 /** 同一个页面组件带不同参数（例如公海） */
 const withProps =
@@ -19,17 +33,6 @@ const withProps =
   };
 
 const groups: HubGroup[] = [
-  {
-    label: '智能',
-    items: [
-      {
-        key: 'salesmind',
-        label: 'CRM 智枢',
-        icon: 'lucide:sparkles',
-        load: () => import('./claw.vue'),
-      },
-    ],
-  },
   {
     label: '线索',
     items: [
@@ -114,5 +117,6 @@ const groups: HubGroup[] = [
 </script>
 
 <template>
-  <SideHub :groups="groups" menu-label="CRM 菜单" />
+  <SalesmindView v-if="isSalesmind" />
+  <SideHub v-else :groups="groups" menu-label="管理客户" />
 </template>

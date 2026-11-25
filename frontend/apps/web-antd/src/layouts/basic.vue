@@ -76,6 +76,13 @@ const NAV: NavItem[] = [
     group: '客户',
   },
   {
+    key: 'salesmind',
+    label: 'CRM 智枢',
+    icon: 'lucide:chart-no-axes-combined',
+    path: '/v3/crm',
+    query: { tab: 'salesmind' },
+  },
+  {
     key: 'agent',
     label: 'AI 助手',
     icon: 'lucide:sparkles',
@@ -132,7 +139,9 @@ const activeKey = computed(() => {
   const p = route.path;
   if (p === '/v3/conversation')
     return route.query.channel === 'mail' ? 'mail' : 'conversation';
-  if (p === '/v3/crm' || p.startsWith('/crm')) return 'crm';
+  if (p === '/v3/crm')
+    return route.query.tab === 'salesmind' ? 'salesmind' : 'crm';
+  if (p.startsWith('/crm')) return 'crm';
   if (p === '/v3/agent') return 'agent';
   if (p.startsWith('/profile')) return 'profile';
   const hit = [...NAV, SETTINGS, PLATFORM].find(
