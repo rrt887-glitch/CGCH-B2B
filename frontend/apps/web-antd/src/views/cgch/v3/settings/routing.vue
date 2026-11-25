@@ -159,9 +159,18 @@ onMounted(async () => {
                   placeholder="请选择国家"
                   :options="COUNTRY_OPTIONS"
                 />
-                <a class="text-gray-400" @click="hasCountry = false"><IconifyIcon icon="lucide:trash-2" class="size-4" /></a>
+                <Button
+                  type="text"
+                  size="small"
+                  class="text-gray-400"
+                  aria-label="移除客户国家条件"
+                  title="移除客户国家条件"
+                  @click="hasCountry = false"
+                >
+                  <IconifyIcon icon="lucide:trash-2" class="size-4" />
+                </Button>
               </div>
-              <a v-else class="text-sm" @click="hasCountry = true"><IconifyIcon icon="lucide:plus" class="mr-1 inline size-3.5" />添加条件</a>
+              <Button v-else type="text" size="small" class="px-0 text-sm" @click="hasCountry = true"><IconifyIcon icon="lucide:plus" class="mr-1 inline size-3.5" />添加条件</Button>
               <div v-if="hasCountry" class="mt-1 text-xs text-gray-400">客户国家由 AI 从对话、邮箱域名或手机号识别；识别不到国家时不算「属于」</div>
             </div>
           </div>
