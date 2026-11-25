@@ -1239,9 +1239,13 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               {{ listTitle }}
             </h2>
             <Dropdown v-if="waAccounts.length > 0" trigger="click">
-              <Button size="small" aria-label="新建会话或群聊"
-                ><IconifyIcon icon="lucide:plus" class="size-3.5"
-              /></Button>
+              <button
+                type="button"
+                class="im-new-btn"
+                aria-label="新建会话或群聊"
+              >
+                <IconifyIcon icon="lucide:plus" class="size-4" />
+              </button>
               <template #overlay>
                 <Menu @click="onNewMenu">
                   <MenuItem key="private">发起私聊</MenuItem>
@@ -2083,21 +2087,19 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         v-if="current"
         class="im-inspector hidden w-80 shrink-0 flex-col gap-5 overflow-auto rounded-xl border border-solid border-[#E5E5EA] bg-white p-5 xl:flex"
       >
-        <!-- 联系人 -->
-        <div
-          class="flex flex-col gap-2 border-0 border-b border-solid border-[#F2F2F7] pb-4"
-        >
+        <!-- 联系人头像名片（参考图：居中大头像 + 名称 + 简洁分组开关卡） -->
+        <div class="flex flex-col items-center gap-2 pb-2 text-center">
           <Avatar
-            :size="48"
+            :size="56"
             :src="current.avatarUrl || undefined"
             :class="current.avatarUrl ? '' : plat(current).avatar"
             >{{ initials(current) }}</Avatar
           >
-          <div>
-            <div class="text-base font-semibold text-[#1D1D1F]">
+          <div class="w-full min-w-0">
+            <div class="truncate text-[16px] font-bold text-[#1D1D1F]">
               {{ current.remarkName || contact(current) }}
             </div>
-            <div class="text-[13px] text-[#6E6E73]">
+            <div class="mt-0.5 truncate text-[12px] text-[#86868B]">
               {{ plat(current).label }} ·
               {{
                 isWa(current)
@@ -2106,61 +2108,14 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               }}
             </div>
           </div>
-          <!-- 公开给团队：负责人或管理员打开后，本公司全部成员都能在「团队会话」里查看 -->
-          <div class="flex flex-col gap-1.5 rounded-[10px] bg-[#F5F5F7] p-3">
-            <div
-              class="flex items-center justify-between text-[13px] font-semibold text-[#1D1D1F]"
-            >
-              公开给团队
-              <Switch
-                :checked="!!current.teamPublic"
-                :disabled="readOnly"
-                :loading="teamPublicSaving"
-                @change="(v: any) => toggleTeamPublic(!!v)"
-              />
-            </div>
-            <div class="text-xs leading-5 text-[#86868B]">
-              {{
-                readOnly
-                  ? '这是同事公开给团队的会话：你可以查看消息、写内部备注，回复客户和转交由负责人处理。'
-                  : '打开后，本公司全部成员都能在「团队会话」里看到这个会话（只能看、写内部备注，不能回复客户）。'
-              }}
-            </div>
-          </div>
-          <!-- WhatsApp 私聊和群聊各自设置 AI 自动回复 -->
-          <div
-            v-if="isWa(current)"
-            class="flex flex-col gap-1.5 rounded-[10px] bg-[#F5F5F7] p-3"
-          >
-            <div
-              class="flex items-center justify-between text-[13px] font-semibold text-[#1D1D1F]"
-            >
-              {{ aiReplyLabel }}
-              <Switch
-                :checked="!!current.aiEnabled"
-                :disabled="readOnly"
-                :loading="aiSaving"
-                :aria-label="aiReplyLabel"
-                @change="(v) => toggleConversationAi(!!v)"
-              />
-            </div>
-            <div v-if="current.group" class="text-xs leading-5 text-[#86868B]">
-              群聊默认不由 AI 回复。开启后，群里有新消息时 AI 会按「AI
-              接待设置」回复（设为「AI
-              起草」时只生成草稿）。群聊不会自动建线索。
-            </div>
-            <div v-else class="text-xs leading-5 text-[#86868B]">
-              关闭后，此会话交由人工接待。开启后按「AI 接待设置」处理，已建档客户自动回复还需开启「AI 托管」。
-            </div>
-          </div>
           <div
             v-if="!current.group && !current.customerId"
-            class="flex items-center gap-2 text-[13px] text-[#86868B]"
+            class="mt-0.5 flex items-center gap-1.5 text-[12px] text-[#86868B]"
           >
             <span>{{
               current.clueName
                 ? `线索：${current.clueName}`
-                : '还没有关联 CRM 客户'
+                : '未关联 CRM 客户'
             }}</span>
             <a
               v-if="current.clueId"
@@ -2170,29 +2125,69 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
           </div>
         </div>
 
-        <!-- 会话操作 -->
-        <section class="flex flex-col gap-3">
-          <div class="text-[13px] font-semibold text-[#1D1D1F]">会话操作</div>
-          <div
-            class="grid grid-cols-[64px_1fr] items-center gap-x-3 gap-y-2.5 text-[13px]"
-          >
-            <span class="text-[#86868B]">处理人</span>
-            <span class="flex items-center justify-between gap-2">
+        <!-- iOS 分组开关卡（说明收进悬停提示，不再堆 8 行灰字） -->
+        <div class="im-info-group">
+          <div class="im-info-row">
+            <Tooltip
+              :title="
+                readOnly
+                  ? '同事公开给团队的会话：可查看消息、写内部备注'
+                  : '打开后公司全部成员都能在「团队会话」中查看此会话'
+              "
+            >
+              <span class="im-info-label">公开给团队</span>
+            </Tooltip>
+            <Switch
+              size="small"
+              :checked="!!current.teamPublic"
+              :disabled="readOnly"
+              :loading="teamPublicSaving"
+              @change="(v: any) => toggleTeamPublic(!!v)"
+            />
+          </div>
+          <div v-if="isWa(current)" class="im-info-row">
+            <Tooltip
+              :title="
+                current.group
+                  ? '开启后，群里有新消息时按「AI 接待设置」处理'
+                  : '关闭后交由人工接待；开启后按「AI 接待设置」处理'
+              "
+            >
+              <span class="im-info-label">{{ aiReplyLabel }}</span>
+            </Tooltip>
+            <Switch
+              size="small"
+              :checked="!!current.aiEnabled"
+              :disabled="readOnly"
+              :loading="aiSaving"
+              :aria-label="aiReplyLabel"
+              @change="(v) => toggleConversationAi(!!v)"
+            />
+          </div>
+          <div class="im-info-row">
+            <span class="im-info-label">处理人</span>
+            <span class="flex items-center gap-2 text-[13px] font-medium text-[#1D1D1F]">
               <span class="truncate">{{ current.handlerName || '-' }}</span>
-              <a class="shrink-0 text-xs" @click="openTransfer">转交</a>
+              <a class="shrink-0 text-xs font-normal" @click="openTransfer">转交</a>
             </span>
-            <span class="text-[#86868B]">状态</span>
+          </div>
+          <div class="im-info-row">
+            <span class="im-info-label">状态</span>
             <Select
               :value="current.status || 'open'"
               size="small"
+              class="w-24"
               :options="CONVERSATION_STATUS"
               aria-label="会话状态"
               @change="(v: any) => setStatus(v)"
             />
-            <span class="text-[#86868B]">优先级</span>
+          </div>
+          <div class="im-info-row">
+            <span class="im-info-label">优先级</span>
             <Select
               :value="current.priority ?? 0"
               size="small"
+              class="w-24"
               :options="
                 PRIORITY_OPTIONS.map((o) => ({
                   label: o.label,
@@ -2202,12 +2197,14 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               aria-label="优先级"
               @change="(v: any) => setPriority(Number(v))"
             />
-            <span class="text-[#86868B]">收件箱</span>
-            <span class="truncate">{{
+          </div>
+          <div class="im-info-row">
+            <span class="im-info-label">收件箱</span>
+            <span class="truncate text-[13px] font-medium text-[#1D1D1F]">{{
               accountName(current.accountId) || plat(current).label
             }}</span>
           </div>
-        </section>
+        </div>
 
         <template v-if="current.customerId && customerStage !== undefined">
           <div
@@ -2768,8 +2765,111 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 .apple-im .im-draft {
   border: 1px solid rgb(175 82 222 / 28%);
   background: #fff;
-  border-radius: 14px;
+  border-radius: 16px;
   box-shadow: 0 4px 18px rgb(175 82 222 / 8%);
+}
+.im-draft-wrap {
+  padding: 0 20px 10px;
+  background: #f5f5f8;
+}
+.im-new-btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #007aff;
+  cursor: pointer;
+  background: #e8f2ff;
+  border: 0;
+  border-radius: 50%;
+  transition:
+    background-color var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+.im-new-btn:hover {
+  background: #d8e9ff;
+}
+.im-new-btn:active {
+  transform: scale(0.92);
+}
+.im-tool-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: #6e6e73;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  transition:
+    background-color var(--ap-dur-fast),
+    color var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+.im-tool-btn:hover:not(:disabled) {
+  color: #1d1d1f;
+  background: #f2f2f7;
+}
+.im-tool-btn--ai {
+  color: #8b5cf6;
+}
+.im-tool-btn--ai:hover:not(:disabled) {
+  color: #7c3aed;
+  background: rgb(139 92 246 / 10%);
+}
+.im-tool-btn:active {
+  transform: scale(0.92);
+}
+.im-send-circle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: #fff;
+  cursor: pointer;
+  background: #007aff;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgb(0 122 255 / 28%);
+  transition:
+    background-color var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease),
+    opacity var(--ap-dur-fast);
+}
+.im-send-circle:hover:not(:disabled) {
+  background: #0a84ff;
+}
+.im-send-circle:active:not(:disabled) {
+  transform: scale(0.92);
+}
+.im-send-circle:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+  box-shadow: none;
+}
+.im-info-group {
+  overflow: hidden;
+  background: #f5f5f7;
+  border-radius: 14px;
+}
+.im-info-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 6px 14px;
+}
+.im-info-row + .im-info-row {
+  border-top: 0.5px solid rgb(0 0 0 / 6%);
+}
+.im-info-label {
+  flex: none;
+  font-size: 12.5px;
+  color: #86868b;
 }
 .apple-im .im-inspector {
   width: 268px;
