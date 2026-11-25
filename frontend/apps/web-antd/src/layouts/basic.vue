@@ -69,7 +69,7 @@ const NAV: NavItem[] = [
   },
   {
     key: 'crm',
-    label: '客户',
+    label: '管理客户',
     icon: 'lucide:users',
     path: '/v3/crm',
     query: { tab: 'customer' },
