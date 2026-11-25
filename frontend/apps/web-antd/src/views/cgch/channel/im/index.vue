@@ -1648,7 +1648,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 
           <div
             ref="chatBox"
-            class="im-messages flex-1 overflow-auto bg-white px-7 py-6"
+            class="im-messages flex-1 overflow-auto bg-[#F5F5F8] px-6 py-5"
           >
             <Spin :spinning="chatLoading">
               <template v-for="it in timeline" :key="it.key">
@@ -1695,17 +1695,19 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 </div>
                 <div
                   v-else-if="it.kind === 'msg'"
-                  class="mb-3 flex"
+                  class="mb-4 flex flex-col"
                   :class="
-                    it.m.direction === 2 ? 'justify-end' : 'justify-start'
+                    it.m.direction === 2 ? 'items-end' : 'items-start'
                   "
                 >
                   <div
-                    class="cg-bubble max-w-[70%] px-3.5 py-2.5 text-[15px] leading-[21px]"
+                    class="cg-bubble im-bubble max-w-[72%] px-4 py-2.5 text-[14px] leading-[22px]"
                     :class="
                       it.m.direction === 2
-                        ? 'rounded-[18px] bg-[#0071E3] text-white [&_a]:text-white [&_a]:underline'
-                        : 'rounded-[18px] bg-[#E9E9EB] text-[#1D1D1F]'
+                        ? it.m.aiGenerated
+                          ? 'im-bubble--ai [&_a]:text-white [&_a]:underline'
+                          : 'im-bubble--out [&_a]:text-white [&_a]:underline'
+                        : 'im-bubble--in'
                     "
                   >
                     <!-- 群聊：标出是群里哪位成员发的 -->
@@ -1804,47 +1806,38 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                     >
                       {{ translations[it.m.id] }}
                     </div>
-                    <div
-                      class="mt-1 flex items-center justify-end gap-1 text-[11px]"
-                      :class="
-                        it.m.direction === 2
-                          ? 'text-white/80'
-                          : 'text-[#86868B]'
+                  </div>
+                  <div
+                    class="im-bubble-meta mt-1.5 flex items-center gap-1.5 px-1 text-[11px] text-[#8E8E93]"
+                    :class="
+                      it.m.direction === 2 ? 'justify-end' : 'justify-start'
+                    "
+                  >
+                    <span v-if="it.m.aiGenerated" class="font-medium text-[#7C5CE6]"
+                      >AI 自动回复 ·</span
+                    >
+                    <span
+                      >{{ md(it.m.messageTime) }}
+                      {{ hm(it.m.messageTime) }}</span
+                    >
+                    <Tooltip
+                      v-if="it.m.direction === 2 && it.m.status"
+                      :title="
+                        it.m.errorMessage || STATUS_ICON[it.m.status]?.label
                       "
                     >
                       <span
-                        v-if="it.m.aiGenerated"
-                        class="rounded px-1 font-semibold"
                         :class="
-                          it.m.direction === 2
-                            ? 'bg-white/20'
-                            : 'bg-[#E8F2FC] text-[#0066CC]'
-                        "
-                        >AI</span
-                      >
-                      <span
-                        >{{ md(it.m.messageTime) }}
-                        {{ hm(it.m.messageTime) }}</span
-                      >
-                      <Tooltip
-                        v-if="it.m.direction === 2 && it.m.status"
-                        :title="
-                          it.m.errorMessage || STATUS_ICON[it.m.status]?.label
+                          it.m.status === 'failed'
+                            ? 'rounded bg-red-50 px-1 font-bold text-[#D70015]'
+                            : it.m.status === 'read'
+                              ? 'font-semibold text-[#007AFF]'
+                              : ''
                         "
                       >
-                        <span
-                          :class="
-                            it.m.status === 'failed'
-                              ? 'rounded bg-white px-1 font-bold text-[#D70015]'
-                              : it.m.status === 'read'
-                                ? 'font-semibold'
-                                : ''
-                          "
-                        >
-                          {{ STATUS_ICON[it.m.status]?.text }}
-                        </span>
-                      </Tooltip>
-                    </div>
+                        {{ STATUS_ICON[it.m.status]?.text }}
+                      </span>
+                    </Tooltip>
                   </div>
                 </div>
               </template>
@@ -2680,15 +2673,18 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   transform: scale(0.992);
 }
 .apple-im .im-selected {
-  background: var(--ap-accent-soft);
+  background: var(--ap-surface);
   color: var(--ap-label);
-  box-shadow: inset 2.5px 0 0 var(--ap-accent);
+  border-radius: 12px;
+  box-shadow:
+    0 2px 10px rgb(0 0 0 / 6%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
 }
 .apple-im .im-thread {
   border: 0;
   border-radius: 0;
   min-height: 0;
-  background: var(--ap-surface);
+  background: #f5f5f8;
 }
 .apple-im .im-toolbar {
   margin: 0;
@@ -2696,9 +2692,8 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   border: 0;
   border-bottom: 0.5px solid var(--ap-separator);
   border-radius: 0;
-  background: var(--ap-glass-strong);
+  background: var(--ap-surface);
   box-shadow: none;
-  backdrop-filter: var(--ap-blur);
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -2715,31 +2710,52 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 }
 .apple-im .im-messages {
   min-height: 100px;
-  padding: 18px 22px;
+  padding: 20px 24px;
   flex: 1;
+  background: #f5f5f8;
 }
-.apple-im .cg-bubble {
-  line-height: 1.55;
-  font-size: 13.5px;
-  animation: ap-bubble-in 340ms var(--ap-spring) both;
+.im-bubble {
+  word-break: break-word;
+  animation: ap-bubble-in 320ms var(--ap-spring) both;
+}
+.im-bubble--in {
+  color: #1d1d1f;
+  background: #fff;
+  border-radius: 18px 18px 18px 5px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 5%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
+}
+.im-bubble--out {
+  color: #fff;
+  background: #007aff;
+  border-radius: 18px 18px 5px 18px;
+  box-shadow: 0 2px 8px rgb(0 122 255 / 20%);
+}
+.im-bubble--ai {
+  color: #fff;
+  background: linear-gradient(135deg, #7455e6 0%, #007aff 100%);
+  border-radius: 18px 18px 5px 18px;
+  box-shadow: 0 3px 12px rgb(92 86 230 / 22%);
 }
 .apple-im .im-composer {
   flex-shrink: 0;
   max-height: 52%;
   overflow: auto;
-  margin: 0 18px 16px;
-  padding: 10px 14px;
+  margin: 0 20px 18px;
+  padding: 12px 16px;
   background: var(--ap-surface);
-  border: 0.5px solid var(--ap-separator-strong);
-  border-radius: 12px;
-  box-shadow: var(--ap-shadow-rest);
-  transition:
-    box-shadow var(--ap-dur-fast) var(--ap-ease),
-    border-color var(--ap-dur-fast) linear;
+  border: 0;
+  border-radius: 16px;
+  box-shadow:
+    0 2px 12px rgb(0 0 0 / 5%),
+    0 0 0 0.5px rgb(0 0 0 / 6%);
+  transition: box-shadow var(--ap-dur-fast) var(--ap-ease);
 }
 .apple-im .im-composer:focus-within {
-  border-color: rgb(0 122 255 / 60%);
-  box-shadow: 0 0 0 2.5px var(--ap-accent-ring);
+  box-shadow:
+    0 0 0 2.5px var(--ap-accent-ring),
+    0 4px 16px rgb(0 0 0 / 7%);
 }
 .apple-im .im-composer :deep(.ant-input) {
   border: 0;
@@ -2747,25 +2763,13 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   box-shadow: none !important;
 }
 .apple-im .im-composer :deep(.ant-btn) {
-  border-radius: 7px;
+  border-radius: 8px;
 }
 .apple-im .im-draft {
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--ap-surface), var(--ap-surface)) padding-box,
-    conic-gradient(
-        from var(--ap-angle),
-        #ff9500,
-        #ff2d92,
-        #af52de,
-        #007aff,
-        #34c759,
-        #ff9500
-      )
-      border-box;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgb(175 82 222 / 8%);
-  animation: ap-glow-border 5s linear infinite;
+  border: 1px solid rgb(175 82 222 / 28%);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 4px 18px rgb(175 82 222 / 8%);
 }
 .apple-im .im-inspector {
   width: 268px;
@@ -2774,7 +2778,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   border-radius: 0;
   padding: 18px 16px;
   gap: 14px;
-  background: var(--ap-bg-subbar);
+  background: var(--ap-surface);
 }
 .apple-im .im-inspector > div:first-child {
   align-items: center;
