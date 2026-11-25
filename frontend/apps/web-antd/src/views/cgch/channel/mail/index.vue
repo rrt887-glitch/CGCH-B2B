@@ -178,7 +178,9 @@ async function trash() {
 
 // ===== 附件（回复与写邮件共用） =====
 const MAX_ATTACHMENT = 25 * 1024 * 1024;
-const uploading = ref(false);
+/** 上传中的附件数量：用计数而不是布尔，两个附件任务重叠时不会提前变成“已完成” */
+const uploadingCount = ref(0);
+const uploading = computed(() => uploadingCount.value > 0);
 async function pickFiles(target: ChannelMailApi.Attachment[]) {
   const input = document.createElement('input');
   input.type = 'file';
@@ -190,12 +192,12 @@ async function pickFiles(target: ChannelMailApi.Attachment[]) {
       message.warning(
         `单个附件不能超过 25MB：${tooBig.map((f) => f.name).join('、')}`,
       );
-    uploading.value = true;
+    uploadingCount.value++;
     try {
       for (const f of files.filter((x) => x.size <= MAX_ATTACHMENT))
         target.push(await uploadMailAttachment(f));
     } finally {
-      uploading.value = false;
+      uploadingCount.value--;
     }
   };
   input.click();
@@ -256,6 +258,10 @@ function quote(m: ChannelMailApi.Message) {
 async function reply() {
   const m = current.value;
   if (!m || !replyText.value.trim()) return;
+  if (uploading.value) {
+    message.warning('附件还在上传，请等上传完成再发送');
+    return;
+  }
   replySending.value = true;
   try {
     const subject = /^re:/i.test(m.subject || '')
@@ -329,6 +335,10 @@ const split = (s: string) =>
 async function sendCompose() {
   if (!compose.accountId || !compose.to.trim()) {
     message.warning('请选择发件邮箱并填写收件人');
+    return;
+  }
+  if (uploading.value) {
+    message.warning('附件还在上传，请等上传完成再发送');
     return;
   }
   await sendMail({
@@ -707,6 +717,7 @@ onMounted(async () => {
       title="写邮件"
       :width="680"
       ok-text="发送"
+      :ok-button-props="{ disabled: uploading, loading: uploading }"
       @ok="sendCompose"
     >
       <div class="flex flex-col gap-3">
