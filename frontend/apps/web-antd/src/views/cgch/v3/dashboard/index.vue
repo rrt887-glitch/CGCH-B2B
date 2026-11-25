@@ -7,7 +7,7 @@ import type { Dayjs } from 'dayjs';
 
 import type { ChannelDashboardV3Api } from '#/api/channel/dashboard';
 
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
@@ -193,6 +193,14 @@ function openItem(i: ChannelDashboardV3Api.SupportItem) {
   });
 }
 
+/** 详情区在今日概览下方，展开后要把它滚到视口里，否则用户看不到内容已经展开 */
+const detailsEl = ref<HTMLDetailsElement>();
+async function openDetails() {
+  detailsOpen.value = true;
+  await nextTick();
+  detailsEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 onMounted(load);
 </script>
 
@@ -239,9 +247,10 @@ onMounted(load);
         ><AppleToday
           :data="data"
           @open="openItem"
-          @details="detailsOpen = true"
+          @details="openDetails"
       /></Spin>
       <details
+        ref="detailsEl"
         :open="detailsOpen"
         @toggle="detailsOpen = ($event.target as HTMLDetailsElement).open"
       >
@@ -817,5 +826,10 @@ onMounted(load);
   color: #007aff;
   cursor: pointer;
   font-size: 13px;
+}
+
+/* 从「全部」展开详情时 scrollIntoView 到顶部，留一点间距避免贴边 */
+.v3-dash details {
+  scroll-margin-top: 12px;
 }
 </style>
