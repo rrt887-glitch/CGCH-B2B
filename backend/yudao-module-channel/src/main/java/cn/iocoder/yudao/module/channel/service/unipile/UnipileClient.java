@@ -62,8 +62,12 @@ public final class UnipileClient {
         return id;
     }
 
-    /** 建只属于该 Scope 的 Key，返回明文 Key（只返回一次，调用方要立刻加密存库） */
-    public static String createScopeKey(ChannelUnipileProperties cfg, String scopeId, String name, int expireDays) {
+    /** 新建出来的租户 Key：编号 + 明文（明文只返回一次，调用方要立刻加密存库） */
+    public record ScopeKey(String id, String key) {
+    }
+
+    /** 建只属于该 Scope 的 Key */
+    public static ScopeKey createScopeKey(ChannelUnipileProperties cfg, String scopeId, String name, int expireDays) {
         ObjectNode body = JSON.createObjectNode();
         body.put("name", StrUtil.maxLength(name, 255));
         body.put("expires_at", ISO_MILLIS.format(Instant.now().plus(expireDays, ChronoUnit.DAYS)));
@@ -75,7 +79,15 @@ public final class UnipileClient {
         if (StrUtil.isBlank(key)) {
             throw new UnipileException("创建租户 Key 失败：返回里没有 api_key");
         }
-        return key;
+        return new ScopeKey(r.path("id").asText(""), key);
+    }
+
+    /** 删除旧 Key（换新成功后清理；删不掉就让它自然过期） */
+    public static void deleteScopeKey(ChannelUnipileProperties cfg, String keyId) {
+        if (StrUtil.isBlank(keyId)) {
+            return;
+        }
+        call(cfg, cfg.getServiceKey(), "DELETE", "/v2/api-keys/" + enc(keyId), null);
     }
 
     // ==================== 托管授权（扫码） ====================

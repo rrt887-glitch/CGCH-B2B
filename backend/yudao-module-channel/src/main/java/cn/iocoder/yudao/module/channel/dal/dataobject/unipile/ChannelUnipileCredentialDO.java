@@ -36,6 +36,12 @@ public class ChannelUnipileCredentialDO extends TenantBaseDO {
     /** 展示用脱敏 Key，形如 pk_****abcd */
     private String apiKeyMask;
 
+    /** 租户 Key 的到期时间：到期前自动换新，避免某天所有渠道突然失效 */
+    private java.time.LocalDateTime keyExpireTime;
+
+    /** Unipile 里这个 Key 的编号（换新后用来删掉旧的） */
+    private String keyId;
+
     /** active / disabled */
     private String status;
 

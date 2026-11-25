@@ -66,6 +66,8 @@ public class ChannelUnipileService {
     private static final int SYNC_MESSAGE_LIMIT = 20;
     /** 托管授权链接有效期（分钟）：手机上登录/选主页比较慢，给足 60 分钟 */
     private static final int AUTH_LINK_MINUTES = 60;
+    /** 租户 Key 剩多少天开始换新（每天检查一次） */
+    private static final int RENEW_BEFORE_DAYS = 30;
     /** 撞到 Unipile 限流的账号（每账号 100 次/天），本轮跳过它、不影响其它账号 */
     private final java.util.Set<Long> quotaBlockedAccounts = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -87,15 +89,25 @@ public class ChannelUnipileService {
                 if (upgraded != null) {
                     return upgraded;
                 }
+            } else if (saved.getKeyExpireTime() == null
+                    || !saved.getKeyExpireTime().isAfter(LocalDateTime.now().plusDays(RENEW_BEFORE_DAYS))) {
+                // 快到期（或老数据没有到期时间）：先用新 Key 顶上，避免到期当天所有渠道突然失效
+                if (renewKey(saved)) {
+                    ChannelUnipileCredentialDO renewed = credentialMapper.selectById(saved.getId());
+                    if (renewed != null) {
+                        return renewed;
+                    }
+                }
             }
             return saved;
         }
         ChannelUnipileCredentialDO row;
         try {
             String scopeId = UnipileClient.createScope(props, "tenant-" + tenantId, String.valueOf(tenantId));
-            String apiKey = UnipileClient.createScopeKey(props, scopeId, "tenant-" + tenantId, props.getKeyExpireDays());
+            UnipileClient.ScopeKey sk = UnipileClient.createScopeKey(props, scopeId, "tenant-" + tenantId, props.getKeyExpireDays());
             row = ChannelUnipileCredentialDO.builder()
-                    .scopeId(scopeId).apiKey(apiKey).apiKeyMask(mask(apiKey))
+                    .scopeId(scopeId).apiKey(sk.key()).apiKeyMask(mask(sk.key())).keyId(sk.id())
+                    .keyExpireTime(LocalDateTime.now().plusDays(props.getKeyExpireDays()))
                     .status(ChannelUnipileCredentialDO.STATUS_ACTIVE).build();
             log.info("[credential][租户 {} 创建 Unipile Scope {}]", tenantId, scopeId);
         } catch (UnipileClient.UnipileException e) {
@@ -117,9 +129,10 @@ public class ChannelUnipileService {
     private ChannelUnipileCredentialDO tryUpgradeToScoped(Long tenantId, ChannelUnipileCredentialDO saved) {
         try {
             String scopeId = UnipileClient.createScope(props, "tenant-" + tenantId, String.valueOf(tenantId));
-            String apiKey = UnipileClient.createScopeKey(props, scopeId, "tenant-" + tenantId, props.getKeyExpireDays());
+            UnipileClient.ScopeKey sk = UnipileClient.createScopeKey(props, scopeId, "tenant-" + tenantId, props.getKeyExpireDays());
             credentialMapper.updateById(ChannelUnipileCredentialDO.builder()
-                    .id(saved.getId()).scopeId(scopeId).apiKey(apiKey).apiKeyMask(mask(apiKey))
+                    .id(saved.getId()).scopeId(scopeId).apiKey(sk.key()).apiKeyMask(mask(sk.key())).keyId(sk.id())
+                    .keyExpireTime(LocalDateTime.now().plusDays(props.getKeyExpireDays()))
                     .status(ChannelUnipileCredentialDO.STATUS_ACTIVE).build());
             log.info("[credential][租户 {} 从单 Key 升级到 Scope {}]", tenantId, scopeId);
             return credentialMapper.selectById(saved.getId());
@@ -312,6 +325,70 @@ public class ChannelUnipileService {
         }
     }
 
+    // ==================== 租户 Key 续期 ====================
+
+    /**
+     * 每天检查一次：租户 Key 到期前 30 天就换新。
+     * 换新在同一个 Scope 下建新 Key、写回库、再删旧 Key；失败只记日志，下一天再试。
+     * 返回成功换新的租户数。
+     */
+    public int renewExpiringKeys() {
+        if (!enabled()) {
+            return 0;
+        }
+        java.util.List<ChannelUnipileCredentialDO> all =
+                TenantUtils.executeIgnore(() -> credentialMapper.selectList(null));
+        int n = 0;
+        for (ChannelUnipileCredentialDO c : all) {
+            if (c.getTenantId() == null || "global".equals(c.getScopeId()) || StrUtil.isBlank(c.getScopeId())) {
+                continue;
+            }
+            boolean due = c.getKeyExpireTime() == null
+                    || !c.getKeyExpireTime().isAfter(LocalDateTime.now().plusDays(RENEW_BEFORE_DAYS));
+            if (!due) {
+                continue;
+            }
+            try {
+                Boolean ok = TenantUtils.execute(c.getTenantId(), () -> renewKey(c));
+                if (Boolean.TRUE.equals(ok)) {
+                    n++;
+                }
+            } catch (Exception e) {
+                log.warn("[renewExpiringKeys][租户 {} 续期失败] {}", c.getTenantId(), e.getMessage());
+            }
+        }
+        if (n > 0) {
+            log.info("[renewExpiringKeys][本次换新 {} 个租户的 Unipile Key]", n);
+        }
+        return n;
+    }
+
+    /** 给一个租户的 Key 换新：同 Scope 重新建 Key，成功后删旧 Key */
+    private boolean renewKey(ChannelUnipileCredentialDO c) {
+        if (StrUtil.isBlank(c.getScopeId()) || "global".equals(c.getScopeId())) {
+            return false;
+        }
+        try {
+            UnipileClient.ScopeKey sk = UnipileClient.createScopeKey(props, c.getScopeId(),
+                    "tenant-" + c.getTenantId(), props.getKeyExpireDays());
+            java.time.LocalDateTime expire = LocalDateTime.now().plusDays(props.getKeyExpireDays());
+            credentialMapper.updateById(ChannelUnipileCredentialDO.builder()
+                    .id(c.getId()).apiKey(sk.key()).apiKeyMask(mask(sk.key())).keyId(sk.id())
+                    .keyExpireTime(expire).status(ChannelUnipileCredentialDO.STATUS_ACTIVE).build());
+            if (StrUtil.isNotBlank(c.getKeyId())) {
+                try {
+                    UnipileClient.deleteScopeKey(props, c.getKeyId());
+                } catch (Exception ignore) {
+                    // 旧 Key 删不掉就让它自然过期，不影响新 Key
+                }
+            }
+            log.info("[renewKey][租户 {} 的 Unipile Key 已续期到 {}]", c.getTenantId(), expire);
+            return true;
+        } catch (Exception e) {
+            log.warn("[renewKey][租户 {} 换新 Key 失败，继续用旧 Key：{}]", c.getTenantId(), e.getMessage());
+            return false;
+        }
+    }
     // ==================== 补偿同步 ====================
 
     /**
