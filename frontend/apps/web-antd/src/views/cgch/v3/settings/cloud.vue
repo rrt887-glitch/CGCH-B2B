@@ -97,6 +97,20 @@ async function beforeUpload(file: File) {
   return false;
 }
 
+/**
+ * 打开文件选择框。
+ *
+ * 不能写成 <Upload><Button>上传文件</Button></Upload>：ant-design-vue 的 rc-upload
+ * 会把子节点包进一个 tabindex="0"、role="button" 的容器里，容器本身也是一次可聚焦的
+ * 「按钮」，于是键盘用户会在同一个操作上停留两次，读屏也会念两个同名按钮。
+ * 这里改为隐藏 Upload 本体（只承载 file input），用独立按钮触发。
+ */
+const uploadRef = ref<InstanceType<typeof Upload>>();
+function pickFiles() {
+  const root = uploadRef.value?.$el as HTMLElement | undefined;
+  root?.querySelector<HTMLInputElement>('input[type="file"]')?.click();
+}
+
 // ===== 新建文件夹 / 编辑 =====
 const folderOpen = ref(false);
 const folderName = ref('');
@@ -153,9 +167,15 @@ onMounted(load);
     <div class="mb-3 flex flex-wrap items-center gap-3">
       <template v-if="canEdit">
       <Button @click="folderOpen = true">新建文件夹 <IconifyIcon icon="lucide:folder" class="ml-1 inline size-4" /></Button>
-      <Upload :show-upload-list="false" multiple :before-upload="beforeUpload">
-        <Button type="primary" :loading="uploading > 0">上传文件 <IconifyIcon icon="lucide:plus" class="ml-1 inline size-4" /></Button>
-      </Upload>
+      <Upload
+        ref="uploadRef"
+        class="cd__upload-hidden"
+        :show-upload-list="false"
+        :open-file-dialog-on-click="false"
+        multiple
+        :before-upload="beforeUpload"
+      />
+      <Button type="primary" :loading="uploading > 0" @click="pickFiles">上传文件 <IconifyIcon icon="lucide:plus" class="ml-1 inline size-4" /></Button>
       </template>
       <span v-else class="text-xs text-gray-500">企业云盘由管理员维护，你可以查看和下载</span>
       <div class="flex-1"></div>
@@ -240,6 +260,14 @@ onMounted(load);
 <style scoped>
 .cd {
   padding: 4px 16px 18px;
+}
+
+/*
+ * 上传控件只用来承载 file input：display:none 让它同时退出 tab 顺序和无障碍树，
+ * 页面上真正可聚焦的只有我们自己那个「上传文件」按钮，避免同一操作停留两次。
+ */
+.cd__upload-hidden {
+  display: none;
 }
 
 .cd__seg {
