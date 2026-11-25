@@ -30,8 +30,6 @@ import { IconifyIcon } from '@vben/icons';
 import { useUserStore } from '@vben/stores';
 
 import {
-  Alert,
-  Avatar,
   Button,
   Empty,
   Input,
@@ -39,13 +37,11 @@ import {
   message,
   Modal,
   Dropdown,
-  DropdownButton,
   Menu,
   MenuItem,
   Popover,
   Segmented,
   Select,
-  Space,
   Spin,
   Switch,
   Tag,
@@ -832,6 +828,23 @@ function useDraft() {
   usedDraftId.value = aiDraft.value.id;
   aiDraft.value = undefined;
 }
+async function sendDraftNow() {
+  if (!aiDraft.value?.content || !current.value || sending.value) return;
+  const draft = aiDraft.value;
+  sending.value = true;
+  try {
+    await sendWaMessage({
+      conversationId: current.value.id,
+      text: draft.content.trim(),
+    });
+    await closeDraft(draft.id, true);
+    aiDraft.value = undefined;
+    await refreshCurrent();
+    loadConversations(true);
+  } finally {
+    sending.value = false;
+  }
+}
 async function discardDraft() {
   if (!aiDraft.value) return;
   await closeDraft(aiDraft.value.id, false);
@@ -1182,8 +1195,51 @@ const MEDIA_LABEL: Record<string, string> = {
   document: '文件',
   sticker: '表情',
 };
-const initials = (c: ChannelWaApi.Conversation) =>
-  (c.profileName || c.waId).slice(0, 1).toUpperCase();
+const initials = (c: ChannelWaApi.Conversation) => {
+  const raw = (c.remarkName || c.customerName || c.profileName || c.waId || '?').trim();
+  const ch = raw.replace(/^[+\s]+/, '').slice(0, 1);
+  return (ch || '?').toUpperCase();
+};
+const AVATAR_GRADIENTS = [
+  'linear-gradient(180deg, #FFAB2E 0%, #FF9500 100%)', // 琥珀橙
+  'linear-gradient(180deg, #FF6259 0%, #FF3B30 100%)', // 珊瑚红
+  'linear-gradient(180deg, #3395FF 0%, #007AFF 100%)', // 苹果蓝
+  'linear-gradient(180deg, #4CD964 0%, #28CD41 100%)', // 翡翠绿
+  'linear-gradient(180deg, #C678F0 0%, #AF52DE 100%)', // 鸢尾紫
+  'linear-gradient(180deg, #7472E8 0%, #5856D6 100%)', // 靛青蓝
+  'linear-gradient(180deg, #2AD4CB 0%, #00B5AD 100%)', // 湖水青
+  'linear-gradient(180deg, #FF5C85 0%, #FF2D55 100%)', // 玫瑰粉
+];
+const avatarBg = (c: ChannelWaApi.Conversation) => {
+  const seed = String(c.profileName || c.waId || c.id || '');
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length];
+};
+const smartTime = (t?: number | string) => {
+  if (!t) return '';
+  const ms = toMs(t);
+  if (!ms) return '';
+  const d = new Date(ms);
+  const now = new Date();
+  if (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  ) {
+    return fmtDateTime(t, 'HH:mm');
+  }
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (
+    d.getFullYear() === yest.getFullYear() &&
+    d.getMonth() === yest.getMonth() &&
+    d.getDate() === yest.getDate()
+  ) {
+    return '昨天';
+  }
+  return fmtDateTime(t, 'MM-DD');
+};
 /** 隐藏了手机号的 WhatsApp 联系人：waId 是「隐藏编号@lid」，不是号码 */
 const hiddenNumber = (c?: { waId?: string }) => !!c?.waId?.endsWith('@lid');
 /** 隐藏号码联系人很多时用隐藏编号末 4 位区分 */
@@ -1231,10 +1287,10 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         class="im-list flex shrink-0 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E5EA] bg-white"
         :class="narrow ? (current ? 'hidden' : 'w-full') : 'w-80'"
       >
-        <div class="flex flex-col gap-2.5 px-4 pt-3.5">
+        <div class="im-list-header flex flex-col gap-2.5 px-3.5 pt-3.5 pb-2">
           <div class="flex items-center gap-2">
             <h2
-              class="m-0 min-w-0 flex-1 truncate text-base font-semibold text-[#1D1D1F]"
+              class="m-0 min-w-0 flex-1 truncate text-[19px] font-bold tracking-tight text-[#1D1D1F]"
             >
               {{ listTitle }}
             </h2>
@@ -1243,6 +1299,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 type="button"
                 class="im-new-btn"
                 aria-label="新建会话或群聊"
+                title="新建会话或群聊"
               >
                 <IconifyIcon icon="lucide:plus" class="size-4" />
               </button>
@@ -1254,6 +1311,41 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               </template>
             </Dropdown>
           </div>
+
+          <!-- iOS 风格无边框圆角搜索栏 -->
+          <div class="im-search-box">
+            <IconifyIcon icon="lucide:search" class="im-search-box__icon" />
+            <input
+              v-model="keyword"
+              type="search"
+              class="im-search-box__input"
+              placeholder="搜索客户、号码、备注名"
+              aria-label="搜索会话"
+              @keydown.enter="loadConversations()"
+              @search="loadConversations()"
+            />
+            <button
+              v-if="keyword"
+              type="button"
+              class="im-search-box__clear"
+              aria-label="清空搜索"
+              @click="
+                keyword = '';
+                loadConversations();
+              "
+            >
+              <IconifyIcon icon="lucide:x" class="size-3" />
+            </button>
+          </div>
+
+          <Select
+            v-if="!embedded"
+            v-model:value="accountId"
+            size="small"
+            :options="accountOptions"
+          />
+          <slot name="list-controls"></slot>
+
           <div class="im-status-pills" role="group" aria-label="会话状态">
             <button
               v-for="s in STATUS_FILTER"
@@ -1266,21 +1358,9 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               {{ s.value ? s.label : '全部' }}
             </button>
           </div>
-          <Select
-            v-if="!embedded"
-            v-model:value="accountId"
-            size="small"
-            :options="accountOptions"
-          />
-          <slot name="list-controls"></slot>
-          <InputSearch
-            v-model:value="keyword"
-            allow-clear
-            placeholder="搜索客户、号码、备注名"
-            @search="() => loadConversations()"
-          />
+
           <div
-            class="im-list-tabs flex border-0 border-b border-solid border-[#E5E5EA]"
+            class="im-list-tabs flex"
             role="tablist"
             aria-label="会话筛选"
           >
@@ -1290,123 +1370,137 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               type="button"
               role="tab"
               :aria-selected="listFilter === f.value"
-              class="im-list-tab -mb-px cursor-pointer border-0 border-b-2 border-solid bg-transparent px-0 pb-2 pt-1 text-[12px]"
-              :class="
-                listFilter === f.value
-                  ? 'border-[#0071E3] font-semibold text-[#1D1D1F]'
-                  : 'border-transparent text-[#86868B] hover:text-[#1D1D1F]'
-              "
+              class="im-list-tab"
+              :class="{ 'is-active': listFilter === f.value }"
               @click="listFilter = f.value as any"
             >
               {{ f.label }}
             </button>
           </div>
         </div>
-        <div class="flex-1 overflow-auto">
+
+        <div class="flex-1 overflow-auto pb-2">
           <Spin :spinning="listLoading">
-            <div v-if="conversations.length === 0" class="p-8">
-              <Empty :description="emptyDescription" />
+            <div
+              v-if="conversations.length === 0"
+              class="flex flex-col items-center justify-center gap-2 px-6 py-14 text-center"
+            >
+              <div
+                class="grid size-11 place-items-center rounded-2xl bg-black/[0.04] text-[#8E8E93]"
+              >
+                <IconifyIcon icon="lucide:inbox" class="size-5" />
+              </div>
+              <div class="text-[13px] text-[#86868B]">
+                {{ emptyDescription }}
+              </div>
             </div>
             <div
               v-for="c in conversations"
               :key="c.id"
               :aria-label="`打开会话 ${c.remarkName || c.customerName || contact(c)}`"
-              class="im-contact flex cursor-pointer gap-2.5 border-0 border-b border-solid border-[#F2F2F7] px-4 py-3"
-              :class="
-                current?.id === c.id
-                  ? 'im-selected bg-[#E8F2FC] shadow-[inset_3px_0_0_#0071E3]'
-                  : 'hover:bg-[#F5F5F7]'
-              "
+              class="im-contact flex cursor-pointer items-start gap-3"
+              :class="{ 'im-selected': current?.id === c.id }"
               @click="openConversation(c)"
             >
-              <Avatar
-                :size="36"
-                :src="c.avatarUrl || undefined"
-                class="shrink-0"
-                :class="c.avatarUrl ? '' : plat(c).avatar"
-                >{{ initials(c) }}</Avatar
+              <img
+                v-if="c.avatarUrl"
+                :src="c.avatarUrl"
+                alt=""
+                class="im-avatar im-avatar--md"
+              />
+              <span
+                v-else
+                class="im-avatar im-avatar--md"
+                :style="{ background: avatarBg(c) }"
+                aria-hidden="true"
+                >{{ initials(c) }}</span
               >
               <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <div
-                  class="flex items-center gap-1.5 text-[11px] text-[#86868B]"
-                >
+                <!-- 第一行：联系人名称 + 右侧智能时间 -->
+                <div class="flex items-center justify-between gap-2">
                   <span
-                    class="inline-block size-2 shrink-0 rounded-sm"
-                    :style="{
-                      background: PLATFORM_DOT[c.platform || 'whatsapp'],
-                    }"
-                  ></span>
-                  <span class="min-w-0 flex-1 truncate">{{
-                    props.accountId
-                      ? c.group
-                        ? '群聊'
-                        : plat(c).label
-                      : accountName(c.accountId) || plat(c).label
-                  }}</span>
-                  <span class="shrink-0"
-                    >{{ md(c.lastMessageTime) }}
-                    {{ hm(c.lastMessageTime) }}</span
+                    class="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-[#1D1D1F]"
                   >
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span
-                    class="min-w-0 flex-1 truncate font-semibold text-[#1D1D1F]"
-                  >
-                    <span v-if="c.starred" class="mr-1 text-amber-500">★</span>
+                    <IconifyIcon
+                      v-if="c.starred"
+                      icon="lucide:star"
+                      class="mr-1 inline size-3.5 align-[-2px] text-amber-500"
+                    />
                     <IconifyIcon
                       v-if="c.group"
                       icon="lucide:users"
-                      class="mr-0.5 inline size-3.5 align-[-2px] text-[#6E6E73]"
+                      class="mr-1 inline size-3.5 align-[-2px] text-[#6E6E73]"
                     />{{ c.remarkName || c.customerName || contact(c) }}
-                    <span
-                      v-if="c.group && c.aiEnabled"
-                      class="ml-1 rounded bg-[#E8F2FC] px-1 text-[10px] text-[#0071E3]"
-                      >AI</span
-                    >
+                  </span>
+                  <span
+                    class="shrink-0 text-[11.5px] tabular-nums"
+                    :class="
+                      c.unreadCount
+                        ? 'font-semibold text-[#007AFF]'
+                        : 'text-[#8E8E93]'
+                    "
+                    >{{ smartTime(c.lastMessageTime) }}</span
+                  >
+                </div>
+
+                <!-- 第二行：最新消息摘要 + 蓝色未读角标 -->
+                <div class="flex items-center justify-between gap-2">
+                  <span class="min-w-0 flex-1 truncate text-[12.5px] leading-[18px] text-[#6E6E73]">
+                    <span v-if="c.teamPublic" class="mr-1 font-medium text-[#FF9500]"
+                      >[公开]</span
+                    ><span
+                      v-if="teamView && c.handlerName"
+                      class="mr-1 font-medium text-[#007AFF]"
+                      >[{{ c.handlerName }}]</span
+                    >{{ c.lastMessagePreview || '暂无消息内容' }}
                   </span>
                   <span
                     v-if="c.unreadCount"
-                    class="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[#0071E3] px-1.5 text-[11px] font-semibold text-white"
+                    class="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[#007AFF] px-1.5 text-[11px] font-semibold text-white tabular-nums"
                   >
                     {{ c.unreadCount > 99 ? '99+' : c.unreadCount }}
                   </span>
                 </div>
-                <div class="truncate text-[13px] text-[#6E6E73]">
-                  <span v-if="c.teamPublic" class="mr-1 text-[#A05A00]"
-                    >[已公开]</span
-                  ><span
-                    v-if="teamView && c.handlerName"
-                    class="mr-1 text-[#0071E3]"
-                    >[{{ c.handlerName }}]</span
-                  >{{ c.lastMessagePreview }}
-                </div>
-                <div
-                  v-if="
-                    (c.priority ?? 0) > 0 ||
-                    c.customerLevel ||
-                    (!statusFilter && c.status && c.status !== 'open')
-                  "
-                  class="mt-0.5 flex flex-wrap gap-1"
-                >
+
+                <!-- 第三行：渠道品牌色标签 + AI 接待状态 + 等级/优先级药丸 -->
+                <div class="mt-0.5 flex flex-wrap items-center gap-1.5">
+                  <span
+                    class="text-[11px] font-semibold leading-4"
+                    :style="{
+                      color: PLATFORM_DOT[c.platform || 'whatsapp'] || '#007AFF',
+                    }"
+                  >
+                    {{
+                      props.accountId
+                        ? c.group
+                          ? '群聊'
+                          : plat(c).label
+                        : accountName(c.accountId) || plat(c).label
+                    }}
+                  </span>
+                  <span
+                    v-if="c.aiEnabled"
+                    class="rounded-full bg-[#F3EEFF] px-1.5 text-[10.5px] font-medium leading-[17px] text-[#7C3AED]"
+                    >AI 接待中</span
+                  >
                   <span
                     v-if="(c.priority ?? 0) > 0"
-                    class="rounded px-1.5 text-[11px] font-medium leading-[18px]"
+                    class="rounded-full px-1.5 text-[10.5px] font-medium leading-[17px]"
                     :style="{
                       color: priorityMeta(c.priority)?.color,
-                      background: '#F5F5F7',
-                      border: `1px solid ${priorityMeta(c.priority)?.color}33`,
+                      background: `${priorityMeta(c.priority)?.color}14`,
                     }"
                   >
                     {{ priorityMeta(c.priority)?.label }}
                   </span>
                   <span
                     v-if="c.customerLevel"
-                    class="rounded bg-[#FFF4E0] px-1.5 text-[11px] leading-[18px] text-[#A05A00]"
+                    class="rounded-full bg-[#FFF4E0] px-1.5 text-[10.5px] font-medium leading-[17px] text-[#B25E00]"
                     >{{ levelLabel(c.customerLevel) }}</span
                   >
                   <span
                     v-if="!statusFilter && c.status && c.status !== 'open'"
-                    class="rounded bg-[#F2F2F7] px-1.5 text-[11px] leading-[18px] text-[#424245]"
+                    class="rounded-full bg-black/[0.05] px-1.5 text-[10.5px] leading-[17px] text-[#6E6E73]"
                   >
                     {{ statusLabel(c.status) }}
                   </span>
@@ -1422,13 +1516,24 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         class="im-thread min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-solid border-[#E5E5EA] bg-white"
         :class="narrow && !current ? 'hidden' : 'flex'"
       >
-        <div v-if="!current" class="flex h-full items-center justify-center">
-          <Empty description="选择一个会话" />
+        <div
+          v-if="!current"
+          class="flex h-full flex-col items-center justify-center gap-3 px-6 text-center"
+        >
+          <div class="im-empty-glyph">
+            <IconifyIcon icon="lucide:messages-square" class="size-7" />
+          </div>
+          <div class="text-[16px] font-semibold text-[#1D1D1F]">
+            选择一个会话开始沟通
+          </div>
+          <div class="max-w-xs text-[13px] leading-relaxed text-[#86868B]">
+            左侧选择客户消息即可查看上下文，支持 AI 自动接待、多语言互译与知识库辅助起草。
+          </div>
         </div>
         <template v-else>
           <div
-            class="im-toolbar flex items-center justify-between border-0 border-b border-solid border-[#E5E5EA] px-5 py-3"
-            :class="narrow ? 'flex-wrap gap-2 !px-3' : ''"
+            class="im-toolbar flex items-center justify-between gap-3 px-5 py-3"
+            :class="narrow ? 'flex-wrap !px-3' : ''"
           >
             <div class="flex min-w-0 flex-1 items-center gap-3">
               <Button
@@ -1442,100 +1547,95 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               >
                 <IconifyIcon icon="lucide:chevron-left" class="size-5" />
               </Button>
-              <Avatar
-                :size="36"
-                :src="current.avatarUrl || undefined"
-                :class="
-                  current.avatarUrl
-                    ? 'shrink-0'
-                    : `shrink-0 ${plat(current).avatar}`
-                "
-                >{{ initials(current) }}</Avatar
+              <img
+                v-if="current.avatarUrl"
+                :src="current.avatarUrl"
+                alt=""
+                class="im-avatar im-avatar--md"
+              />
+              <span
+                v-else
+                class="im-avatar im-avatar--md"
+                :style="{ background: avatarBg(current) }"
+                aria-hidden="true"
+                >{{ initials(current) }}</span
               >
               <div class="min-w-0 flex-1">
-                <div
-                  class="truncate whitespace-nowrap text-[17px] font-semibold tracking-tight"
-                >
-                  <span v-if="current.starred" class="mr-1 text-amber-500"
-                    >★</span
-                  >{{ current.remarkName || contact(current) }}
-              <Button
-                type="text"
-                size="small"
-                class="!h-6 !px-1 align-middle"
-                :aria-label="remarkTitle"
-                @click="openRemark"
-                ><IconifyIcon icon="lucide:pencil" class="size-3.5 text-gray-400"
-              /></Button>
-                  <span v-if="current.remarkName" class="text-sm text-gray-400"
-                    >（{{ contact(current) }}）</span
+                <div class="flex items-center gap-1.5">
+                  <span
+                    class="truncate text-[16px] font-bold tracking-tight text-[#1D1D1F]"
                   >
-                  <Tooltip
-                    v-if="isWa(current) && hiddenNumber(current)"
-                    title="对方在 WhatsApp 上隐藏了手机号，可以照常收发消息；对方之后带上号码时会自动合并到号码会话"
+                    {{ current.remarkName || contact(current) }}
+                  </span>
+                  <button
+                    type="button"
+                    class="im-icon-ghost"
+                    :aria-label="remarkTitle"
+                    :title="remarkTitle"
+                    @click="openRemark"
                   >
-                    <span class="text-sm text-gray-400">隐藏号码</span>
-                  </Tooltip>
-                  <Tag v-else-if="current.group" color="green" class="ml-1"
-                    >群聊</Tag
-                  >
-                  <span v-else-if="isWa(current)" class="text-sm text-gray-400"
-                    >+{{ current.waId }}</span
-                  >
-                  <Tag v-else :color="plat(current).color" class="ml-1">{{
-                    plat(current).label
-                  }}</Tag>
-                </div>
-                <div class="mt-1 flex flex-wrap gap-1.5">
-                  <Tag
+                    <IconifyIcon icon="lucide:pencil" class="size-3.5" />
+                  </button>
+                  <button
                     v-if="current.customerName"
-                    color="blue"
-                    class="cursor-pointer"
+                    type="button"
+                    class="im-crm-chip im-crm-chip--blue"
                     @click="
                       router.push(`/crm/customer/detail/${current.customerId}`)
                     "
                   >
-                    客户：{{ current.customerName }}
-                  </Tag>
-                  <Tag
+                    客户 · {{ current.customerName }}
+                  </button>
+                  <button
                     v-else-if="current.clueName"
-                    color="cyan"
-                    class="cursor-pointer"
+                    type="button"
+                    class="im-crm-chip im-crm-chip--teal"
                     @click="router.push(`/crm/clue/detail/${current.clueId}`)"
                   >
-                    线索：{{ current.clueName }}
-                  </Tag>
-                  <!-- 群聊：AI 自动回复默认关闭，在这里按群开启 -->
-                  <span
-                    v-else-if="current.group"
-                    class="inline-flex items-center gap-1.5 text-xs text-[#6E6E73]"
+                    线索 · {{ current.clueName }}
+                  </button>
+                </div>
+                <div
+                  class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#86868B]"
+                >
+                  <span>{{ plat(current).label }}</span>
+                  <template v-if="isWa(current) && hiddenNumber(current)">
+                    <span>·</span>
+                    <Tooltip
+                      title="对方在 WhatsApp 上隐藏了手机号，可以照常收发消息；对方之后带上号码时会自动合并到号码会话"
+                    >
+                      <span class="cursor-help">隐藏号码</span>
+                    </Tooltip>
+                  </template>
+                  <template v-else-if="current.group">
+                    <span>·</span>
+                    <span>群聊</span>
+                  </template>
+                  <template v-else-if="isWa(current)">
+                    <span>·</span>
+                    <span class="tabular-nums">+{{ current.waId }}</span>
+                  </template>
+                  <span v-if="current.remarkName" class="truncate text-[#A1A1A6]"
+                    >（{{ contact(current) }}）</span
                   >
-                    AI 自动回复
-                    <Switch
-                      size="small"
-                      :checked="!!current.aiEnabled"
-                      :disabled="readOnly"
-                      :loading="aiSaving"
-                      :aria-label="aiReplyLabel"
-                      @change="(v) => toggleConversationAi(!!v)"
-                    />
-                  </span>
-                  <Tag v-else>未关联客户</Tag>
-                  <span
-                    v-if="isWa(current) && !current.group"
-                    class="inline-flex items-center gap-1.5 text-xs text-[#6E6E73] xl:hidden"
+                  <span>·</span>
+                  <Tooltip
+                    v-if="current.windowOpen"
+                    :title="`回复窗口在 ${fmtDateTime(current.windowExpireTime)} 关闭`"
                   >
-                    AI 自动回复
-                    <Switch
-                      size="small"
-                      :checked="!!current.aiEnabled"
-                      :disabled="readOnly"
-                      :loading="aiSaving"
-                      :aria-label="aiReplyLabel"
-                      @change="(v) => toggleConversationAi(!!v)"
-                    />
+                    <span class="inline-flex items-center gap-1 text-[#248A3D]">
+                      <span class="size-1.5 rounded-full bg-[#34C759]"></span>
+                      24h 窗口内
+                    </span>
+                  </Tooltip>
+                  <span
+                    v-else
+                    class="inline-flex items-center gap-1 text-[#C93400]"
+                  >
+                    <span class="size-1.5 rounded-full bg-[#FF9500]"></span>
+                    {{ isWa(current) ? '仅可发模板' : '等待客户来信' }}
                   </span>
-                  <!-- 窄屏没有右侧客户栏时，阶段和标签在这里改 -->
+                  <!-- 窄屏没有右侧客户栏时，阶段在这里快捷改 -->
                   <span
                     v-if="current.customerId && customerStage !== undefined"
                     class="contents xl:hidden"
@@ -1552,27 +1652,12 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                       "
                       @change="(v: any) => changeStage(Number(v))"
                     />
-                    <Tag
-                      v-for="t in customerTags.slice(0, 3)"
-                      :key="t"
-                      class="m-0"
-                      >{{ tagName(t) || t }}</Tag
-                    >
                   </span>
-                  <Tooltip
-                    v-if="current.windowOpen"
-                    :title="`窗口在 ${fmtDateTime(current.windowExpireTime)} 关闭`"
-                  >
-                    <Tag color="green">24 小时窗口内</Tag>
-                  </Tooltip>
-                  <Tag v-else color="orange">{{
-                    isWa(current)
-                      ? '窗口已关闭，仅可发模板'
-                      : '窗口已关闭，等待客户来信'
-                  }}</Tag>
                 </div>
               </div>
             </div>
+
+            <!-- 顶栏右侧：AI 托管开关 + 转给同事 + 收藏 + 更多 + 标为已解决 -->
             <div class="flex shrink-0 items-center gap-2">
               <Tooltip
                 :title="
@@ -1583,38 +1668,69 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               >
                 <span
                   class="inline-block size-2 rounded-full"
-                  :class="live ? 'bg-green-500' : 'bg-gray-300'"
+                  :class="live ? 'bg-[#34C759]' : 'bg-[#D1D1D6]'"
                 ></span>
               </Tooltip>
-              <Tooltip :title="current.starred ? '取消收藏' : '收藏'">
-                <Button
+
+              <label
+                v-if="isWa(current)"
+                class="im-ai-toggle"
+                :title="aiReplyLabel"
+              >
+                <Switch
                   size="small"
-                  :aria-label="current.starred ? '取消收藏' : '收藏'"
+                  :checked="!!current.aiEnabled"
+                  :disabled="readOnly"
+                  :loading="aiSaving"
+                  :aria-label="aiReplyLabel"
+                  @change="(v) => toggleConversationAi(!!v)"
+                />
+                <span>AI 托管</span>
+              </label>
+
+              <Tag v-if="readOnly" color="orange" class="m-0 !rounded-full"
+                >同事公开 · 只读</Tag
+              >
+
+              <button
+                v-if="!readOnly"
+                type="button"
+                class="im-pill-action im-pill-action--soft"
+                @click="openTransfer"
+              >
+                {{ current.handlerName ? `转交 · ${current.handlerName}` : '转给同事' }}
+              </button>
+
+              <Tooltip :title="current.starred ? '取消收藏' : '收藏会话'">
+                <button
+                  type="button"
+                  class="im-circle-action"
+                  :class="{ 'is-starred': current.starred }"
+                  :aria-label="current.starred ? '取消收藏' : '收藏会话'"
                   @click="toggleStar(current)"
                 >
-                  <span
-                    :class="
-                      current.starred ? 'text-amber-500' : 'text-[#86868B]'
-                    "
-                    >★</span
-                  >
-                </Button>
+                  <IconifyIcon icon="lucide:star" class="size-4" />
+                </button>
               </Tooltip>
-              <Tag v-if="readOnly" color="orange" class="m-0"
-                >同事公开 · 只能查看</Tag
-              >
-              <Button v-if="!readOnly" size="small" @click="openTransfer">
-                <IconifyIcon
-                  icon="lucide:user-round-plus"
-                  class="mr-1 inline size-3.5 align-[-2px]"
-                />{{ current.handlerName || '指派' }}
-              </Button>
+
               <Dropdown v-if="!readOnly" :trigger="['click']">
-                <Button size="small">更多</Button>
+                <button
+                  type="button"
+                  class="im-circle-action"
+                  aria-label="更多操作"
+                >
+                  <IconifyIcon icon="lucide:ellipsis" class="size-4" />
+                </button>
                 <template #overlay>
                   <Menu @click="(e: any) => onMenu(String(e.key))">
+                    <MenuItem v-if="current.status === 'pending'" key="status-open" @click="setStatus('open')">
+                      回到进行中
+                    </MenuItem>
+                    <MenuItem v-else-if="current.status !== 'resolved'" key="status-pending" @click="setStatus('pending')">
+                      标为待处理
+                    </MenuItem>
                     <MenuItem key="archive">{{
-                      current.archived ? '移出归档' : '归档'
+                      current.archived ? '移出归档' : '归档会话'
                     }}</MenuItem>
                     <MenuItem key="remark">设置备注名</MenuItem>
                     <MenuItem key="transfer">转交给同事</MenuItem>
@@ -1624,29 +1740,24 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   </Menu>
                 </template>
               </Dropdown>
+
               <template v-if="readOnly"></template>
-              <Button
+              <button
                 v-else-if="current.status === 'resolved'"
-                size="small"
+                type="button"
+                class="im-pill-action im-pill-action--soft"
                 @click="setStatus('open')"
-                >重新打开</Button
               >
-              <DropdownButton
+                重新打开
+              </button>
+              <button
                 v-else
-                size="small"
-                type="primary"
+                type="button"
+                class="im-pill-action im-pill-action--primary"
                 @click="setStatus('resolved')"
               >
-                标记已解决
-                <template #overlay>
-                  <Menu @click="(e: any) => setStatus(e.key as any)">
-                    <MenuItem v-if="current.status === 'pending'" key="open"
-                      >回到进行中</MenuItem
-                    >
-                    <MenuItem v-else key="pending">标为待处理</MenuItem>
-                  </Menu>
-                </template>
-              </DropdownButton>
+                标为已解决
+              </button>
             </div>
           </div>
 
@@ -1873,18 +1984,31 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               >
                 {{ aiDraft.content }}
               </div>
-              <div class="mt-3 flex items-center gap-2">
-                <Button
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <button
                   v-if="aiDraft.content && current.windowOpen"
-                  size="small"
-                  type="primary"
-                  shape="round"
+                  type="button"
+                  class="im-pill-action im-pill-action--primary"
+                  :disabled="sending"
+                  @click="sendDraftNow"
+                >
+                  发送
+                </button>
+                <button
+                  v-if="aiDraft.content && current.windowOpen"
+                  type="button"
+                  class="im-pill-action im-pill-action--soft"
                   @click="useDraft"
-                  >放进输入框修改</Button
                 >
-                <Button size="small" shape="round" @click="discardDraft"
-                  >不用</Button
+                  放进输入框修改
+                </button>
+                <button
+                  type="button"
+                  class="im-pill-action im-pill-action--soft"
+                  @click="discardDraft"
                 >
+                  不用
+                </button>
               </div>
             </div>
           </div>
@@ -2096,132 +2220,267 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 </button>
               </div>
             </template>
-            <Alert
+            <div
               v-else
-              type="warning"
-              show-icon
-              :message="
-                isWa(current)
-                  ? '客户超过 24 小时没有回复，WhatsApp 规定此时只能发送已审核的模板消息。'
-                  : `客户超过 24 小时没有回复，${plat(current).label} 规定此时不能再发消息，等客户再次来信后即可回复。`
-              "
+              class="flex items-center justify-between gap-3 rounded-xl bg-[#FFF8EB] px-3.5 py-2.5 text-[13px] text-[#9A5B00]"
             >
-              <template v-if="isWa(current)" #action
-                ><Button type="primary" size="small" @click="openTemplate()"
-                  >发送模板</Button
-                ></template
+              <div class="flex items-center gap-2">
+                <IconifyIcon icon="lucide:clock" class="size-4 shrink-0 text-[#FF9500]" />
+                <span>{{
+                  isWa(current)
+                    ? '客户超过 24 小时未回复，当前仅可发送已审核的模板消息。'
+                    : `客户超过 24 小时未回复，等对方再次来信后即可直接回复。`
+                }}</span>
+              </div>
+              <button
+                v-if="isWa(current)"
+                type="button"
+                class="im-pill-action im-pill-action--primary shrink-0"
+                @click="openTemplate()"
               >
-            </Alert>
+                发送模板
+              </button>
+            </div>
           </div>
         </template>
       </div>
 
-      <!-- 客户信息栏（设计稿「会话工作台」右侧）：关联了客户时显示，窄屏隐藏 -->
+      <!-- 客户信息栏（设计稿「会话工作台」右侧）：选中会话时显示，窄屏隐藏 -->
       <aside
         v-if="current"
-        class="im-inspector hidden w-80 shrink-0 flex-col gap-5 overflow-auto rounded-xl border border-solid border-[#E5E5EA] bg-white p-5 xl:flex"
+        class="im-inspector hidden w-80 shrink-0 flex-col gap-4 overflow-auto bg-white p-5 xl:flex"
       >
-        <!-- 联系人头像名片（参考图：居中大头像 + 名称 + 简洁分组开关卡） -->
-        <div class="flex flex-col items-center gap-2 pb-2 text-center">
-          <Avatar
-            :size="56"
-            :src="current.avatarUrl || undefined"
-            :class="current.avatarUrl ? '' : plat(current).avatar"
-            >{{ initials(current) }}</Avatar
+        <!-- 联系人头像名片（居中彩色单字大头像 + 名称 + 公司/账号副标题 + 标签药丸） -->
+        <div class="flex flex-col items-center gap-2 pb-1 text-center">
+          <img
+            v-if="current.avatarUrl"
+            :src="current.avatarUrl"
+            alt=""
+            class="im-avatar im-avatar--lg"
+          />
+          <span
+            v-else
+            class="im-avatar im-avatar--lg"
+            :style="{ background: avatarBg(current) }"
+            aria-hidden="true"
+            >{{ initials(current) }}</span
           >
           <div class="w-full min-w-0">
-            <div class="truncate text-[16px] font-bold text-[#1D1D1F]">
-              {{ current.remarkName || contact(current) }}
+            <div class="truncate text-[16px] font-bold tracking-tight text-[#1D1D1F]">
+              {{ customer?.name || current.remarkName || contact(current) }}
             </div>
             <div class="mt-0.5 truncate text-[12px] text-[#86868B]">
-              {{ plat(current).label }} ·
               {{
-                isWa(current)
-                  ? waNumber(current)
-                  : accountName(current.accountId)
+                customer?.companyName ||
+                `${plat(current).label} · ${
+                  isWa(current)
+                    ? waNumber(current)
+                    : accountName(current.accountId)
+                }`
               }}
             </div>
           </div>
+
+          <!-- 客户标签行（参考图：阶段蓝药丸 + 等级暖黄药丸 + 客户标签 + 添加标签） -->
           <div
-            v-if="!current.group && !current.customerId"
+            v-if="current.customerId && customerStage !== undefined"
+            class="mt-1 flex flex-wrap justify-center gap-1.5"
+          >
+            <span
+              class="rounded-full bg-[#E8F2FF] px-2.5 py-0.5 text-[11px] font-semibold text-[#007AFF]"
+            >
+              {{ stageLabel(customerStage) }}
+            </span>
+            <span
+              v-if="customer?.level"
+              class="rounded-full bg-[#FFF4E0] px-2.5 py-0.5 text-[11px] font-semibold text-[#B25E00]"
+            >
+              {{ levelLabel(customer.level) }}
+            </span>
+            <span
+              v-for="t in customerTags"
+              :key="t"
+              class="rounded-full bg-[#F2F2F7] px-2.5 py-0.5 text-[11px] font-medium text-[#424245]"
+            >
+              {{ tagName(t) || t }}
+            </span>
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              :open="tagEditOpen"
+              @open-change="openTagEdit"
+            >
+              <template #content>
+                <div class="flex w-72 flex-col gap-2">
+                  <div class="text-xs text-gray-500">客户标签</div>
+                  <Select
+                    v-model:value="tagDraft"
+                    mode="multiple"
+                    size="small"
+                    placeholder="选择标签"
+                    :options="
+                      tagOptions.map((t) => ({ label: t.name, value: t.id }))
+                    "
+                    option-filter-prop="label"
+                  />
+                  <div class="text-xs text-gray-500">客户分组</div>
+                  <Select
+                    v-model:value="groupDraft"
+                    size="small"
+                    allow-clear
+                    placeholder="不分组"
+                    :options="
+                      groupOptions.map((g) => ({
+                        label: g.name,
+                        value: g.id,
+                      }))
+                    "
+                  />
+                  <div class="text-right">
+                    <Button size="small" type="primary" shape="round" @click="saveTags"
+                      >保存</Button
+                    >
+                  </div>
+                </div>
+              </template>
+              <button
+                type="button"
+                class="cursor-pointer rounded-full border border-dashed border-[#D2D2D7] bg-white px-2 py-0.5 text-[11px] text-[#6E6E73] hover:border-[#007AFF] hover:text-[#007AFF]"
+              >
+                + 标签
+              </button>
+            </Popover>
+          </div>
+          <div
+            v-else-if="!current.group"
             class="mt-0.5 flex items-center gap-1.5 text-[12px] text-[#86868B]"
           >
             <span>{{
               current.clueName
                 ? `线索：${current.clueName}`
-                : '未关联 CRM 客户'
+                : '尚未关联 CRM 客户'
             }}</span>
             <a
               v-if="current.clueId"
               @click="router.push(`/crm/clue/detail/${current.clueId}`)"
-              >查看</a
+              >查看 ›</a
             >
           </div>
         </div>
 
-        <!-- iOS 分组开关卡（说明收进悬停提示，不再堆 8 行灰字） -->
+        <!-- 客户档案 iOS Inset Grouped 信息卡（关联客户时置顶展示核心业务信息） -->
+        <template v-if="current.customerId && customerStage !== undefined">
+          <div class="im-info-group">
+            <div v-if="customer?.countryCode" class="im-info-row">
+              <span class="im-info-label">国家 / 地区</span>
+              <span class="truncate text-[13px] font-medium text-[#1D1D1F]">
+                {{ countryName(customer.countryCode) || customer.countryCode }}
+              </span>
+            </div>
+            <div class="im-info-row">
+              <span class="im-info-label">客户负责人</span>
+              <span class="truncate text-[13px] font-medium text-[#1D1D1F]">
+                {{ customer?.ownerUserName || '-' }}
+              </span>
+            </div>
+            <div v-if="customer?.mobile" class="im-info-row">
+              <span class="im-info-label">联系电话</span>
+              <span class="truncate text-[13px] font-medium tabular-nums text-[#1D1D1F]">
+                {{ customer.mobile }}
+              </span>
+            </div>
+            <div v-if="customer?.email" class="im-info-row">
+              <span class="im-info-label">联系邮箱</span>
+              <span class="truncate text-[12.5px] font-medium text-[#1D1D1F]">
+                {{ customer.email }}
+              </span>
+            </div>
+            <div class="im-info-row">
+              <span class="im-info-label">下次跟进</span>
+              <span
+                class="text-[13px] font-medium tabular-nums"
+                :class="
+                  customer?.contactNextTime ? 'text-[#C93400]' : 'text-[#86868B]'
+                "
+              >
+                {{ fmtDateTime(customer?.contactNextTime, 'MM-DD HH:mm', '未预约') }}
+              </span>
+            </div>
+          </div>
+
+          <!-- 客户阶段步进条 -->
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between text-[12px]">
+              <span class="font-semibold text-[#6E6E73]">跟进阶段</span>
+              <span class="font-medium text-[#007AFF]">{{
+                stageLabel(customerStage)
+              }}</span>
+            </div>
+            <div class="flex gap-1">
+              <button
+                v-for="s in stageSteps"
+                :key="s.value"
+                type="button"
+                class="flex flex-1 cursor-pointer flex-col items-center gap-1 border-0 bg-transparent p-0"
+                :title="`切换阶段为「${s.label}」`"
+                @click="changeStage(s.value)"
+              >
+                <span
+                  class="block h-1.5 w-full rounded-full transition-colors"
+                  :class="s.done ? 'bg-[#007AFF]' : 'bg-[#E5E5EA]'"
+                ></span>
+                <span
+                  class="text-[10.5px]"
+                  :class="
+                    s.on ? 'font-semibold text-[#007AFF]' : 'text-[#8E8E93]'
+                  "
+                  >{{ s.label }}</span
+                >
+              </button>
+            </div>
+          </div>
+
+          <!-- 最近跟进（淡紫柔光摘要卡，呼应参考图「AI 小结 / 跟进摘要」） -->
+          <div class="im-summary-card">
+            <div class="flex items-center justify-between">
+              <span class="inline-flex items-center gap-1 text-[12px] font-semibold text-[#7C3AED]">
+                <IconifyIcon icon="lucide:sparkles" class="size-3.5" />
+                最近跟进
+              </span>
+              <span
+                v-if="customer?.contactLastTime"
+                class="text-[11px] tabular-nums text-[#8E8E93]"
+              >
+                {{ fmtDateTime(customer.contactLastTime, 'MM-DD HH:mm') }}
+              </span>
+            </div>
+            <div class="mt-1.5 text-[12.5px] leading-[19px] text-[#3A3A3C]">
+              {{ customer?.contactLastContent || '暂无跟进记录，可点击下方「写跟进」补充沟通要点。' }}
+            </div>
+          </div>
+        </template>
+
+        <!-- 会话协作与属性 iOS 分组卡 -->
         <div class="im-info-group">
           <div class="im-info-row">
-            <Tooltip
-              :title="
-                readOnly
-                  ? '同事公开给团队的会话：可查看消息、写内部备注'
-                  : '打开后公司全部成员都能在「团队会话」中查看此会话'
-              "
-            >
-              <span class="im-info-label">公开给团队</span>
-            </Tooltip>
-            <Switch
-              size="small"
-              :checked="!!current.teamPublic"
-              :disabled="readOnly"
-              :loading="teamPublicSaving"
-              @change="(v: any) => toggleTeamPublic(!!v)"
-            />
-          </div>
-          <div v-if="isWa(current)" class="im-info-row">
-            <Tooltip
-              :title="
-                current.group
-                  ? '开启后，群里有新消息时按「AI 接待设置」处理'
-                  : '关闭后交由人工接待；开启后按「AI 接待设置」处理'
-              "
-            >
-              <span class="im-info-label">{{ aiReplyLabel }}</span>
-            </Tooltip>
-            <Switch
-              size="small"
-              :checked="!!current.aiEnabled"
-              :disabled="readOnly"
-              :loading="aiSaving"
-              :aria-label="aiReplyLabel"
-              @change="(v) => toggleConversationAi(!!v)"
-            />
-          </div>
-          <div class="im-info-row">
-            <span class="im-info-label">处理人</span>
-            <span class="flex items-center gap-2 text-[13px] font-medium text-[#1D1D1F]">
+            <span class="im-info-label">会话处理人</span>
+            <span class="flex items-center gap-1.5 text-[13px] font-medium text-[#1D1D1F]">
               <span class="truncate">{{ current.handlerName || '-' }}</span>
-              <a class="shrink-0 text-xs font-normal" @click="openTransfer">转交</a>
+              <a
+                v-if="!readOnly"
+                class="shrink-0 text-xs font-normal text-[#007AFF]"
+                @click="openTransfer"
+                >转交</a
+              >
             </span>
-          </div>
-          <div class="im-info-row">
-            <span class="im-info-label">状态</span>
-            <Select
-              :value="current.status || 'open'"
-              size="small"
-              class="w-24"
-              :options="CONVERSATION_STATUS"
-              aria-label="会话状态"
-              @change="(v: any) => setStatus(v)"
-            />
           </div>
           <div class="im-info-row">
             <span class="im-info-label">优先级</span>
             <Select
               :value="current.priority ?? 0"
               size="small"
-              class="w-24"
+              :bordered="false"
+              class="-mr-2 w-24 text-right"
               :options="
                 PRIORITY_OPTIONS.map((o) => ({
                   label: o.label,
@@ -2233,213 +2492,81 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             />
           </div>
           <div class="im-info-row">
-            <span class="im-info-label">收件箱</span>
-            <span class="truncate text-[13px] font-medium text-[#1D1D1F]">{{
+            <Tooltip
+              :title="
+                readOnly
+                  ? '同事公开给团队的会话：可查看消息、写内部备注'
+                  : '打开后公司全部成员都能在「团队会话」中查看此会话'
+              "
+            >
+              <span class="im-info-label cursor-help">公开给团队</span>
+            </Tooltip>
+            <Switch
+              size="small"
+              :checked="!!current.teamPublic"
+              :disabled="readOnly"
+              :loading="teamPublicSaving"
+              @change="(v: any) => toggleTeamPublic(!!v)"
+            />
+          </div>
+          <div class="im-info-row">
+            <span class="im-info-label">所属渠道</span>
+            <span class="truncate text-[12.5px] font-medium text-[#6E6E73]">{{
               accountName(current.accountId) || plat(current).label
             }}</span>
           </div>
         </div>
 
-        <template v-if="current.customerId && customerStage !== undefined">
-          <div
-            class="flex flex-col gap-1 border-0 border-t border-solid border-[#F2F2F7] pt-4"
-          >
-            <div class="text-xs text-[#86868B]">客户</div>
-            <a
-              class="text-base font-semibold text-[#1D1D1F]"
-              @click="router.push(`/crm/customer/detail/${current.customerId}`)"
-              >{{ customer?.name || current.customerName }}</a
-            >
-            <div class="mt-1 flex flex-wrap gap-1.5">
-              <span
-                v-if="customer?.level"
-                class="rounded bg-[#FFF4E0] px-2 py-0.5 text-xs font-medium text-[#A05A00]"
-                >{{ levelLabel(customer.level) }}</span
-              >
-              <span
-                v-if="customer?.countryCode"
-                class="rounded bg-[#F2F2F7] px-2 py-0.5 text-xs text-[#424245]"
-                >{{
-                  countryName(customer.countryCode) || customer.countryCode
-                }}</span
-              >
-              <span
-                v-for="t in customerTags"
-                :key="t"
-                class="rounded bg-[#F2F2F7] px-2 py-0.5 text-xs text-[#424245]"
-                >{{ tagName(t) || t }}</span
-              >
-              <Popover
-                trigger="click"
-                placement="bottomRight"
-                :open="tagEditOpen"
-                @open-change="openTagEdit"
-              >
-                <template #content>
-                  <div class="flex w-72 flex-col gap-2">
-                    <div class="text-xs text-gray-500">客户标签</div>
-                    <Select
-                      v-model:value="tagDraft"
-                      mode="multiple"
-                      size="small"
-                      placeholder="选择标签"
-                      :options="
-                        tagOptions.map((t) => ({ label: t.name, value: t.id }))
-                      "
-                      option-filter-prop="label"
-                    />
-                    <div class="text-xs text-gray-500">客户分组</div>
-                    <Select
-                      v-model:value="groupDraft"
-                      size="small"
-                      allow-clear
-                      placeholder="不分组"
-                      :options="
-                        groupOptions.map((g) => ({
-                          label: g.name,
-                          value: g.id,
-                        }))
-                      "
-                    />
-                    <div class="text-right">
-                      <Button size="small" type="primary" @click="saveTags"
-                        >保存</Button
-                      >
-                    </div>
-                  </div>
-                </template>
-                <button
-                  type="button"
-                  class="cursor-pointer rounded border border-dashed border-[#D2D2D7] bg-white px-2 py-0.5 text-xs text-[#6E6E73]"
-                >
-                  + 标签
-                </button>
-              </Popover>
-            </div>
+        <div v-if="otherConversations.length" class="flex flex-col gap-1.5">
+          <div class="text-[12px] font-semibold text-[#6E6E73]">
+            该客户的其他会话
           </div>
-
-          <div class="flex flex-col gap-2.5">
-            <div class="text-[13px] font-semibold">客户阶段</div>
-            <div class="flex gap-1">
-              <button
-                v-for="s in stageSteps"
-                :key="s.value"
-                type="button"
-                class="flex flex-1 cursor-pointer flex-col items-center gap-1.5 border-0 bg-transparent p-0"
-                :title="`改为「${s.label}」`"
-                @click="changeStage(s.value)"
+          <button
+            v-for="o in otherConversations"
+            :key="o.id"
+            type="button"
+            class="flex cursor-pointer items-center gap-2 rounded-xl border-0 bg-[#F5F5F7] px-3 py-2 text-left transition-colors hover:bg-[#EBEBF0]"
+            @click="openConversation(o)"
+          >
+            <span
+              class="inline-block size-2 shrink-0 rounded-full"
+              :style="{ background: PLATFORM_DOT[o.platform || 'whatsapp'] }"
+            ></span>
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate text-[11px] text-[#86868B]"
+                >{{ accountName(o.accountId) || plat(o).label }} ·
+                {{ smartTime(o.lastMessageTime) }}</span
               >
-                <span
-                  class="block h-1.5 w-full rounded-full"
-                  :class="s.done ? 'bg-[#0071E3]' : 'bg-[#E5E5EA]'"
-                ></span>
-                <span
-                  class="text-[11px]"
-                  :class="
-                    s.on ? 'font-semibold text-[#0071E3]' : 'text-[#86868B]'
-                  "
-                  >{{ s.label }}</span
-                >
+              <span class="truncate text-[12.5px] text-[#1D1D1F]">{{
+                o.lastMessagePreview
+              }}</span>
+            </span>
+            <span
+              v-if="o.status === 'resolved'"
+              class="shrink-0 text-[11px] text-[#8E8E93]"
+              >已解决</span
+            >
+          </button>
+        </div>
+
+        <template v-if="current.customerId && customerStage !== undefined">
+          <div class="mt-auto flex flex-col gap-2 pt-1">
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="im-pill-action im-pill-action--soft flex-1 justify-center !h-8"
+                @click="openFollow"
+              >
+                写跟进
+              </button>
+              <button
+                type="button"
+                class="im-pill-action im-pill-action--link flex-1 justify-center !h-8"
+                @click="router.push(`/crm/customer/detail/${current.customerId}`)"
+              >
+                打开客户档案 ›
               </button>
             </div>
-          </div>
-
-          <dl
-            class="m-0 grid grid-cols-[72px_1fr] gap-x-3 gap-y-2.5 text-[13px]"
-          >
-            <template v-if="customer?.companyName">
-              <dt class="text-[#86868B]">公司</dt>
-              <dd class="m-0 break-words">{{ customer.companyName }}</dd>
-            </template>
-            <template v-if="customer?.email">
-              <dt class="text-[#86868B]">邮箱</dt>
-              <dd class="m-0 break-all">{{ customer.email }}</dd>
-            </template>
-            <template v-if="customer?.mobile">
-              <dt class="text-[#86868B]">电话</dt>
-              <dd class="m-0">{{ customer.mobile }}</dd>
-            </template>
-            <dt class="text-[#86868B]">下次联系</dt>
-            <dd
-              class="m-0"
-              :class="
-                customer?.contactNextTime
-                  ? 'font-medium text-[#C93400]'
-                  : 'text-[#86868B]'
-              "
-            >
-              {{
-                fmtDateTime(customer?.contactNextTime, 'MM-DD HH:mm', '未约')
-              }}
-            </dd>
-            <dt class="text-[#86868B]">负责人</dt>
-            <dd class="m-0">{{ customer?.ownerUserName || '-' }}</dd>
-          </dl>
-
-          <div class="flex flex-col gap-2 rounded-[10px] bg-[#F5F5F7] p-3">
-            <div class="flex items-center justify-between">
-              <span class="text-[13px] font-semibold">最近跟进</span>
-              <a
-                class="text-xs"
-                @click="
-                  router.push(`/crm/customer/detail/${current.customerId}`)
-                "
-                >全部记录</a
-              >
-            </div>
-            <div class="text-[13px] leading-5 text-[#424245]">
-              {{ customer?.contactLastContent || '还没有跟进记录' }}
-            </div>
-            <div
-              v-if="customer?.contactLastTime"
-              class="text-xs text-[#86868B]"
-            >
-              {{ fmtDateTime(customer.contactLastTime, 'MM-DD HH:mm') }}
-            </div>
-          </div>
-
-          <div v-if="otherConversations.length" class="flex flex-col gap-1.5">
-            <div class="text-[13px] font-semibold">这位客户的其他会话</div>
-            <button
-              v-for="o in otherConversations"
-              :key="o.id"
-              type="button"
-              class="flex cursor-pointer items-center gap-2 rounded-lg border border-solid border-[#E5E5EA] bg-white px-2.5 py-2 text-left hover:border-[#0071E3]"
-              @click="openConversation(o)"
-            >
-              <span
-                class="inline-block size-2 shrink-0 rounded-sm"
-                :style="{ background: PLATFORM_DOT[o.platform || 'whatsapp'] }"
-              ></span>
-              <span class="flex min-w-0 flex-1 flex-col">
-                <span class="truncate text-xs text-[#86868B]"
-                  >{{ accountName(o.accountId) || plat(o).label }} ·
-                  {{ md(o.lastMessageTime) }}</span
-                >
-                <span class="truncate text-[13px] text-[#1D1D1F]">{{
-                  o.lastMessagePreview
-                }}</span>
-              </span>
-              <span
-                v-if="o.status === 'resolved'"
-                class="shrink-0 text-[11px] text-[#86868B]"
-                >已解决</span
-              >
-            </button>
-          </div>
-
-          <div class="flex-1"></div>
-          <div class="flex gap-2">
-            <Button
-              class="flex-1"
-              @click="router.push(`/crm/customer/detail/${current.customerId}`)"
-              >客户详情</Button
-            >
-            <Button
-              class="flex-1 !border-[#1D1D1F] !bg-[#1D1D1F] !text-white"
-              @click="openFollow"
-              >写跟进</Button
-            >
           </div>
         </template>
       </aside>
@@ -2635,25 +2762,107 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   box-shadow: none;
 }
 .apple-im .im-list {
-  width: 304px;
-  background: var(--ap-bg-subbar);
+  width: 312px;
+  background: #f6f6f9;
   border: 0;
   border-right: 0.5px solid var(--ap-separator);
   border-radius: 0;
 }
-.apple-im .im-list h2 {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  line-height: 1.3;
+.im-list-header {
+  border-bottom: 0.5px solid rgb(0 0 0 / 5%);
+}
+/* 苹果通讯录彩色渐变单字头像 */
+.im-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  object-fit: cover;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 50%;
+  user-select: none;
+  box-shadow:
+    inset 0 0.5px 0 rgb(255 255 255 / 35%),
+    0 1px 3px rgb(0 0 0 / 10%);
+}
+.im-avatar--md {
+  width: 38px;
+  height: 38px;
+  font-size: 15px;
+}
+.im-avatar--lg {
+  width: 56px;
+  height: 56px;
+  font-size: 22px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 38%),
+    0 4px 12px rgb(0 0 0 / 10%);
+}
+/* iOS 风格无边框圆角搜索栏 */
+.im-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  background: rgb(118 118 128 / 11%);
+  border-radius: 10px;
+  transition:
+    background-color var(--ap-dur-fast),
+    box-shadow var(--ap-dur-fast);
+}
+.im-search-box:focus-within {
+  background: #fff;
+  box-shadow:
+    0 0 0 2px rgb(0 122 255 / 24%),
+    0 1px 4px rgb(0 0 0 / 5%);
+}
+.im-search-box__icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #8e8e93;
+}
+.im-search-box__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font-size: 13px;
+  color: #1d1d1f;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+.im-search-box__input::placeholder {
+  color: #8e8e93;
+}
+.im-search-box__input::-webkit-search-cancel-button {
+  display: none;
+}
+.im-search-box__clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: #fff;
+  cursor: pointer;
+  background: #aeaeb2;
+  border: 0;
+  border-radius: 50%;
+}
+.im-search-box__clear:hover {
+  background: #8e8e93;
 }
 .im-status-pills {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 2px;
-  padding: 2px;
-  background: rgb(0 0 0 / 5%);
-  border-radius: 8px;
+  padding: 2.5px;
+  background: rgb(118 118 128 / 10%);
+  border-radius: 9px;
 }
 .im-status-pill {
   height: 26px;
@@ -2665,7 +2874,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   transition:
     background-color var(--ap-dur-fast) linear,
     color var(--ap-dur-fast) linear,
@@ -2681,35 +2890,61 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
 .im-status-pill.on {
   font-weight: 600;
   color: var(--ap-label);
-  background: var(--ap-surface);
+  background: #fff;
   box-shadow:
-    0 1px 2px rgb(0 0 0 / 8%),
+    0 1px 3px rgb(0 0 0 / 8%),
     0 0 0 0.5px rgb(0 0 0 / 4%);
 }
-.apple-im .im-contact {
-  position: relative;
-  margin: 2px 8px;
-  padding: 10px 11px;
-  min-height: 66px;
+.im-list-tabs {
+  gap: 4px;
+  justify-content: space-between;
+}
+.im-list-tab {
+  padding: 3px 7px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #86868b;
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
+  transition:
+    background-color var(--ap-dur-fast),
+    color var(--ap-dur-fast);
+}
+.im-list-tab:hover:not(.is-active) {
+  color: #1d1d1f;
+  background: rgb(0 0 0 / 4%);
+}
+.im-list-tab.is-active {
+  font-weight: 600;
+  color: #007aff;
+  background: rgb(0 122 255 / 11%);
+}
+.im-contact {
+  position: relative;
+  margin: 3px 8px;
+  padding: 10px 11px;
+  border: 0;
+  border-radius: 12px;
   transition:
     background-color var(--ap-dur-fast) linear,
+    box-shadow var(--ap-dur-fast) linear,
     transform var(--ap-dur-fast) var(--ap-ease);
 }
-.apple-im .im-contact:hover:not(.im-selected) {
+.im-contact:hover:not(.im-selected) {
   background: rgb(0 0 0 / 3.5%);
 }
-.apple-im .im-contact:active {
+.im-contact:active {
   transform: scale(0.992);
 }
-.apple-im .im-selected {
-  background: var(--ap-surface);
+.im-contact.im-selected {
+  background: #fff;
   color: var(--ap-label);
-  border-radius: 12px;
   box-shadow:
     0 2px 10px rgb(0 0 0 / 6%),
-    0 0 0 0.5px rgb(0 0 0 / 4%);
+    0 0 0 0.5px rgb(0 0 0 / 5%);
 }
 .apple-im .im-thread {
   border: 0;
@@ -2717,27 +2952,155 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   min-height: 0;
   background: #f5f5f8;
 }
+.im-empty-glyph {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  color: #007aff;
+  background: linear-gradient(180deg, #fff 0%, #eef4ff 100%);
+  border-radius: 20px;
+  box-shadow:
+    0 4px 16px rgb(0 122 255 / 12%),
+    0 0 0 0.5px rgb(0 122 255 / 14%);
+}
 .apple-im .im-toolbar {
   margin: 0;
-  padding: 10px 18px;
+  padding: 11px 20px;
   border: 0;
   border-bottom: 0.5px solid var(--ap-separator);
   border-radius: 0;
-  background: var(--ap-surface);
+  background: rgb(255 255 255 / 92%);
+  backdrop-filter: blur(18px);
   box-shadow: none;
-  flex-wrap: wrap;
-  gap: 8px;
 }
-/* 顶栏工具按钮：macOS Messages 静默透明质感，不再满排灰药丸，只让主操作突出 */
-.apple-im .im-toolbar :deep(.ant-btn-default) {
+.im-icon-ghost {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: #aeaeb2;
+  cursor: pointer;
   background: transparent;
-  box-shadow: none !important;
-  color: var(--ap-label-2);
+  border: 0;
+  border-radius: 6px;
+  transition:
+    color var(--ap-dur-fast),
+    background-color var(--ap-dur-fast);
 }
-.apple-im .im-toolbar :deep(.ant-btn-default:hover) {
+.im-icon-ghost:hover {
+  color: #1d1d1f;
   background: rgb(0 0 0 / 5%);
-  color: var(--ap-label);
-  box-shadow: none !important;
+}
+.im-crm-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+}
+.im-crm-chip--blue {
+  color: #007aff;
+  background: rgb(0 122 255 / 10%);
+}
+.im-crm-chip--blue:hover {
+  background: rgb(0 122 255 / 16%);
+}
+.im-crm-chip--teal {
+  color: #00827c;
+  background: rgb(0 199 190 / 14%);
+}
+.im-ai-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 10px 4px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #3a3a3c;
+  cursor: pointer;
+  background: #f5f5f7;
+  border-radius: 999px;
+}
+.im-pill-action {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 30px;
+  padding: 0 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  transition:
+    background-color var(--ap-dur-fast),
+    color var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease),
+    opacity var(--ap-dur-fast);
+}
+.im-pill-action:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.im-pill-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.im-pill-action--primary {
+  color: #fff;
+  background: #007aff;
+  box-shadow: 0 2px 8px rgb(0 122 255 / 24%);
+}
+.im-pill-action--primary:hover:not(:disabled) {
+  background: #006ee6;
+}
+.im-pill-action--soft {
+  color: #3a3a3c;
+  background: #f2f2f7;
+}
+.im-pill-action--soft:hover:not(:disabled) {
+  color: #1d1d1f;
+  background: #e5e5ea;
+}
+.im-pill-action--link {
+  color: #007aff;
+  background: rgb(0 122 255 / 8%);
+}
+.im-pill-action--link:hover:not(:disabled) {
+  background: rgb(0 122 255 / 14%);
+}
+.im-circle-action {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: #6e6e73;
+  cursor: pointer;
+  background: #f2f2f7;
+  border: 0;
+  border-radius: 50%;
+  transition:
+    background-color var(--ap-dur-fast),
+    color var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+.im-circle-action:hover {
+  color: #1d1d1f;
+  background: #e5e5ea;
+}
+.im-circle-action.is-starred {
+  color: #ff9500;
+  background: #fff4e0;
 }
 .apple-im .im-messages {
   min-height: 100px;
@@ -2777,7 +3140,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   padding: 12px 16px;
   background: var(--ap-surface);
   border: 0;
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow:
     0 2px 12px rgb(0 0 0 / 5%),
     0 0 0 0.5px rgb(0 0 0 / 6%);
@@ -2797,7 +3160,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   border-radius: 8px;
 }
 .apple-im .im-draft {
-  border: 1px solid rgb(175 82 222 / 28%);
+  border: 1px solid rgb(175 82 222 / 26%);
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 4px 18px rgb(175 82 222 / 8%);
@@ -2894,8 +3257,8 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   gap: 10px;
   align-items: center;
   justify-content: space-between;
-  min-height: 40px;
-  padding: 6px 14px;
+  min-height: 38px;
+  padding: 5px 13px;
 }
 .im-info-row + .im-info-row {
   border-top: 0.5px solid rgb(0 0 0 / 6%);
@@ -2905,31 +3268,38 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   font-size: 12.5px;
   color: #86868b;
 }
+.im-summary-card {
+  padding: 11px 13px;
+  background: linear-gradient(180deg, #faf7ff 0%, #f5f0ff 100%);
+  border: 0.5px solid rgb(139 92 246 / 18%);
+  border-radius: 14px;
+}
 .apple-im .im-inspector {
-  width: 268px;
+  width: 276px;
   border: 0;
   border-left: 0.5px solid var(--ap-separator);
   border-radius: 0;
   padding: 18px 16px;
-  gap: 14px;
   background: var(--ap-surface);
 }
-.apple-im .im-inspector > div:first-child {
+.im-send-tools {
+  flex-wrap: wrap;
+  gap: 10px;
   align-items: center;
-  text-align: center;
 }
-.apple-im .im-inspector :deep(.ant-btn) {
-  border-radius: 8px;
+.im-send-tools > :last-child {
+  margin-left: auto;
+  flex-shrink: 0;
 }
-@media (width <= 1450px) {
+@media (width <= 1450px) and (width >= 1024px) {
   .apple-im .im-list {
-    width: 250px;
+    width: 288px;
   }
   .apple-im .im-inspector {
-    width: 245px;
+    width: 252px;
   }
   .apple-im .im-toolbar {
-    padding: 8px 10px;
+    padding: 10px 14px;
   }
 }
 @media (width <= 1100px) {
@@ -2937,113 +3307,26 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
     display: none;
   }
   .apple-im .im-list {
-    width: 245px;
-  }
-}
-@media (width <= 760px) {
-  .apple-im .im-list {
-    width: 100%;
-  }
-  .apple-im .im-composer {
-    margin: 0 8px 8px;
-    padding: 10px;
-  }
-  .apple-im .im-messages {
-    padding: 15px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .apple-im .im-contact {
-    transition: none;
-  }
-}
-</style>
-
-<style scoped>
-.im-send-tools {
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-start;
-}
-.im-send-tools > :last-child {
-  margin-left: auto;
-  flex-shrink: 0;
-}
-.im-send-tools :deep(.ant-space) {
-  max-width: 100%;
-}
-@media (width <= 760px) {
-  .im-send-tools :deep(.ant-btn) {
-    min-height: 44px;
-  }
-  .im-composer [role='tablist'] {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-}
-</style>
-
-<style scoped>
-.apple-im .im-list {
-  width: 304px;
-}
-.apple-im .im-list-tabs {
-  justify-content: space-between;
-  gap: 6px;
-  overflow: visible;
-}
-.im-list-tab {
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.apple-im .im-list-tabs [role='tab'] {
-  font-size: 12px;
-}
-.apple-im .im-contact {
-  min-height: 64px;
-}
-.apple-im .im-list :deep(.ant-input-search-button) {
-  border: 0;
-  background: transparent;
-  color: var(--ap-label-3);
-  box-shadow: none !important;
-}
-.apple-im .im-list :deep(.ant-input-group-addon) {
-  background: transparent;
-}
-.apple-im .im-contact :deep(.font-semibold) {
-  font-size: 13px;
-}
-.apple-im .im-list > div:first-child {
-  padding-top: 14px;
-  gap: 10px;
-}
-@media (width <= 1450px) {
-  .apple-im .im-toolbar > div:first-child {
-    flex: 1 0 100%;
-  }
-  .apple-im .im-toolbar > div:last-child {
-    max-width: 100%;
-    flex-wrap: wrap;
-  }
-}
-@media (width <= 1450px) and (width >= 1024px) {
-  .apple-im .im-list {
-    width: 330px;
-  }
-  .apple-im .im-inspector {
-    width: 245px;
+    width: 268px;
   }
 }
 @media (width <= 1023px) {
   .apple-im .im-list {
     width: 100%;
   }
-  .im-list-tab {
-    min-height: 39px;
+}
+@media (width <= 760px) {
+  .apple-im .im-composer {
+    margin: 0 10px 10px;
+    padding: 10px 12px;
   }
-  .apple-im .im-list :deep(.ant-input-affix-wrapper) {
-    min-height: 40px;
+  .apple-im .im-messages {
+    padding: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .im-contact {
+    transition: none;
   }
 }
 </style>

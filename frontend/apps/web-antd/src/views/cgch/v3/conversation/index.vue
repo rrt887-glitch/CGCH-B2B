@@ -254,46 +254,30 @@ onMounted(() => {
           @changed="loadCounts"
         >
           <template #list-controls>
-            <div class="ownership" aria-label="会话归属">
-              <button
-                type="button"
-                :class="{ on: view === 'mine' }"
-                @click="pickView('mine')"
-              >
-                我的
-                <small
-                  v-if="counts?.open != null"
-                  title="全部账号的进行中会话数"
-                  >{{ counts.open }}</small
-                ></button
-              ><button
-                v-if="counts?.teamOpen != null"
-                type="button"
-                :class="{ on: view === 'team' }"
-                @click="pickView('team')"
-              >
-                团队
-                <small title="全部账号的团队进行中会话数">{{
-                  counts.teamOpen
-                }}</small>
-              </button>
-            </div>
-            <div class="account-line">
-              <div class="channel-pills" role="group" aria-label="选择渠道">
+            <div class="conv-subhead">
+              <div class="ownership" aria-label="会话归属">
                 <button
-                  v-for="c in channelPills"
-                  :key="c.value"
                   type="button"
-                  class="channel-pill"
-                  :class="{ on: accountKey === c.value }"
-                  :title="c.title"
-                  @click="selectAccount(c.value)"
+                  :class="{ on: view === 'mine' }"
+                  @click="pickView('mine')"
                 >
-                  <span
-                    class="channel-pill__dot"
-                    :style="{ background: c.color }"
-                  ></span>
-                  <span>{{ c.label }}</span>
+                  <span>我的</span>
+                  <small
+                    v-if="counts?.open != null"
+                    title="全部账号的进行中会话数"
+                    >{{ counts.open }}</small
+                  >
+                </button>
+                <button
+                  v-if="counts?.teamOpen != null"
+                  type="button"
+                  :class="{ on: view === 'team' }"
+                  @click="pickView('team')"
+                >
+                  <span>团队</span>
+                  <small title="全部账号的团队进行中会话数">{{
+                    counts.teamOpen
+                  }}</small>
                 </button>
               </div>
               <button
@@ -302,12 +286,28 @@ onMounted(() => {
                 :class="{ on: filterCount > 0 }"
                 aria-label="筛选会话"
                 :aria-expanded="filtersOpen"
+                title="按客户等级、群聊、优先级筛选"
                 @click="openFilters"
               >
-                <IconifyIcon icon="lucide:sliders-horizontal" /><span
-                  v-if="filterCount"
-                  >{{ filterCount }}</span
-                >
+                <IconifyIcon icon="lucide:sliders-horizontal" />
+                <span v-if="filterCount">{{ filterCount }}</span>
+              </button>
+            </div>
+            <div class="channel-pills" role="group" aria-label="选择渠道">
+              <button
+                v-for="c in channelPills"
+                :key="c.value"
+                type="button"
+                class="channel-pill"
+                :class="{ on: accountKey === c.value }"
+                :title="c.title"
+                @click="selectAccount(c.value)"
+              >
+                <span
+                  class="channel-pill__dot"
+                  :style="{ background: c.color }"
+                ></span>
+                <span>{{ c.label }}</span>
               </button>
             </div>
             <div v-if="filterCount" class="filter-chips">
@@ -340,7 +340,17 @@ onMounted(() => {
           :account-id="selected.id"
           :open-id="openId"
           ><template #list-controls>
-            <div class="channel-pills" role="group" aria-label="选择邮箱">
+            <div class="channel-pills" role="group" aria-label="选择邮箱与渠道">
+              <button
+                v-if="showIm"
+                type="button"
+                class="channel-pill channel-pill--back"
+                title="返回即时消息会话"
+                @click="selectAccount('im:all')"
+              >
+                <IconifyIcon icon="lucide:chevron-left" class="size-3.5" />
+                <span>即时消息</span>
+              </button>
               <button
                 v-for="c in mailAccountPills"
                 :key="c.value"
@@ -364,7 +374,7 @@ onMounted(() => {
       v-model:open="filtersOpen"
       title="筛选会话"
       placement="right"
-      :width="290"
+      :width="300"
       :mask="false"
       :get-container="false"
       :root-style="{ position: 'absolute' }"
@@ -372,10 +382,20 @@ onMounted(() => {
       @close="filtersOpen = false"
     >
       <p class="filter-description">
-        只筛选当前账号和归属下的会话。应用后，条件会显示在列表上方。
+        只筛选当前账号和归属下的会话。应用后，筛选标签会展示在会话列表顶部。
       </p>
       <div class="filter-field">
-        <label>客户等级 · 可多选</label>
+        <div class="filter-field__head">
+          <label>客户等级（可多选）</label>
+          <button
+            v-if="draft.levels.length"
+            type="button"
+            class="filter-reset"
+            @click="draft.levels = []"
+          >
+            不限
+          </button>
+        </div>
         <div class="grade-options">
           <button
             v-for="(g, i) in ['A', 'B', 'C', 'D']"
@@ -388,49 +408,63 @@ onMounted(() => {
             {{ g }} 类
           </button>
         </div>
-        <button type="button" class="filter-reset" @click="draft.levels = []">
-          不限等级
-        </button>
       </div>
       <div class="filter-field">
-        <label for="conversation-kind">会话类型</label
-        ><select
-          id="conversation-kind"
-          :value="
-            draft.group === undefined ? 'all' : draft.group ? 'group' : 'person'
-          "
-          @change="
-            (e: any) =>
-              (draft.group =
-                e.target.value === 'all'
-                  ? undefined
-                  : e.target.value === 'group')
-          "
-        >
-          <option value="all">全部类型</option>
-          <option value="person">联系人</option>
-          <option value="group">群聊</option>
-        </select>
+        <label>会话类型</label>
+        <div class="seg-options">
+          <button
+            type="button"
+            :class="{ on: draft.group === undefined }"
+            @click="draft.group = undefined"
+          >
+            全部
+          </button>
+          <button
+            type="button"
+            :class="{ on: draft.group === false }"
+            @click="draft.group = false"
+          >
+            单聊联系人
+          </button>
+          <button
+            type="button"
+            :class="{ on: draft.group === true }"
+            @click="draft.group = true"
+          >
+            群聊
+          </button>
+        </div>
       </div>
       <div class="filter-field">
-        <label for="conversation-priority">优先级</label
-        ><select
-          id="conversation-priority"
-          :value="draft.highPriority ? 'high' : 'all'"
-          @change="(e: any) => (draft.highPriority = e.target.value === 'high')"
-        >
-          <option value="all">全部优先级</option>
-          <option value="high">高及紧急</option>
-        </select>
+        <label>优先级</label>
+        <div class="seg-options seg-options--2">
+          <button
+            type="button"
+            :class="{ on: !draft.highPriority }"
+            @click="draft.highPriority = false"
+          >
+            全部优先级
+          </button>
+          <button
+            type="button"
+            :class="{ on: draft.highPriority }"
+            @click="draft.highPriority = true"
+          >
+            高及紧急
+          </button>
+        </div>
       </div>
       <template #footer
         ><div class="filter-footer">
           <Button
+            shape="round"
             @click="
               draft = { levels: [], group: undefined, highPriority: false }
             "
             >重置</Button
-          ><Button type="primary" @click="applyFilters">应用筛选</Button>
+          ><Button type="primary" shape="round" @click="applyFilters"
+            >应用筛选</Button
+          >
         </div></template
       >
     </Drawer>
@@ -441,79 +475,103 @@ onMounted(() => {
   position: relative;
   height: 100%;
   min-height: 0;
+  padding: 10px 12px 10px 4px;
 }
+.v3-conv :deep(.ant-spin-nested-loading),
 .v3-conv :deep(.ant-spin-container) {
   height: 100%;
 }
 .v3-conv__main {
   height: 100%;
   min-height: 0;
-  background: white;
-  border-radius: 22px;
+  background: var(--ap-surface);
+  border-radius: 20px;
   overflow: hidden;
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 5%),
+    0 8px 28px rgb(15 23 42 / 5%);
 }
 .v3-conv__empty {
   display: grid;
   place-items: center;
   height: 100%;
-  background: white;
-  border-radius: 22px;
+  background: var(--ap-surface);
+  border-radius: 20px;
+  box-shadow: var(--ap-shadow-rest);
+}
+.conv-subhead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .ownership {
   display: flex;
-  background: #78788013;
-  padding: 3px;
-  border-radius: 10px;
-  gap: 3px;
+  flex: 1;
+  background: rgb(118 118 128 / 10%);
+  padding: 2.5px;
+  border-radius: 9px;
+  gap: 2px;
 }
 .ownership button {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 27px;
   border: 0;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   font-size: 12px;
-  padding: 7px;
-  color: #777780;
+  font-weight: 500;
+  padding: 0 8px;
+  color: var(--ap-label-2);
   cursor: pointer;
+  transition:
+    background-color var(--ap-dur-fast),
+    color var(--ap-dur-fast),
+    box-shadow var(--ap-dur-fast);
+}
+.ownership button:hover:not(.on) {
+  color: var(--ap-label);
 }
 .ownership button.on {
-  background: white;
-  box-shadow: 0 1px 4px #0001;
-  color: #202025;
+  background: #fff;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 8%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
+  color: var(--ap-label);
   font-weight: 600;
 }
 .ownership small {
-  margin-left: 7px;
-  font-size: 10px;
-  font-weight: 400;
-  color: #9999a2;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ap-label-3);
+  font-variant-numeric: tabular-nums;
 }
-.account-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
+.ownership button.on small {
+  color: var(--ap-accent);
 }
 .channel-pills {
   display: flex;
-  flex: 1;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 .channel-pill {
   display: inline-flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
-  height: 28px;
-  padding: 0 10px;
-  font-size: 12px;
+  height: 26px;
+  padding: 0 9px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--ap-label-2);
   white-space: nowrap;
   cursor: pointer;
   background: var(--ap-surface);
   border: 0;
-  border-radius: 7px;
+  border-radius: 999px;
   box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 10%);
   transition:
     background-color var(--ap-dur-fast) linear,
@@ -523,6 +581,7 @@ onMounted(() => {
 }
 .channel-pill:hover:not(.on) {
   color: var(--ap-label);
+  background: rgb(255 255 255 / 90%);
   box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 18%);
 }
 .channel-pill:active {
@@ -531,8 +590,18 @@ onMounted(() => {
 .channel-pill.on {
   font-weight: 600;
   color: #fff;
-  background: var(--ap-label);
+  background: #1d1d1f;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 14%);
+}
+.channel-pill--back {
+  color: var(--ap-accent);
+  background: rgb(0 122 255 / 8%);
   box-shadow: none;
+}
+.channel-pill--back:hover {
+  color: #0066d6 !important;
+  background: rgb(0 122 255 / 14%) !important;
+  box-shadow: none !important;
 }
 .channel-pill__dot {
   flex: none;
@@ -546,44 +615,47 @@ onMounted(() => {
 .filter-trigger {
   position: relative;
   display: grid;
+  flex: none;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border: 0.5px solid rgb(0 0 0 / 12%);
-  border-radius: 8px;
-  background: var(--ap-surface);
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: rgb(118 118 128 / 10%);
   color: var(--ap-label-2);
-  box-shadow: 0 0.5px 1px rgb(0 0 0 / 4%);
   cursor: pointer;
   transition:
     background-color var(--ap-dur-fast),
-    border-color var(--ap-dur-fast),
-    color var(--ap-dur-fast);
+    color var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease);
 }
 .filter-trigger:hover {
-  border-color: rgb(0 0 0 / 20%);
+  background: rgb(118 118 128 / 16%);
   color: var(--ap-label);
+}
+.filter-trigger:active {
+  transform: scale(0.94);
 }
 .filter-trigger :deep(svg) {
   width: 15px;
   height: 15px;
 }
 .filter-trigger.on {
-  background: var(--ap-accent-soft);
+  background: rgb(0 122 255 / 12%);
   color: var(--ap-accent);
-  border-color: rgb(0 122 255 / 35%);
 }
 .filter-trigger span {
   position: absolute;
   right: -4px;
   top: -4px;
   background: #007aff;
-  border: 2px solid #f8f8fb;
+  border: 2px solid #f6f6f9;
   border-radius: 99px;
   min-width: 16px;
   height: 16px;
   line-height: 12px;
   font-size: 9px;
+  font-weight: 700;
   color: white;
 }
 .filter-chips {
@@ -594,63 +666,86 @@ onMounted(() => {
 }
 .filter-chips :deep(.ant-tag) {
   margin: 0;
-  background: #e6f1ff;
+  background: rgb(0 122 255 / 10%);
   border: 0;
+  border-radius: 999px;
+  padding-inline: 8px;
   color: #007aff;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 500;
 }
 .filter-chips button,
 .filter-reset {
-  font-size: 10px;
-  color: #8a8a93;
+  font-size: 11px;
+  color: var(--ap-accent);
   background: none;
   border: 0;
-  padding: 4px;
+  padding: 2px 4px;
   cursor: pointer;
 }
 .filter-description {
-  font-size: 12px;
-  line-height: 1.8;
-  color: #9696a1;
-  border-bottom: 1px solid #eeeef4;
-  padding-bottom: 22px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ap-label-3);
+  border-bottom: 0.5px solid var(--ap-separator);
+  padding-bottom: 16px;
+  margin-bottom: 4px;
 }
 .filter-field {
-  margin: 24px 0;
+  margin: 20px 0;
+}
+.filter-field__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.filter-field__head label {
+  margin-bottom: 0 !important;
 }
 .filter-field label {
-  font-size: 12px;
-  color: #64646f;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ap-label);
   display: block;
-  margin-bottom: 11px;
+  margin-bottom: 10px;
 }
 .grade-options {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
-.grade-options button {
-  padding: 8px 0;
-  border: 1px solid #e7e7ef;
-  border-radius: 8px;
-  font-size: 11px;
-  background: white;
-  color: #92929d;
-  cursor: pointer;
-}
-.grade-options button.on {
-  border-color: #007aff66;
-  color: #007aff;
-  background: #007aff0b;
-}
-.filter-field select {
-  border: 1px solid #e7e7ef;
-  background: #fafafc;
+.grade-options button,
+.seg-options button {
+  height: 34px;
+  border: 0.5px solid rgb(0 0 0 / 10%);
   border-radius: 9px;
-  padding: 10px;
-  width: 100%;
   font-size: 12px;
-  color: #74747e;
+  font-weight: 500;
+  background: #f5f5f7;
+  color: var(--ap-label-2);
+  cursor: pointer;
+  transition: all var(--ap-dur-fast) var(--ap-ease);
+}
+.grade-options button:hover:not(.on),
+.seg-options button:hover:not(.on) {
+  color: var(--ap-label);
+  background: #ededf2;
+}
+.grade-options button.on,
+.seg-options button.on {
+  border-color: rgb(0 122 255 / 35%);
+  color: #007aff;
+  font-weight: 600;
+  background: rgb(0 122 255 / 10%);
+}
+.seg-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.seg-options--2 {
+  grid-template-columns: repeat(2, 1fr);
 }
 .filter-footer {
   display: flex;
@@ -660,31 +755,35 @@ onMounted(() => {
   flex: 1;
 }
 .v3-conv :deep(.conversation-filter-drawer .ant-drawer-content-wrapper) {
-  box-shadow: -12px 0 40px #22223b08;
+  box-shadow: -12px 0 36px rgb(15 23 42 / 8%);
 }
 .v3-conv :deep(.conversation-filter-drawer .ant-drawer-content) {
-  border-left: 1px solid #ededf4;
+  background: rgb(255 255 255 / 94%);
+  backdrop-filter: blur(24px);
+  border-left: 0.5px solid var(--ap-separator);
 }
 .v3-conv button:focus-visible {
   outline: 2px solid #007aff;
   outline-offset: 2px;
 }
 @media (width <= 760px) {
+  .v3-conv {
+    padding: 0;
+  }
+  .v3-conv__main {
+    border-radius: 0;
+  }
   .ownership button {
-    min-height: 39px;
+    min-height: 36px;
   }
   .filter-trigger {
-    width: 44px;
-    height: 44px;
-  }
-  .account-select :deep(.ant-select-selector) {
-    min-height: 44px;
-    align-items: center;
+    width: 38px;
+    height: 38px;
   }
   .grade-options button,
-  .filter-footer :deep(.ant-btn),
-  .filter-field select {
-    min-height: 44px;
+  .seg-options button,
+  .filter-footer :deep(.ant-btn) {
+    min-height: 40px;
   }
   .v3-conv :deep(.ant-drawer-content-wrapper) {
     max-width: 90vw !important;

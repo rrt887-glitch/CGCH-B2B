@@ -20,15 +20,13 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
 import {
   Badge,
   Button,
   Empty,
   Input,
-  InputSearch,
-  List,
-  ListItem,
   message,
   Modal,
   Pagination,
@@ -37,6 +35,7 @@ import {
   Spin,
   Tag,
   Textarea,
+  Tooltip,
 } from 'ant-design-vue';
 
 import {
@@ -346,7 +345,32 @@ async function sendCompose() {
 }
 
 const iframeDoc = (html: string) =>
-  `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>body{font:14px/1.6 -apple-system,Segoe UI,Arial,sans-serif;margin:0;color:#222;word-break:break-word}img{max-width:100%}</style></head><body>${html}</body></html>`;
+  `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>body{font:14px/1.65 -apple-system,BlinkMacSystemFont,'PingFang SC',Segoe UI,Arial,sans-serif;margin:0;color:#1d1d1f;word-break:break-word}img{max-width:100%;border-radius:8px}</style></head><body>${html}</body></html>`;
+
+const MAIL_AVATAR_GRADIENTS = [
+  'linear-gradient(180deg, #7472E8 0%, #5856D6 100%)',
+  'linear-gradient(180deg, #3395FF 0%, #007AFF 100%)',
+  'linear-gradient(180deg, #FFAB2E 0%, #FF9500 100%)',
+  'linear-gradient(180deg, #4CD964 0%, #28CD41 100%)',
+  'linear-gradient(180deg, #C678F0 0%, #AF52DE 100%)',
+  'linear-gradient(180deg, #2AD4CB 0%, #00B5AD 100%)',
+  'linear-gradient(180deg, #FF6259 0%, #FF3B30 100%)',
+];
+function mailSenderLabel(m: ChannelMailApi.Message) {
+  return m.direction === 2
+    ? m.toAddresses || '收件人'
+    : m.fromName || m.fromAddress || '发件人';
+}
+function mailInitial(m: ChannelMailApi.Message) {
+  const s = mailSenderLabel(m).trim().replace(/^[<"'\s]+/, '');
+  return (s.slice(0, 1) || 'M').toUpperCase();
+}
+function mailAvatarBg(m: ChannelMailApi.Message) {
+  const seed = mailSenderLabel(m);
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return MAIL_AVATAR_GRADIENTS[h % MAIL_AVATAR_GRADIENTS.length];
+}
 
 onMounted(async () => {
   await loadAccounts();
@@ -418,93 +442,210 @@ onMounted(async () => {
       </div>
 
       <!-- 中：邮件列表 -->
-      <div class="mail-list flex w-96 shrink-0 flex-col rounded bg-white">
+      <div class="mail-list flex w-80 shrink-0 flex-col bg-[#F6F6F9]">
         <div
-          class="flex flex-col gap-3 border-0 border-b border-solid border-black/[0.06] p-3.5"
+          class="flex flex-col gap-2.5 border-0 border-b border-solid border-black/[0.05] px-3.5 pt-3.5 pb-2.5"
         >
-          <slot name="list-controls"></slot>
-          <div v-if="embedded" class="flex items-center gap-2">
-            <Select
-              v-model:value="view"
-              class="min-w-0 flex-1"
-              :options="VIEWS.map((v) => ({ label: v.label, value: v.key }))"
-            /><Button type="primary" @click="openCompose">写邮件</Button
-            ><Button :loading="syncing" @click="syncAll">收信</Button>
+          <div v-if="embedded" class="flex items-center justify-between gap-2">
+            <h2 class="m-0 text-[19px] font-bold tracking-tight text-[#1D1D1F]">
+              邮件
+            </h2>
+            <div class="flex items-center gap-1.5">
+              <Tooltip title="同步收取新邮件">
+                <button
+                  type="button"
+                  class="mail-head-btn mail-head-btn--ghost"
+                  :disabled="syncing"
+                  aria-label="收信"
+                  @click="syncAll"
+                >
+                  <IconifyIcon
+                    icon="lucide:refresh-cw"
+                    class="size-3.5"
+                    :class="{ 'animate-spin': syncing }"
+                  />
+                </button>
+              </Tooltip>
+              <Tooltip title="写新邮件">
+                <button
+                  type="button"
+                  class="mail-head-btn mail-head-btn--primary"
+                  aria-label="写邮件"
+                  @click="openCompose"
+                >
+                  <IconifyIcon icon="lucide:square-pen" class="size-3.5" />
+                  <span>写邮件</span>
+                </button>
+              </Tooltip>
+            </div>
           </div>
-          <InputSearch
-            v-model:value="keyword"
-            allow-clear
-            placeholder="搜索主题、发件人"
-            @search="
-              () => {
+
+          <!-- iOS 无边框圆角搜索栏 -->
+          <div class="mail-search-box">
+            <IconifyIcon icon="lucide:search" class="mail-search-box__icon" />
+            <input
+              v-model="keyword"
+              type="search"
+              class="mail-search-box__input"
+              placeholder="搜索主题、发件人"
+              aria-label="搜索邮件"
+              @keydown.enter="
                 pageNo = 1;
                 loadList();
-              }
-            "
-          />
+              "
+              @search="
+                pageNo = 1;
+                loadList();
+              "
+            />
+            <button
+              v-if="keyword"
+              type="button"
+              class="mail-search-box__clear"
+              aria-label="清空搜索"
+              @click="
+                keyword = '';
+                pageNo = 1;
+                loadList();
+              "
+            >
+              <IconifyIcon icon="lucide:x" class="size-3" />
+            </button>
+          </div>
+
+          <slot name="list-controls"></slot>
+
+          <!-- 嵌入式文件夹切换条（替代突兀的下拉框） -->
+          <div
+            v-if="embedded"
+            class="mail-folder-pills"
+            role="tablist"
+            aria-label="邮件文件夹"
+          >
+            <button
+              v-for="v in VIEWS"
+              :key="v.key"
+              type="button"
+              role="tab"
+              :aria-selected="view === v.key"
+              class="mail-folder-pill"
+              :class="{ on: view === v.key }"
+              @click="view = v.key"
+            >
+              <span>{{ v.label }}</span>
+              <span
+                v-if="v.key === 'unreplied' && unrepliedTotal"
+                class="mail-folder-pill__count"
+                >{{ unrepliedTotal }}</span
+              >
+            </button>
+          </div>
         </div>
-        <div class="flex-1 overflow-auto">
+
+        <div class="flex-1 overflow-auto py-1.5">
           <Spin :spinning="listLoading">
-            <List :data-source="list" :locale="{ emptyText: '暂无邮件' }">
-              <template #renderItem="{ item }">
-                <ListItem
-                  class="mail-row cursor-pointer !px-3"
+            <div
+              v-if="list.length === 0"
+              class="flex flex-col items-center justify-center gap-2 px-6 py-14 text-center"
+            >
+              <div
+                class="grid size-11 place-items-center rounded-2xl bg-black/[0.04] text-[#8E8E93]"
+              >
+                <IconifyIcon icon="lucide:mail" class="size-5" />
+              </div>
+              <div class="text-[13px] text-[#86868B]">暂无邮件</div>
+            </div>
+            <div
+              v-for="item in list"
+              :key="item.id"
+              class="mail-row flex cursor-pointer items-start gap-3"
+              :class="{ 'is-selected': current?.id === item.id }"
+              @click="open(item)"
+            >
+              <span
+                class="mail-avatar"
+                :style="{ background: mailAvatarBg(item) }"
+                aria-hidden="true"
+                >{{ mailInitial(item) }}</span
+              >
+              <div class="w-full min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span
+                    class="flex min-w-0 items-center gap-1.5 truncate text-[13.5px] text-[#1D1D1F]"
+                    :class="item.readStatus ? 'font-medium' : 'font-bold'"
+                  >
+                    <span
+                      v-if="!item.readStatus"
+                      class="size-2 shrink-0 rounded-full bg-[#007AFF]"
+                    ></span>
+                    <span class="truncate">{{
+                      item.direction === 2
+                        ? `发给 ${item.toAddresses}`
+                        : item.fromName || item.fromAddress
+                    }}</span>
+                  </span>
+                  <span class="shrink-0 text-[11px] tabular-nums text-[#8E8E93]">{{
+                    fmtDateTime(item.sentTime, 'MM-DD HH:mm')
+                  }}</span>
+                </div>
+                <div
+                  class="mt-0.5 truncate text-[13px]"
                   :class="
-                    current?.id === item.id
-                      ? 'is-selected bg-blue-50'
-                      : 'hover:bg-gray-50'
+                    item.readStatus
+                      ? 'text-[#3A3A3C]'
+                      : 'font-semibold text-[#1D1D1F]'
                   "
-                  @click="open(item)"
                 >
-                  <div class="w-full min-w-0">
-                    <div class="flex items-center justify-between gap-2">
-                      <span
-                        class="truncate"
-                        :class="item.readStatus ? '' : 'font-semibold'"
-                      >
-                        {{
-                          item.direction === 2
-                            ? `发给 ${item.toAddresses}`
-                            : item.fromName || item.fromAddress
-                        }}
-                      </span>
-                      <span class="shrink-0 text-xs text-gray-400">{{
-                        fmtDateTime(item.sentTime, 'MM-DD HH:mm')
-                      }}</span>
-                    </div>
-                    <div
-                      class="truncate text-sm"
-                      :class="
-                        item.readStatus ? 'text-gray-700' : 'font-semibold'
-                      "
-                    >
-                      {{ item.subject || '（无主题）' }}
-                    </div>
-                    <div class="truncate text-xs text-gray-400">
-                      {{ item.snippet }}
-                    </div>
-                    <div class="mt-1 flex gap-1">
-                      <Tag v-if="item.customerName" color="blue">{{
-                        item.customerName
-                      }}</Tag>
-                      <Tag v-else-if="item.clueName" color="cyan"
-                        >线索 · {{ item.clueName }}</Tag
-                      >
-                      <Tag
-                        v-if="item.direction === 1 && item.replied"
-                        color="green"
-                        >已回复</Tag
-                      >
-                      <Tag v-if="item.hasAttachments">📎 附件</Tag>
-                      <Tag v-if="item.aiGenerated" color="purple">AI 回复</Tag>
-                    </div>
-                  </div>
-                </ListItem>
-              </template>
-            </List>
+                  {{ item.subject || '（无主题）' }}
+                </div>
+                <div class="mt-0.5 truncate text-[12px] text-[#86868B]">
+                  {{ item.snippet }}
+                </div>
+                <div
+                  v-if="
+                    item.customerName ||
+                    item.clueName ||
+                    (item.direction === 1 && item.replied) ||
+                    item.hasAttachments ||
+                    item.aiGenerated
+                  "
+                  class="mt-1.5 flex flex-wrap items-center gap-1"
+                >
+                  <span
+                    v-if="item.customerName"
+                    class="rounded-full bg-[#E8F2FF] px-2 py-0.5 text-[10.5px] font-medium text-[#007AFF]"
+                    >{{ item.customerName }}</span
+                  >
+                  <span
+                    v-else-if="item.clueName"
+                    class="rounded-full bg-[#E6FAF8] px-2 py-0.5 text-[10.5px] font-medium text-[#00827C]"
+                    >线索 · {{ item.clueName }}</span
+                  >
+                  <span
+                    v-if="item.direction === 1 && item.replied"
+                    class="rounded-full bg-[#EAF9EE] px-2 py-0.5 text-[10.5px] font-medium text-[#248A3D]"
+                    >已回复</span
+                  >
+                  <span
+                    v-if="item.hasAttachments"
+                    class="inline-flex items-center gap-0.5 rounded-full bg-black/[0.05] px-2 py-0.5 text-[10.5px] text-[#6E6E73]"
+                  >
+                    <IconifyIcon icon="lucide:paperclip" class="size-2.5" />附件
+                  </span>
+                  <span
+                    v-if="item.aiGenerated"
+                    class="rounded-full bg-[#F3EEFF] px-2 py-0.5 text-[10.5px] font-medium text-[#7C3AED]"
+                    >AI 回复</span
+                  >
+                </div>
+              </div>
+            </div>
           </Spin>
         </div>
-        <div class="flex justify-center border-t p-2">
+        <div
+          v-if="total > pageSize"
+          class="flex justify-center border-0 border-t border-solid border-black/[0.05] py-2"
+        >
           <Pagination
             v-model:current="pageNo"
             :page-size="pageSize"
@@ -517,24 +658,34 @@ onMounted(async () => {
       </div>
 
       <!-- 右：正文与回复 -->
-      <div class="mail-reader flex min-w-0 flex-1 flex-col rounded bg-white">
+      <div class="mail-reader flex min-w-0 flex-1 flex-col bg-white">
         <Spin :spinning="detailLoading" class="h-full">
           <div
             v-if="!current"
-            class="flex h-full items-center justify-center p-10"
+            class="flex h-full flex-col items-center justify-center gap-3 bg-[#F5F5F8] p-10 text-center"
           >
-            <Empty description="选择一封邮件查看" />
+            <div class="mail-empty-glyph">
+              <IconifyIcon icon="lucide:mail-open" class="size-7" />
+            </div>
+            <div class="text-[16px] font-semibold text-[#1D1D1F]">
+              选择一封邮件阅读
+            </div>
+            <div class="max-w-xs text-[13px] leading-relaxed text-[#86868B]">
+              支持客户档案自动识别、历史往来聚合与 AI 智能起草外贸回信。
+            </div>
           </div>
-          <div v-else class="flex h-full flex-col">
-            <div class="border-b p-4">
+          <div v-else class="flex h-full flex-col bg-[#F5F5F8]">
+            <div
+              class="border-0 border-b border-solid border-black/[0.06] bg-white px-6 py-4"
+            >
               <Button
-                class="mail-mobile-back"
+                class="mail-mobile-back mb-2"
                 type="text"
                 @click="current = undefined"
                 >‹ 返回邮件列表</Button
               >
               <div class="flex items-start justify-between gap-3">
-                <h3 class="text-lg font-semibold">
+                <h3 class="m-0 text-[18px] font-bold leading-snug tracking-tight text-[#1D1D1F]">
                   {{ current.subject || '（无主题）' }}
                 </h3>
                 <Popconfirm
@@ -542,161 +693,219 @@ onMounted(async () => {
                   title="移到已删除？"
                   @confirm="trash"
                 >
-                  <Button size="small" danger>删除</Button>
+                  <button
+                    type="button"
+                    class="mail-trash-btn"
+                    title="移到已删除"
+                  >
+                    <IconifyIcon icon="lucide:trash-2" class="size-3.5" />
+                    <span>删除</span>
+                  </button>
                 </Popconfirm>
               </div>
-              <div class="mt-1 text-sm text-gray-600">
-                {{ current.fromName }} &lt;{{ current.fromAddress }}&gt; →
-                {{ current.toAddresses }}
-                <span v-if="current.ccAddresses"
-                  >，抄送 {{ current.ccAddresses }}</span
+              <div class="mt-3 flex items-center gap-3">
+                <span
+                  class="mail-avatar mail-avatar--lg"
+                  :style="{ background: mailAvatarBg(current) }"
+                  aria-hidden="true"
+                  >{{ mailInitial(current) }}</span
                 >
-              </div>
-              <div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-                <span>{{ fmtDateTime(current.sentTime) }}</span>
-                <Tag
-                  v-if="current.customerName"
-                  color="blue"
-                  class="cursor-pointer"
-                  @click="
-                    router.push(`/crm/customer/detail/${current.customerId}`)
-                  "
-                >
-                  客户：{{ current.customerName }}
-                </Tag>
-                <Tag
-                  v-else-if="current.clueName"
-                  color="cyan"
-                  class="cursor-pointer"
-                  @click="router.push(`/crm/clue/detail/${current.clueId}`)"
-                >
-                  线索：{{ current.clueName }}
-                </Tag>
-                <Tag v-else-if="current.direction === 1">未关联客户</Tag>
+                <div class="min-w-0 flex-1">
+                  <div class="truncate text-[13.5px] font-medium text-[#1D1D1F]">
+                    {{ current.fromName || current.fromAddress }}
+                    <span class="font-normal text-[#86868B]"
+                      >&lt;{{ current.fromAddress }}&gt;</span
+                    >
+                  </div>
+                  <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#86868B]">
+                    <span>收件人：{{ current.toAddresses }}</span>
+                    <span v-if="current.ccAddresses"
+                      >· 抄送：{{ current.ccAddresses }}</span
+                    >
+                    <span>· {{ fmtDateTime(current.sentTime) }}</span>
+                    <button
+                      v-if="current.customerName"
+                      type="button"
+                      class="mail-crm-chip"
+                      @click="
+                        router.push(`/crm/customer/detail/${current.customerId}`)
+                      "
+                    >
+                      客户 · {{ current.customerName }}
+                    </button>
+                    <button
+                      v-else-if="current.clueName"
+                      type="button"
+                      class="mail-crm-chip"
+                      @click="router.push(`/crm/clue/detail/${current.clueId}`)"
+                    >
+                      线索 · {{ current.clueName }}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div class="flex-1 overflow-auto p-4">
-              <iframe
-                v-if="current.htmlBody"
-                :srcdoc="iframeDoc(current.htmlBody)"
-                :title="`邮件正文：${current.subject || '无标题'}`"
-                sandbox="allow-popups allow-popups-to-escape-sandbox"
-                class="h-[420px] w-full border-0"
-              ></iframe>
-              <pre v-else class="whitespace-pre-wrap font-sans text-sm">{{
-                current.textBody
-              }}</pre>
-
-              <div
-                v-if="current.attachments?.length"
-                class="mt-4 flex flex-wrap gap-2"
-              >
-                <a
-                  v-for="a in current.attachments"
-                  :key="a.id"
-                  :href="a.fileUrl"
-                  target="_blank"
-                  rel="noopener"
-                  class="flex items-center gap-2 rounded border px-3 py-2 text-sm hover:bg-gray-50"
+            <div class="flex-1 overflow-auto px-6 py-5">
+              <div class="rounded-2xl bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.05)]">
+                <iframe
+                  v-if="current.htmlBody"
+                  :srcdoc="iframeDoc(current.htmlBody)"
+                  :title="`邮件正文：${current.subject || '无标题'}`"
+                  sandbox="allow-popups allow-popups-to-escape-sandbox"
+                  class="h-[420px] w-full border-0"
+                ></iframe>
+                <pre
+                  v-else
+                  class="m-0 whitespace-pre-wrap font-sans text-[14px] leading-relaxed text-[#1D1D1F]"
+                  >{{ current.textBody }}</pre
                 >
-                  <span>📎 {{ a.fileName }}</span>
-                  <span class="text-xs text-gray-400">{{
-                    formatSize(a.fileSize)
-                  }}</span>
-                </a>
+
+                <div
+                  v-if="current.attachments?.length"
+                  class="mt-4 flex flex-wrap gap-2 border-0 border-t border-solid border-black/[0.06] pt-3.5"
+                >
+                  <a
+                    v-for="a in current.attachments"
+                    :key="a.id"
+                    :href="a.fileUrl"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex items-center gap-2 rounded-xl bg-[#F5F5F7] px-3 py-2 text-[13px] font-medium text-[#1D1D1F] transition-colors hover:bg-[#EBEBF0]"
+                  >
+                    <IconifyIcon icon="lucide:paperclip" class="size-3.5 text-[#007AFF]" />
+                    <span>{{ a.fileName }}</span>
+                    <span class="text-xs font-normal text-[#86868B]">{{
+                      formatSize(a.fileSize)
+                    }}</span>
+                  </a>
+                </div>
               </div>
 
-              <div v-if="thread.length > 1" class="mt-6">
-                <div class="mb-2 text-sm font-medium text-gray-500">
+              <div v-if="thread.length > 1" class="mt-5">
+                <div class="mb-2.5 px-1 text-[12px] font-semibold text-[#86868B]">
                   往来记录（{{ thread.length }} 封）
                 </div>
-                <div
-                  v-for="t in thread"
-                  :key="t.id"
-                  class="mb-2 rounded border-l-4 p-2 text-sm"
-                  :class="
-                    t.direction === 2
-                      ? 'border-green-400 bg-green-50'
-                      : 'border-blue-400 bg-blue-50'
-                  "
-                >
-                  <div class="text-xs text-gray-500">
-                    {{
-                      t.direction === 2 ? '我方' : t.fromName || t.fromAddress
-                    }}
-                    · {{ fmtDateTime(t.sentTime) }}
+                <div class="flex flex-col gap-2">
+                  <div
+                    v-for="t in thread"
+                    :key="t.id"
+                    class="rounded-xl bg-white px-4 py-3 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.03),0_0_0_0.5px_rgba(0,0,0,0.05)]"
+                  >
+                    <div class="flex items-center justify-between text-xs text-[#86868B]">
+                      <span
+                        class="font-semibold"
+                        :class="t.direction === 2 ? 'text-[#007AFF]' : 'text-[#1D1D1F]'"
+                      >
+                        {{
+                          t.direction === 2 ? '我方回复' : t.fromName || t.fromAddress
+                        }}
+                      </span>
+                      <span class="tabular-nums">{{ fmtDateTime(t.sentTime) }}</span>
+                    </div>
+                    <div class="mt-1 truncate text-[13px] text-[#424245]">
+                      {{ t.snippet }}
+                    </div>
                   </div>
-                  <div class="truncate">{{ t.snippet }}</div>
                 </div>
               </div>
             </div>
 
             <div
               v-if="current.direction === 1 && current.folder !== 'TRASH'"
-              class="mail-reply border-t p-4"
+              class="px-5 pb-4 pt-1"
             >
-              <div
-                v-if="aiDraft"
-                class="mail-ai-draft mb-2 rounded border border-orange-200 bg-orange-50 p-3 text-sm"
-              >
-                <div class="mb-1 font-medium text-orange-700">
-                  AI 已准备回复，未自动发出：{{
-                    DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason
-                  }}
-                  <span v-if="aiDraft.reasonDetail"
+              <!-- AI 草稿悬浮紫边白卡（与 IM 保持完全一致的视觉语言） -->
+              <div v-if="aiDraft" class="mail-ai-draft mb-2.5 p-3.5 text-sm">
+                <div
+                  class="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[#8B5CF6]"
+                >
+                  <IconifyIcon icon="lucide:sparkles" class="size-3.5" />
+                  <span
+                    >AI 草稿 ·
+                    {{
+                      DRAFT_REASON[aiDraft.reason || ''] ?? aiDraft.reason
+                    }}</span
+                  >
+                  <span v-if="aiDraft.reasonDetail" class="font-normal text-[#86868B]"
                     >（{{ aiDraft.reasonDetail }}）</span
                   >
                 </div>
                 <div
                   v-if="aiDraft.content"
-                  class="line-clamp-3 whitespace-pre-wrap text-gray-700"
+                  class="line-clamp-3 whitespace-pre-wrap text-[13.5px] leading-[21px] text-[#1D1D1F]"
                 >
                   {{ aiDraft.content }}
                 </div>
-                <div class="mt-2 flex gap-2">
+                <div class="mt-2.5 flex gap-2">
                   <Button
                     v-if="aiDraft.content"
                     size="small"
                     type="primary"
-                    ghost
+                    shape="round"
                     @click="useDraft"
                     >填入回复框</Button
                   >
-                  <Button size="small" @click="discardDraft">忽略</Button>
-                </div>
-              </div>
-              <Textarea
-                v-model:value="replyText"
-                :rows="5"
-                placeholder="输入回复内容，原邮件会自动引用在下方"
-              />
-              <div v-if="replyFiles.length" class="mt-2 flex flex-wrap gap-2">
-                <Tag
-                  v-for="a in replyFiles"
-                  :key="a.id"
-                  closable
-                  @close="removeFile(replyFiles, a.id)"
-                >
-                  📎 {{ a.fileName }} {{ formatSize(a.fileSize) }}
-                </Tag>
-              </div>
-              <div class="mt-2 flex justify-between">
-                <div class="flex gap-2">
-                  <Button :loading="uploading" @click="pickFiles(replyFiles)"
-                    >添加附件</Button
-                  >
-                  <Button :loading="aiLoading" @click="aiCompose"
-                    >AI 起草</Button
+                  <Button size="small" shape="round" @click="discardDraft"
+                    >忽略</Button
                   >
                 </div>
-                <Button
-                  type="primary"
-                  :loading="replySending"
-                  :disabled="!replyText.trim() || uploading"
-                  @click="reply"
-                  >发送回复</Button
-                >
+              </div>
+
+              <div class="mail-reply">
+                <Textarea
+                  v-model:value="replyText"
+                  :auto-size="{ minRows: 3, maxRows: 7 }"
+                  placeholder="输入回复内容，原邮件会自动引用在下方…"
+                />
+                <div v-if="replyFiles.length" class="mt-2 flex flex-wrap gap-1.5">
+                  <Tag
+                    v-for="a in replyFiles"
+                    :key="a.id"
+                    closable
+                    class="!m-0 !rounded-full"
+                    @close="removeFile(replyFiles, a.id)"
+                  >
+                    <IconifyIcon icon="lucide:paperclip" class="mr-1 inline size-3" />{{
+                      a.fileName
+                    }}
+                    {{ formatSize(a.fileSize) }}
+                  </Tag>
+                </div>
+                <div class="mt-2 flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <Tooltip title="添加附件">
+                      <button
+                        type="button"
+                        class="mail-tool-btn"
+                        :disabled="uploading"
+                        @click="pickFiles(replyFiles)"
+                      >
+                        <IconifyIcon icon="lucide:paperclip" class="size-4" />
+                        <span>附件</span>
+                      </button>
+                    </Tooltip>
+                    <Tooltip title="AI 根据上下文自动起草回信">
+                      <button
+                        type="button"
+                        class="mail-tool-btn mail-tool-btn--ai"
+                        :disabled="aiLoading"
+                        @click="aiCompose"
+                      >
+                        <IconifyIcon icon="lucide:sparkles" class="size-3.5" />
+                        <span>{{ aiLoading ? '起草中…' : 'AI 起草' }}</span>
+                      </button>
+                    </Tooltip>
+                  </div>
+                  <Button
+                    type="primary"
+                    shape="round"
+                    :loading="replySending"
+                    :disabled="!replyText.trim() || uploading"
+                    @click="reply"
+                    >发送回复</Button
+                  >
+                </div>
               </div>
             </div>
           </div>
@@ -766,3 +975,230 @@ onMounted(async () => {
     </Modal>
   </Page>
 </template>
+
+<style scoped>
+.mail-head-btn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  transition:
+    background-color var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+.mail-head-btn:active {
+  transform: scale(0.95);
+}
+.mail-head-btn--ghost {
+  width: 28px;
+  justify-content: center;
+  padding: 0;
+  color: #6e6e73;
+  background: rgb(118 118 128 / 10%);
+}
+.mail-head-btn--ghost:hover:not(:disabled) {
+  color: #1d1d1f;
+  background: rgb(118 118 128 / 16%);
+}
+.mail-head-btn--primary {
+  padding: 0 11px;
+  color: #007aff;
+  background: #e8f2ff;
+}
+.mail-head-btn--primary:hover {
+  background: #d8e9ff;
+}
+.mail-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  background: rgb(118 118 128 / 11%);
+  border-radius: 10px;
+  transition:
+    background-color var(--ap-dur-fast),
+    box-shadow var(--ap-dur-fast);
+}
+.mail-search-box:focus-within {
+  background: #fff;
+  box-shadow:
+    0 0 0 2px rgb(0 122 255 / 24%),
+    0 1px 4px rgb(0 0 0 / 5%);
+}
+.mail-search-box__icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #8e8e93;
+}
+.mail-search-box__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font-size: 13px;
+  color: #1d1d1f;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+.mail-search-box__input::placeholder {
+  color: #8e8e93;
+}
+.mail-search-box__input::-webkit-search-cancel-button {
+  display: none;
+}
+.mail-search-box__clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: #fff;
+  cursor: pointer;
+  background: #aeaeb2;
+  border: 0;
+  border-radius: 50%;
+}
+.mail-folder-pills {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2.5px;
+  background: rgb(118 118 128 / 10%);
+  border-radius: 9px;
+}
+.mail-folder-pill {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ap-label-2);
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  transition: all var(--ap-dur-fast) var(--ap-ease);
+}
+.mail-folder-pill.on {
+  font-weight: 600;
+  color: #1d1d1f;
+  background: #fff;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 8%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
+}
+.mail-folder-pill__count {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #007aff;
+}
+.mail-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  border-radius: 50%;
+  user-select: none;
+  box-shadow:
+    inset 0 0.5px 0 rgb(255 255 255 / 35%),
+    0 1px 3px rgb(0 0 0 / 10%);
+}
+.mail-avatar--lg {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+.mail-empty-glyph {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  color: #5856d6;
+  background: linear-gradient(180deg, #fff 0%, #f1effe 100%);
+  border-radius: 20px;
+  box-shadow:
+    0 4px 16px rgb(88 86 214 / 12%),
+    0 0 0 0.5px rgb(88 86 214 / 14%);
+}
+.mail-trash-btn {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6e6e73;
+  cursor: pointer;
+  background: #f2f2f7;
+  border: 0;
+  border-radius: 999px;
+  transition: all var(--ap-dur-fast);
+}
+.mail-trash-btn:hover {
+  color: #ff3b30;
+  background: #ffeceb;
+}
+.mail-crm-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #007aff;
+  cursor: pointer;
+  background: rgb(0 122 255 / 10%);
+  border: 0;
+  border-radius: 999px;
+}
+.mail-reply :deep(.ant-input) {
+  border: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-inline: 2px;
+}
+.mail-tool-btn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6e6e73;
+  cursor: pointer;
+  background: #f2f2f7;
+  border: 0;
+  border-radius: 999px;
+  transition: all var(--ap-dur-fast);
+}
+.mail-tool-btn:hover:not(:disabled) {
+  color: #1d1d1f;
+  background: #e5e5ea;
+}
+.mail-tool-btn--ai {
+  color: #7c3aed;
+  background: #f3eeff;
+}
+.mail-tool-btn--ai:hover:not(:disabled) {
+  background: #ebe2ff;
+}
+</style>
