@@ -263,6 +263,15 @@ function setExtra(v: Record<string, any>) {
   search();
 }
 
+/**
+ * 筛选入口的文案：这个组件被客户、线索、订单复用，写死「客户筛选」会误导，
+ * 按列表名推导（客户列表 → 客户筛选、线索列表 → 线索筛选、订单管理 → 订单筛选）。
+ */
+const filterLabel = computed(() => {
+  const base = props.title.replace(/(列表|管理)$/, '').trim();
+  return `${base || '客户'}筛选`;
+});
+
 const rowSelection = computed(() =>
   props.selectable
     ? {
@@ -310,7 +319,7 @@ defineExpose({ reload, setExtra, currentParams: params });
           :aria-expanded="railOpen"
           @click="railOpen = !railOpen"
         >
-          {{ railOpen ? '收起筛选' : '客户筛选' }}</button
+          {{ railOpen ? '收起筛选' : filterLabel }}</button
         ><slot name="actions"></slot>
       </div>
     </div>
