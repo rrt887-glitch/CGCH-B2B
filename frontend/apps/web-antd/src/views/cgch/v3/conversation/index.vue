@@ -497,15 +497,15 @@ onMounted(() => {
   display: flex;
   flex: 1;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 .channel-pill {
   display: inline-flex;
-  gap: 5px;
+  gap: 6px;
   align-items: center;
-  height: 26px;
-  padding: 0 9px;
+  height: 28px;
+  padding: 0 10px;
   font-size: 12px;
   font-weight: 500;
   color: var(--ap-label-2);
