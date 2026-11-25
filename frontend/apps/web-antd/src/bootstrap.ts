@@ -17,6 +17,7 @@ import { useTitle } from '@vueuse/core';
 import { $t, setupI18n } from '#/locales';
 import { bindFormCreateApp } from '#/plugins/form-create/lazy';
 import { setupHoverPrefetch } from '#/utils/prefetch';
+import { setupVxeTableA11y } from '#/utils/vxe-a11y';
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
@@ -81,6 +82,9 @@ async function bootstrap(namespace: string) {
   });
 
   app.mount('#app');
+
+  // 表格工具栏 / 分页按钮只有图标字形，读屏念不出操作名，这里补 aria-label
+  setupVxeTableA11y();
 
   // 鼠标悬停菜单时预取页面分包：跨境链路下能省掉 1 个往返的等待
   setupHoverPrefetch();
