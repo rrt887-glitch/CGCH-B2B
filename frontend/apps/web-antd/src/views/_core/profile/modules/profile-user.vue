@@ -1,16 +1,14 @@
 <script setup lang="ts">
 import type { SystemUserProfileApi } from '#/api/system/user/profile';
 
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
-import { preferences } from '@vben/preferences';
 import { formatDateTime } from '@vben/utils';
 
-import { Descriptions, DescriptionsItem, Tooltip } from 'ant-design-vue';
+import { message } from 'ant-design-vue';
 
 import { updateUserProfile } from '#/api/system/user/profile';
-import { CropperAvatar } from '#/components/cropper';
 import { useUpload } from '#/components/upload/use-upload';
 
 const props = defineProps<{
@@ -21,128 +19,214 @@ const emit = defineEmits<{
   (e: 'success'): void;
 }>();
 
-const avatar = computed(
-  () => props.profile?.avatar || preferences.app.defaultAvatar,
+const fileInput = ref<HTMLInputElement>();
+const uploading = ref(false);
+
+const avatar = computed(() => props.profile?.avatar || '');
+const displayName = computed(
+  () => props.profile?.nickname || props.profile?.username || '',
+);
+const monogram = computed(() =>
+  (displayName.value.trim().slice(0, 1) || '用').toUpperCase(),
 );
 
-async function handelUpload({
-  file,
-  filename,
-}: {
-  file: Blob;
-  filename: string;
-}) {
-  // 1. 上传头像，获取 URL
-  const { httpRequest } = useUpload();
-  // 将 Blob 转换为 File
-  const fileObj = new File([file], filename, { type: file.type });
-  const avatar = await httpRequest(fileObj);
-  // 2. 更新用户头像
-  await updateUserProfile({ avatar });
+const rows = computed(() => {
+  const p = props.profile;
+  if (!p) return [];
+  return [
+    { label: '用户账号', value: p.username || '—' },
+    { label: '所属部门', value: p.dept?.name || '—' },
+    {
+      label: '所属岗位',
+      value: p.posts?.length ? p.posts.map((x) => x.name).join('、') : '—',
+    },
+    { label: '手机号码', value: p.mobile || '—' },
+    { label: '用户邮箱', value: p.email || '—' },
+    { label: '创建时间', value: p.createTime ? formatDateTime(p.createTime) : '—' },
+    { label: '最近登录', value: p.loginDate ? formatDateTime(p.loginDate) : '—' },
+  ];
+});
+
+function pickFile() {
+  fileInput.value?.click();
+}
+
+async function onFileChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  uploading.value = true;
+  try {
+    const { httpRequest } = useUpload();
+    const url = await httpRequest(file);
+    await updateUserProfile({ avatar: url });
+    message.success('头像已更新');
+    emit('success');
+  } finally {
+    uploading.value = false;
+  }
 }
 </script>
 
 <template>
-  <div v-if="profile">
-    <div class="flex flex-col items-center">
-      <Tooltip title="点击上传头像">
-        <CropperAvatar
-          :show-btn="false"
-          :upload-api="handelUpload"
-          :value="avatar"
-          :width="120"
-          @change="emit('success')"
-        />
-      </Tooltip>
+  <div v-if="profile" class="ap-contact-card">
+    <input
+      ref="fileInput"
+      type="file"
+      accept="image/*"
+      class="hidden"
+      @change="onFileChange"
+    />
+    <div class="ap-contact-card__hero">
+      <button
+        type="button"
+        class="ap-contact-avatar"
+        :disabled="uploading"
+        title="点击更换头像"
+        @click="pickFile"
+      >
+        <img v-if="avatar" :src="avatar" :alt="displayName" />
+        <span v-else class="ap-contact-avatar__char">{{ monogram }}</span>
+        <span class="ap-contact-avatar__mask">
+          <IconifyIcon icon="lucide:camera" class="size-4" />
+        </span>
+      </button>
+      <div class="ap-contact-card__name">{{ displayName }}</div>
+      <div v-if="profile.roles?.length" class="ap-contact-card__roles">
+        <span
+          v-for="r in profile.roles"
+          :key="r.id"
+          class="ap-contact-card__role"
+          >{{ r.name }}</span
+        >
+      </div>
     </div>
-    <div class="mt-6">
-      <Descriptions :column="1" size="small">
-        <DescriptionsItem>
-          <template #label>
-            <div class="flex items-center">
-              <IconifyIcon icon="ant-design:user-outlined" class="mr-1" />
-              用户账号
-            </div>
-          </template>
-          {{ profile.username }}
-        </DescriptionsItem>
-        <DescriptionsItem>
-          <template #label>
-            <div class="flex items-center">
-              <IconifyIcon
-                icon="ant-design:user-switch-outlined"
-                class="mr-1"
-              />
-              所属角色
-            </div>
-          </template>
-          {{ profile.roles.map((role) => role.name).join(',') }}
-        </DescriptionsItem>
-        <DescriptionsItem>
-          <template #label>
-            <div class="flex items-center">
-              <IconifyIcon icon="ant-design:phone-outlined" class="mr-1" />
-              手机号码
-            </div>
-          </template>
-          {{ profile.mobile }}
-        </DescriptionsItem>
-        <DescriptionsItem>
-          <template #label>
-            <div class="flex items-center">
-              <IconifyIcon icon="ant-design:mail-outlined" class="mr-1" />
-              用户邮箱
-            </div>
-          </template>
-          {{ profile.email }}
-        </DescriptionsItem>
-        <DescriptionsItem>
-          <template #label>
-            <div class="flex items-center">
-              <IconifyIcon icon="ant-design:team-outlined" class="mr-1" />
-              所属部门
-            </div>
-          </template>
-          {{ profile.dept?.name }}
-        </DescriptionsItem>
-        <DescriptionsItem>
-          <template #label>
-            <div class="flex items-center">
-              <IconifyIcon
-                icon="ant-design:usergroup-add-outlined"
-                class="mr-1"
-              />
-              所属岗位
-            </div>
-          </template>
-          {{
-            profile.posts && profile.posts.length > 0
-              ? profile.posts.map((post) => post.name).join(',')
-              : '-'
-          }}
-        </DescriptionsItem>
-        <DescriptionsItem>
-          <template #label>
-            <div class="flex items-center">
-              <IconifyIcon
-                icon="ant-design:clock-circle-outlined"
-                class="mr-1"
-              />
-              创建时间
-            </div>
-          </template>
-          {{ formatDateTime(profile.createTime) }}
-        </DescriptionsItem>
-        <DescriptionsItem>
-          <template #label>
-            <div class="flex items-center">
-              <IconifyIcon icon="ant-design:login-outlined" class="mr-1" />
-              登录时间
-            </div>
-          </template>
-          {{ formatDateTime(profile.loginDate) }}
-        </DescriptionsItem>
-      </Descriptions>
+
+    <div class="ap-contact-card__group">
+      <div v-for="r in rows" :key="r.label" class="ap-contact-card__row">
+        <span class="ap-contact-card__label">{{ r.label }}</span>
+        <span class="ap-contact-card__value tabular-nums">{{ r.value }}</span>
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.ap-contact-card__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 20px;
+  text-align: center;
+}
+
+.ap-contact-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: linear-gradient(180deg, #a4abb7 0%, #868e9c 100%);
+  border: 0;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 35%),
+    0 6px 18px rgb(0 0 0 / 10%);
+  transition: transform var(--ap-dur) var(--ap-ease);
+}
+
+.ap-contact-avatar:hover {
+  transform: scale(1.03);
+}
+
+.ap-contact-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ap-contact-avatar__char {
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  user-select: none;
+}
+
+.ap-contact-avatar__mask {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgb(0 0 0 / 38%);
+  opacity: 0;
+  transition: opacity var(--ap-dur-fast);
+}
+
+.ap-contact-avatar:hover .ap-contact-avatar__mask {
+  opacity: 1;
+}
+
+.ap-contact-card__name {
+  margin-top: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ap-label);
+}
+
+.ap-contact-card__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.ap-contact-card__role {
+  padding: 2px 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ap-accent);
+  background: var(--ap-accent-soft);
+  border-radius: 999px;
+}
+
+.ap-contact-card__group {
+  overflow: hidden;
+  background: #f5f5f7;
+  border-radius: 12px;
+}
+
+.ap-contact-card__row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+}
+
+.ap-contact-card__row + .ap-contact-card__row {
+  border-top: 0.5px solid rgb(0 0 0 / 6%);
+}
+
+.ap-contact-card__label {
+  flex: none;
+  color: var(--ap-label-3);
+}
+
+.ap-contact-card__value {
+  overflow: hidden;
+  font-weight: 500;
+  color: var(--ap-label);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

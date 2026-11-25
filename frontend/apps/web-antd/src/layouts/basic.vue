@@ -163,11 +163,12 @@ function go(item: NavItem) {
   router.push({ path: item.path, query: item.query });
 }
 
-const avatar = computed(
-  () => userStore.userInfo?.avatar || preferences.app.defaultAvatar,
-);
+const avatar = computed(() => userStore.userInfo?.avatar || '');
 const nickname = computed(
   () => userStore.userInfo?.nickname || userStore.userInfo?.username || '',
+);
+const monogram = computed(() =>
+  (nickname.value.trim().slice(0, 1) || '用').toUpperCase(),
 );
 
 function onUserMenu({ key }: { key: number | string }) {
@@ -267,9 +268,15 @@ function onUserMenu({ key }: { key: number | string }) {
               class="cgch-rail__avatar"
               :class="{ 'is-active': activeKey === 'profile' }"
             >
-              <Avatar :src="avatar" :size="32">{{
-                nickname.slice(0, 1)
-              }}</Avatar>
+              <Avatar
+                v-if="avatar"
+                :src="avatar"
+                :size="30"
+                class="shrink-0"
+              />
+              <span v-else class="ap-monogram" aria-hidden="true">{{
+                monogram
+              }}</span>
               <div class="rail-user">
                 <span class="rail-name">{{ nickname }}</span>
                 <span v-if="userStore.userInfo?.email" class="rail-email">
@@ -624,6 +631,24 @@ function onUserMenu({ key }: { key: number | string }) {
   width: 13px;
   height: 13px;
   color: var(--ap-label-3);
+}
+
+/* 苹果通讯录风格默认单字头像 */
+.ap-monogram {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0;
+  background: linear-gradient(180deg, #a4abb7 0%, #868e9c 100%);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0.5px 0 rgb(255 255 255 / 35%),
+    0 1px 2px rgb(0 0 0 / 10%);
 }
 
 .is-collapsed .cgch-rail__brand,
