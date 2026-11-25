@@ -29,7 +29,14 @@ export namespace SystemUserApi {
 }
 
 /** 查询用户管理列表 */
-export function getUserPage(params: PageParam) {
+export function getUserPage(
+  params: PageParam & {
+    mobile?: string;
+    /** 姓名模糊搜索，后端 UserPageReqVO.nickname */
+    nickname?: string;
+    username?: string;
+  },
+) {
   return requestClient.get<PageResult<SystemUserApi.User>>(
     '/system/user/page',
     { params },

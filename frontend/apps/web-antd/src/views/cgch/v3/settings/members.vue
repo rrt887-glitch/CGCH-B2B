@@ -66,7 +66,7 @@ const adminCount = computed(() => rows.value.filter((r) => r.role === 'admin').l
 async function load() {
   loading.value = true;
   try {
-    const r = await getUserPage({ pageNo: page.no, pageSize: page.size, nickname: keyword.value.trim() || undefined } as any);
+    const r = await getUserPage({ pageNo: page.no, pageSize: page.size, nickname: keyword.value.trim() || undefined });
     const list = (r.list ?? []) as Row[];
     await Promise.all(
       list.map(async (u) => {
@@ -221,7 +221,14 @@ onMounted(async () => {
           账号数量上限以开户时为准，需要增加请联系平台。这里只能添加<strong>成员</strong>，管理员账号由平台创建。
         </p>
       </div>
-      <Input.Search v-model:value="keyword" allow-clear placeholder="搜索姓名" class="w-full sm:w-56" @search="page.no = 1; load()" />
+      <Input.Search
+        v-model:value="keyword"
+        allow-clear
+        placeholder="搜索姓名"
+        class="w-full sm:w-56"
+        @search="page.no = 1; load()"
+        @change="(e: any) => !e.target.value && ((page.no = 1), load())"
+      />
       <Button type="primary" @click="openForm()">添加成员</Button>
     </div>
 
