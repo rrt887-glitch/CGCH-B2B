@@ -35,7 +35,11 @@ async function load() {
 const open = ref(false);
 const form = ref<NotifyRuleApi.Rule>({ type: '', channel: 'site', enabled: true });
 
-function edit(r?: NotifyRuleApi.Rule) {
+async function edit(r?: NotifyRuleApi.Rule) {
+  // 消息类型的选项来自接口。首次进页面就立刻点「新增」时 types 可能还是空的，
+  // 默认值会取到空串、下拉框一直显示空白；取消后重开因为数据已到才正常。
+  // 这里在打开前确保候选项就绪。
+  if (!types.value.length) await load();
   form.value = r ? { ...r } : { type: types.value[0]?.value ?? '', channel: 'site', enabled: true };
   open.value = true;
 }
