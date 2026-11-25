@@ -174,23 +174,42 @@ onMounted(() => {
 
 <template>
   <div class="kb">
+    <header class="kb__head">
+      <div>
+        <h2 class="kb__title">知识库</h2>
+        <p class="kb__sub">上传产品目录、报价单、FAQ 或录入文字条目，AI 接待时自动检索引用</p>
+      </div>
+    </header>
+
     <div class="kb__company">
-      <template v-if="company?.name || company?.intro">
-        <div class="flex items-center gap-2">
-          <span class="text-base font-semibold text-gray-900">{{ company.name || '未填写公司名称' }}</span>
-          <span v-if="company.industry" class="kb__tag">{{ company.industry }}</span>
-          <IconifyIcon icon="lucide:pencil" class="size-3.5 cursor-pointer text-gray-400 hover:text-[#0071E3]" @click="editCompany" />
+      <div class="kb__company-icon">
+        <IconifyIcon icon="lucide:building-2" class="size-5" />
+      </div>
+      <div class="min-w-0 flex-1">
+        <template v-if="company?.name || company?.intro">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-[15px] font-semibold text-[#1D1D1F]">{{ company.name || '未填写公司名称' }}</span>
+            <span v-if="company.industry" class="kb__tag">{{ company.industry }}</span>
+            <button type="button" class="kb__edit" @click="editCompany">
+              <IconifyIcon icon="lucide:pencil" class="size-3" />编辑
+            </button>
+          </div>
+          <a v-if="company.website" :href="company.website" target="_blank" class="mt-0.5 block text-xs text-[#007AFF]">{{ company.website }}</a>
+          <Tooltip :title="company.intro" placement="bottomLeft" :overlay-style="{ maxWidth: '560px' }">
+            <p class="kb__intro">{{ company.intro }}</p>
+          </Tooltip>
+        </template>
+        <div v-else class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="text-[14px] font-semibold text-[#1D1D1F]">企业基础信息</div>
+            <div class="mt-0.5 text-xs text-[#86868B]">填写公司名称、行业与主营简介，AI 会以企业代表身份向买家自我介绍</div>
+          </div>
+          <Button type="primary" size="small" @click="editCompany">填写企业信息</Button>
         </div>
-        <a v-if="company.website" :href="company.website" target="_blank" class="mt-1 block text-sm text-gray-500">{{ company.website }}</a>
-        <Tooltip :title="company.intro" placement="bottomLeft" :overlay-style="{ maxWidth: '560px' }">
-          <p class="kb__intro">{{ company.intro }}</p>
-        </Tooltip>
-      </template>
-      <div v-else class="flex items-center justify-between">
-        <span class="text-sm text-gray-500">填写公司名称、行业和简介，AI 回复时会以公司代表的身份介绍。</span>
-        <Button type="primary" ghost size="small" @click="editCompany">填写企业信息</Button>
       </div>
     </div>
+
+    <div class="kb__panel">
 
     <div class="kb__bar">
       <div class="kb__seg">
@@ -258,6 +277,7 @@ onMounted(() => {
       </div>
     </template>
     <div v-else class="kb__text"><TextKnowledge /></div>
+    </div>
 
     <Modal v-model:open="companyOpen" title="企业信息" :width="560" ok-text="保存" @ok="saveCompany">
       <div class="space-y-3">
@@ -275,20 +295,82 @@ onMounted(() => {
 
 <style scoped>
 .kb {
-  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kb__head {
+  padding: 2px 2px 0;
+}
+
+.kb__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ap-label);
+  letter-spacing: -0.015em;
+}
+
+.kb__sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ap-label-3);
 }
 
 .kb__company {
-  padding-bottom: 14px;
-  border-bottom: 1px solid #ebebf0;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 20px;
+  background: var(--ap-surface);
+  border-radius: 16px;
+  box-shadow: var(--ap-shadow-rest);
+}
+
+.kb__company-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: var(--ap-accent);
+  background: var(--ap-accent-soft);
+  border-radius: 12px;
+}
+
+.kb__edit {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--ap-label-2);
+  cursor: pointer;
+  background: #f5f5f7;
+  border: 0;
+  border-radius: 6px;
+}
+
+.kb__edit:hover {
+  color: var(--ap-accent);
+  background: var(--ap-accent-soft);
+}
+
+.kb__panel {
+  padding: 18px 20px;
+  background: var(--ap-surface);
+  border-radius: 16px;
+  box-shadow: var(--ap-shadow-rest);
 }
 
 .kb__tag {
-  padding: 0 6px;
-  font-size: 11px;
-  color: #86868b;
-  background: #f2f2f7;
-  border-radius: 4px;
+  padding: 1px 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ap-accent);
+  background: var(--ap-accent-soft);
+  border-radius: 999px;
 }
 
 .kb__intro {
@@ -296,8 +378,8 @@ onMounted(() => {
   margin: 4px 0 0;
   overflow: hidden;
   -webkit-line-clamp: 1;
-  font-size: 13px;
-  color: #86868b;
+  font-size: 12.5px;
+  color: var(--ap-label-3);
   -webkit-box-orient: vertical;
 }
 
@@ -306,54 +388,53 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-  margin: 14px 0 10px;
+  margin-bottom: 14px;
 }
 
 .kb__seg {
   display: inline-flex;
-  padding: 3px;
-  background: #F2F2F7;
+  padding: 2px;
+  background: var(--ap-fill-3);
   border-radius: 8px;
 }
 
 .kb__seg button {
-  padding: 3px 12px;
-  font-size: 13px;
-  color: #6e6e73;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ap-label-2);
   cursor: pointer;
   background: none;
   border: 0;
   border-radius: 6px;
+  transition: all var(--ap-dur-fast);
 }
 
 .kb__seg button.on {
-  color: #0071E3;
+  font-weight: 600;
+  color: var(--ap-label);
   background: #fff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
 }
 
 .kb__search {
   width: 220px;
 }
 
-/*
- * 上传控件只用来承载 file input：display:none 让它同时退出 tab 顺序和无障碍树，
- * 界面上真正可聚焦的只有我们自己那个「上传资料」按钮。
- */
 .kb__upload-hidden {
   display: none;
 }
 
 .kb__icon {
   display: inline-flex;
-  flex: 0 0 16px;
+  flex: 0 0 24px;
   align-items: center;
   justify-content: center;
-  height: 16px;
-  font-size: 10px;
+  height: 24px;
+  font-size: 11px;
   font-weight: 700;
   color: #fff;
-  border-radius: 3px;
+  border-radius: 6px;
 }
 
 .kb__text :deep(.p-5),

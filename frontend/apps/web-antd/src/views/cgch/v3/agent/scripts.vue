@@ -312,11 +312,14 @@ onMounted(() => {
 
 <style scoped>
 .sc {
-  padding: 8px 16px 18px;
+  padding: 20px 22px;
+  background: var(--ap-surface);
+  border-radius: 16px;
+  box-shadow: var(--ap-shadow-rest);
 }
 
 .sc__tabs :deep(.ant-tabs-nav) {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .sc__body {
@@ -324,10 +327,11 @@ onMounted(() => {
 }
 
 .sc__block {
-  padding: 16px;
+  padding: 16px 18px;
   margin-bottom: 16px;
-  border: 1px solid #eef0f3;
-  border-radius: 10px;
+  background: #f7f7fa;
+  border: 0;
+  border-radius: 12px;
 }
 
 .sc__head {

@@ -24,9 +24,9 @@ const active = ref<'crm' | 'inquiry' | 'research'>('inquiry');
 const cfg = ref<ChannelAiApi.Config>({});
 
 const SKILLS = [
-  { key: 'inquiry' as const, title: '智能询盘接待', desc: '全渠道，主动跟进赢单', hot: true },
-  { key: 'research' as const, title: '自动背调客户', desc: '毫秒级背调，识别风险' },
-  { key: 'crm' as const, title: 'CRM 自动录入', desc: '自动评级打标，管理档案' },
+  { key: 'inquiry' as const, title: '智能询盘接待', desc: '全渠道自动发资料、报价与跟进', icon: 'lucide:message-square-heart', tint: 'blue' },
+  { key: 'research' as const, title: '自动背调客户', desc: '毫秒级背景核验，识别采购信号', icon: 'lucide:radar', tint: 'purple' },
+  { key: 'crm' as const, title: 'CRM 自动录入', desc: '自动建档、提取需求与客户评级', icon: 'lucide:database-zap', tint: 'green' },
 ];
 
 async function patch(p: Partial<AgentApi.Skills>) {
@@ -112,15 +112,29 @@ onMounted(async () => {
 
 <template>
   <div class="sk">
-    <aside class="sk__list">
-      <div v-for="s in SKILLS" :key="s.key" class="sk__item" :class="{ on: active === s.key }" @click="active = s.key">
-        <div v-if="s.hot" class="sk__robot"><IconifyIcon icon="lucide:bot-message-square" class="size-7 text-[#0071E3]" /></div>
-        <div>
-          <div class="font-semibold text-gray-900">{{ s.title }}</div>
-          <div class="mt-0.5 text-xs text-gray-500">{{ s.desc }}</div>
+    <header class="sk__head">
+      <h2 class="sk__title">配技能</h2>
+      <p class="sk__sub">按业务场景开启数字员工的自动化技能，实时保存生效</p>
+    </header>
+
+    <div class="sk__cards">
+      <button
+        v-for="s in SKILLS"
+        :key="s.key"
+        type="button"
+        class="sk__card"
+        :class="{ on: active === s.key }"
+        @click="active = s.key"
+      >
+        <span class="sk__icon" :class="`is-${s.tint}`">
+          <IconifyIcon :icon="s.icon" class="size-5" />
+        </span>
+        <div class="min-w-0">
+          <div class="sk__card-title">{{ s.title }}</div>
+          <div class="sk__card-desc">{{ s.desc }}</div>
         </div>
-      </div>
-    </aside>
+      </button>
+    </div>
 
     <section v-if="skills" class="sk__detail">
       <template v-if="active === 'inquiry'">
@@ -276,63 +290,124 @@ onMounted(async () => {
 <style scoped>
 .sk {
   display: flex;
-  min-height: 100%;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.sk__list {
-  flex: 0 0 190px;
-  padding: 52px 12px 12px;
-  border-right: 1px solid #ebebf0;
+.sk__head {
+  padding: 2px 2px 0;
 }
 
-.sk__item {
+.sk__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ap-label);
+  letter-spacing: -0.015em;
+}
+
+.sk__sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ap-label-3);
+}
+
+.sk__cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sk__card {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
-  padding: 12px;
-  margin-bottom: 8px;
+  padding: 15px 16px;
+  text-align: left;
   cursor: pointer;
-  border: 1px solid transparent;
-  border-radius: 10px;
+  background: var(--ap-surface);
+  border: 1.5px solid transparent;
+  border-radius: 15px;
+  box-shadow: var(--ap-shadow-rest);
+  transition:
+    border-color var(--ap-dur-fast),
+    box-shadow var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease);
 }
 
-.sk__item:hover {
-  background: #f8fafc;
+.sk__card:hover:not(.on) {
+  transform: translateY(-1px);
+  box-shadow: var(--ap-shadow-lift);
 }
 
-.sk__item.on {
-  background: #f5f5f7;
-  border-color: #f5c2d7;
+.sk__card.on {
+  border-color: var(--ap-accent);
+  box-shadow: 0 4px 16px rgb(0 122 255 / 12%);
 }
 
-.sk__robot {
-  display: flex;
-  flex: 0 0 44px;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  background: #fff;
-  border-radius: 12px;
+.sk__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+}
+
+.sk__icon.is-blue {
+  color: var(--ap-accent);
+  background: var(--ap-accent-soft);
+}
+
+.sk__icon.is-purple {
+  color: #7c5ce6;
+  background: rgb(124 92 230 / 12%);
+}
+
+.sk__icon.is-green {
+  color: var(--ap-green-text);
+  background: rgb(52 199 89 / 12%);
+}
+
+.sk__card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ap-label);
+}
+
+.sk__card.on .sk__card-title {
+  color: var(--ap-accent);
+}
+
+.sk__card-desc {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ap-label-3);
 }
 
 .sk__detail {
-  flex: 1;
-  min-width: 0;
-  padding: 20px 24px;
+  padding: 22px 24px;
+  background: var(--ap-surface);
+  border-radius: 16px;
+  box-shadow: var(--ap-shadow-rest);
 }
 
 .sk__h {
-  margin: 0 0 22px;
-  font-size: 15px;
+  margin: 0 0 18px;
+  font-size: 16px;
   font-weight: 700;
-  color: #1D1D1F;
+  color: var(--ap-label);
 }
 
 .sk__row {
   display: flex;
   gap: 14px;
   align-items: flex-start;
-  margin-bottom: 26px;
+  padding: 18px 0;
+}
+
+.sk__row + .sk__row {
+  border-top: 0.5px solid var(--ap-separator);
 }
 
 .sk__row > :first-child {
@@ -342,54 +417,51 @@ onMounted(async () => {
 .sk__name {
   font-size: 14px;
   font-weight: 600;
-  color: #1D1D1F;
+  color: var(--ap-label);
 }
 
 .sk__desc {
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.6;
-  color: #6e6e73;
+  color: var(--ap-label-2);
 }
 
 .sk__tags {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 10px 12px;
+  padding: 12px 14px;
   margin-top: 10px;
-  background: #f7f8fa;
-  border-radius: 8px;
+  background: #f5f5f7;
+  border-radius: 10px;
 }
 
 .sk__chip {
-  padding: 1px 8px;
+  padding: 2px 9px;
   font-size: 12px;
-  color: #424245;
-  background: #e9ebef;
-  border-radius: 4px;
+  font-weight: 500;
+  color: var(--ap-label);
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 0.5px 1px rgb(0 0 0 / 6%);
 }
 
 .sk__grade {
   padding: 8px 10px;
   background: #fff;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .sk__box {
   padding: 16px;
-  background: #f7f8fa;
-  border-radius: 10px;
+  background: #f5f5f7;
+  border-radius: 12px;
 }
 
-@media (width <= 760px) {
-  .sk {
-    flex-direction: column;
-  }
-
-  .sk__list {
-    padding-top: 12px;
-    border-right: 0;
+@media (width <= 860px) {
+  .sk__cards {
+    grid-template-columns: 1fr;
   }
 }
 </style>

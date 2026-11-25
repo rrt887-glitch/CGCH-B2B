@@ -253,11 +253,14 @@ onMounted(() => load().catch(() => {}));
 
 <style scoped>
 .ho {
-  padding: 8px 16px 18px;
+  padding: 20px 22px;
+  background: var(--ap-surface);
+  border-radius: 16px;
+  box-shadow: var(--ap-shadow-rest);
 }
 
 .ho__tabs :deep(.ant-tabs-nav) {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .ho__body {
@@ -265,10 +268,11 @@ onMounted(() => load().catch(() => {}));
 }
 
 .ho__block {
-  padding: 14px 16px;
+  padding: 16px 18px;
   margin-bottom: 14px;
-  border: 1px solid #eef0f3;
-  border-radius: 10px;
+  background: #f7f7fa;
+  border: 0;
+  border-radius: 12px;
 }
 
 .ho__h {
