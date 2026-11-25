@@ -9,7 +9,7 @@ import type { ChannelWaApi } from '#/api/channel/whatsapp';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { Button, Drawer, Empty, Select, Spin, Tag } from 'ant-design-vue';
+import { Button, Drawer, Empty, Spin, Tag } from 'ant-design-vue';
 import { IconifyIcon } from '@vben/icons';
 
 import { getMailAccountList } from '#/api/channel/mail';
@@ -95,16 +95,54 @@ function clearFilters() {
 const accountKey = computed(
   () => `${selected.value.kind}:${selected.value.id ?? 'all'}`,
 );
-const accountOptions = computed(() => [
-  ...(showIm.value ? [{ value: 'im:all', label: '全部即时消息' }] : []),
-  ...waAccounts.value.map((a) => ({
-    value: `im:${a.id}`,
-    label: `${PLATFORM[a.platform || 'whatsapp']} · ${a.name || imLabel(a)}`,
+const PLATFORM_COLOR: Record<string, string> = {
+  whatsapp: '#25D366',
+  messenger: '#1877F2',
+  instagram: '#E4405F',
+  linkedin: '#0A66C2',
+  telegram: '#26A5E4',
+  web: '#007AFF',
+  youtube: '#FF0000',
+  tiktok: '#1D1D1F',
+  mail: '#5856D6',
+};
+
+const channelPills = computed(() => {
+  const countsByPlat = new Map<string, number>();
+  for (const a of waAccounts.value) {
+    const p = a.platform || 'whatsapp';
+    countsByPlat.set(p, (countsByPlat.get(p) ?? 0) + 1);
+  }
+  const list: { value: string; label: string; title: string; color: string }[] = [];
+  if (showIm.value) {
+    list.push({ value: 'im:all', label: '全部', title: '全部即时消息', color: '#007AFF' });
+  }
+  for (const a of waAccounts.value) {
+    const p = a.platform || 'whatsapp';
+    const pName = PLATFORM[p] || p;
+    const accName = a.name || imLabel(a);
+    const dup = (countsByPlat.get(p) ?? 0) > 1;
+    list.push({
+      value: `im:${a.id}`,
+      label: dup ? `${pName}·${accName}` : pName,
+      title: `${pName} · ${accName}`,
+      color: PLATFORM_COLOR[p] || '#007AFF',
+    });
+  }
+  if (mailAccounts.value.length) {
+    list.push({ value: 'mail:all', label: '邮件', title: '全部邮件', color: PLATFORM_COLOR.mail! });
+  }
+  return list;
+});
+
+const mailAccountPills = computed(() => [
+  { value: 'mail:all', label: '全部邮箱', title: '全部邮箱', color: PLATFORM_COLOR.mail! },
+  ...mailAccounts.value.map((a) => ({
+    value: `mail:${a.id}`,
+    label: a.email.split('@')[0] || a.email,
+    title: a.email,
+    color: PLATFORM_COLOR.mail!,
   })),
-  ...(mailAccounts.value.length
-    ? [{ value: 'mail:all', label: '全部邮件' }]
-    : []),
-  ...mailAccounts.value.map((a) => ({ value: `mail:${a.id}`, label: a.email })),
 ]);
 function selectAccount(value: string) {
   const [kind, id] = value.split(':');
@@ -241,13 +279,24 @@ onMounted(() => {
               </button>
             </div>
             <div class="account-line">
-              <Select
-                :value="accountKey"
-                :options="accountOptions"
-                class="account-select"
-                aria-label="选择收件箱账号"
-                @change="(v: any) => selectAccount(String(v))"
-              /><button
+              <div class="channel-pills" role="group" aria-label="选择渠道">
+                <button
+                  v-for="c in channelPills"
+                  :key="c.value"
+                  type="button"
+                  class="channel-pill"
+                  :class="{ on: accountKey === c.value }"
+                  :title="c.title"
+                  @click="selectAccount(c.value)"
+                >
+                  <span
+                    class="channel-pill__dot"
+                    :style="{ background: c.color }"
+                  ></span>
+                  <span>{{ c.label }}</span>
+                </button>
+              </div>
+              <button
                 type="button"
                 class="filter-trigger"
                 :class="{ on: filterCount > 0 }"
@@ -290,14 +339,25 @@ onMounted(() => {
           embedded
           :account-id="selected.id"
           :open-id="openId"
-          ><template #list-controls
-            ><Select
-              :value="accountKey"
-              :options="accountOptions"
-              class="w-full"
-              aria-label="选择收件箱账号"
-              @change="(v: any) => selectAccount(String(v))" /></template
-        ></MailWorkbench>
+          ><template #list-controls>
+            <div class="channel-pills" role="group" aria-label="选择邮箱">
+              <button
+                v-for="c in mailAccountPills"
+                :key="c.value"
+                type="button"
+                class="channel-pill"
+                :class="{ on: accountKey === c.value }"
+                :title="c.title"
+                @click="selectAccount(c.value)"
+              >
+                <span
+                  class="channel-pill__dot"
+                  :style="{ background: c.color }"
+                ></span>
+                <span>{{ c.label }}</span>
+              </button>
+            </div>
+          </template></MailWorkbench>
       </div>
     </Spin>
     <Drawer
@@ -430,12 +490,58 @@ onMounted(() => {
 }
 .account-line {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 6px;
 }
-.account-select {
+.channel-pills {
+  display: flex;
   flex: 1;
+  flex-wrap: wrap;
+  gap: 5px;
   min-width: 0;
+}
+.channel-pill {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 26px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ap-label-2);
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--ap-surface);
+  border: 0;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 10%);
+  transition:
+    background-color var(--ap-dur-fast) linear,
+    color var(--ap-dur-fast) linear,
+    box-shadow var(--ap-dur-fast) linear,
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+.channel-pill:hover:not(.on) {
+  color: var(--ap-label);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 18%);
+}
+.channel-pill:active {
+  transform: scale(0.96);
+}
+.channel-pill.on {
+  font-weight: 600;
+  color: #fff;
+  background: var(--ap-label);
+  box-shadow: none;
+}
+.channel-pill__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.channel-pill.on .channel-pill__dot {
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 45%);
 }
 .filter-trigger {
   position: relative;

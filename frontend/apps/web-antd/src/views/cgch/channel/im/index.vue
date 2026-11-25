@@ -1238,13 +1238,6 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
             >
               {{ listTitle }}
             </h2>
-            <Select
-              v-model:value="statusFilter"
-              size="small"
-              class="w-[92px]"
-              :options="STATUS_FILTER"
-              aria-label="会话状态"
-            />
             <Dropdown v-if="waAccounts.length > 0" trigger="click">
               <Button size="small" aria-label="新建会话或群聊"
                 ><IconifyIcon icon="lucide:plus" class="size-3.5"
@@ -1256,6 +1249,18 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                 </Menu>
               </template>
             </Dropdown>
+          </div>
+          <div class="im-status-pills" role="group" aria-label="会话状态">
+            <button
+              v-for="s in STATUS_FILTER"
+              :key="s.value || 'all'"
+              type="button"
+              class="im-status-pill"
+              :class="{ on: statusFilter === s.value }"
+              @click="statusFilter = s.value"
+            >
+              {{ s.value ? s.label : '全部' }}
+            </button>
           </div>
           <Select
             v-if="!embedded"
@@ -2617,6 +2622,45 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   font-weight: 700;
   letter-spacing: -0.015em;
   line-height: 1.3;
+}
+.im-status-pills {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  background: rgb(0 0 0 / 5%);
+  border-radius: 8px;
+}
+.im-status-pill {
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ap-label-2);
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  transition:
+    background-color var(--ap-dur-fast) linear,
+    color var(--ap-dur-fast) linear,
+    box-shadow var(--ap-dur-fast) linear,
+    transform var(--ap-dur-fast) var(--ap-ease);
+}
+.im-status-pill:hover:not(.on) {
+  color: var(--ap-label);
+}
+.im-status-pill:active {
+  transform: scale(0.97);
+}
+.im-status-pill.on {
+  font-weight: 600;
+  color: var(--ap-label);
+  background: var(--ap-surface);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 8%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
 }
 .apple-im .im-contact {
   position: relative;
