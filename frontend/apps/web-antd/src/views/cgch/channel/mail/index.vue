@@ -98,8 +98,15 @@ const unrepliedTotal = computed(() =>
   accounts.value.reduce((n, a) => n + (a.unrepliedCount ?? 0), 0),
 );
 
+const accountsLoading = ref(true);
+
 async function loadAccounts() {
-  accounts.value = await getMailAccountList();
+  accountsLoading.value = true;
+  try {
+    accounts.value = await getMailAccountList();
+  } finally {
+    accountsLoading.value = false;
+  }
 }
 
 async function loadList() {
@@ -352,8 +359,17 @@ onMounted(async () => {
 
 <template>
   <Page auto-content-height :class="{ 'mail-design': embedded }">
+    <!-- 账号列表未加载完之前不能判定“没有绑定邮箱”，否则已绑定邮箱的账号会先闪一下空态 -->
     <div
-      v-if="accounts.length === 0"
+      v-if="accountsLoading"
+      class="flex h-full items-center justify-center rounded bg-white"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <Spin tip="正在加载邮箱…" />
+    </div>
+    <div
+      v-else-if="accounts.length === 0"
       class="flex h-full items-center justify-center rounded bg-white"
     >
       <Empty description="还没有绑定邮箱">
