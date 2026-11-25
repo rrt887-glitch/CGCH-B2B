@@ -72,6 +72,26 @@ const ITEM_STATUS: Record<string, { color: string; label: string }> = {
   skipped: { color: 'default', label: '已跳过' },
 };
 
+/** 待确认 = 草稿 + 已确认未发送 */
+const pendingCount = (t: ChannelReactivateApi.Task) =>
+  (t.counts?.draft ?? 0) + (t.counts?.approved ?? 0);
+
+/**
+ * 任务标签。
+ *
+ * 后端 status=ready 只表示「AI 写完了」，不代表一定有内容等人确认：如果候选全都因为
+ * 缺邮箱/WhatsApp、负责人没有可用发件账号、或没选 WhatsApp 模板而被跳过，待确认就是 0。
+ * 这时继续显示「待确认」会和卡片上的「待确认 0」自相矛盾，所以按实际计数推导标签。
+ */
+function taskTag(t: ChannelReactivateApi.Task): { color: string; label: string } {
+  if (t.status === 'ready' && pendingCount(t) === 0) {
+    if ((t.counts?.failed ?? 0) > 0) return { color: 'red', label: '生成失败' };
+    if ((t.counts?.skipped ?? 0) > 0) return { color: 'default', label: '无可发送内容' };
+    return { color: 'default', label: '没有候选人' };
+  }
+  return TASK_STATUS[t.status] ?? { color: 'default', label: t.status };
+}
+
 // ===== 任务列表 =====
 const tasks = ref<ChannelReactivateApi.Task[]>([]);
 const loading = ref(false);
@@ -268,12 +288,16 @@ onMounted(async () => {
         <Card v-for="t in tasks" :key="t.id" size="small" class="cursor-pointer" @click="openTask(t.id)">
           <div class="flex items-center justify-between">
             <span class="truncate font-medium">{{ t.name }}</span>
-            <Tag :color="TASK_STATUS[t.status]?.color">{{ TASK_STATUS[t.status]?.label }}</Tag>
+            <Tag :color="taskTag(t).color">{{ taskTag(t).label }}</Tag>
           </div>
           <div class="mt-2 text-sm text-gray-500">{{ fmtDateTime(t.createTime) }} · {{ t.total }} 位客户</div>
-          <div class="mt-2 flex gap-4 text-sm">
+          <div class="mt-2 flex flex-wrap gap-4 text-sm">
             <span>已发送 <b>{{ t.counts.sent }}</b></span>
-            <span>待确认 <b>{{ t.counts.draft + t.counts.approved }}</b></span>
+            <span>待确认 <b>{{ pendingCount(t) }}</b></span>
+            <Tooltip v-if="t.counts.skipped" title="客户缺邮箱 / WhatsApp、负责人没有可用发件账号，或没选 WhatsApp 模板；点开任务可看每条的原因">
+              <span class="cursor-help">已跳过 <b>{{ t.counts.skipped }}</b></span>
+            </Tooltip>
+            <span v-if="t.counts.failed" class="text-red-600">失败 <b>{{ t.counts.failed }}</b></span>
             <span>已回复 <b class="text-green-600">{{ t.replied }}</b></span>
           </div>
         </Card>
