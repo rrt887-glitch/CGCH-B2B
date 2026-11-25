@@ -62,8 +62,9 @@ public interface ChannelCustomerOverviewMapper {
             + " GROUP BY end_status</script>")
     List<Map<String, Object>> ended(@Param("typeId") Long typeId, @Param("userIds") Collection<Long> userIds);
 
-    @Select("SELECT id FROM crm_business_status_type WHERE deleted = 0 ORDER BY id LIMIT 1")
-    Long defaultStatusType();
+    /** 全部商机状态组（可能有多套流程） */
+    @Select("SELECT id, name FROM crm_business_status_type WHERE deleted = 0 ORDER BY id")
+    List<Map<String, Object>> statusTypes();
 
     /** 期间内往来消息最多的客户（邮件 + WhatsApp） */
     @Select("<script>SELECT c.id AS id, c.name AS name, c.company_name AS company, c.country_code AS country, "
