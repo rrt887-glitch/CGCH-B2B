@@ -192,7 +192,17 @@ async function batch(action: 'approve' | 'draft' | 'skip', ids?: number[]) {
     return;
   }
   const n = await changeReactivateItems(action, list);
-  message.success(`已处理 ${n} 条`);
+  const verb = ACTION_TEXT[action];
+  // 后端只处理状态符合的条目（例如已发送的不能再撤回确认），一条都没改时不能报成功
+  if (!n) {
+    message.info(`勾选的 ${list.length} 条都不符合「${verb}」的条件，没有处理任何一条`);
+    return;
+  }
+  if (n < list.length) {
+    message.success(`已${verb} ${n} 条，另有 ${list.length - n} 条状态不符、未处理`);
+  } else {
+    message.success(`已${verb} ${n} 条`);
+  }
   itemSel.value = [];
   await refreshTask();
 }
@@ -266,7 +276,8 @@ onMounted(async () => {
           <div class="mt-2 text-sm text-gray-500">{{ fmtDateTime(t.createTime) }} · {{ t.total }} 位客户</div>
           <div class="mt-2 flex flex-wrap gap-4 text-sm">
             <span>已发送 <b>{{ t.counts.sent }}</b></span>
-            <span>待确认 <b>{{ pendingCount(t) }}</b></span>
+            <span>待确认 <b>{{ draftCount(t) }}</b></span>
+            <span v-if="approvedCount(t)">已确认 <b>{{ approvedCount(t) }}</b></span>
             <Tooltip v-if="t.counts.skipped" title="客户缺邮箱 / WhatsApp、负责人没有可用发件账号，或没选 WhatsApp 模板；点开任务可看每条的原因">
               <span class="cursor-help">已跳过 <b>{{ t.counts.skipped }}</b></span>
             </Tooltip>
