@@ -58,7 +58,12 @@ const props = withDefaults(
   },
 );
 
-const emit = defineEmits<{ loaded: [rows: any[]]; select: [rows: any[]] }>();
+const emit = defineEmits<{
+  loaded: [rows: any[]];
+  /** 搜索关键词变化（空字符串表示已清空），父组件据此判断列表是否处于筛选态 */
+  search: [keyword: string];
+  select: [rows: any[]];
+}>();
 
 // ===== 左侧筛选栏 =====
 const railOpen = ref(false);
@@ -245,6 +250,7 @@ async function load() {
 
 function search() {
   page.no = 1;
+  emit('search', keyword.value.trim());
   load();
 }
 

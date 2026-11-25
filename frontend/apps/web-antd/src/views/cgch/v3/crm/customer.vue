@@ -125,12 +125,19 @@ async function toggleStar(r: any) {
 
 // ===== 客户阶段 =====
 const stageCount = ref<Record<number, number>>({});
+/** 是否处于关键词搜索状态：阶段数字是全部客户口径，搜索时更要说明清楚 */
+const keywordActive = ref(false);
 /** 顶部阶段快捷筛选（设计稿「CRM · 客户列表」） */
 const stageChip = ref<number>();
 function pickStage(v?: number) {
   stageChip.value = v;
   listRef.value?.setExtra({ stage: v });
 }
+/** 列表的搜索关键词变化时记录是否处于筛选态（用于阶段数字的口径提示） */
+function onKeywordChange(keyword: string) {
+  keywordActive.value = !!keyword;
+}
+
 async function loadStageStats() {
   if (props.pool) return;
   try {
@@ -282,13 +289,23 @@ const me = computed(() => userStore.userInfo?.id);
       search-placeholder="搜索客户名称、公司名称"
       @select="(rows) => (selected = rows)"
       @loaded="loadResearch"
+      @search="onKeywordChange"
     >
       <template v-if="!pool" #filters>
-        <div class="crm-stage-chips" role="group" aria-label="按阶段筛选">
+        <div class="crm-stage-chips" role="group" aria-label="按阶段筛选（数字为全部客户统计）">
           <button type="button" :class="{ on: stageChip === undefined }" @click="pickStage(undefined)">全部阶段</button>
-          <button v-for="o in stageOptions()" :key="o.value" type="button" :class="{ on: stageChip === o.value }" @click="pickStage(Number(o.value))">
+          <button
+            v-for="o in stageOptions()"
+            :key="o.value"
+            type="button"
+            :class="{ on: stageChip === o.value }"
+            :title="`${o.label}：全部客户中 ${stageCount[Number(o.value)] || 0} 个`"
+            @click="pickStage(Number(o.value))"
+          >
             {{ o.label }}<span v-if="stageCount[Number(o.value)]">{{ stageCount[Number(o.value)] }}</span>
           </button>
+          <!-- 数字是 /crm/customer/stage-stats 的全量口径，不随搜索变化，必须说明 -->
+          <span class="crm-stage-hint">{{ keywordActive ? '阶段数字为全部客户统计，不随搜索变化' : '阶段数字为全部客户统计' }}</span>
         </div>
       </template>
       <template #actions>
@@ -392,6 +409,12 @@ const me = computed(() => userStore.userInfo?.id);
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+}
+
+/* 说明阶段数字的统计口径，避免搜索命中 0 条时把数字误读成筛选结果 */
+.crm-stage-hint {
+  font-size: 12px;
+  color: #86868b;
 }
 
 .crm-stage-chips button {
