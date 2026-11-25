@@ -115,6 +115,20 @@ async function beforeUpload(file: File) {
   return false;
 }
 
+/**
+ * 打开文件选择框。
+ *
+ * 不能直接写成 <Upload><Button>上传资料</Button></Upload>：ant-design-vue 的
+ * rc-upload 会把子节点包进一个 tabindex="0"、role="button" 的容器里，
+ * 于是键盘导航和读屏会看到两个同名「上传资料」按钮，同一次操作重复获得焦点。
+ * 这里改为隐藏 Upload 本体，用我们自己的按钮去点它内部的 file input。
+ */
+const uploadRef = ref<InstanceType<typeof Upload>>();
+function pickFiles() {
+  const root = uploadRef.value?.$el as HTMLElement | undefined;
+  root?.querySelector<HTMLInputElement>('input[type="file"]')?.click();
+}
+
 async function onMenu(f: AgentApi.KnowledgeFile, key: string) {
   if (key === 'download') window.open(f.url, '_blank');
   if (key === 'relearn') {
@@ -189,9 +203,16 @@ onMounted(() => {
         </Input>
         <div class="flex-1"></div>
         <Select v-model:value="kind" class="w-32" :options="KINDS" @change="page.no = 1" />
-        <Upload :show-upload-list="false" multiple :before-upload="beforeUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.md,.html,.htm,.rtf">
-          <Button type="primary" :loading="uploading > 0"><IconifyIcon icon="lucide:upload" class="mr-1 inline size-4" />上传资料</Button>
-        </Upload>
+        <Upload
+          ref="uploadRef"
+          class="kb__upload-hidden"
+          :show-upload-list="false"
+          :open-file-dialog-on-click="false"
+          multiple
+          :before-upload="beforeUpload"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.md,.html,.htm,.rtf"
+        />
+        <Button type="primary" :loading="uploading > 0" @click="pickFiles"><IconifyIcon icon="lucide:upload" class="mr-1 inline size-4" />上传资料</Button>
       </template>
     </div>
 
@@ -313,6 +334,14 @@ onMounted(() => {
 
 .kb__search {
   width: 220px;
+}
+
+/*
+ * 上传控件只用来承载 file input：display:none 让它同时退出 tab 顺序和无障碍树，
+ * 界面上真正可聚焦的只有我们自己那个「上传资料」按钮。
+ */
+.kb__upload-hidden {
+  display: none;
 }
 
 .kb__icon {
