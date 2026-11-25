@@ -214,35 +214,26 @@
 .cg-page-enter-active,
 .ap-page-enter-active {
   transition:
-    opacity 380ms var(--ap-ease-out),
-    transform 480ms var(--ap-ease);
+    opacity 260ms var(--ap-ease-out),
+    transform 320ms var(--ap-ease);
 }
 
 .cg-page-enter-from,
 .ap-page-enter-from {
   opacity: 0;
-  transform: translate3d(0, 10px, 0) scale(0.995);
-}
-
-.cg-page-leave-active,
-.ap-page-leave-active {
-  display: none;
+  transform: translate3d(0, 6px, 0);
 }
 
 /* 子页面内容交叉淡化 */
 .ap-swap-enter-active {
   transition:
-    opacity 300ms var(--ap-ease-out),
-    transform 380ms var(--ap-ease);
+    opacity 220ms var(--ap-ease-out),
+    transform 260ms var(--ap-ease);
 }
 
 .ap-swap-enter-from {
   opacity: 0;
-  transform: translate3d(0, 8px, 0);
-}
-
-.ap-swap-leave-active {
-  display: none;
+  transform: translate3d(0, 5px, 0);
 }
 
 /* 列表依次浮现（TransitionGroup name="ap-list"） */

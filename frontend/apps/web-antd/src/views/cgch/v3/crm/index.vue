@@ -117,6 +117,8 @@ const groups: HubGroup[] = [
 </script>
 
 <template>
-  <SalesmindView v-if="isSalesmind" />
-  <SideHub v-else :groups="groups" menu-label="管理客户" />
+  <div class="h-full">
+    <SalesmindView v-if="isSalesmind" />
+    <SideHub v-else :groups="groups" menu-label="管理客户" />
+  </div>
 </template>
