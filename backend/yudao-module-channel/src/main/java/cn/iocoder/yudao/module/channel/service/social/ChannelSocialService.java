@@ -233,7 +233,7 @@ public class ChannelSocialService {
                 conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(a.getPlatform()).waId(waId)
                         .profileName(top.own() ? null : StrUtil.maxLength(top.author(), 100)).unreadCount(0).build();
                 conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
-                channelWaConversationMapper.insert(conv);
+                conv = insertConversationOrGet(conv);
             }
             LocalDateTime time = LocalDateTime.ofInstant(Instant.ofEpochSecond(c.time()), ZoneId.systemDefault());
             String body = c.parentId() == null && StrUtil.isNotBlank(c.videoTitle())
@@ -266,6 +266,21 @@ public class ChannelSocialService {
 
     private static LocalDateTime max(LocalDateTime x, LocalDateTime y) {
         return x == null ? y : y == null ? x : x.isAfter(y) ? x : y;
+    }
+
+    /** 并发下撞唯一索引就复用已有会话，避免同一个客户两个窗口 */
+    private ChannelWaConversationDO insertConversationOrGet(ChannelWaConversationDO conv) {
+        try {
+            channelWaConversationMapper.insert(conv);
+            return conv;
+        } catch (Exception e) {
+            ChannelWaConversationDO exist = channelWaConversationMapper.selectByAccountIdAndWaId(
+                    conv.getAccountId(), conv.getWaId());
+            if (exist != null) {
+                return exist;
+            }
+            throw e;
+        }
     }
 
 }

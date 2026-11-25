@@ -113,6 +113,23 @@ public class ChannelWhatsAppService {
     }
 
     /** 会话平台：取号码的平台，没填按 WhatsApp 处理 */
+    /**
+     * 新建会话；并发或不同入口同时建同一个客户时，撞唯一索引就复用已存在的那条，
+     * 保证「一个号码上的同一个客户只有一个会话窗口」。
+     */
+    private ChannelWaConversationDO insertConversationOrGet(ChannelWaConversationDO conv) {
+        try {
+            conversationMapper.insert(conv);
+            return conv;
+        } catch (Exception e) {
+            ChannelWaConversationDO exist = conversationMapper.selectByAccountIdAndWaId(
+                    conv.getAccountId(), conv.getWaId());
+            if (exist != null) {
+                return exist;
+            }
+            throw e;
+        }
+    }
     private static String platformOf(ChannelWaAccountDO a) {
         return a == null || a.getPlatform() == null ? ChannelWaAccountDO.PLATFORM_WHATSAPP : a.getPlatform();
     }
@@ -552,7 +569,7 @@ public class ChannelWhatsAppService {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(a.getPlatform()).waId(userId)
                     .profileName(WaGraphClient.getMessagingUserName(a, userId)).unreadCount(0).build();
             conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
-            conversationMapper.insert(conv);
+            conv = insertConversationOrGet(conv);
         }
         return conv;
     }
@@ -693,7 +710,7 @@ public class ChannelWhatsAppService {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(a.getPlatform()).waId(customer)
                     .profileName(name).unreadCount(0).build();
             conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
-            conversationMapper.insert(conv);
+            conv = insertConversationOrGet(conv);
         }
         ChannelWaMessageDO msg = ChannelWaMessageDO.builder()
                 .accountId(a.getId()).conversationId(conv.getId()).direction(out ? ChannelWaMessageDO.DIRECTION_OUT : ChannelWaMessageDO.DIRECTION_IN)
@@ -745,7 +762,7 @@ public class ChannelWhatsAppService {
                     .waId(from).profileName(profileName)
                     .customerId(findCustomerId(from)).unreadCount(0).build();
             conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
-            conversationMapper.insert(conv);
+            conv = insertConversationOrGet(conv);
         }
         msg.setConversationId(conv.getId());
         messageMapper.insert(msg);
@@ -837,7 +854,7 @@ public class ChannelWhatsAppService {
             conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(platformOf(a))
                     .waId(waId).profileName(profileName).customerId(findCustomerId(waId)).unreadCount(0).build();
             conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
-            conversationMapper.insert(conv);
+            conv = insertConversationOrGet(conv);
         }
         msg.setConversationId(conv.getId());
         messageMapper.insert(msg);
@@ -998,7 +1015,7 @@ public class ChannelWhatsAppService {
             if (conv == null) {
                 conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(platformOf(a))
                         .waId(to).customerId(findCustomerId(to)).unreadCount(0).build();
-                conversationMapper.insert(conv);
+                conv = insertConversationOrGet(conv);
             }
         }
         boolean template = StrUtil.isNotBlank(req.getTemplateName());
@@ -1364,7 +1381,7 @@ public class ChannelWhatsAppService {
                     .waId(waId).profileName(StrUtil.maxLength(req.getSubject(), 200))
                     .customerId(null).unreadCount(0).build();
             conv.setOwnerUserId(userId);
-            conversationMapper.insert(conv);
+            conv = insertConversationOrGet(conv);
             convId = conv.getId();
         } else {
             convId = conv.getId();

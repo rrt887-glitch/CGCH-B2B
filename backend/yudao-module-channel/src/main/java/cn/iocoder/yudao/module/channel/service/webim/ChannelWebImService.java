@@ -144,7 +144,7 @@ public class ChannelWebImService {
                 conv = ChannelWaConversationDO.builder().accountId(a.getId()).platform(ChannelWaAccountDO.PLATFORM_WEB)
                         .waId(visitorId).unreadCount(0).build();
                 conv.setOwnerUserId(channelAssignService.nextOwner(a)); // 按号码的接待成员轮流分配
-                conversationMapper.insert(conv);
+                conv = insertConversationOrGet(conv);
             } else {
                 Long recent = messageMapper.selectCount(new LambdaQueryWrapperX<ChannelWaMessageDO>()
                         .eq(ChannelWaMessageDO::getConversationId, conv.getId())
@@ -205,6 +205,21 @@ public class ChannelWebImService {
         }
         return new VisitorMessage(m.getId(), m.getDirection() == ChannelWaMessageDO.DIRECTION_IN ? "visitor" : "agent",
                 m.getType(), text, m.getFileName(), m.getFileUrl(), m.getMessageTime());
+    }
+
+    /** 并发下撞唯一索引就复用已有会话，避免同一个访客两个窗口 */
+    private ChannelWaConversationDO insertConversationOrGet(ChannelWaConversationDO conv) {
+        try {
+            conversationMapper.insert(conv);
+            return conv;
+        } catch (Exception e) {
+            ChannelWaConversationDO exist = conversationMapper.selectByAccountIdAndWaId(
+                    conv.getAccountId(), conv.getWaId());
+            if (exist != null) {
+                return exist;
+            }
+            throw e;
+        }
     }
 
 }
