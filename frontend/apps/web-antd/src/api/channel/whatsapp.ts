@@ -336,5 +336,9 @@ export function templatePreview(t: ChannelWaApi.Template, params: string[]) {
 }
 
 /** 设置号码的接待成员：这个号码上的新客户在他们之间轮流分配；传空数组恢复为号码所属的业务员接待 */
+/** 把号码转交给同事（号码归属人与其名下会话一起换人），返回一起转交的会话数 */
+export const transferWaAccount = (id: number, userId: number) =>
+  requestClient.put<number>(`/channel/wa-account/transfer?id=${id}&userId=${userId}`);
+
 export const setWaAssignees = (id: number, userIds: number[]) =>
   requestClient.put<boolean>('/channel/wa-account/assignees', { id, userIds });

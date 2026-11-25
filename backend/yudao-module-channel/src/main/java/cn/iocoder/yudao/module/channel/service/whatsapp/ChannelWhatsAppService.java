@@ -1440,6 +1440,36 @@ public class ChannelWhatsAppService {
     }
 
     /** 转交给同事：之后由对方处理（看得到、能回复），自己不再看到；转回号码所属业务员时清空负责人 */
+    /**
+     * 把号码转交给同事：号码归属人和他名下（未转交出去的）会话一起换人。
+     * 只有管理员能转交别人的号码；普通成员只能转交自己名下的号码。
+     * 返回一起转交的会话数。
+     */
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public int transferAccount(Long userId, Long accountId, Long toUserId) {
+        ChannelWaAccountDO a = validateAccount(userId, accountId);
+        cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO to =
+                toUserId == null ? null : adminUserApi.getUser(toUserId);
+        if (to == null || !cn.iocoder.yudao.framework.common.enums.CommonStatusEnum.isEnable(to.getStatus())) {
+            throw exception(WA_ACCOUNT_TRANSFER_INVALID, "请选择要转交的同事");
+        }
+        boolean allScope = channelDashboardService.resolveScope(userId, null).isAll();
+        if (!allScope && !Objects.equals(a.getUserId(), userId)) {
+            throw exception(WA_ACCOUNT_TRANSFER_FORBIDDEN);
+        }
+        Long from = a.getUserId();
+        accountMapper.updateById(new ChannelWaAccountDO().setId(accountId).setUserId(toUserId));
+        int moved = 0;
+        if (from != null && !from.equals(toUserId)) {
+            moved = conversationMapper.update(null,
+                    new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ChannelWaConversationDO>()
+                            .eq(ChannelWaConversationDO::getAccountId, accountId)
+                            .eq(ChannelWaConversationDO::getOwnerUserId, from)
+                            .set(ChannelWaConversationDO::getOwnerUserId, toUserId));
+        }
+        log.info("[transferAccount][号码 {} 由 {} 转交给 {}，同时转交 {} 个会话]", accountId, from, toUserId, moved);
+        return moved;
+    }
     public void transferConversation(Long userId, Long id, Long toUserId) {
         ChannelWaConversationDO c = validateConversation(userId, id);
         ChannelWaAccountDO a = accountMapper.selectById(c.getAccountId());

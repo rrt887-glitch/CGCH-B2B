@@ -54,6 +54,12 @@ public class ChannelWaAccountController {
         return success(true);
     }
 
+    @PutMapping("/transfer")
+    @Operation(summary = "把号码转交给同事（号码归属人与其名下会话一起换人）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:update')")
+    public CommonResult<Integer> transfer(@RequestParam("id") Long id, @RequestParam("userId") Long userId) {
+        return CommonResult.success(whatsAppService.transferAccount(getLoginUserId(), id, userId));
+    }
     @DeleteMapping("/delete")
     @Operation(summary = "解绑号码，同时删除会话与消息")
     @Parameter(name = "id", required = true)

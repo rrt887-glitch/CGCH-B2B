@@ -44,6 +44,7 @@ import { getSocialPlatforms, pollSocial } from '#/api/channel/social';
 import {
   getWaAccountList,
   setWaAssignees,
+  transferWaAccount,
   syncWaHistory,
 } from '#/api/channel/whatsapp';
 import { fmtDateTime } from '#/utils/datetime';
@@ -746,6 +747,34 @@ function assignText(a?: ChannelWaApi.Account) {
   return n ? `接待成员(${n})` : '接待成员';
 }
 
+
+// ===== 号码转交：成员离职时把号码和名下会话一起交给别人 =====
+const transferOpen = ref(false);
+const transferAccount = ref<ChannelWaApi.Account>();
+const transferTo = ref<number>();
+const transferSaving = ref(false);
+async function openTransferAccount(a: ChannelWaApi.Account) {
+  transferAccount.value = a;
+  transferTo.value = undefined;
+  transferOpen.value = true;
+  if (!users.value.length)
+    users.value = ((await getSimpleUserList().catch(() => [])) as any) || [];
+}
+async function saveTransferAccount() {
+  if (!transferAccount.value?.id || !transferTo.value) {
+    message.warning('请选择要转交给谁');
+    return;
+  }
+  transferSaving.value = true;
+  try {
+    const moved = await transferWaAccount(transferAccount.value.id, transferTo.value);
+    message.success(`已转交，同时转交 ${moved} 个会话`);
+    transferOpen.value = false;
+    await waRef.value?.load();
+  } finally {
+    transferSaving.value = false;
+  }
+}
 async function toggle(r: AccountRow) {
   if (r.mail) {
     await updateMailAccount({
@@ -870,6 +899,9 @@ function runAction(key: string, r: InboxRow) {
     case 'assign':
       if (r.wa) openAssign(r.wa);
       break;
+    case 'transfer':
+      if (r.wa) openTransferAccount(r.wa);
+      break;
     case 'toggle':
       toggle(r);
       break;
@@ -912,6 +944,7 @@ function menuOf(r: InboxRow) {
       label: r.mail?.authType === 'oauth2' ? '重新授权' : '修改配置',
     });
   if (r.wa) items.push({ key: 'assign', label: assignText(r.wa) });
+  if (r.wa) items.push({ key: 'transfer', label: '转交号码' });
   items.push({
     key: 'toggle',
     label: (r.mail ?? r.wa)?.enabled ? (r.mail ? '暂停收信' : '停用') : '启用',
@@ -1224,6 +1257,29 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
         mode="multiple"
         class="w-full"
         placeholder="选择接待成员"
+        :options="users.map((u) => ({ label: u.nickname, value: u.id }))"
+        option-filter-prop="label"
+      />
+    </Modal>
+
+    <Modal
+      v-model:open="transferOpen"
+      title="转交号码"
+      :width="460"
+      centered
+      :confirm-loading="transferSaving"
+      ok-text="转交"
+      @ok="saveTransferAccount"
+    >
+      <div class="mb-3 text-sm leading-6 text-gray-500">
+        把
+        <b>{{ transferAccount?.displayPhone || transferAccount?.name }}</b>
+        转交给同事后，这个号码本身和它名下（未转交出去的）会话都会归对方，之后新消息进的也是对方的会话列表。
+      </div>
+      <Select
+        v-model:value="transferTo"
+        class="w-full"
+        placeholder="选择要转交给谁"
         :options="users.map((u) => ({ label: u.nickname, value: u.id }))"
         option-filter-prop="label"
       />

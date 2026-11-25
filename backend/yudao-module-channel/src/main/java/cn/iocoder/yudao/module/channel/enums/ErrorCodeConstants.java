@@ -39,6 +39,8 @@ public interface ErrorCodeConstants {
     ErrorCode WA_GROUP_NO_PARTICIPANTS = new ErrorCode(1_030_002_013, "请至少填写一个有效的成员号码");
     ErrorCode WA_GROUP_CREATE_FAILED = new ErrorCode(1_030_002_014, "建群失败，请确认号码在线后重试");
     ErrorCode WA_CONVERSATION_MERGE_INVALID = new ErrorCode(1_030_002_015, "只能合并同一个号码下的两个会话");
+    ErrorCode WA_ACCOUNT_TRANSFER_INVALID = new ErrorCode(1_030_002_016, "请选择要转交的同事");
+    ErrorCode WA_ACCOUNT_TRANSFER_FORBIDDEN = new ErrorCode(1_030_002_017, "只有管理员可以把别人的号码转交给他人");
     ErrorCode META_PLATFORM_INVALID = new ErrorCode(1_030_002_012, "不支持的平台：{}");
     ErrorCode META_TEMPLATE_UNSUPPORTED = new ErrorCode(1_030_002_013, "{} 不支持模板消息，只能在客户来信后 24 小时内回复");
     ErrorCode META_NEW_CONVERSATION_UNSUPPORTED = new ErrorCode(1_030_002_014, "{} 不能主动发起会话，请等待客户先发消息");
