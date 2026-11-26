@@ -255,10 +255,16 @@ function openItem(i: ChannelDashboardV3Api.SupportItem) {
 }
 
 const detailsEl = ref<HTMLElement>();
+/** 详情里的「全部待人工支持事项」那一块；点「全部」后要直接滚到它，而不是详情顶部 */
+const supportEl = ref<HTMLElement>();
 async function openDetails() {
   detailsOpen.value = true;
   await nextTick();
-  detailsEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // 详情区很长（流量、转化漏斗…），待办是第 5 小节；滚到详情顶等于还要用户自己再滚 600 多像素
+  (supportEl.value ?? detailsEl.value)?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  });
 }
 
 onMounted(load);
@@ -616,7 +622,7 @@ onMounted(load);
               </section>
 
               <!-- 5. 全部待人工支持事项工作台 -->
-              <section class="v3-support mt-4">
+              <section ref="supportEl" class="v3-support mt-4" style="scroll-margin-top: 12px">
                 <div class="v3-support__head">
                   <div class="support-seg" role="tablist">
                     <button
