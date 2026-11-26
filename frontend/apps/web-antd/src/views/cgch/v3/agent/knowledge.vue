@@ -357,7 +357,7 @@ onMounted(() => {
 
         <!-- 空状态上传引导卡 -->
         <div
-          v-if="!loading && paged.length === 0 && !keyword && !kind"
+          v-if="!loading && paged.length === 0 && !keyword.trim() && !kind"
           class="kb__dropzone"
           @click="pickFiles"
         >
@@ -451,7 +451,15 @@ onMounted(() => {
                 </Dropdown>
               </template>
             </template>
-            <template #emptyText>没有匹配筛选条件的资料文件</template>
+            <template #emptyText>
+              {{
+                keyword.trim()
+                  ? `没有找到与“${keyword.trim()}”匹配的资料`
+                  : kind
+                    ? '当前类型下还没有资料'
+                    : '还没有资料，上传产品目录、FAQ、报价规则等文件，AI 就能据此回答客户'
+              }}
+            </template>
           </Table>
 
           <div

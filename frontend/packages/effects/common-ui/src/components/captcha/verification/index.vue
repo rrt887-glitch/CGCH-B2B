@@ -113,7 +113,15 @@ defineExpose({
     >
       <div v-if="mode === 'pop'" class="verifybox-top">
         {{ $t('ui.captcha.title') }}
-        <span class="verifybox-close" @click="onClose">
+        <span
+          class="verifybox-close"
+          role="button"
+          tabindex="0"
+          :aria-label="$t('ui.captcha.closeAriaLabel') ?? '关闭'"
+          @click="onClose"
+          @keydown.enter.prevent="onClose"
+          @keydown.space.prevent="onClose"
+        >
           <IconifyIcon icon="lucide:x" class="size-5" />
         </span>
       </div>

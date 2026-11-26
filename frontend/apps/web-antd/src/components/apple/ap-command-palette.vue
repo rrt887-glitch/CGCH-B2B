@@ -14,6 +14,7 @@ const open = defineModel<boolean>('open', { default: false });
 const router = useRouter();
 const accessStore = useAccessStore();
 const inputRef = ref<HTMLInputElement>();
+const listRef = ref<HTMLElement>();
 const query = ref('');
 const selected = ref(0);
 
@@ -58,7 +59,9 @@ const COMMANDS: CommandItem[] = [
   { group: '管理与设置', label: '邮件模板', icon: 'lucide:mail', path: '/v3/settings', query: { tab: 'emailTemplates' }, keywords: 'template 邮件模板' },
   { group: '管理与设置', label: '快捷回复', icon: 'lucide:zap', path: '/v3/settings', query: { tab: 'quickReplies' }, keywords: 'quick reply 快捷回复' },
   { group: '管理与设置', label: '消息分流设置', icon: 'lucide:git-branch', path: '/v3/settings', query: { tab: 'routing' }, keywords: 'routing 分流 分配规则' },
-  { group: '管理与设置', label: '通知与翻译设置', icon: 'lucide:bell', path: '/v3/settings', query: { tab: 'notifications' }, keywords: 'notify translate 通知 翻译' },
+  { group: '管理与设置', label: '通知设置', icon: 'lucide:bell', path: '/v3/settings', query: { tab: 'notifications' }, keywords: 'notify 通知 提醒' },
+  // 翻译是独立的设置页（设置 → 偏好 → 翻译设置），不能并到通知里，否则搜「翻译」点进去只有通知规则
+  { group: '管理与设置', label: '翻译设置', icon: 'lucide:languages', path: '/v3/settings', query: { tab: 'translate' }, keywords: 'translate i18n 翻译 双语 中英' },
   { group: '管理与设置', label: '客户管理（平台）', icon: 'lucide:building-2', path: '/v3/platform/tenants', keywords: 'tenant platform 租户 开户', platformOnly: true },
   { group: '账户', label: '个人中心', icon: 'lucide:user-round', path: '/profile', keywords: 'profile password 个人中心 密码' },
 ];
@@ -78,6 +81,20 @@ const filtered = computed(() => {
 
 watch(filtered, () => {
   selected.value = 0;
+  // 换关键词后结果变了，列表回到顶部，选中项才不会“藏在下面”
+  if (listRef.value) listRef.value.scrollTop = 0;
+});
+
+/**
+ * 上下键在长列表里移动时把选中项滚进视野。
+ * 否则在空搜索框按 ↑ 会绕到最后一项（个人中心），但列表还停在顶部，用户看不到选了什么。
+ */
+watch(selected, async () => {
+  await nextTick();
+  const el = listRef.value?.querySelector<HTMLElement>(
+    `[data-cmd-index="${selected.value}"]`,
+  );
+  el?.scrollIntoView({ block: 'nearest' });
 });
 
 watch(open, async (v) => {
@@ -138,7 +155,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             />
             <kbd class="ap-cmd__kbd">ESC</kbd>
           </div>
-          <div class="ap-cmd__list">
+          <div ref="listRef" class="ap-cmd__list">
             <div v-if="!filtered.length" class="ap-cmd__empty">
               没有找到匹配的页面
             </div>
@@ -147,6 +164,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
               :key="`${item.path}-${item.label}`"
               type="button"
               class="ap-cmd__item"
+              :data-cmd-index="idx"
               :class="{ 'is-selected': idx === selected }"
               @mouseenter="selected = idx"
               @click="run(item)"

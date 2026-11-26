@@ -5,36 +5,65 @@
  */
 import type { Dayjs } from 'dayjs';
 
-import { computed, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
-import { getDictOptions } from '@vben/hooks';
 import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 import { IconifyIcon } from '@vben/icons';
 
-import { DatePicker, message, Modal, Select, Table, Textarea, Tooltip } from 'ant-design-vue';
+import {
+  DatePicker,
+  message,
+  Modal,
+  Select,
+  Table,
+  Textarea,
+  Tooltip,
+} from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import { getWaConversationPage } from '#/api/channel/whatsapp';
 import { requestClient } from '#/api/request';
 import { fmtDateTime } from '#/utils/datetime';
 
+import { customerDetailPath, openCustomerDetail } from './agenda-nav';
 import { crmAvatarBg, crmInitial, stageLabel } from './components/shared';
 
 type TabKey = 'done' | 'expired' | 'pool' | 'today';
-const TABS: { key: TabKey; label: string; empty: string }[] = [
+const TABS: { empty: string; key: TabKey; label: string }[] = [
   { key: 'today', label: '今天需联系', empty: '今天没有约好要联系的客户' },
   { key: 'expired', label: '已逾期', empty: '没有逾期未联系的客户' },
   { key: 'pool', label: '即将进入公海', empty: '没有快要掉进公海的客户' },
   { key: 'done', label: '今天已联系', empty: '今天还没有联系过客户' },
 ];
-const STATUS: Record<Exclude<TabKey, 'pool'>, number> = { today: 1, expired: 2, done: 3 };
+const STATUS: Record<Exclude<TabKey, 'pool'>, number> = {
+  today: 1,
+  expired: 2,
+  done: 3,
+};
 
 const router = useRouter();
-const tab = ref<TabKey>('today');
+const route = useRoute();
+
+const isTabKey = (v: unknown): v is TabKey => TABS.some((t) => t.key === v);
+
+/**
+ * 当前 tab 写进 URL（?agendaTab=expired）。
+ * 去客户详情再「返回」时页面是按上一页地址恢复的，URL 里没有 tab 就会跳回默认的
+ * 「今天需联系」，业务员得重新点一次「已逾期」。
+ */
+const tab = ref<TabKey>(
+  isTabKey(route.query.agendaTab) ? route.query.agendaTab : 'today',
+);
 const rows = ref<any[]>([]);
 const total = ref(0);
-const counts = reactive<Record<TabKey, number>>({ today: 0, expired: 0, pool: 0, done: 0 });
+const counts = reactive<Record<TabKey, number>>({
+  today: 0,
+  expired: 0,
+  pool: 0,
+  done: 0,
+});
 const loading = ref(false);
 const loadFailed = ref(false);
 let loadVersion = 0;
@@ -42,13 +71,19 @@ const pager = reactive({ no: 1, size: 20 });
 
 function fetchTab(key: TabKey, pageNo: number, pageSize: number) {
   if (key === 'pool') {
-    return requestClient.get<{ list: any[]; total: number }>('/crm/customer/put-pool-remind-page', {
-      params: { pageNo, pageSize, sceneType: 1 },
-    });
+    return requestClient.get<{ list: any[]; total: number }>(
+      '/crm/customer/put-pool-remind-page',
+      {
+        params: { pageNo, pageSize, sceneType: 1 },
+      },
+    );
   }
-  return requestClient.get<{ list: any[]; total: number }>('/crm/customer/page', {
-    params: { pageNo, pageSize, sceneType: 1, contactStatus: STATUS[key] },
-  });
+  return requestClient.get<{ list: any[]; total: number }>(
+    '/crm/customer/page',
+    {
+      params: { pageNo, pageSize, sceneType: 1, contactStatus: STATUS[key] },
+    },
+  );
 }
 
 async function load() {
@@ -85,13 +120,19 @@ async function loadCounts() {
 }
 
 const emptyText = computed(() =>
-  loadFailed.value ? '加载失败，请刷新重试' : TABS.find((t) => t.key === tab.value)!.empty,
+  loadFailed.value
+    ? '加载失败，请刷新重试'
+    : TABS.find((t) => t.key === tab.value)!.empty,
 );
 
 const columns = computed(() => [
   { title: '客户', key: 'name', width: 200 },
   { title: '阶段', key: 'stage', width: 90 },
-  { title: tab.value === 'pool' ? '距离进入公海' : '下次联系时间', key: 'next', width: 150 },
+  {
+    title: tab.value === 'pool' ? '距离进入公海' : '下次联系时间',
+    key: 'next',
+    width: 150,
+  },
   { title: '最近跟进', key: 'last' },
   { title: '最近联系', key: 'lastTime', width: 130 },
   { title: '操作', key: 'action', width: 150 },
@@ -99,43 +140,73 @@ const columns = computed(() => [
 
 function overdueDays(r: any) {
   if (!r.contactNextTime) return 0;
-  return Math.max(0, dayjs().startOf('day').diff(dayjs(r.contactNextTime).startOf('day'), 'day'));
+  return Math.max(
+    0,
+    dayjs().startOf('day').diff(dayjs(r.contactNextTime).startOf('day'), 'day'),
+  );
 }
 
-function detail(r: any) {
-  router.push({ name: 'CrmCustomerDetail', params: { id: r.id } });
+/**
+ * 打开客户详情。
+ * 带 href 是为了让链接可键盘聚焦、可中键新开；左键仍走 SPA 跳转，
+ * 跳转没生效时（路由缺失 / 被改写）自动用整页打开兜底，不会再“点了没反应”。
+ */
+async function detail(r: any, event?: MouseEvent) {
+  if (event && (event.ctrlKey || event.metaKey || event.shiftKey)) return;
+  event?.preventDefault();
+  await openCustomerDetail(router, r.id, (href) => {
+    console.warn('[agenda] SPA 跳转客户详情未生效，改用整页打开', href);
+    window.location.assign(href);
+  });
 }
 
 /** 去会话：打开和这个客户最近的一个即时消息会话 */
 async function chat(r: any) {
-  const res = await getWaConversationPage({ pageNo: 1, pageSize: 1, customerId: r.id });
+  const res = await getWaConversationPage({
+    pageNo: 1,
+    pageSize: 1,
+    customerId: r.id,
+  });
   const c = res.list[0];
   if (!c) {
     message.info('这个客户还没有关联的会话，可以在客户详情里查看邮件往来');
     return;
   }
-  router.push({ path: '/v3/conversation', query: { channel: 'whatsapp', ref: String(c.id) } });
+  router.push({
+    path: '/v3/conversation',
+    query: { channel: 'whatsapp', ref: String(c.id) },
+  });
 }
 
 // ===== 写跟进 =====
-const followTypes = computed(() => getDictOptions(DICT_TYPE.CRM_FOLLOW_UP_TYPE, 'number'));
+const followTypes = computed(() =>
+  getDictOptions(DICT_TYPE.CRM_FOLLOW_UP_TYPE, 'number'),
+);
 const open = ref(false);
 const saving = ref(false);
 const target = ref<any>();
-const form = reactive<{ content: string; nextTime?: Dayjs; type?: number }>({ content: '', nextTime: undefined, type: undefined });
+const form = reactive<{ content: string; nextTime?: Dayjs; type?: number }>({
+  content: '',
+  nextTime: undefined,
+  type: undefined,
+});
 const QUICK = [
   { label: '明天', days: 1 },
   { label: '3 天后', days: 3 },
   { label: '一周后', days: 7 },
   { label: '两周后', days: 14 },
 ];
+
 function openFollow(r: any) {
   target.value = r;
   form.content = '';
-  form.type = followTypes.value.find((o) => o.label === 'WhatsApp')?.value ?? followTypes.value[0]?.value;
+  form.type =
+    followTypes.value.find((o) => o.label === 'WhatsApp')?.value ??
+    followTypes.value[0]?.value;
   form.nextTime = dayjs().add(3, 'day').hour(10).minute(0).second(0);
   open.value = true;
 }
+
 async function saveFollow() {
   if (!form.content.trim()) {
     message.warning('请填写跟进内容');
@@ -167,10 +238,22 @@ async function saveFollow() {
 }
 
 function switchTab(v: any) {
-  tab.value = v;
+  tab.value = isTabKey(v) ? v : 'today';
   pager.no = 1;
+  router.replace({ query: { ...route.query, agendaTab: tab.value } });
   load();
 }
+
+watch(
+  () => route.query.agendaTab,
+  (v) => {
+    const next = isTabKey(v) ? v : 'today';
+    if (next === tab.value) return;
+    tab.value = next;
+    pager.no = 1;
+    load();
+  },
+);
 
 onMounted(() => {
   loadCounts();
@@ -261,8 +344,9 @@ onMounted(() => {
               >{{ crmInitial(record.name) }}</span
             >
             <a
+              :href="customerDetailPath(record.id)"
               class="min-w-0 truncate font-semibold text-[#1D1D1F] hover:text-[#007AFF]"
-              @click="detail(record)"
+              @click="detail(record, $event)"
               >{{ record.name }}</a
             >
           </div>
@@ -275,7 +359,11 @@ onMounted(() => {
           <template v-else-if="column.key === 'next'">
             <template v-if="tab === 'pool'">
               <span class="ap-crm-pill ap-crm-pill--amber">
-                {{ record.poolDay != null ? `剩余 ${record.poolDay} 天` : '即将进入' }}
+                {{
+                  record.poolDay != null
+                    ? `剩余 ${record.poolDay} 天`
+                    : '即将进入'
+                }}
               </span>
             </template>
             <template v-else>
@@ -300,7 +388,10 @@ onMounted(() => {
               {{ fmtDateTime(record.contactLastTime, 'MM-DD HH:mm', '-') }}
             </span>
           </template>
-          <div v-else-if="column.key === 'action'" class="flex items-center gap-2">
+          <div
+            v-else-if="column.key === 'action'"
+            class="flex items-center gap-2"
+          >
             <button
               type="button"
               class="agenda-act-btn agenda-act-btn--soft"
@@ -318,11 +409,17 @@ onMounted(() => {
           </div>
         </template>
         <template #emptyText>
-          <div class="flex flex-col items-center justify-center gap-2 py-12 text-center">
-            <div class="grid size-11 place-items-center rounded-2xl bg-[#F4F5F8] text-[#8E8E93]">
+          <div
+            class="flex flex-col items-center justify-center gap-2 py-12 text-center"
+          >
+            <div
+              class="grid size-11 place-items-center rounded-2xl bg-[#F4F5F8] text-[#8E8E93]"
+            >
               <IconifyIcon icon="lucide:calendar-check-2" class="size-5" />
             </div>
-            <div class="text-[13px] font-medium text-[#86868B]">{{ emptyText }}</div>
+            <div class="text-[13px] font-medium text-[#86868B]">
+              {{ emptyText }}
+            </div>
           </div>
         </template>
       </Table>
@@ -351,7 +448,9 @@ onMounted(() => {
           <Select
             v-model:value="form.type"
             class="w-full"
-            :options="followTypes.map((o) => ({ label: o.label, value: o.value }))"
+            :options="
+              followTypes.map((o) => ({ label: o.label, value: o.value }))
+            "
           />
         </div>
         <div class="ap-sheet-field">
@@ -407,9 +506,9 @@ onMounted(() => {
 
 .agenda-head {
   display: flex;
+  gap: 12px;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
   padding-bottom: 14px;
 }
 
@@ -417,8 +516,8 @@ onMounted(() => {
   margin: 0;
   font-size: 21px;
   font-weight: 700;
-  letter-spacing: -0.02em;
   color: #1d1d1f;
+  letter-spacing: -0.02em;
 }
 
 .agenda-sub {

@@ -286,6 +286,29 @@ if [ "$mysql_ready" = false ]; then
   docker compose logs --tail 80 mysql >&2 || true
   die "数据库没有在预期时间内就绪，未执行数据库升级"
 fi
+# 数据库升级脚本优先用 GitHub 上的最新版：SQL 修好了不用等镜像重新构建（镜像构建要十几分钟）。
+# 下载失败（服务器访问不了 GitHub）时什么都不做，继续用镜像里内置的脚本，不影响升级。
+say "获取最新数据库升级脚本"
+MIG_DIR=$DIR/migrations
+SRC_REPO=${CGCH_SOURCE_REPO:-rrt887-glitch/CGCH-B2B}
+if curl -fsSL --max-time 60 "https://codeload.github.com/$SRC_REPO/tar.gz/refs/heads/main" -o /tmp/cgch-src.tgz 2>/dev/null; then
+  rm -rf /tmp/cgch-src "$MIG_DIR.new"
+  mkdir -p /tmp/cgch-src "$MIG_DIR.new"
+  tar -xzf /tmp/cgch-src.tgz -C /tmp/cgch-src 2>/dev/null || true
+  cp /tmp/cgch-src/*/backend/sql/mysql/cgch/migrations/*.sql "$MIG_DIR.new/" 2>/dev/null || true
+  if ls "$MIG_DIR.new"/*.sql >/dev/null 2>&1; then
+    rm -rf "$MIG_DIR"
+    mv "$MIG_DIR.new" "$MIG_DIR"
+    # 同步进正在运行的数据库容器（先清掉镜像里自带的旧脚本，避免残留）
+    docker compose exec -T mysql sh -c 'rm -f /cgch-migrations/*.sql' </dev/null || true
+    docker cp "$MIG_DIR/." "$(docker compose ps -q mysql):/cgch-migrations/" >/dev/null 2>&1 || true
+    say "已同步 $(ls "$MIG_DIR"/*.sql | wc -l) 个升级脚本（无需等待镜像重建）"
+  else
+    say "下载到的脚本为空，继续使用镜像内置脚本"
+  fi
+else
+  say "暂时访问不了 GitHub，继续使用镜像内置脚本"
+fi
 say "检查数据库升级"
 docker compose exec -T mysql cgch-migrate </dev/null || die "数据库升级失败，请把上面的输出发给技术支持"
 say "启动服务"

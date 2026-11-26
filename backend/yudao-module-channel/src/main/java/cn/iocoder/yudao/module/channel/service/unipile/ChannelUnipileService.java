@@ -291,6 +291,46 @@ public class ChannelUnipileService {
         });
     }
 
+    /**
+     * 找回：把 Unipile 上已经存在、但后台没有记录的账号补进来。
+     * 典型场景：客户在托管页面登录成功了，但回调没落库；之后再点绑定会提示 Account already exists。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int recoverAccounts(Long userId) {
+        ChannelUnipileCredentialDO c = credential();
+        if (c == null || StrUtil.isBlank(c.getApiKey())) {
+            throw new ServiceException(1_030_015_000, "还没有配置 Unipile 渠道");
+        }
+        JsonNode r = UnipileClient.listAccounts(props, keyOf(c));
+        JsonNode items = r.path("items");
+        int n = 0;
+        for (JsonNode acc : items) {
+            String id = acc.path("id").asText("");
+            if (StrUtil.isBlank(id) || accountMapper.selectByPhoneNumberId(id) != null) {
+                continue;
+            }
+            String provider = StrUtil.blankToDefault(acc.path("type").asText(""),
+                    acc.path("provider").asText("linkedin")).toLowerCase();
+            String name = StrUtil.blankToDefault(acc.path("name").asText(null),
+                    acc.path("username").asText(null));
+            String rawStatus = acc.path("status").asText("");
+            String conn = "running".equalsIgnoreCase(rawStatus)
+                    ? ChannelWaAccountDO.CONN_OPEN : ChannelWaAccountDO.CONN_CLOSE;
+            accountMapper.insert(ChannelWaAccountDO.builder()
+                    .platform(platformOf(provider))
+                    .authType(ChannelWaAccountDO.AUTH_UNIPILE)
+                    .phoneNumberId(id)
+                    .displayPhone(StrUtil.maxLength(name, 64))
+                    .userId(userId)
+                    .enabled(true)
+                    .connState(conn)
+                    .build());
+            n++;
+        }
+        log.info("[recoverAccounts][租户 {} 找回 {} 个 Unipile 账号]",
+                TenantContextHolder.getTenantId(), n);
+        return n;
+    }
     /** 断开并删除该号码（会同时断开客户手机上的关联设备） */
     @Transactional(rollbackFor = Exception.class)
     public void disconnect(Long accountId) {

@@ -20,6 +20,7 @@ import { $t, setupI18n } from '#/locales';
 import { bindFormCreateApp } from '#/plugins/form-create/lazy';
 import { registerMotionDirectives } from '#/utils/motion';
 import { setupHoverPrefetch } from '#/utils/prefetch';
+import { setupSegmentedKeyboard } from '#/utils/segmented-enter';
 import { setupVxeTableA11y } from '#/utils/vxe-a11y';
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
@@ -91,6 +92,9 @@ async function bootstrap(namespace: string) {
 
   // 表格工具栏 / 分页按钮只有图标字形，读屏念不出操作名，这里补 aria-label
   setupVxeTableA11y();
+
+  // Segmented 是原生 radio，回车不会选中，这里统一补上
+  setupSegmentedKeyboard();
 
   // 鼠标悬停菜单时预取页面分包：跨境链路下能省掉 1 个往返的等待
   setupHoverPrefetch();
