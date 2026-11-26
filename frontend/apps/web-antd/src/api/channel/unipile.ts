@@ -22,6 +22,8 @@ export namespace ChannelUnipileApi {
     provider: Provider;
     scopeId?: string | null;
     expiresInMinutes: number;
+    /** 大于 0 表示 Unipile 上已有这个渠道的账号，后端直接找回了，不用再扫码 */
+    recovered?: number;
   }
 }
 

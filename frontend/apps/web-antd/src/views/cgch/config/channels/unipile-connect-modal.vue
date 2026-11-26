@@ -59,8 +59,12 @@ const PROVIDERS: Record<
     name: 'Facebook',
     title: '连接您的 Facebook',
     icon: 'logos:facebook',
-    desc: '扫码后在手机上登录 Facebook 并选择要接入的主页 / 个人 Messenger。',
-    steps: ['用手机相机扫描左侧二维码', '登录 Facebook，勾选要接入的主页或个人账号', '完成后本页面会自动刷新'],
+    desc: '登录 Facebook 后勾选要接入的主页或个人 Messenger。提示 Intent not found 说明链接已失效，点「刷新二维码」重新生成即可。',
+    steps: [
+      '用手机相机扫描左侧二维码（或点「在这台电脑上授权」）',
+      '登录 Facebook，勾选要接入的主页或个人账号，点「下一步」',
+      '完成后本页面会自动刷新；没反应就关掉窗口重新点「一键授权登录」',
+    ],
   },
   instagram: {
     platform: 'instagram',
@@ -117,6 +121,16 @@ async function refresh() {
     attempt.baseline = new Set((list || []).map((a) => Number(a.id)));
     const res = await connectUnipile(attempt.provider);
     if (!isActive(attempt)) return;
+    if (res.recovered && res.recovered > 0) {
+      // Unipile 上已经有这个渠道的账号（上次绑成功了但没落库），后端直接找回来了
+      stop();
+      emit('done');
+      open.value = false;
+      message.success(
+        `已找回 ${res.recovered} 个之前绑定过的账号，不需要再授权`,
+      );
+      return;
+    }
     url.value = res.url;
     state.value = 'ready';
     pollTimer = setInterval(() => void poll(attempt), 2000);

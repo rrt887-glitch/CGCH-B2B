@@ -190,6 +190,19 @@ public class ChannelUnipileService {
         if (userId == null) {
             throw new ServiceException(1_030_015_006, "请先登录后再连接渠道");
         }
+        // 先看看 Unipile 上是不是已经有这个渠道的账号（上次绑定成功但没落库的孤儿）。
+        // 有就直接绑进来，省得客户再走一遍授权、还容易撞上「Intent not found」。
+        int recoveredBeforeConnect = recoverProvider(userId, p);
+        if (recoveredBeforeConnect > 0) {
+            Map<String, Object> done = new LinkedHashMap<>();
+            done.put("url", "");
+            done.put("provider", p);
+            done.put("recovered", recoveredBeforeConnect);
+            done.put("scopeId", c.getScopeId());
+            done.put("expiresInMinutes", 0);
+            return done;
+        }
+
         String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();
         // 一次性令牌：回调时用它换回「哪个租户、哪个成员、哪个渠道」，避免伪造 state 把号绑到别人名下
         String state = createAuthState(tenantId, userId, p);
@@ -295,6 +308,52 @@ public class ChannelUnipileService {
      * 找回：把 Unipile 上已经存在、但后台没有记录的账号补进来。
      * 典型场景：客户在托管页面登录成功了，但回调没落库；之后再点绑定会提示 Account already exists。
      */
+    /** 只找回指定渠道的账号（例如只找回 facebook），返回找回数量 */
+    private int recoverProvider(Long userId, String provider) {
+        try {
+            ChannelUnipileCredentialDO c = credential();
+            if (c == null || StrUtil.isBlank(c.getApiKey())) {
+                return 0;
+            }
+            JsonNode r = UnipileClient.listAccounts(props, keyOf(c));
+            int n = 0;
+            for (JsonNode acc : r.path("items")) {
+                String id = acc.path("id").asText("");
+                if (StrUtil.isBlank(id) || accountMapper.selectByPhoneNumberId(id) != null) {
+                    continue;
+                }
+                String accProvider = StrUtil.blankToDefault(acc.path("type").asText(""),
+                        acc.path("provider").asText("linkedin")).toLowerCase();
+                if (StrUtil.isNotBlank(provider) && !provider.equalsIgnoreCase(accProvider)) {
+                    continue;
+                }
+                String name = StrUtil.blankToDefault(acc.path("name").asText(null),
+                        acc.path("username").asText(null));
+                String rawStatus = acc.path("status").asText("");
+                String conn = "running".equalsIgnoreCase(rawStatus)
+                        ? ChannelWaAccountDO.CONN_OPEN : ChannelWaAccountDO.CONN_CLOSE;
+                accountMapper.insert(ChannelWaAccountDO.builder()
+                        .platform(platformOf(accProvider))
+                        .authType(ChannelWaAccountDO.AUTH_UNIPILE)
+                        .phoneNumberId(id)
+                        .displayPhone(StrUtil.maxLength(name, 64))
+                        .userId(userId)
+                        .enabled(true)
+                        .connState(conn)
+                        .build());
+                n++;
+            }
+            if (n > 0) {
+                log.info("[recoverProvider][租户 {} 渠道 {} 找回 {} 个账号]",
+                        TenantContextHolder.getTenantId(), provider, n);
+            }
+            return n;
+        } catch (Exception e) {
+            log.warn("[recoverProvider][渠道 {} 找回失败，继续走授权：{}]", provider, e.getMessage());
+            return 0;
+        }
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public int recoverAccounts(Long userId) {
         ChannelUnipileCredentialDO c = credential();
