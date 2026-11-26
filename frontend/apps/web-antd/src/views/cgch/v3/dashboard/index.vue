@@ -749,23 +749,36 @@ onMounted(load);
 
 .dash-nav-row {
   display: flex;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
   margin-bottom: 10px;
 }
 
 .dash-tabs {
   display: inline-flex;
   gap: 3px;
+  /* 窄屏（375px）下三个页签放不下：允许横向滚动，绝不能让文字竖着断行 */
+  max-width: 100%;
   padding: 3.5px;
+  overflow-x: auto;
+  scrollbar-width: none;
   background: rgb(118 118 128 / 11%);
   border-radius: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dash-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .dash-tab {
   display: inline-flex;
+  flex: 0 0 auto;
   gap: 6px;
   align-items: center;
+  white-space: nowrap;
   height: 31px;
   padding: 0 14px;
   font-size: 13px;

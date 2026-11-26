@@ -665,8 +665,10 @@ h2 small {
 
 .live-pill {
   display: inline-flex;
+  flex: 0 0 auto;
   gap: 6px;
   align-items: center;
+  white-space: nowrap;
   height: 24px;
   padding: 0 10px;
   font-size: 11.5px;
