@@ -190,14 +190,32 @@ function closeAuthWindow() {
   authWindow = null;
 }
 
-function openHere() {
-  if (!url.value) return;
+/**
+ * 打开授权页：先强制生成一条新链接再打开。
+ * Unipile 每次新建链接都会让上一条失效，所以「现生成现打开」才能保证窗口里的一定是活的 intent；
+ * 弹窗里显示的二维码可能是几分钟前生成的，直接打开它就容易报 Intent not found。
+ */
+async function openHere() {
+  // 先同步开一个空白窗口，避免 await 之后被浏览器当成弹窗拦截
   closeAuthWindow();
-  authWindow = window.open(
-    url.value,
-    `cgch-unipile-${Date.now()}`,
-    'width=560,height=760',
-  );
+  authWindow = window.open('about:blank', `cgch-unipile-${Date.now()}`, 'width=560,height=760');
+  try {
+    await refresh(true);
+    if (!url.value && state.value !== 'ready') {
+      authWindow?.close();
+      message.warning('生成授权链接失败，请重试');
+      return;
+    }
+    if (authWindow && url.value) {
+      authWindow.location.href = url.value;
+    } else if (url.value) {
+      // 空白窗口被拦截了，退化成直接打开
+      authWindow = window.open(url.value, `cgch-unipile-${Date.now()}`, 'width=560,height=760');
+    }
+  } catch {
+    authWindow?.close();
+    message.warning('打开授权页失败，请重试');
+  }
 }
 
 watch([open, provider], ([v]) => {
