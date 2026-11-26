@@ -23,7 +23,7 @@ const view = ref<'board' | 'list'>('board');
 const loading = ref(true);
 const keyword = ref('');
 const field = ref('name');
-const statuses = ref<{ id: number; name: string }[]>([]);
+const statuses = ref<{ id: number; name: string; typeName?: string }[]>([]);
 const rows = ref<CrmBusinessApi.Business[]>([]);
 
 const [FormModal, formApi] = useVbenModal({ connectedComponent: BusinessForm, destroyOnClose: true });
@@ -40,7 +40,13 @@ async function load() {
 const columns = computed(() =>
   statuses.value.map((s) => {
     const list = rows.value.filter((b) => b.statusId === s.id);
-    return { ...s, list, sum: list.reduce((t, b) => t + Number(b.totalPrice || 0), 0) };
+    return {
+      ...s,
+      // 多套流程时列头带流程名，否则同名阶段（如「初步接洽」）会出现好几列分不清
+      label: s.typeName ? `${s.typeName} · ${s.name}` : s.name,
+      list,
+      sum: list.reduce((t, b) => t + Number(b.totalPrice || 0), 0),
+    };
   }),
 );
 
@@ -88,9 +94,24 @@ const listColumns = [
 ];
 
 onMounted(async () => {
-  const types = await getBusinessStatusTypeSimpleList().catch(() => []);
-  const typeId = (types as any[])[0]?.id;
-  statuses.value = typeId ? ((await getBusinessStatusSimpleList(typeId).catch(() => [])) as any[]) : [];
+  // 商机看板要覆盖所有流程：原来只取 types[0]，配了多套商机流程时其他流程的商机
+  // 在列表里存在、却因为找不到对应阶段列而完全不显示（金额也统计不到）
+  const types = ((await getBusinessStatusTypeSimpleList().catch(() => [])) ?? []) as {
+    id: number;
+    name: string;
+  }[];
+  const lists = await Promise.all(
+    types.map(async (t) =>
+      ((await getBusinessStatusSimpleList(t.id).catch(() => [])) ?? []) as {
+        id: number;
+        name: string;
+      }[],
+    ),
+  );
+  const multiPipeline = types.length > 1;
+  statuses.value = lists.flatMap((list, i) =>
+    list.map((s) => ({ ...s, typeName: multiPipeline ? types[i]?.name : undefined })),
+  );
   await load();
 });
 </script>
@@ -134,7 +155,7 @@ onMounted(async () => {
           @dragleave="over === c.id && (over = undefined)"
           @drop.prevent="drop(c.id)"
         >
-          <div class="biz__stage">{{ c.name }}<span v-if="c.list.length" class="ml-1 opacity-80">({{ c.list.length }})</span></div>
+          <div class="biz__stage">{{ c.label }}<span v-if="c.list.length" class="ml-1 opacity-80">({{ c.list.length }})</span></div>
           <div class="biz__sum">{{ fmtMoney(c.sum) }}</div>
           <div class="biz__cards">
             <div
