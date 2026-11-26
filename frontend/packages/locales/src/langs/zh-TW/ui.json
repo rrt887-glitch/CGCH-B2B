@@ -33,6 +33,8 @@
     "title": "請完成安全驗證",
     "sliderSuccessText": "驗證通過",
     "sliderDefaultText": "請按住滑塊拖動",
+    "sliderKeyboardTip": "使用左右方向鍵移動滑塊，按 Enter 確認",
+    "closeAriaLabel": "關閉驗證碼彈窗",
     "sliderRotateDefaultTip": "點選圖片可重新整理",
     "sliderTranslateDefaultTip": "點選圖片可重新整理",
     "sliderRotateFailTip": "驗證失敗",

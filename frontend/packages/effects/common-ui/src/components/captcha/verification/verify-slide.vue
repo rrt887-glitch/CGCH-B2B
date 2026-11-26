@@ -21,6 +21,7 @@ import { $t } from '@vben/locales';
 import { AES } from '@vben-core/shared/utils';
 
 import { resetSize } from './utils/util';
+import { clampSliderPosition, sliderHintText } from './verify-slide-helpers';
 
 const props = withDefaults(defineProps<VerificationProps>(), {
   barSize: () => ({
@@ -88,8 +89,10 @@ const barArea = computed(() => {
   return proxy?.$el.querySelector('.verify-bar-area');
 });
 function init() {
-  text.value =
-    explain.value === '' ? $t('ui.captcha.sliderDefaultText') : explain.value;
+  text.value = sliderHintText(
+    explain.value,
+    $t('ui.captcha.sliderDefaultText'),
+  );
 
   getPictrue();
   nextTick(() => {
@@ -173,6 +176,14 @@ function end() {
   endMovetime.value = Date.now();
   // 判断是否重合
   if (status.value && isEnd.value === false) {
+    submit();
+    status.value = false;
+  }
+}
+
+/** 校验当前位置（鼠标松开、键盘回车都走这里） */
+function submit() {
+  {
     let moveLeftDistance = Number.parseInt(
       (moveBlockLeft.value || '').replace('px', ''),
     );
@@ -233,7 +244,6 @@ function end() {
         }, 1000);
       }
     });
-    status.value = false;
   }
 }
 
@@ -257,7 +267,12 @@ async function refresh() {
   setTimeout(() => {
     transitionWidth.value = '';
     transitionLeft.value = '';
-    text.value = explain.value;
+    // explain 默认是空串：这里要和 init() 一样回退到默认提示，
+    // 否则点刷新 / 重新打开弹窗后「请按住滑块拖动」就没了
+    text.value = sliderHintText(
+      explain.value,
+      $t('ui.captcha.sliderDefaultText'),
+    );
   }, 300);
 }
 
@@ -277,6 +292,68 @@ async function getPictrue() {
     tipWords.value = res?.data?.repMsg;
   }
 }
+// ===== 键盘操作（无障碍）=====
+// 滑块默认只能鼠标拖：键盘用户按不到、也拖不动，等于无法登录。
+// 让滑块可聚焦，方向键移动、回车提交；位置与鼠标拖动共用同一套变量。
+const KEYBOARD_STEP = 8;
+
+const currentLeft = computed(
+  () => Number.parseInt(String(moveBlockLeft.value ?? '0').replace('px', '')) || 0,
+);
+const maxLeft = computed(() =>
+  Math.max(
+    0,
+    (Number.parseInt(setSize.imgWidth || '0') || 0) -
+      (Number.parseInt(blockSize.value.width) || 0),
+  ),
+);
+
+function keyboardStart() {
+  if (status.value || isEnd.value) return;
+  text.value = '';
+  moveBlockBackgroundColor.value = '#337ab7';
+  leftBarBorderColor.value = '#337AB7';
+  iconColor.value = '#fff';
+  status.value = true;
+  startLeft.value = 0;
+  startMoveTime.value = Date.now();
+}
+
+function keyboardMove(delta: number) {
+  if (isEnd.value) return;
+  keyboardStart();
+  const next = clampSliderPosition(currentLeft.value, delta, maxLeft.value);
+  moveBlockLeft.value = `${next}px`;
+  leftBarWidth.value = `${next}px`;
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (isEnd.value) return;
+  switch (e.key) {
+    case 'ArrowDown':
+    case 'ArrowLeft': {
+      e.preventDefault();
+      keyboardMove(-KEYBOARD_STEP);
+      break;
+    }
+    case 'ArrowRight':
+    case 'ArrowUp': {
+      e.preventDefault();
+      keyboardMove(KEYBOARD_STEP);
+      break;
+    }
+    case ' ':
+    case 'Enter': {
+      e.preventDefault();
+      endMovetime.value = Date.now();
+      keyboardStart();
+      submit();
+      status.value = false;
+      break;
+    }
+  }
+}
+
 defineExpose({
   init,
   refresh,
@@ -299,7 +376,16 @@ defineExpose({
           alt=""
           style="display: block; width: 100%; height: 100%"
         />
-        <div v-show="showRefresh" class="verify-refresh" @click="refresh">
+        <div
+          v-show="showRefresh"
+          class="verify-refresh"
+          role="button"
+          tabindex="0"
+          :aria-label="$t('ui.captcha.refreshAriaLabel')"
+          @click="refresh"
+          @keydown.enter.prevent="refresh"
+          @keydown.space.prevent="refresh"
+        >
           <IconifyIcon icon="lucide:refresh-ccw" class="mr-2 size-5" />
         </div>
         <transition name="tips">
@@ -342,6 +428,13 @@ defineExpose({
             transition: transitionLeft,
           }"
           class="verify-move-block"
+          role="slider"
+          tabindex="0"
+          aria-valuemin="0"
+          :aria-valuemax="maxLeft"
+          :aria-valuenow="currentLeft"
+          :aria-label="$t('ui.captcha.sliderKeyboardTip')"
+          @keydown="onKeydown"
           @mousedown="start"
           @touchstart="start"
         >
