@@ -8,7 +8,7 @@ import type { Component } from 'vue';
 
 import type { HubGroup } from './types';
 
-import { computed, defineAsyncComponent, markRaw, provide, ref } from 'vue';
+import { computed, defineAsyncComponent, defineComponent, h, markRaw, provide, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
@@ -44,7 +44,39 @@ const active = computed(() =>
 const menuRef = ref<HTMLElement>();
 const { style: indicatorStyle } = useSlidingIndicator(menuRef, activeKey, '.on');
 
-const cache = new Map<string, Component>();
+/** reactive Map：删掉条目后 view 会重算，重试就是「删缓存再挂一次」 */
+const cache = reactive(new Map<string, Component>());
+
+/** 子页分包加载失败时的兜底界面（原来只有骨架，失败后一片空白、也没有重试入口） */
+function makeLoadError(key: string, label: string) {
+  return defineComponent({
+    name: 'HubLoadError',
+    setup: () => () =>
+      h('div', { class: 'side-hub__error' }, [
+        h('div', { class: 'side-hub__error-title' }, '页面加载失败'),
+        h(
+          'div',
+          { class: 'side-hub__error-desc' },
+          `${label} 的页面文件没有加载下来，常见于网络抖动或刚更新过版本。`,
+        ),
+        h(
+          'button',
+          {
+            class: 'side-hub__error-btn',
+            type: 'button',
+            onClick: () => retry(key),
+          },
+          '重试',
+        ),
+      ]),
+  });
+}
+
+/** 丢掉这页的缓存，让 defineAsyncComponent 重新拉取 */
+function retry(key: string) {
+  cache.delete(key);
+}
+
 const view = computed(() => {
   const item = active.value;
   if (!item) return undefined;
@@ -56,6 +88,15 @@ const view = computed(() => {
           loader: item.load,
           loadingComponent: ApSkeleton,
           delay: 140,
+          // 分包一直不回来时也别永远转圈
+          timeout: 15_000,
+          errorComponent: makeLoadError(item.key, item.label),
+          onError: (error, _retry, _fail, attempts) => {
+            console.warn(
+              `[side-hub] ${item.label} 加载失败（第 ${attempts} 次）`,
+              error,
+            );
+          },
         }),
       ),
     );
@@ -141,6 +182,43 @@ provide('cgchHubSelect', select);
 </template>
 
 <style scoped>
+.side-hub__error {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: center;
+  height: 100%;
+  min-height: 220px;
+  padding: 24px;
+}
+
+.side-hub__error-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.side-hub__error-desc {
+  max-width: 460px;
+  font-size: 13px;
+  color: #6e6e73;
+}
+
+.side-hub__error-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  color: #fff;
+  cursor: pointer;
+  background: #0071e3;
+  border: 0;
+  border-radius: 8px;
+}
+
+.side-hub__error-btn:hover {
+  background: #0062c4;
+}
+
 .side-hub {
   display: flex;
   gap: 0;
