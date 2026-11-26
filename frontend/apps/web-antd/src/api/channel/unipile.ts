@@ -33,9 +33,9 @@ export function getUnipileCredential() {
 }
 
 /** 生成托管授权链接：前端打开后由客户在 Unipile 页面登录/扫码 */
-export function connectUnipile(provider: ChannelUnipileApi.Provider) {
+export function connectUnipile(provider: ChannelUnipileApi.Provider, force = false) {
   return requestClient.post<ChannelUnipileApi.ConnectResult>(
-    `/channel/unipile/connect?provider=${provider}`,
+    `/channel/unipile/connect?provider=${provider}&force=${force}`,
   );
 }
 

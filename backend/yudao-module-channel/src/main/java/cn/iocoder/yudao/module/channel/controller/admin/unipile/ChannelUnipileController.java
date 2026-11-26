@@ -45,8 +45,9 @@ public class ChannelUnipileController {
     @Operation(summary = "生成托管授权链接（provider：whatsapp / linkedin / instagram / facebook / telegram）")
     @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
     public CommonResult<Map<String, Object>> connect(
-            @RequestParam(value = "provider", required = false, defaultValue = "whatsapp") String provider) {
-        return CommonResult.success(channelUnipileService.connect(provider));
+            @RequestParam(value = "provider", required = false, defaultValue = "whatsapp") String provider,
+            @RequestParam(value = "force", required = false, defaultValue = "false") Boolean force) {
+        return CommonResult.success(channelUnipileService.connect(provider, Boolean.TRUE.equals(force)));
     }
 
     @PostMapping("/recover")

@@ -68,6 +68,11 @@ public class ChannelUnipileService {
     private static final int AUTH_LINK_MINUTES = 60;
     /** 租户 Key 剩多少天开始换新（每天检查一次） */
     private static final int RENEW_BEFORE_DAYS = 30;
+    /** 60 秒内重复请求同一个渠道，复用同一个授权链接。
+     *  Unipile 每次新建链接都会让上一个 intent 失效，前端若因为 watch 触发两次刷新，
+     *  用户手里打开的那条链接就成了过期 intent（点「下一步」报 Intent not found）。 */
+    private static final long AUTH_LINK_REUSE_MS = 10_000;
+    private final java.util.Map<String, Object[]> lastAuthLink = new java.util.concurrent.ConcurrentHashMap<>();
     /** 撞到 Unipile 限流的账号（每账号 100 次/天），本轮跳过它、不影响其它账号 */
     private final java.util.Set<Long> quotaBlockedAccounts = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -180,6 +185,10 @@ public class ChannelUnipileService {
 
     /** 生成托管授权链接：前端打开后客户扫码 / 登录授权 */
     public Map<String, Object> connect(String provider) {
+        return connect(provider, false);
+    }
+
+    public Map<String, Object> connect(String provider, boolean force) {
         String p = StrUtil.blankToDefault(provider, "whatsapp").trim().toLowerCase();
         if (!SUPPORTED_PROVIDERS.contains(p)) {
             throw new ServiceException(1_030_015_005, "不支持的渠道：" + provider);
@@ -203,7 +212,18 @@ public class ChannelUnipileService {
             return done;
         }
 
-        String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();
+        String cacheKey = TenantContextHolder.getRequiredTenantId() + ":" + p;
+        Object[] cached = lastAuthLink.get(cacheKey);
+        if (!force && cached != null && System.currentTimeMillis() < (Long) cached[1]) {
+            Map<String, Object> reuse = new LinkedHashMap<>();
+            reuse.put("url", cached[0]);
+            reuse.put("provider", p);
+            reuse.put("scopeId", c.getScopeId());
+            reuse.put("expiresInMinutes", AUTH_LINK_MINUTES);
+            return reuse;
+        }
+
+        String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();        String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();
         // 一次性令牌：回调时用它换回「哪个租户、哪个成员、哪个渠道」，避免伪造 state 把号绑到别人名下
         String state = createAuthState(tenantId, userId, p);
         String url;
@@ -218,6 +238,7 @@ public class ChannelUnipileService {
             }
             throw new ServiceException(1_030_015_004, "生成授权链接失败：" + msg);
         }
+        lastAuthLink.put(cacheKey, new Object[] {url, System.currentTimeMillis() + AUTH_LINK_REUSE_MS});
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("url", url);
         m.put("provider", p);

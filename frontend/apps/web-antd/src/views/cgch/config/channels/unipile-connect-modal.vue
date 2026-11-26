@@ -103,7 +103,7 @@ function stop() {
   expireTimer = undefined;
 }
 
-async function refresh() {
+async function refresh(force = false) {
   closeAuthWindow();
   stop();
   const attempt: AuthorizationAttempt = {
@@ -120,7 +120,7 @@ async function refresh() {
     const list = await getWaAccountList();
     if (!isActive(attempt)) return;
     attempt.baseline = new Set((list || []).map((a) => Number(a.id)));
-    const res = await connectUnipile(attempt.provider);
+    const res = await connectUnipile(attempt.provider, force);
     if (!isActive(attempt)) return;
     if (res.recovered && res.recovered > 0) {
       // Unipile 上已经有这个渠道的账号（上次绑成功了但没落库），后端直接找回来了
@@ -233,7 +233,7 @@ onBeforeUnmount(stop);
             :size="200"
             :bordered="false"
             :status="state === 'expired' ? 'expired' : 'active'"
-            @refresh="refresh"
+            @refresh="refresh(true)"
           />
           <template v-else-if="state === 'loading'">
             <IconifyIcon icon="lucide:loader-circle" class="size-10 animate-spin text-[#0071E3]" />
@@ -253,7 +253,7 @@ onBeforeUnmount(stop);
           等待手机上完成授权
         </div>
 
-        <button type="button" class="fb-connect__primary" :disabled="state === 'loading'" @click="refresh">
+        <button type="button" class="fb-connect__primary" :disabled="state === 'loading'" @click="refresh(true)">
           <IconifyIcon icon="lucide:refresh-cw" class="size-4" />
           刷新二维码
         </button>
