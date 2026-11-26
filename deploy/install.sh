@@ -30,6 +30,24 @@ fi
 docker compose version >/dev/null 2>&1 || die "缺少 docker compose 插件，请执行 apt-get install -y docker-compose-plugin"
 systemctl enable --now docker >/dev/null 2>&1 || true
 
+# 可选：Docker Hub 镜像加速器（阿里云「容器镜像服务 → 镜像工具 → 镜像加速器」里给的地址）
+# 用法：CGCH_DOCKER_MIRROR=https://xxxx.mirror.aliyuncs.com DOMAIN=... bash install.sh
+# 只影响 docker.io 的镜像（postgres/redis/mysql:8.0 等），ghcr 的镜像不走这个。
+if [ -n "${CGCH_DOCKER_MIRROR:-}" ] && ! grep -qF "$CGCH_DOCKER_MIRROR" /etc/docker/daemon.json 2>/dev/null; then
+  say "配置 Docker 镜像加速：$CGCH_DOCKER_MIRROR"
+  mkdir -p /etc/docker
+  if [ -f /etc/docker/daemon.json ]; then
+    cp /etc/docker/daemon.json "/etc/docker/daemon.json.bak.$(date +%s)"
+  fi
+  cat > /etc/docker/daemon.json <<EOF
+{
+  "registry-mirrors": ["$CGCH_DOCKER_MIRROR"]
+}
+EOF
+  systemctl restart docker >/dev/null 2>&1 || true
+  sleep 5
+fi
+
 # 内存小于 4G 时加 2G 交换空间，避免打包任务或高峰时被系统杀掉
 if [ "$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)" -lt 3800 ] && ! swapon --show | grep -q .; then
   say "内存不足 4G，创建 2G 交换空间"

@@ -45,8 +45,23 @@ systemctl disable --now cgch-autodeploy.timer # 关掉
 
 > 自动部署只会在**镜像更新后**触发（CI 构建成功才会推镜像），所以不会反复重启服务。
 
-## 回滚
+## 镜像加速（可选，国内建议开）
 
+Docker Hub 的镜像（postgres / redis / mysql 基础镜像）在国内拉取很慢，可以配阿里云镜像加速器：
+
+1. 打开阿里云控制台 → **容器镜像服务 ACR** → 左侧「镜像工具」→「镜像加速器」
+2. 复制你的专属地址（形如 `https://xxxx.mirror.aliyuncs.com`）
+3. 执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rrt887-glitch/CGCH-B2B/main/deploy/install.sh -o /tmp/install.sh
+CGCH_DOCKER_MIRROR=https://xxxx.mirror.aliyuncs.com DOMAIN=hig.global bash /tmp/install.sh
+```
+
+> 只影响 docker.io 的镜像；`ghcr.io` 上的后端/前端镜像不走这个加速器。
+> 配置会写入 `/etc/docker/daemon.json`（原文件自动备份），并重启 Docker（约 20 秒）。
+
+## 回滚
 ```bash
 bash /opt/cgch/rollback.sh            # 回到上一个版本
 bash /opt/cgch/rollback.sh --list     # 看部署历史
