@@ -118,6 +118,8 @@ const POLL_MS = 10_000; // 实时推送没连上时的定时刷新间隔
 const POLL_MS_LIVE = 60_000; // 实时推送连上后只做兜底刷新
 
 const accounts = ref<ChannelWaApi.Account[]>([]);
+/** 账号列表没回来之前不能判定“还没绑定账号”，否则首屏会误报（和邮件页 BIZ-01 同类） */
+const accountsLoading = ref(true);
 const accountId = ref<number | undefined>(props.accountId);
 // Watch sources are evaluated synchronously during setup.
 const text = ref('');
@@ -388,7 +390,11 @@ function schedulePoll() {
   );
 }
 onMounted(async () => {
-  accounts.value = await getWaAccountList();
+  try {
+    accounts.value = await getWaAccountList();
+  } finally {
+    accountsLoading.value = false;
+  }
   await loadConversations(); // 没有自己的号码也可能有同事转交过来的会话
   // 从工作报告等页面跳转过来时，直接打开指定会话：/channel-msg/im?conversationId=123
   const cid = props.openId || Number(route.query.conversationId);
@@ -1268,6 +1274,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
   >
     <div
       v-if="
+        !accountsLoading &&
         accounts.length === 0 &&
         conversations.length === 0 &&
         listFilter === 'all'
