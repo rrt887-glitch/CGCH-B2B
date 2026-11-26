@@ -276,6 +276,9 @@ onMounted(async () => {
       :scroll="{ x: 900 }"
       :pagination="{ current: page.no, pageSize: page.size, total, showTotal: (t: number) => `共 ${t} 人`, onChange: (n: number, s: number) => { page.no = n; page.size = s; load(); } }"
     >
+      <template #emptyText>
+        {{ loading ? '正在加载成员…' : '还没有成员' }}
+      </template>
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'nickname'">
           {{ record.nickname }}<Tag v-if="record.id === myId" class="ml-1">我</Tag>

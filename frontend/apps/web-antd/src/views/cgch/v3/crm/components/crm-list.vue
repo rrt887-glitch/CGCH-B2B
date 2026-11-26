@@ -564,7 +564,13 @@ defineExpose({ reload, setExtra, currentParams: params });
                   />
                 </div>
                 <div class="text-[13px] font-medium text-[#86868B]">
-                  {{ loadFailed ? '数据加载失败，请点击右上角刷新重试' : '暂无符合条件的数据' }}
+                  {{
+                    loading
+                      ? '正在加载…'
+                      : loadFailed
+                        ? '数据加载失败，请点击右上角刷新重试'
+                        : '暂无符合条件的数据'
+                  }}
                 </div>
               </div>
             </template>

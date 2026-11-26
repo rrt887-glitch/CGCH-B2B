@@ -453,11 +453,15 @@ onMounted(() => {
             </template>
             <template #emptyText>
               {{
-                keyword.trim()
-                  ? `没有找到与“${keyword.trim()}”匹配的资料`
-                  : kind
-                    ? '当前类型下还没有资料'
-                    : '还没有资料，上传产品目录、FAQ、报价规则等文件，AI 就能据此回答客户'
+                loading
+                  ? '正在加载资料…'
+                  : loadFailed
+                    ? '资料列表加载失败，请刷新重试'
+                    : keyword.trim()
+                      ? `没有找到与“${keyword.trim()}”匹配的资料`
+                      : kind
+                        ? '当前类型下还没有资料'
+                        : '还没有资料，上传产品目录、FAQ、报价规则等文件，AI 就能据此回答客户'
               }}
             </template>
           </Table>
