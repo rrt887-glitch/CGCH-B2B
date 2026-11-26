@@ -17,6 +17,19 @@ DIR=/opt/cgch
 REGISTRY=ghcr.io/rrt887-glitch
 VERSION="${CGCH_VERSION:-latest}"
 
+# 镜像仓库可以换成国内代理（ghcr 在国内拉取经常很慢）：
+#   CGCH_IMAGE_REGISTRY=ghcr.nju.edu.cn/rrt887-glitch            （南京大学镜像）
+#   CGCH_IMAGE_REGISTRY=docker.m.daocloud.io/ghcr.io/rrt887-glitch （DaoCloud 镜像）
+# 传一次就会记到 /opt/cgch/image-registry，之后自动部署也用它。
+if [ -f "$DIR/image-registry" ] && [ -z "${CGCH_IMAGE_REGISTRY:-}" ]; then
+  REGISTRY=$(cat "$DIR/image-registry")
+fi
+if [ -n "${CGCH_IMAGE_REGISTRY:-}" ]; then
+  REGISTRY=$CGCH_IMAGE_REGISTRY
+  mkdir -p "$DIR"
+  printf '%s\n' "$REGISTRY" > "$DIR/image-registry"
+fi
+
 say() { printf '\033[1;32m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31m错误：%s\033[0m\n' "$*" >&2; exit 1; }
 
