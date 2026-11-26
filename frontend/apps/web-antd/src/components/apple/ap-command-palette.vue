@@ -111,6 +111,13 @@ function run(item: CommandItem) {
   router.push({ path: item.path, query: item.query });
 }
 
+/** 方向键改完 selected 后，把 DOM 焦点也挪过去，避免“高亮在一个、焦点在另一个” */
+function focusSelected() {
+  listRef.value
+    ?.querySelector<HTMLElement>(`[data-cmd-index="${selected.value}"]`)
+    ?.focus();
+}
+
 function onKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
@@ -124,11 +131,13 @@ function onKeydown(e: KeyboardEvent) {
   } else if (e.key === 'ArrowDown') {
     e.preventDefault();
     selected.value = (selected.value + 1) % Math.max(1, filtered.value.length);
+    focusSelected();
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
     selected.value =
       (selected.value - 1 + Math.max(1, filtered.value.length)) %
       Math.max(1, filtered.value.length);
+    focusSelected();
   } else if (e.key === 'Enter' && filtered.value[selected.value]) {
     e.preventDefault();
     run(filtered.value[selected.value]!);
@@ -166,6 +175,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
               class="ap-cmd__item"
               :data-cmd-index="idx"
               :class="{ 'is-selected': idx === selected }"
+              @focus="selected = idx"
               @mouseenter="selected = idx"
               @click="run(item)"
             >
