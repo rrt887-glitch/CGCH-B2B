@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 import java.util.Map;
 
@@ -48,6 +49,12 @@ public class ChannelUnipileController {
         return CommonResult.success(channelUnipileService.connect(provider));
     }
 
+    @PostMapping("/recover")
+    @Operation(summary = "找回 Unipile 上已存在、但后台没记录的账号")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
+    public CommonResult<Integer> recover() {
+        return CommonResult.success(channelUnipileService.recoverAccounts(getLoginUserId()));
+    }
     @DeleteMapping("/account")
     @Operation(summary = "断开并删除号码")
     @PreAuthorize("@ss.hasPermission('channel:wa-account:delete')")

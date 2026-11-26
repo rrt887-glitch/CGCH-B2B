@@ -41,6 +41,7 @@ import { getOAuthAuthorizeUrl, getOAuthProviders } from '#/api/channel/oauth';
 import type { ChannelUnipileApi } from '#/api/channel/unipile';
 import type { SocialPlatform } from '#/api/channel/social';
 import { getSocialPlatforms, pollSocial } from '#/api/channel/social';
+import { recoverUnipile } from '#/api/channel/unipile';
 import {
   getWaAccountList,
   setWaAssignees,
@@ -775,6 +776,18 @@ async function saveTransferAccount() {
     transferSaving.value = false;
   }
 }
+/** 找回 Unipile 上已存在、但后台没记录的账号（绑定提示 Account already exists 时用） */
+async function recoverBound() {
+  const n = await recoverUnipile().catch(() => 0);
+  if (n > 0) {
+    message.success(`已找回 ${n} 个已绑定的账号`);
+    await loadMail();
+    await waRef.value?.load();
+  } else {
+    message.info('没有需要找回的账号：要么已经绑定，要么 Unipile 侧也不存在');
+  }
+}
+
 async function toggle(r: AccountRow) {
   if (r.mail) {
     await updateMailAccount({
@@ -1028,6 +1041,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
           AI，在「会话」里统一处理。
         </p>
       </div>
+      <Button @click="recoverBound">找回已绑定账号</Button>
       <Button @click="leadOpen = true">设置留资邮箱</Button>
       <Button type="primary" @click="addOpen = true"
         ><IconifyIcon

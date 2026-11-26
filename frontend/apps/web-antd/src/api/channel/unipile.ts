@@ -37,6 +37,11 @@ export function connectUnipile(provider: ChannelUnipileApi.Provider) {
   );
 }
 
+/** 找回 Unipile 上已存在、但后台没记录的账号（绑定报 Account already exists 时用） */
+export function recoverUnipile() {
+  return requestClient.post<number>('/channel/unipile/recover');
+}
+
 /** 断开并删除该渠道账号 */
 export function disconnectUnipile(id: number) {
   return requestClient.delete<boolean>(`/channel/unipile/account?id=${id}`);
