@@ -39,7 +39,8 @@ const PERIODS = [
 ];
 const days = ref(30);
 const userId = ref<number>();
-const loading = ref(false);
+// 初值就是 true：首帧还没发请求时若显示「还没有配置商机阶段」，用户会以为没配置
+const loading = ref(true);
 const data = ref<CustomerOverviewApi.Overview>();
 const users = ref<{ id: number; nickname: string }[]>([]);
 const userName = (id?: number) => users.value.find((u) => u.id === id)?.nickname ?? (id ? `#${id}` : '公海');
