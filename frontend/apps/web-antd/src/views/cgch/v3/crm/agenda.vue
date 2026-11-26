@@ -18,6 +18,7 @@ import { getWaConversationPage } from '#/api/channel/whatsapp';
 import { requestClient } from '#/api/request';
 import { fmtDateTime } from '#/utils/datetime';
 
+import { customerDetailPath, openCustomerDetail } from './agenda-nav';
 import { stageLabel } from './components/shared';
 
 type TabKey = 'done' | 'expired' | 'pool' | 'today';
@@ -114,8 +115,19 @@ function overdueDays(r: any) {
   return Math.max(0, dayjs().startOf('day').diff(dayjs(r.contactNextTime).startOf('day'), 'day'));
 }
 
-function detail(r: any) {
-  router.push({ name: 'CrmCustomerDetail', params: { id: r.id } });
+/**
+ * 打开客户详情。
+ * 带 href 是为了让链接可键盘聚焦、可中键新开；左键仍走 SPA 跳转，
+ * 跳转没生效时（路由缺失 / 被改写）自动用整页打开兜底，不会再“点了没反应”。
+ */
+async function detail(r: any, event?: MouseEvent) {
+  // 让浏览器自己处理 ctrl / ⌘ / shift + 点击（新标签页打开）
+  if (event && (event.ctrlKey || event.metaKey || event.shiftKey)) return;
+  event?.preventDefault();
+  await openCustomerDetail(router, r.id, (href) => {
+    console.warn('[agenda] SPA 跳转客户详情未生效，改用整页打开', href);
+    window.location.assign(href);
+  });
 }
 
 /** 去会话：打开和这个客户最近的一个即时消息会话 */
@@ -218,7 +230,13 @@ onMounted(() => {
       :pagination="{ current: pager.no, pageSize: pager.size, total, showSizeChanger: false, onChange: (p: number) => { pager.no = p; load(); } }"
     >
       <template #bodyCell="{ column, record }">
-        <a v-if="column.key === 'name'" class="font-medium" @click="detail(record)">{{ record.name }}</a>
+        <a
+          v-if="column.key === 'name'"
+          :href="customerDetailPath(record.id)"
+          class="font-medium"
+          @click="detail(record, $event)"
+          >{{ record.name }}</a
+        >
         <template v-else-if="column.key === 'stage'">
           <Tag v-if="record.stage" class="m-0">{{ stageLabel(record.stage) }}</Tag>
           <span v-else class="text-gray-300">-</span>
