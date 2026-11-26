@@ -1,36 +1,31 @@
 <script lang="ts" setup>
 /**
- * 工作时间：上班时间业务员优先（超时无人回复由 AI 接手）、下班时间 AI 接待；支持节假日与调休。
- * 只影响数字员工「自动回复」模式；「只起草」模式不受影响。
+ * AI 工作时间（人机分时值守策略）：
+ * 上班时间可设业务员优先（超时未回再由 AI 接手），下班及节假日由 AI 7×24 自动值守。
  */
 import type { ChannelWorkTimeApi } from '#/api/channel/worktime';
 
 import { computed, onMounted, ref } from 'vue';
 
-import { Page } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
 import {
-  Alert,
-  Badge,
   Button,
-  Card,
   Checkbox,
   DatePicker,
-  Form,
-  FormItem,
   Input,
   InputNumber,
   message,
-  Radio,
-  RadioGroup,
   Select,
-  Space,
   Switch,
-  Tag,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
-import { getWorkTime, getWorkTimeStatus, saveWorkTime } from '#/api/channel/worktime';
+import {
+  getWorkTime,
+  getWorkTimeStatus,
+  saveWorkTime,
+} from '#/api/channel/worktime';
 
 defineOptions({ name: 'CgchConfigWorkTime' });
 
@@ -52,9 +47,11 @@ const form = ref<ChannelWorkTimeApi.Config>();
 const status = ref<ChannelWorkTimeApi.Status>();
 const saving = ref(false);
 
-const days = computed(() => [...(form.value?.schedule ?? [])].sort((a, b) => a.day - b.day));
+const days = computed(() =>
+  [...(form.value?.schedule ?? [])].sort((a, b) => a.day - b.day),
+);
 
-function applyPreset(kind: 'standard' | 'six' | 'allday') {
+function applyPreset(kind: 'allday' | 'six' | 'standard') {
   if (!form.value) return;
   form.value.schedule = [1, 2, 3, 4, 5, 6, 7].map((d) => ({
     day: d,
@@ -62,24 +59,23 @@ function applyPreset(kind: 'standard' | 'six' | 'allday') {
     ranges: kind === 'allday' ? '00:00-24:00' : '09:00-12:00,13:30-18:00',
   }));
 }
+
 function copyMonday() {
   const mon = form.value?.schedule.find((d) => d.day === 1);
   if (!form.value || !mon) return;
   form.value.schedule.forEach((d) => {
     if (d.day !== 1 && d.enabled) d.ranges = mon.ranges;
   });
+  message.success('已同步周一作息到全部工作日');
 }
 
 const holidayPick = ref<any>();
 const workdayPick = ref<any>();
 
-/**
- * 同一天不能既是「节假日」又是「调休上班日」。
- * 后端判断顺序是「先看节假日」，所以两边都填时这一天仍按休息处理、调休不生效，
- * 用户却以为已经调休了，所以要在录入时就挡住，保存前再兜底检查一次。
- */
 const dateConflicts = computed(() =>
-  form.value ? form.value.holidays.filter((d) => form.value!.extraWorkdays.includes(d)) : [],
+  form.value
+    ? form.value.holidays.filter((d) => form.value!.extraWorkdays.includes(d))
+    : [],
 );
 
 function addDate(field: 'extraWorkdays' | 'holidays', v: any) {
@@ -88,7 +84,9 @@ function addDate(field: 'extraWorkdays' | 'holidays', v: any) {
   const isHoliday = field === 'holidays';
   const other = isHoliday ? form.value.extraWorkdays : form.value.holidays;
   if (other.includes(s)) {
-    message.warning(`${s} 已填在「${isHoliday ? '调休上班日' : '节假日'}」里，同一天不能既是节假日又是调休上班日`);
+    message.warning(
+      `${s} 已填在「${isHoliday ? '调休上班日' : '节假日'}」里，同一天不能同时存在于两处`,
+    );
     return;
   }
   const list = form.value[field];
@@ -97,19 +95,24 @@ function addDate(field: 'extraWorkdays' | 'holidays', v: any) {
 }
 
 async function load() {
-  [form.value, status.value] = await Promise.all([getWorkTime(), getWorkTimeStatus()]);
+  [form.value, status.value] = await Promise.all([
+    getWorkTime(),
+    getWorkTimeStatus(),
+  ]);
 }
+
 async function save() {
   if (!form.value) return;
-  // 历史数据可能已经存在冲突，保存前必须挡住，否则调休设置依旧是「保存成功但不生效」
   if (dateConflicts.value.length) {
-    message.warning(`以下日期同时是节假日和调休上班日，请先删掉一边：${dateConflicts.value.join('、')}`);
+    message.warning(
+      `以下日期同时存在于节假日和调休上班日，请先移除一侧：${dateConflicts.value.join('、')}`,
+    );
     return;
   }
   saving.value = true;
   try {
     await saveWorkTime(form.value);
-    message.success('已保存');
+    message.success('工作时间策略已保存');
     status.value = await getWorkTimeStatus();
   } finally {
     saving.value = false;
@@ -120,92 +123,448 @@ onMounted(load);
 </script>
 
 <template>
-  <Page auto-content-height>
-    <Card v-if="status" :bordered="false" class="mb-4">
-      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <div>
-          <Badge :status="!status.enabled ? 'default' : status.inWorkTime ? 'success' : 'warning'" />
-          <span class="font-medium">{{ !status.enabled ? '未启用' : status.inWorkTime ? '工作时间' : '非工作时间' }}</span>
+  <div class="wt">
+    <!-- 实时状态横幅卡 -->
+    <div v-if="status" class="wt__status-card">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <span
+            class="ap-crm-pill"
+            :class="
+              !status.enabled
+                ? 'ap-crm-pill--gray'
+                : status.inWorkTime
+                  ? 'ap-crm-pill--green'
+                  : 'ap-crm-pill--purple'
+            "
+          >
+            ●
+            {{
+              !status.enabled
+                ? '分时值守未启用'
+                : status.inWorkTime
+                  ? '当前处于工作时间'
+                  : '当前处于下班 / AI 夜间值守时段'
+            }}
+          </span>
+          <span class="text-xs text-[#6E6E73]">
+            当地时间 {{ status.localTime }}（{{ status.timezone }}）
+          </span>
+          <span
+            v-if="status.enabled && status.nextChange"
+            class="text-xs text-[#86868B]"
+          >
+            · 下次切换（{{ status.inWorkTime ? '下班' : '上班' }}）：{{
+              status.nextChange
+            }}
+          </span>
         </div>
-        <div class="text-sm text-gray-500">公司当地时间 {{ status.localTime }}（{{ status.timezone }}）</div>
-        <div v-if="status.enabled && status.nextChange" class="text-sm text-gray-500">
-          {{ status.inWorkTime ? '下班' : '上班' }}时间：{{ status.nextChange }}
-        </div>
-        <Tag v-if="status.waitingCount" color="orange">{{ status.waitingCount }} 条消息等待业务员回复</Tag>
+
+        <span
+          v-if="status.waitingCount"
+          class="ap-crm-pill ap-crm-pill--amber"
+        >
+          {{ status.waitingCount }} 条新消息正等待业务员优先处理
+        </span>
       </div>
-      <div class="mt-2 text-sm">{{ status.policy }}</div>
-    </Card>
+      <div class="mt-2 text-xs text-[#48484A]">{{ status.policy }}</div>
+    </div>
 
-    <Card v-if="form" title="工作时间" :bordered="false">
-      <template #extra>
-        <Space>
-          <span class="text-sm">启用</span>
+    <!-- 主配置面板 -->
+    <div v-if="form" class="wt__card">
+      <div class="wt__head">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="wt__icon">
+            <IconifyIcon icon="lucide:clock" class="size-5" />
+          </span>
+          <div>
+            <div class="text-[15px] font-bold text-[#1D1D1F]">
+              团队工作时间与分时接待策略
+            </div>
+            <div class="mt-0.5 text-xs text-[#6E6E73]">
+              仅影响设为「自动回复」模式的渠道；客诉转人工、违禁词拦截等安全规则始终生效
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <span class="text-xs font-medium text-[#6E6E73]">
+            {{ form.enabled ? '已启用' : '未启用' }}
+          </span>
           <Switch v-model:checked="form.enabled" />
-          <Button type="primary" :loading="saving" @click="save">保存</Button>
-        </Space>
-      </template>
-      <Alert
-        class="mb-4"
-        type="info"
-        show-icon
-        message="只影响数字员工设为「自动回复」的渠道。投诉退款转人工、违禁词、客户未托管等规则照常生效。"
-      />
-      <Form layout="vertical" :disabled="!form.enabled">
-        <FormItem label="时区">
-          <Select v-model:value="form.timezone" :options="TIMEZONES" show-search class="w-72" />
-        </FormItem>
+          <Button
+            type="primary"
+            shape="round"
+            :loading="saving"
+            @click="save"
+          >
+            保存配置
+          </Button>
+        </div>
+      </div>
 
-        <FormItem label="每周上班时间">
-          <Space class="mb-2">
-            <Button size="small" @click="applyPreset('standard')">周一至周五</Button>
-            <Button size="small" @click="applyPreset('six')">周一至周六</Button>
-            <Button size="small" @click="applyPreset('allday')">全天候</Button>
-            <Button size="small" type="link" @click="copyMonday">把周一的时间段应用到其他上班日</Button>
-          </Space>
-          <div v-for="d in days" :key="d.day" class="mb-2 flex items-center gap-3">
-            <Checkbox v-model:checked="d.enabled" class="w-16">{{ WEEK[d.day] }}</Checkbox>
-            <Input v-model:value="d.ranges" :disabled="!form.enabled || !d.enabled" placeholder="09:00-12:00,13:30-18:00" class="w-80" />
-            <span v-if="!d.enabled" class="text-sm text-gray-400">休息</span>
+      <div :class="{ 'opacity-50 pointer-events-none': !form.enabled }" class="space-y-4">
+        <!-- 1. 时区与周排班 -->
+        <div class="wt__block">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div>
+              <div class="wt__label mb-0">公司所在时区与每周排班</div>
+              <div class="text-xs text-[#86868B]">
+                多时段用英文逗号分隔，24 小时全天上班填 00:00-24:00
+              </div>
+            </div>
+            <Select
+              v-model:value="form.timezone"
+              :options="TIMEZONES"
+              show-search
+              class="w-64"
+            />
           </div>
-          <div class="text-xs text-gray-500">多个时间段用英文逗号分隔；全天上班填 00:00-24:00。</div>
-        </FormItem>
 
-        <FormItem label="节假日（全天休息）">
-          <Space wrap>
-            <Tag v-for="h in form.holidays" :key="h" closable @close="form!.holidays = form!.holidays.filter((x) => x !== h)">{{ h }}</Tag>
-            <DatePicker v-model:value="holidayPick" size="small" placeholder="添加日期" @change="(v: any) => { addDate('holidays', v); holidayPick = undefined; }" />
-          </Space>
-          <div class="mt-1 text-xs text-gray-500">这一天全天按休息处理，优先于调休设置。</div>
-        </FormItem>
-        <FormItem label="调休上班日（按周一的时间上班）">
-          <Space wrap>
-            <Tag v-for="h in form.extraWorkdays" :key="h" closable @close="form!.extraWorkdays = form!.extraWorkdays.filter((x) => x !== h)">{{ h }}</Tag>
-            <DatePicker v-model:value="workdayPick" size="small" placeholder="添加日期" @change="(v: any) => { addDate('extraWorkdays', v); workdayPick = undefined; }" />
-          </Space>
-          <div class="mt-1 text-xs text-gray-500">这一天的休息日会改成按周一的时间上班。</div>
-          <div v-if="dateConflicts.length" class="mt-1 text-xs text-red-500">
-            {{ dateConflicts.join('、') }} 同时出现在「节假日」和「调休上班日」里，这一天会按休息处理、调休不生效，请删掉一边。
+          <div class="mb-3 flex flex-wrap items-center gap-1.5">
+            <span class="text-xs text-[#6E6E73] mr-1">快捷排班：</span>
+            <button
+              type="button"
+              class="wt__preset"
+              @click="applyPreset('standard')"
+            >
+              标准双休（周一至周五）
+            </button>
+            <button
+              type="button"
+              class="wt__preset"
+              @click="applyPreset('six')"
+            >
+              大小周 / 单休（周一至周六）
+            </button>
+            <button
+              type="button"
+              class="wt__preset"
+              @click="applyPreset('allday')"
+            >
+              7×24 全天候
+            </button>
+            <button
+              type="button"
+              class="wt__preset is-link"
+              @click="copyMonday"
+            >
+              将周一时间段同步到其他工作日
+            </button>
           </div>
-        </FormItem>
 
-        <FormItem label="工作时间内，新消息怎么处理">
-          <RadioGroup v-model:value="form.inHoursPolicy" class="flex flex-col gap-2">
-            <Radio value="human_first">
-              业务员优先：等待
-              <InputNumber v-model:value="form.takeoverMinutes" :min="1" :max="1440" size="small" class="mx-1 w-20" :disabled="!form.enabled || form.inHoursPolicy !== 'human_first'" />
-              分钟，仍无人回复再由 AI 接手
-            </Radio>
-            <Radio value="ai">AI 立即回复</Radio>
-            <Radio value="draft">AI 只起草，由业务员确认发送</Radio>
-          </RadioGroup>
-        </FormItem>
-        <FormItem label="非工作时间，新消息怎么处理">
-          <RadioGroup v-model:value="form.offHoursPolicy" class="flex flex-col gap-2">
-            <Radio value="ai">AI 自动接待：能答的直接回答，需要人工的告诉客户业务员上班后跟进</Radio>
-            <Radio value="draft">AI 只起草，等业务员上班后确认发送</Radio>
-          </RadioGroup>
-        </FormItem>
-      </Form>
-    </Card>
-  </Page>
+          <div class="space-y-2">
+            <div v-for="d in days" :key="d.day" class="wt__day-row">
+              <Checkbox v-model:checked="d.enabled" class="w-20 font-medium">
+                {{ WEEK[d.day] }}
+              </Checkbox>
+              <Input
+                v-model:value="d.ranges"
+                :disabled="!d.enabled"
+                placeholder="09:00-12:00,13:30-18:00"
+                class="max-w-xs"
+              />
+              <span
+                v-if="!d.enabled"
+                class="ap-crm-pill ap-crm-pill--gray"
+              >
+                休息日 · AI 全天值守
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. 节假日与调休 -->
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div class="wt__block">
+            <div class="wt__label">法定节假日（全天休息 · AI 值守）</div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span
+                v-for="hd in form.holidays"
+                :key="hd"
+                class="wt__date-chip"
+              >
+                <span>{{ hd }}</span>
+                <button
+                  type="button"
+                  @click="
+                    form!.holidays = form!.holidays.filter((x) => x !== hd)
+                  "
+                >
+                  ×
+                </button>
+              </span>
+              <DatePicker
+                v-model:value="holidayPick"
+                size="small"
+                placeholder="+ 添加放假日期"
+                @change="
+                  (v: any) => {
+                    addDate('holidays', v);
+                    holidayPick = undefined;
+                  }
+                "
+              />
+            </div>
+          </div>
+
+          <div class="wt__block">
+            <div class="wt__label">调休补班日（按周一作息上班）</div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span
+                v-for="wd in form.extraWorkdays"
+                :key="wd"
+                class="wt__date-chip is-work"
+              >
+                <span>{{ wd }}</span>
+                <button
+                  type="button"
+                  @click="
+                    form!.extraWorkdays = form!.extraWorkdays.filter(
+                      (x) => x !== wd,
+                    )
+                  "
+                >
+                  ×
+                </button>
+              </span>
+              <DatePicker
+                v-model:value="workdayPick"
+                size="small"
+                placeholder="+ 添加补班日期"
+                @change="
+                  (v: any) => {
+                    addDate('extraWorkdays', v);
+                    workdayPick = undefined;
+                  }
+                "
+              />
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="dateConflicts.length"
+          class="rounded-xl bg-[#FFECEB] px-3.5 py-2.5 text-xs text-[#D70015]"
+        >
+          日期冲突提示：{{ dateConflicts.join('、') }} 同时存在于节假日与调休补班日，请移除其中一侧后再保存。
+        </div>
+
+        <!-- 3. 工作时间与非工作时间接待策略 -->
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div class="wt__block">
+            <div class="wt__label">上班时间内 · 新消息处理方式</div>
+            <div class="space-y-2">
+              <div
+                class="wt__policy"
+                :class="{ on: form.inHoursPolicy === 'human_first' }"
+                @click="form.inHoursPolicy = 'human_first'"
+              >
+                <div class="font-semibold text-[#1D1D1F]">业务员优先接待</div>
+                <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#6E6E73]">
+                  <span>预留</span>
+                  <InputNumber
+                    v-model:value="form.takeoverMinutes"
+                    :min="1"
+                    :max="1440"
+                    size="small"
+                    class="w-18"
+                    @click.stop
+                  />
+                  <span>分钟给业务员，超时未回再由 AI 自动接手</span>
+                </div>
+              </div>
+
+              <div
+                class="wt__policy"
+                :class="{ on: form.inHoursPolicy === 'ai' }"
+                @click="form.inHoursPolicy = 'ai'"
+              >
+                <div class="font-semibold text-[#1D1D1F]">AI 秒级立即回复</div>
+                <div class="mt-0.5 text-xs text-[#6E6E73]">
+                  上班时间也由 AI 第一时间响应买家
+                </div>
+              </div>
+
+              <div
+                class="wt__policy"
+                :class="{ on: form.inHoursPolicy === 'draft' }"
+                @click="form.inHoursPolicy = 'draft'"
+              >
+                <div class="font-semibold text-[#1D1D1F]">AI 仅拟定草稿</div>
+                <div class="mt-0.5 text-xs text-[#6E6E73]">
+                  不自动发送，由在线业务员审阅确认后发出
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="wt__block">
+            <div class="wt__label">下班及节假日 · 新消息处理方式</div>
+            <div class="space-y-2">
+              <div
+                class="wt__policy"
+                :class="{ on: form.offHoursPolicy === 'ai' }"
+                @click="form.offHoursPolicy = 'ai'"
+              >
+                <div class="font-semibold text-[#1D1D1F]">
+                  AI 夜间自动值守接待（推荐）
+                </div>
+                <div class="mt-0.5 text-xs text-[#6E6E73]">
+                  克服跨国时差秒回买家；遇复杂定制需求礼貌告知上班后跟进
+                </div>
+              </div>
+
+              <div
+                class="wt__policy"
+                :class="{ on: form.offHoursPolicy === 'draft' }"
+                @click="form.offHoursPolicy = 'draft'"
+              >
+                <div class="font-semibold text-[#1D1D1F]">
+                  仅生成草稿留待次日上班处理
+                </div>
+                <div class="mt-0.5 text-xs text-[#6E6E73]">
+                  夜间不自动发信，提前备好草稿供业务员上班一键发出
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.wt {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wt__status-card {
+  padding: 14px 18px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--ap-shadow-rest);
+}
+
+.wt__card {
+  padding: 20px 22px;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: var(--ap-shadow-rest);
+}
+
+.wt__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 0.5px solid var(--ap-separator);
+}
+
+.wt__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: #007aff;
+  background: #e8f2ff;
+  border-radius: 12px;
+}
+
+.wt__block {
+  padding: 15px 16px;
+  background: #f7f8fb;
+  border-radius: 14px;
+}
+
+.wt__label {
+  margin-bottom: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1d1d1f;
+}
+
+.wt__preset {
+  height: 27px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #3a3a3c;
+  cursor: pointer;
+  background: #fff;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.wt__preset:hover {
+  color: #007aff;
+}
+
+.wt__preset.is-link {
+  color: #007aff;
+  background: #e8f2ff;
+  box-shadow: none;
+}
+
+.wt__day-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 11px;
+  background: #fff;
+  border-radius: 10px;
+}
+
+.wt__date-chip {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 26px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #b25e00;
+  background: #fff4e0;
+  border-radius: 999px;
+}
+
+.wt__date-chip.is-work {
+  color: #007aff;
+  background: #e8f2ff;
+}
+
+.wt__date-chip button {
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  opacity: 0.7;
+}
+
+.wt__policy {
+  padding: 11px 13px;
+  font-size: 13px;
+  cursor: pointer;
+  background: #fff;
+  border: 1.5px solid transparent;
+  border-radius: 11px;
+  transition: all var(--ap-dur-fast);
+}
+
+.wt__policy.on {
+  background: rgb(0 122 255 / 5%);
+  border-color: #007aff;
+}
+</style>

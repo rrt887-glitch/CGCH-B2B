@@ -674,12 +674,17 @@ textarea.ant-input {
 /* 弹窗内输入控件采用苹果柔和浅灰填充槽（#F4F5F8），聚焦浮白发光 */
 .ap-modal-sheet .ant-input:not(.ant-input-borderless),
 .ap-modal-sheet .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-borderless),
+.ap-modal-sheet .ant-input-number:not(.ant-input-number-borderless),
 .ap-modal-sheet .ant-select:not(.ant-select-borderless) .ant-select-selector {
   min-height: 40px;
   background: #f4f5f8 !important;
   border-color: transparent !important;
   border-radius: 12px !important;
   box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 5%) !important;
+}
+
+.ap-modal-sheet .ant-input-number .ant-input-number-input {
+  height: 38px;
 }
 
 .ap-modal-sheet .ant-select-single:not(.ant-select-borderless) .ant-select-selector {

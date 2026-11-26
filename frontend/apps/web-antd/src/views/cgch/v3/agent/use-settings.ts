@@ -10,6 +10,9 @@ import { getAgentSettings, saveAgentSettings } from '#/api/channel/agent';
 const settings = ref<AgentApi.Settings>();
 let loading: Promise<AgentApi.Settings> | undefined;
 
+/** 数字员工对外名称：人设页与右侧实时模拟器共享，改名即时联动 */
+export const sharedAgentName = ref('Sales Assistant');
+
 export function useAgentSettings() {
   async function load(force = false) {
     if (settings.value && !force) return settings.value;
@@ -18,9 +21,13 @@ export function useAgentSettings() {
     return settings.value;
   }
 
-  async function save(part: Parameters<typeof saveAgentSettings>[0], tip = '已保存') {
+  async function save(
+    part: Parameters<typeof saveAgentSettings>[0],
+    tip = '已保存',
+  ) {
     await saveAgentSettings(part);
-    if (settings.value) Object.assign(settings.value, JSON.parse(JSON.stringify(part)));
+    if (settings.value)
+      Object.assign(settings.value, JSON.parse(JSON.stringify(part)));
     if (tip) message.success(tip);
   }
 

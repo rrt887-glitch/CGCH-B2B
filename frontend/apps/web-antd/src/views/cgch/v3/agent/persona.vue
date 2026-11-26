@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 /**
- * 角色人设（Apple Intelligence / macOS 系统设置卡片风格）：
- * 1. 数字员工身份名片 + 5 枚可视化性格卡片直接点选（改动自动保存）
- * 2. 角色定位与职责（带一键填充行业模板胶囊 + 内置字数统计）
+ * 步骤 2 · 角色人设（Apple Intelligence / macOS 系统设置卡片风格）：
+ * 1. 数字员工身份名片（改名实时同步右侧模拟器）+ 5 枚带选中勾标的沟通性格卡片
+ * 2. 角色定位与职责（行业快捷模板胶囊 + 字数进度条）
  * 3. 默认工作语言（iOS 分组设置行）
  */
 import type { ChannelAiApi } from '#/api/channel/ai';
@@ -16,16 +16,41 @@ import { Input, message, Select, Textarea } from 'ant-design-vue';
 
 import { getAiConfig, saveAiConfig } from '#/api/channel/ai';
 
-import { useAgentSettings } from './use-settings';
+import { sharedAgentName, useAgentSettings } from './use-settings';
 
 const router = useRouter();
 
 const PERSONALITIES = [
-  { value: 'professional', label: '专业严谨', desc: '用词准确、条理清楚', icon: 'lucide:shield-check' },
-  { value: 'concise', label: '高效简洁', desc: '直奔主题、少寒暄', icon: 'lucide:zap' },
-  { value: 'friendly', label: '温和友好', desc: '语气亲切、拉近距离', icon: 'lucide:smile' },
-  { value: 'proactive', label: '积极推进', desc: '主动推进寄样与报价', icon: 'lucide:trending-up' },
-  { value: 'calm', label: '冷静专业', desc: '客诉场景保持克制', icon: 'lucide:compass' },
+  {
+    value: 'professional',
+    label: '专业严谨',
+    desc: '用词准确、条理清楚',
+    icon: 'lucide:shield-check',
+  },
+  {
+    value: 'concise',
+    label: '高效简洁',
+    desc: '直奔主题、少寒暄',
+    icon: 'lucide:zap',
+  },
+  {
+    value: 'friendly',
+    label: '温和友好',
+    desc: '语气亲切、拉近距离',
+    icon: 'lucide:smile',
+  },
+  {
+    value: 'proactive',
+    label: '积极推进',
+    desc: '主动推进寄样与报价',
+    icon: 'lucide:trending-up',
+  },
+  {
+    value: 'calm',
+    label: '冷静专业',
+    desc: '客诉场景保持克制',
+    icon: 'lucide:compass',
+  },
 ];
 
 const TEMPLATES = [
@@ -75,6 +100,7 @@ async function persist(patch: Partial<ChannelAiApi.Config>, tip = '已保存') {
   saving.value = true;
   try {
     Object.assign(cfg.value, patch);
+    if (patch.agentName) sharedAgentName.value = patch.agentName;
     await saveAiConfig({ ...cfg.value, llmApiKey: '' });
     if (tip) message.success(tip);
   } finally {
@@ -102,11 +128,12 @@ function onDuty(v: string) {
 
 function applyTemplate(t: string) {
   cfg.value.extraInstructions = t;
-  persist({ extraInstructions: t }, '已套用模板');
+  persist({ extraInstructions: t }, '已套用行业模板');
 }
 
 onMounted(async () => {
   cfg.value = await getAiConfig();
+  if (cfg.value.agentName) sharedAgentName.value = cfg.value.agentName;
   load().catch(() => {});
 });
 </script>
@@ -116,11 +143,13 @@ onMounted(async () => {
     <header class="ps__head">
       <div>
         <h2 class="ps__title">角色人设</h2>
-        <p class="ps__sub">定义数字员工对外接待时的身份、沟通语气与核心职责，修改后自动生效</p>
+        <p class="ps__sub">
+          定义数字员工对外接待时的自称身份、沟通语气与推进目标，修改后自动保存生效
+        </p>
       </div>
       <span class="ps__autosave">
         <span class="ps__autosave-dot" :class="{ 'is-saving': saving }"></span>
-        {{ saving ? '保存中…' : '自动保存' }}
+        <span>{{ saving ? '正在保存…' : '自动保存已开启' }}</span>
       </span>
     </header>
 
@@ -132,32 +161,53 @@ onMounted(async () => {
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
-            <Input
-              v-if="editingName"
-              v-model:value="nameDraft"
-              size="small"
-              class="w-48"
-              :maxlength="64"
-              autofocus
-              @blur="saveName"
-              @press-enter="saveName"
-            />
+            <template v-if="editingName">
+              <Input
+                v-model:value="nameDraft"
+                size="small"
+                class="w-52"
+                :maxlength="64"
+                autofocus
+                @press-enter="saveName"
+                @keydown.esc="editingName = false"
+              />
+              <button
+                type="button"
+                class="ps-save-pill"
+                @mousedown.prevent="saveName"
+              >
+                保存
+              </button>
+              <button
+                type="button"
+                class="ps-edit-btn"
+                @mousedown.prevent="editingName = false"
+              >
+                取消
+              </button>
+            </template>
             <template v-else>
               <span class="ps-name">{{ name }}</span>
+              <span class="ap-crm-pill ap-crm-pill--purple">
+                {{ personality.label }}
+              </span>
               <button
                 type="button"
                 class="ps-edit-btn"
                 title="修改对外自称"
                 @click="startName"
               >
-                <IconifyIcon icon="lucide:pencil" class="size-3.5" />
-                <span>改名</span>
+                <IconifyIcon icon="lucide:pencil" class="size-3" />
+                <span>修改自称</span>
               </button>
             </template>
           </div>
           <div class="ps-industry">
             <span>所属行业：</span>
-            <span v-if="settings?.company?.industry" class="font-medium text-[#1D1D1F]">
+            <span
+              v-if="settings?.company?.industry"
+              class="font-medium text-[#1D1D1F]"
+            >
               {{ settings.company.industry }}
             </span>
             <button
@@ -166,7 +216,7 @@ onMounted(async () => {
               class="ps-link"
               @click="router.replace({ query: { tab: 'knowledge' } })"
             >
-              未填写 · 去「知识库」补充企业信息 ›
+              未填写 · 前往「知识库」补充企业信息 ›
             </button>
           </div>
         </div>
@@ -174,7 +224,7 @@ onMounted(async () => {
 
       <div class="ps-divider"></div>
 
-      <div class="ps-section-label">沟通性格</div>
+      <div class="ps-section-label">选择沟通性格</div>
       <div class="ps-tones">
         <button
           v-for="p in PERSONALITIES"
@@ -185,9 +235,17 @@ onMounted(async () => {
           @click="persist({ personality: p.value })"
         >
           <div class="ps-tone__top">
-            <IconifyIcon :icon="p.icon" class="ps-tone__icon" />
-            <span class="ps-tone__name">{{ p.label }}</span>
+            <span class="ps-tone__badge">
+              <IconifyIcon :icon="p.icon" class="size-3.5" />
+            </span>
+            <span
+              v-if="p.value === personality.value"
+              class="ps-tone__check"
+            >
+              <IconifyIcon icon="lucide:check" class="size-2.5" />
+            </span>
           </div>
+          <div class="ps-tone__name">{{ p.label }}</div>
           <div class="ps-tone__desc">{{ p.desc }}</div>
         </button>
       </div>
@@ -197,14 +255,19 @@ onMounted(async () => {
     <section class="ps-card">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div class="ps-card__title">角色定位与职责</div>
-          <div class="ps-card__desc">告诉数字员工代表谁、接待优先级以及推进目标</div>
+          <div class="ps-card__title">角色定位与核心职责</div>
+          <div class="ps-card__desc">
+            告诉数字员工代表谁、接待优先级以及最终引导动作（如获取采购量、推进寄样）
+          </div>
         </div>
         <span class="ps-count">{{ dutyLen }} / 500</span>
       </div>
 
       <div class="ps-tpls">
-        <span class="ps-tpls__label">快速套用：</span>
+        <span class="ps-tpls__label">
+          <IconifyIcon icon="lucide:wand-sparkles" class="size-3.5" />
+          <span>一键套用范本：</span>
+        </span>
         <button
           v-for="t in TEMPLATES"
           :key="t.label"
@@ -228,10 +291,15 @@ onMounted(async () => {
 
     <!-- 卡片 3：默认工作语言 -->
     <section class="ps-card ps-card--row">
-      <div class="min-w-0 flex-1">
-        <div class="ps-card__title">默认工作语言</div>
-        <div class="ps-card__desc">
-          {{ name }} 精通 92 种语言，会自动按买家来信语种回复；仅当无法识别语种时使用此默认语言。
+      <div class="flex min-w-0 flex-1 items-center gap-3.5">
+        <span class="ps-lang-icon">
+          <IconifyIcon icon="lucide:languages" class="size-5" />
+        </span>
+        <div class="min-w-0">
+          <div class="ps-card__title">默认兜底语言</div>
+          <div class="ps-card__desc">
+            {{ name }} 支持 92 种语言自动识别并按买家母语回复；仅当无法判断语种时使用此语言。
+          </div>
         </div>
       </div>
       <Select
@@ -264,26 +332,27 @@ onMounted(async () => {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
-  color: var(--ap-label);
+  color: #1d1d1f;
   letter-spacing: -0.015em;
 }
 
 .ps__sub {
   margin: 4px 0 0;
   font-size: 13px;
-  color: var(--ap-label-3);
+  color: #6e6e73;
 }
 
 .ps__autosave {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  padding: 4px 10px;
+  padding: 5px 12px;
   font-size: 12px;
-  color: var(--ap-label-3);
-  background: rgb(255 255 255 / 72%);
+  font-weight: 500;
+  color: #6e6e73;
+  background: rgb(255 255 255 / 78%);
   border-radius: 999px;
-  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 7%);
+  box-shadow: var(--ap-shadow-rest);
 }
 
 .ps__autosave-dot {
@@ -299,8 +368,8 @@ onMounted(async () => {
 
 .ps-card {
   padding: 20px 22px;
-  background: var(--ap-surface);
-  border-radius: 16px;
+  background: #fff;
+  border-radius: 18px;
   box-shadow: var(--ap-shadow-rest);
 }
 
@@ -322,51 +391,66 @@ onMounted(async () => {
   display: grid;
   flex: none;
   place-items: center;
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
   color: #fff;
-  background: linear-gradient(135deg, #7455e6 0%, #007aff 100%);
-  border-radius: 14px;
-  box-shadow: 0 4px 14px rgb(92 86 230 / 26%);
+  background: linear-gradient(135deg, #af52de 0%, #5856d6 50%, #007aff 100%);
+  border-radius: 15px;
+  box-shadow: 0 6px 16px rgb(88 86 214 / 26%);
 }
 
 .ps-name {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
-  color: var(--ap-label);
+  color: #1d1d1f;
+}
+
+.ps-save-pill {
+  height: 26px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  background: #007aff;
+  border: 0;
+  border-radius: 999px;
 }
 
 .ps-edit-btn {
   display: inline-flex;
   gap: 4px;
   align-items: center;
-  padding: 3px 8px;
+  height: 26px;
+  padding: 0 10px;
   font-size: 12px;
-  color: var(--ap-label-2);
+  font-weight: 500;
+  color: #3a3a3c;
   cursor: pointer;
-  background: #f5f5f7;
+  background: #f2f3f7;
   border: 0;
-  border-radius: 6px;
+  border-radius: 999px;
   transition:
     background-color var(--ap-dur-fast),
     color var(--ap-dur-fast);
 }
 
 .ps-edit-btn:hover {
-  color: var(--ap-accent);
-  background: var(--ap-accent-soft);
+  color: #007aff;
+  background: #e8f2ff;
 }
 
 .ps-industry {
-  margin-top: 4px;
+  margin-top: 5px;
   font-size: 12.5px;
-  color: var(--ap-label-3);
+  color: #6e6e73;
 }
 
 .ps-link {
   padding: 0;
   font-size: 12.5px;
-  color: var(--ap-accent);
+  font-weight: 500;
+  color: #007aff;
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -386,25 +470,25 @@ onMounted(async () => {
   margin-bottom: 10px;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--ap-label-2);
+  color: #6e6e73;
 }
 
 .ps-tones {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  gap: 9px;
 }
 
 .ps-tone {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 11px 12px;
+  padding: 12px;
   text-align: left;
   cursor: pointer;
-  background: #f7f7fa;
+  background: #f7f8fb;
   border: 1.5px solid transparent;
-  border-radius: 12px;
+  border-radius: 14px;
   transition:
     background-color var(--ap-dur-fast),
     border-color var(--ap-dur-fast),
@@ -413,7 +497,8 @@ onMounted(async () => {
 }
 
 .ps-tone:hover:not(.is-active) {
-  background: #f0f1f5;
+  background: #eff1f6;
+  transform: translateY(-1px);
 }
 
 .ps-tone:active {
@@ -421,61 +506,81 @@ onMounted(async () => {
 }
 
 .ps-tone.is-active {
-  background: rgb(0 122 255 / 6%);
-  border-color: var(--ap-accent);
-  box-shadow: 0 2px 8px rgb(0 122 255 / 10%);
+  background: rgb(0 122 255 / 5.5%);
+  border-color: #007aff;
+  box-shadow: 0 4px 12px rgb(0 122 255 / 10%);
 }
 
 .ps-tone__top {
   display: flex;
-  gap: 6px;
   align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
 }
 
-.ps-tone__icon {
-  flex: none;
-  width: 15px;
-  height: 15px;
-  color: var(--ap-label-3);
+.ps-tone__badge {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: #6e6e73;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }
 
-.ps-tone.is-active .ps-tone__icon {
-  color: var(--ap-accent);
+.ps-tone.is-active .ps-tone__badge {
+  color: #fff;
+  background: #007aff;
+}
+
+.ps-tone__check {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: #fff;
+  background: #007aff;
+  border-radius: 50%;
 }
 
 .ps-tone__name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ap-label);
+  color: #1d1d1f;
 }
 
 .ps-tone.is-active .ps-tone__name {
-  color: var(--ap-accent);
+  color: #007aff;
 }
 
 .ps-tone__desc {
   font-size: 11.5px;
   line-height: 1.4;
-  color: var(--ap-label-3);
+  color: #86868b;
 }
 
 .ps-card__title {
   font-size: 15px;
-  font-weight: 600;
-  color: var(--ap-label);
+  font-weight: 700;
+  color: #1d1d1f;
 }
 
 .ps-card__desc {
   margin-top: 3px;
   font-size: 12.5px;
   line-height: 1.55;
-  color: var(--ap-label-3);
+  color: #6e6e73;
 }
 
 .ps-count {
-  font-size: 12px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--ap-label-3);
+  color: #6e6e73;
+  background: #f2f3f7;
+  border-radius: 999px;
 }
 
 .ps-tpls {
@@ -487,17 +592,21 @@ onMounted(async () => {
 }
 
 .ps-tpls__label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
   font-size: 12px;
-  color: var(--ap-label-3);
+  font-weight: 500;
+  color: #6e6e73;
 }
 
 .ps-tpl {
-  padding: 4px 10px;
+  padding: 4.5px 11px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--ap-label-2);
+  color: #3a3a3c;
   cursor: pointer;
-  background: #f5f5f7;
+  background: #f4f5f9;
   border: 0;
   border-radius: 999px;
   transition:
@@ -506,20 +615,31 @@ onMounted(async () => {
 }
 
 .ps-tpl:hover {
-  color: var(--ap-accent);
-  background: var(--ap-accent-soft);
+  color: #007aff;
+  background: #e8f2ff;
 }
 
 .ps-textarea {
   padding: 12px 14px !important;
   font-size: 13.5px !important;
   line-height: 1.65 !important;
-  background: #f7f7fa !important;
-  border-radius: 12px !important;
+  background: #f7f8fb !important;
+  border-radius: 14px !important;
 }
 
 .ps-textarea:focus {
   background: #fff !important;
+}
+
+.ps-lang-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: #5856d6;
+  background: #ededfc;
+  border-radius: 12px;
 }
 
 @media (width <= 960px) {

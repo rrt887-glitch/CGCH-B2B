@@ -1,15 +1,17 @@
 <script lang="ts" setup>
 /**
  * AI 助手右侧实时对话模拟器（iMessage / Apple Intelligence 风格）：
- * 顶栏单行不折行、可点击提示词胶囊、紫蓝 AI 标识气泡、底部悬浮胶囊输入框 + 圆形 ↑ 发送按钮。
+ * 顶栏名称与人设实时联动、胶囊渠道切换、紫蓝 AI 气泡、转人工/违禁词/附件语义提示条、底部胶囊输入框。
  */
 import { nextTick, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
-import { message, Segmented, Tooltip } from 'ant-design-vue';
+import { message, Tooltip } from 'ant-design-vue';
 
 import { getAiConfig, testAgentReply } from '#/api/channel/ai';
+
+import { sharedAgentName } from './use-settings';
 
 const props = defineProps<{ suggestions: string[] }>();
 
@@ -17,10 +19,10 @@ interface Msg {
   role: 'assistant' | 'user';
   content: string;
   note?: string;
+  noteKind?: 'files' | 'forbidden' | 'handoff';
 }
 
 const channel = ref<'mail' | 'whatsapp'>('whatsapp');
-const name = ref('Sales Assistant');
 const msgs = ref<Msg[]>([]);
 const text = ref('');
 const sending = ref(false);
@@ -28,7 +30,7 @@ const box = ref<HTMLElement>();
 
 getAiConfig()
   .then((c) => {
-    if (c?.agentName) name.value = c.agentName;
+    if (c?.agentName) sharedAgentName.value = c.agentName;
   })
   .catch(() => {});
 
@@ -52,16 +54,22 @@ async function send(q?: string) {
       msgs.value.push({
         role: 'assistant',
         content: '',
-        note: '这个问题会转给人工处理（命中转人工规则）',
+        note: '命中转人工规则 · 该会话将交由真人销售接手',
+        noteKind: 'handoff',
       });
     } else {
       msgs.value.push({
         role: 'assistant',
         content: r.content,
         note: r.forbidden
-          ? `回复中含有违禁内容「${r.forbidden}」，实际不会自动发出`
+          ? `命中违禁词「${r.forbidden}」· 将留为草稿待确认`
           : r.files?.length
-            ? `附件：${r.files.join('、')}`
+            ? `附带云盘资料：${r.files.join('、')}`
+            : undefined,
+        noteKind: r.forbidden
+          ? 'forbidden'
+          : r.files?.length
+            ? 'files'
             : undefined,
       });
     }
@@ -75,7 +83,7 @@ async function send(q?: string) {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     send();
   }
@@ -89,23 +97,37 @@ async function scroll() {
 
 <template>
   <div class="tc">
-    <!-- 顶栏：单行对齐，绝不折行 -->
+    <!-- 顶栏 -->
     <header class="tc__head">
       <div class="tc__brand">
         <span class="tc__badge">
           <IconifyIcon icon="lucide:sparkles" class="size-3.5" />
         </span>
-        <span class="tc__name" :title="name">{{ name }}</span>
+        <div class="min-w-0">
+          <div class="tc__name" :title="sharedAgentName">
+            {{ sharedAgentName }}
+          </div>
+          <div class="tc__sub">实时模拟预览</div>
+        </div>
       </div>
+
       <div class="tc__controls">
-        <Segmented
-          v-model:value="channel"
-          size="small"
-          :options="[
-            { label: '会话', value: 'whatsapp' },
-            { label: '邮件', value: 'mail' },
-          ]"
-        />
+        <div class="tc__seg">
+          <button
+            type="button"
+            :class="{ on: channel === 'whatsapp' }"
+            @click="channel = 'whatsapp'"
+          >
+            会话
+          </button>
+          <button
+            type="button"
+            :class="{ on: channel === 'mail' }"
+            @click="channel = 'mail'"
+          >
+            邮件
+          </button>
+        </div>
         <Tooltip title="清空预览对话">
           <button
             type="button"
@@ -125,13 +147,15 @@ async function scroll() {
       <div class="tc__welcome">
         <div class="tc__welcome-head">
           <span class="tc__live"></span>
-          <span>实时效果预览</span>
+          <span>
+            {{ channel === 'whatsapp' ? 'WhatsApp / IM 接待模式' : '外贸邮件回复模式' }}
+          </span>
         </div>
         <p class="tc__welcome-text">
-          你好，我是 <b>{{ name }}</b>。扮演海外买家发一句话，立即测试当前配置下的回复效果。
+          你好，我是 <b>{{ sharedAgentName }}</b>。扮演海外买家发一句话，立即检验当前知识库、人设与技能的实际表现。
         </p>
         <div class="tc__prompts">
-          <div class="tc__prompts-label">试试点击提问</div>
+          <div class="tc__prompts-label">点击快捷买家提问</div>
           <button
             v-for="s in props.suggestions"
             :key="s"
@@ -140,7 +164,7 @@ async function scroll() {
             :disabled="sending"
             @click="send(s)"
           >
-            <span>{{ s }}</span>
+            <span class="min-w-0 flex-1">{{ s }}</span>
             <IconifyIcon icon="lucide:arrow-up-right" class="tc__prompt-icon" />
           </button>
         </div>
@@ -155,7 +179,7 @@ async function scroll() {
         <div class="tc__bubble">
           <div v-if="m.role === 'assistant'" class="tc__ai-tag">
             <IconifyIcon icon="lucide:sparkles" class="size-3" />
-            <span>{{ name }}</span>
+            <span>{{ sharedAgentName }}</span>
           </div>
           <div v-if="m.content" class="whitespace-pre-wrap break-words">
             {{ m.content }}
@@ -163,9 +187,22 @@ async function scroll() {
           <div
             v-if="m.note"
             class="tc__note"
-            :class="{ 'mt-1.5 pt-1.5 border-t border-black/[0.06]': m.content }"
+            :class="[
+              `is-${m.noteKind || 'handoff'}`,
+              { 'mt-2': m.content },
+            ]"
           >
-            {{ m.note }}
+            <IconifyIcon
+              :icon="
+                m.noteKind === 'forbidden'
+                  ? 'lucide:shield-alert'
+                  : m.noteKind === 'files'
+                    ? 'lucide:paperclip'
+                    : 'lucide:user-round-check'
+              "
+              class="mt-0.5 size-3.5 shrink-0"
+            />
+            <span>{{ m.note }}</span>
           </div>
         </div>
       </div>
@@ -175,17 +212,17 @@ async function scroll() {
       </div>
     </div>
 
-    <!-- 底部悬浮胶囊输入框 -->
+    <!-- 底部悬浮输入框 -->
     <footer class="tc__foot">
       <div class="tc__composer">
-        <input
+        <textarea
           v-model="text"
-          type="text"
+          rows="1"
           class="tc__input"
-          placeholder="输入买家的提问…"
+          placeholder="扮演海外买家输入提问…"
           :disabled="sending"
           @keydown="onKeydown"
-        />
+        ></textarea>
         <button
           type="button"
           class="tc__send"
@@ -212,15 +249,15 @@ async function scroll() {
   gap: 8px;
   align-items: center;
   justify-content: space-between;
-  height: 54px;
+  height: 58px;
   padding: 0 14px;
-  background: rgb(255 255 255 / 72%);
+  background: rgb(255 255 255 / 78%);
   border-bottom: 0.5px solid var(--ap-separator);
 }
 
 .tc__brand {
   display: flex;
-  gap: 8px;
+  gap: 9px;
   align-items: center;
   min-width: 0;
 }
@@ -229,21 +266,28 @@ async function scroll() {
   display: grid;
   flex: none;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   color: #fff;
-  background: linear-gradient(135deg, #7455e6, #007aff);
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgb(92 86 230 / 24%);
+  background: linear-gradient(135deg, #af52de 0%, #5856d6 50%, #007aff 100%);
+  border-radius: 9px;
+  box-shadow: 0 3px 8px rgb(88 86 214 / 24%);
 }
 
 .tc__name {
   overflow: hidden;
   font-size: 13.5px;
   font-weight: 700;
-  color: var(--ap-label);
+  line-height: 1.2;
+  color: #1d1d1f;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tc__sub {
+  margin-top: 1px;
+  font-size: 10.5px;
+  color: #8e8e93;
 }
 
 .tc__controls {
@@ -253,12 +297,39 @@ async function scroll() {
   align-items: center;
 }
 
+.tc__seg {
+  display: inline-flex;
+  padding: 2px;
+  background: #eceef3;
+  border-radius: 8px;
+}
+
+.tc__seg button {
+  height: 24px;
+  padding: 0 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #6e6e73;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  transition: all var(--ap-dur-fast);
+}
+
+.tc__seg button.on {
+  font-weight: 600;
+  color: #1d1d1f;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+
 .tc__reset {
   display: grid;
   place-items: center;
   width: 26px;
   height: 26px;
-  color: var(--ap-label-3);
+  color: #6e6e73;
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -269,7 +340,7 @@ async function scroll() {
 }
 
 .tc__reset:hover:not(:disabled) {
-  color: var(--ap-label);
+  color: #1d1d1f;
   background: rgb(0 0 0 / 5%);
 }
 
@@ -288,9 +359,9 @@ async function scroll() {
 }
 
 .tc__welcome {
-  padding: 14px;
+  padding: 15px;
   background: #fff;
-  border-radius: 14px;
+  border-radius: 16px;
   box-shadow: var(--ap-shadow-rest);
 }
 
@@ -300,7 +371,7 @@ async function scroll() {
   align-items: center;
   font-size: 11px;
   font-weight: 600;
-  color: var(--ap-label-3);
+  color: #6e6e73;
 }
 
 .tc__live {
@@ -315,7 +386,7 @@ async function scroll() {
   margin: 8px 0 12px;
   font-size: 12.5px;
   line-height: 1.55;
-  color: var(--ap-label-2);
+  color: #48484a;
 }
 
 .tc__prompts {
@@ -326,8 +397,8 @@ async function scroll() {
 
 .tc__prompts-label {
   font-size: 11px;
-  font-weight: 500;
-  color: var(--ap-label-3);
+  font-weight: 600;
+  color: #8e8e93;
 }
 
 .tc__prompt {
@@ -336,15 +407,15 @@ async function scroll() {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 10px;
+  padding: 8.5px 11px;
   font-size: 12px;
   line-height: 1.4;
-  color: var(--ap-label);
+  color: #1d1d1f;
   text-align: left;
   cursor: pointer;
-  background: #f5f6f9;
+  background: #f5f6fa;
   border: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   transition:
     background-color var(--ap-dur-fast),
     color var(--ap-dur-fast),
@@ -352,8 +423,8 @@ async function scroll() {
 }
 
 .tc__prompt:hover:not(:disabled) {
-  color: var(--ap-accent);
-  background: var(--ap-accent-soft);
+  color: #007aff;
+  background: #e8f2ff;
 }
 
 .tc__prompt:active:not(:disabled) {
@@ -381,21 +452,21 @@ async function scroll() {
 }
 
 .tc__bubble {
-  max-width: 86%;
-  padding: 9px 13px;
+  max-width: 88%;
+  padding: 9.5px 13px;
   font-size: 13px;
   line-height: 1.55;
 }
 
 .is-user .tc__bubble {
   color: #fff;
-  background: #007aff;
+  background: linear-gradient(180deg, #1686ff 0%, #007aff 100%);
   border-radius: 16px 16px 4px 16px;
   box-shadow: 0 2px 8px rgb(0 122 255 / 20%);
 }
 
 .is-ai .tc__bubble {
-  color: var(--ap-label);
+  color: #1d1d1f;
   background: #fff;
   border-radius: 16px 16px 16px 4px;
   box-shadow: var(--ap-shadow-rest);
@@ -408,12 +479,32 @@ async function scroll() {
   margin-bottom: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #7c5ce6;
+  color: #6d4aff;
 }
 
 .tc__note {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 6px 9px;
   font-size: 11.5px;
-  color: var(--ap-orange-text);
+  line-height: 1.45;
+  border-radius: 9px;
+}
+
+.tc__note.is-handoff {
+  color: #b25e00;
+  background: #fff4e0;
+}
+
+.tc__note.is-forbidden {
+  color: #d70015;
+  background: #ffeceb;
+}
+
+.tc__note.is-files {
+  color: #007aff;
+  background: #e8f2ff;
 }
 
 .tc__typing {
@@ -463,13 +554,13 @@ async function scroll() {
 .tc__composer {
   display: flex;
   gap: 8px;
-  align-items: center;
-  padding: 6px 6px 6px 13px;
+  align-items: flex-end;
+  padding: 7px 7px 7px 14px;
   background: #fff;
-  border-radius: 999px;
+  border-radius: 20px;
   box-shadow:
     0 2px 10px rgb(0 0 0 / 5%),
-    0 0 0 0.5px rgb(0 0 0 / 7%);
+    0 0 0 0.5px rgb(0 0 0 / 8%);
   transition: box-shadow var(--ap-dur-fast) var(--ap-ease);
 }
 
@@ -482,16 +573,21 @@ async function scroll() {
 .tc__input {
   flex: 1;
   min-width: 0;
-  height: 28px;
+  min-height: 22px;
+  max-height: 84px;
+  padding: 3px 0;
+  font-family: inherit;
   font-size: 13px;
-  color: var(--ap-label);
+  line-height: 1.45;
+  color: #1d1d1f;
+  resize: none;
   background: transparent;
   border: 0;
   outline: none;
 }
 
 .tc__input::placeholder {
-  color: var(--ap-label-4);
+  color: #8e8e93;
 }
 
 .tc__send {
@@ -502,17 +598,12 @@ async function scroll() {
   height: 30px;
   color: #fff;
   cursor: pointer;
-  background: #007aff;
+  background: linear-gradient(180deg, #1a88ff 0%, #007aff 100%);
   border: 0;
   border-radius: 50%;
   transition:
-    background-color var(--ap-dur-fast),
     transform var(--ap-dur-fast) var(--ap-ease),
     opacity var(--ap-dur-fast);
-}
-
-.tc__send:hover:not(:disabled) {
-  background: #0a84ff;
 }
 
 .tc__send:active:not(:disabled) {
@@ -521,6 +612,7 @@ async function scroll() {
 
 .tc__send:disabled {
   cursor: not-allowed;
-  opacity: 0.32;
+  background: #d1d1d6;
+  opacity: 0.55;
 }
 </style>
