@@ -223,7 +223,7 @@ public class ChannelUnipileService {
             return reuse;
         }
 
-        String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();        String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();
+        String redirect = StrUtil.blankToDefault(props.getPublicBase(), "") + props.getCallbackPath();
         // 一次性令牌：回调时用它换回「哪个租户、哪个成员、哪个渠道」，避免伪造 state 把号绑到别人名下
         String state = createAuthState(tenantId, userId, p);
         String url;
