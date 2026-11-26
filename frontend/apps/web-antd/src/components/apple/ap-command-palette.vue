@@ -14,6 +14,7 @@ const open = defineModel<boolean>('open', { default: false });
 const router = useRouter();
 const accessStore = useAccessStore();
 const inputRef = ref<HTMLInputElement>();
+const listRef = ref<HTMLElement>();
 const query = ref('');
 const selected = ref(0);
 
@@ -78,6 +79,20 @@ const filtered = computed(() => {
 
 watch(filtered, () => {
   selected.value = 0;
+  // 换关键词后结果变了，列表回到顶部，选中项才不会“藏在下面”
+  if (listRef.value) listRef.value.scrollTop = 0;
+});
+
+/**
+ * 上下键在长列表里移动时把选中项滚进视野。
+ * 否则在空搜索框按 ↑ 会绕到最后一项（个人中心），但列表还停在顶部，用户看不到选了什么。
+ */
+watch(selected, async () => {
+  await nextTick();
+  const el = listRef.value?.querySelector<HTMLElement>(
+    `[data-cmd-index="${selected.value}"]`,
+  );
+  el?.scrollIntoView({ block: 'nearest' });
 });
 
 watch(open, async (v) => {
@@ -138,7 +153,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             />
             <kbd class="ap-cmd__kbd">ESC</kbd>
           </div>
-          <div class="ap-cmd__list">
+          <div ref="listRef" class="ap-cmd__list">
             <div v-if="!filtered.length" class="ap-cmd__empty">
               没有找到匹配的页面
             </div>
@@ -147,6 +162,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
               :key="`${item.path}-${item.label}`"
               type="button"
               class="ap-cmd__item"
+              :data-cmd-index="idx"
               :class="{ 'is-selected': idx === selected }"
               @mouseenter="selected = idx"
               @click="run(item)"
