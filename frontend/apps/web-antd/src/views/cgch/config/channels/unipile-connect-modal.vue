@@ -104,6 +104,7 @@ function stop() {
 }
 
 async function refresh() {
+  closeAuthWindow();
   stop();
   const attempt: AuthorizationAttempt = {
     baseline: new Set(),
@@ -177,9 +178,26 @@ async function poll(attempt: AuthorizationAttempt) {
   }
 }
 
+/** 授权窗口。每次都用新的 window name：复用旧窗口会停在已经失效的授权页上，点「下一步」就报 Intent not found */
+let authWindow: Window | null = null;
+
+function closeAuthWindow() {
+  try {
+    authWindow?.close();
+  } catch {
+    // 跨域窗口可能关不掉，忽略
+  }
+  authWindow = null;
+}
+
 function openHere() {
   if (!url.value) return;
-  window.open(url.value, 'cgch-unipile', 'width=560,height=760');
+  closeAuthWindow();
+  authWindow = window.open(
+    url.value,
+    `cgch-unipile-${Date.now()}`,
+    'width=560,height=760',
+  );
 }
 
 watch([open, provider], ([v]) => {
@@ -227,6 +245,9 @@ onBeforeUnmount(stop);
           </template>
         </div>
 
+        <div v-if="state === 'ready'" class="fb-connect__wait">
+          <span class="mr-1 text-xs text-gray-400">链接一次性有效，过期请点「刷新二维码」</span>
+        </div>
         <div v-if="state === 'ready'" class="fb-connect__wait">
           <span class="fb-connect__dot"></span>
           等待手机上完成授权
