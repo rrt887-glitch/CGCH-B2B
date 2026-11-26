@@ -1,28 +1,31 @@
 /**
- * 打开客户详情。
+ * 打开 CRM 详情页（客户 / 线索）。
  *
- * 线上出现过：从「跟进日程 → 已逾期」点客户名称，点了两次页面都留在日程列表，
- * 浏览器也没有新标签页——原来的写法是 `router.push({ name })` 发了不管，
- * 一旦路由没解析成功（名称缺失、被守卫改写、部署版本不一致）就静默什么都不发生。
+ * 线上出现过：客户名、线索名是**没有 href 的 `<a>`**，键盘用户 Tab 十几下都到不了，
+ * 只能绕到行尾点「查看」；而「跟进日程」里点客户名则因为 router.push 发了不管，
+ * 路由没解析成功时就静默什么都不发生。
  *
- * 这里改成：推送后校验当前路由是否真的停在详情页，不成功就用整页跳转兜底，
- * 保证「点客户名能看到详情」这件事一定发生。
+ * 统一做法：给出真实的 href（可键盘聚焦、可中键新开、浏览器默认导航兜底），
+ * 左键仍走 SPA；推送后校验当前路由，没换页就用整页跳转兜底。
  */
+export type CrmDetailKind = 'clue' | 'customer';
+
 export interface DetailRouterLike {
   currentRoute: { value: { path: string } };
   push: (to: string) => Promise<unknown>;
 }
 
-export function customerDetailPath(id: number | string) {
-  return `/crm/customer/detail/${id}`;
+export function crmDetailPath(kind: CrmDetailKind, id: number | string) {
+  return kind === 'clue'
+    ? `/crm/clue/detail/${id}`
+    : `/crm/customer/detail/${id}`;
 }
 
-export async function openCustomerDetail(
+export async function openCrmDetail(
   router: DetailRouterLike,
-  id: number | string,
+  href: string,
   fallback: (href: string) => void,
 ): Promise<'fallback' | 'pushed'> {
-  const href = customerDetailPath(id);
   try {
     await router.push(href);
   } catch {
@@ -36,3 +39,13 @@ export async function openCustomerDetail(
   }
   return 'pushed';
 }
+
+/** 兼容既有调用（跟进日程） */
+export const customerDetailPath = (id: number | string) =>
+  crmDetailPath('customer', id);
+
+export const openCustomerDetail = (
+  router: DetailRouterLike,
+  id: number | string,
+  fallback: (href: string) => void,
+) => openCrmDetail(router, customerDetailPath(id), fallback);

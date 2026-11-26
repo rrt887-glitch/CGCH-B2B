@@ -34,6 +34,7 @@ import CustomerForm from '#/views/crm/customer/modules/form.vue';
 import ImportForm from '#/views/crm/customer/modules/import-form.vue';
 
 import CrmList from './components/crm-list.vue';
+import { crmDetailPath, openCrmDetail } from './crm-detail-nav';
 import {
   channelTags,
   countryName,
@@ -126,8 +127,14 @@ const fetch = (p: Record<string, any>) => page(getCustomerPage({ ...p } as any))
 const [FormModal, formApi] = useVbenModal({ connectedComponent: CustomerForm, destroyOnClose: true });
 const [ImportModal, importApi] = useVbenModal({ connectedComponent: ImportForm, destroyOnClose: true });
 
-function detail(r: any) {
-  router.push({ name: 'CrmCustomerDetail', params: { id: r.id } });
+function detail(r: any, event?: MouseEvent) {
+  // ctrl / ⌘ / shift + 点击交给浏览器（新标签页）
+  if (event && (event.ctrlKey || event.metaKey || event.shiftKey)) return;
+  event?.preventDefault();
+  void openCrmDetail(router, crmDetailPath('customer', r.id), (href) => {
+    console.warn('[crm] SPA 跳转客户详情未生效，改用整页打开', href);
+    window.location.assign(href);
+  });
 }
 
 async function toggleStar(r: any) {
@@ -412,7 +419,8 @@ const me = computed(() => userStore.userInfo?.id);
           >
           <a
             class="min-w-0 truncate font-semibold text-[#1D1D1F] hover:text-[#007AFF]"
-            @click="detail(record)"
+            :href="crmDetailPath('customer', record.id)"
+            @click="detail(record, $event)"
             >{{ record.name }}</a
           >
         </div>

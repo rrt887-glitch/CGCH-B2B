@@ -14,6 +14,7 @@ import { deleteClue, getCluePage, transformClue } from '#/api/crm/clue';
 import ClueForm from '#/views/crm/clue/modules/form.vue';
 
 import CrmList from './components/crm-list.vue';
+import { crmDetailPath, openCrmDetail } from './crm-detail-nav';
 import {
   channelTags,
   countryName,
@@ -62,8 +63,13 @@ const fetch = (p: Record<string, any>) => page(getCluePage({ ...p } as any));
 
 const [FormModal, formApi] = useVbenModal({ connectedComponent: ClueForm, destroyOnClose: true });
 
-function detail(r: any) {
-  router.push({ name: 'CrmClueDetail', params: { id: r.id } });
+function detail(r: any, event?: MouseEvent) {
+  if (event && (event.ctrlKey || event.metaKey || event.shiftKey)) return;
+  event?.preventDefault();
+  void openCrmDetail(router, crmDetailPath('clue', r.id), (href) => {
+    console.warn('[crm] SPA 跳转线索详情未生效，改用整页打开', href);
+    window.location.assign(href);
+  });
 }
 
 async function remove(r: any) {
@@ -113,7 +119,8 @@ async function transform(r: any) {
           >
           <a
             class="min-w-0 truncate font-semibold text-[#1D1D1F] hover:text-[#007AFF]"
-            @click="detail(record)"
+            :href="crmDetailPath('clue', record.id)"
+            @click="detail(record, $event)"
             >{{ record.name }}</a
           >
         </div>

@@ -27,7 +27,7 @@ import { getWaConversationPage } from '#/api/channel/whatsapp';
 import { requestClient } from '#/api/request';
 import { fmtDateTime } from '#/utils/datetime';
 
-import { customerDetailPath, openCustomerDetail } from './agenda-nav';
+import { customerDetailPath, openCustomerDetail } from './crm-detail-nav';
 import { crmAvatarBg, crmInitial, stageLabel } from './components/shared';
 
 type TabKey = 'done' | 'expired' | 'pool' | 'today';

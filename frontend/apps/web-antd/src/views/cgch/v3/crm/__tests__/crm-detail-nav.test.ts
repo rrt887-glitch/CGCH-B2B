@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { customerDetailPath, openCustomerDetail } from '../agenda-nav';
+import { customerDetailPath, openCustomerDetail } from '../crm-detail-nav';
 
 /**
  * 线上问题：点客户名称后页面留在日程列表，两次都没反应。
