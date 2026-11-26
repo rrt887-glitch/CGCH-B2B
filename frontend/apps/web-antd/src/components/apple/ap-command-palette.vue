@@ -59,7 +59,9 @@ const COMMANDS: CommandItem[] = [
   { group: '管理与设置', label: '邮件模板', icon: 'lucide:mail', path: '/v3/settings', query: { tab: 'emailTemplates' }, keywords: 'template 邮件模板' },
   { group: '管理与设置', label: '快捷回复', icon: 'lucide:zap', path: '/v3/settings', query: { tab: 'quickReplies' }, keywords: 'quick reply 快捷回复' },
   { group: '管理与设置', label: '消息分流设置', icon: 'lucide:git-branch', path: '/v3/settings', query: { tab: 'routing' }, keywords: 'routing 分流 分配规则' },
-  { group: '管理与设置', label: '通知与翻译设置', icon: 'lucide:bell', path: '/v3/settings', query: { tab: 'notifications' }, keywords: 'notify translate 通知 翻译' },
+  { group: '管理与设置', label: '通知设置', icon: 'lucide:bell', path: '/v3/settings', query: { tab: 'notifications' }, keywords: 'notify 通知 提醒' },
+  // 翻译是独立的设置页（设置 → 偏好 → 翻译设置），不能并到通知里，否则搜「翻译」点进去只有通知规则
+  { group: '管理与设置', label: '翻译设置', icon: 'lucide:languages', path: '/v3/settings', query: { tab: 'translate' }, keywords: 'translate i18n 翻译 双语 中英' },
   { group: '管理与设置', label: '客户管理（平台）', icon: 'lucide:building-2', path: '/v3/platform/tenants', keywords: 'tenant platform 租户 开户', platformOnly: true },
   { group: '账户', label: '个人中心', icon: 'lucide:user-round', path: '/profile', keywords: 'profile password 个人中心 密码' },
 ];
