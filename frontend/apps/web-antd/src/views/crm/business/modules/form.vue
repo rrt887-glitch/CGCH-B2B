@@ -105,8 +105,8 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <Modal :title="getTitle" class="w-1/2">
-    <Form class="mx-4">
+  <Modal :title="getTitle" class="ap-vben-modal w-[780px] max-w-[94vw]">
+    <Form class="mx-2">
       <template #product="slotProps">
         <ProductEditTable
           v-bind="slotProps.componentProps"

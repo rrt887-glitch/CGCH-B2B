@@ -737,6 +737,124 @@ textarea.ant-input {
   border-radius: 12px;
 }
 
+/* CRM 列表与页面共享的苹果通讯录小圆头像、语义胶囊与动作按钮 */
+.ap-crm-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  user-select: none;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0.5px 0 rgb(255 255 255 / 36%),
+    0 1px 2px rgb(0 0 0 / 10%);
+}
+
+.ap-crm-pill {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 22px;
+  white-space: nowrap;
+  border-radius: 999px;
+}
+
+.ap-crm-pill--blue {
+  color: #007aff;
+  background: #e8f2ff;
+}
+
+.ap-crm-pill--green {
+  color: #1e8e3e;
+  background: #eaf9ee;
+}
+
+.ap-crm-pill--amber {
+  color: #b25e00;
+  background: #fff4e0;
+}
+
+.ap-crm-pill--purple {
+  color: #7c3aed;
+  background: #f3eeff;
+}
+
+.ap-crm-pill--red {
+  color: #d70015;
+  background: #ffeceb;
+}
+
+.ap-crm-pill--gray {
+  color: #6e6e73;
+  background: #f2f2f7;
+}
+
+.ap-crm-link {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #007aff;
+  cursor: pointer;
+  transition: opacity var(--ap-dur-fast);
+}
+
+.ap-crm-link:hover {
+  opacity: 0.78;
+}
+
+.ap-crm-link--danger {
+  color: #ff3b30;
+}
+
+/* Vben Page 详情页顶栏与 Descriptions 描述列表精修 */
+.cgch-main .vben-page-header,
+.cgch-main [class*='page-header'] {
+  background: rgb(255 255 255 / 76%) !important;
+  border-bottom: 0.5px solid var(--ap-separator) !important;
+  backdrop-filter: blur(22px) saturate(165%);
+}
+
+.ant-descriptions .ant-descriptions-item-label {
+  font-size: 12.5px;
+  color: #86868b !important;
+}
+
+.ant-descriptions .ant-descriptions-item-content {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #1d1d1f !important;
+}
+
+/* Vben Modal 表单统一浅灰填充槽视觉 */
+.ap-vben-modal .ant-input:not(.ant-input-borderless),
+.ap-vben-modal .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-borderless),
+.ap-vben-modal .ant-input-number:not(.ant-input-number-borderless),
+.ap-vben-modal .ant-picker:not(.ant-picker-borderless),
+.ap-vben-modal .ant-select:not(.ant-select-borderless) .ant-select-selector {
+  background: #f4f5f8 !important;
+  border-color: transparent !important;
+  border-radius: 10px !important;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 5%) !important;
+}
+
+.ap-vben-modal .ant-input:focus,
+.ap-vben-modal .ant-input-focused,
+.ap-vben-modal .ant-input-affix-wrapper-focused,
+.ap-vben-modal .ant-input-number-focused,
+.ap-vben-modal .ant-picker-focused,
+.ap-vben-modal .ant-select-focused:not(.ant-select-borderless) .ant-select-selector {
+  background: #fff !important;
+  border-color: rgb(0 122 255 / 65%) !important;
+  box-shadow: 0 0 0 2.5px rgb(0 122 255 / 14%) !important;
+}
+
 /* 弹窗弹簧放大 / 缩小（覆盖 antd 默认 zoom） */
 .ant-zoom-enter.ant-zoom-enter-active,
 .ant-zoom-appear.ant-zoom-appear-active {

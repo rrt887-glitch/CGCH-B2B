@@ -10,13 +10,13 @@ import { useRouter } from 'vue-router';
 import { useVbenModal } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
-import { Button, Empty, Input, message, Select, Spin, Table } from 'ant-design-vue';
+import { Button, message, Spin, Table } from 'ant-design-vue';
 
 import { getBusinessPage, updateBusinessStatus } from '#/api/crm/business';
 import { getBusinessStatusSimpleList, getBusinessStatusTypeSimpleList } from '#/api/crm/business/status';
 import BusinessForm from '#/views/crm/business/modules/form.vue';
 
-import { fetchAll, fmtMoney, fmtTime } from './components/shared';
+import { crmAvatarBg, crmInitial, fetchAll, fmtMoney, fmtTime } from './components/shared';
 
 const router = useRouter();
 const view = ref<'board' | 'list'>('board');
@@ -42,6 +42,11 @@ const columns = computed(() =>
     const list = rows.value.filter((b) => b.statusId === s.id);
     return { ...s, list, sum: list.reduce((t, b) => t + Number(b.totalPrice || 0), 0) };
   }),
+);
+
+const STAGE_DOTS = ['#007AFF', '#5856D6', '#AF52DE', '#FF9500', '#34C759', '#00C7BE'];
+const totalPipeline = computed(() =>
+  rows.value.reduce((s, b) => s + Number(b.totalPrice || 0), 0),
 );
 
 // ===== 拖动改阶段 =====
@@ -99,34 +104,56 @@ onMounted(async () => {
   <div class="biz">
     <FormModal @success="load" />
     <div class="biz__head">
-      <div class="flex items-baseline gap-2">
-        <h2 class="biz__title">商机</h2>
-        <span class="text-sm text-gray-500">集中管理商机阶段、客户和预计成交时间</span>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <h2 class="biz__title">商机推进</h2>
+        <span class="ap-crm-pill ap-crm-pill--blue tabular-nums">
+          {{ rows.length }} 个商机 · {{ fmtMoney(totalPipeline) }}
+        </span>
       </div>
-      <div class="flex items-center gap-2">
-        <div class="biz__switch">
+      <div class="flex flex-wrap items-center gap-2.5">
+        <div class="biz__search">
+          <IconifyIcon icon="lucide:search" class="size-3.5 shrink-0 text-[#8E8E93]" />
+          <input
+            v-model="keyword"
+            type="search"
+            class="biz__search-input"
+            placeholder="搜索商机名称…"
+            @keydown.enter="load"
+            @search="load"
+          />
+          <button
+            v-if="keyword"
+            type="button"
+            class="biz__search-clear"
+            aria-label="清空"
+            @click="
+              keyword = '';
+              load();
+            "
+          >
+            <IconifyIcon icon="lucide:x" class="size-3" />
+          </button>
+        </div>
+
+        <div class="biz__switch" role="group" aria-label="视图切换">
           <button type="button" :class="{ on: view === 'board' }" @click="view = 'board'">
-            <IconifyIcon icon="lucide:layout-grid" class="size-3.5" />看板
+            <IconifyIcon icon="lucide:kanban" class="size-3.5" />看板
           </button>
           <button type="button" :class="{ on: view === 'list' }" @click="view = 'list'">
             <IconifyIcon icon="lucide:list" class="size-3.5" />列表
           </button>
         </div>
-        <Button @click="formApi.setData(null).open()"><IconifyIcon icon="lucide:plus" class="mr-1 inline size-4" />新增</Button>
-      </div>
-    </div>
 
-    <div class="biz__search">
-      <Select v-model:value="field" :bordered="false" class="w-24" :options="[{ value: 'name', label: '商机名称' }]" />
-      <Input v-model:value="keyword" :bordered="false" allow-clear placeholder="请输入商机名称" @press-enter="load" @change="(e: any) => !e.target.value && load()">
-        <template #suffix><IconifyIcon icon="lucide:search" class="size-3.5 cursor-pointer text-gray-400" @click="load" /></template>
-      </Input>
+        <Button type="primary" shape="round" @click="formApi.setData(null).open()">
+          <IconifyIcon icon="lucide:plus" class="mr-1 inline size-4 align-[-3px]" />新增商机
+        </Button>
+      </div>
     </div>
 
     <Spin :spinning="loading" wrapper-class-name="biz__spin">
       <div v-if="view === 'board'" class="biz__board">
         <div
-          v-for="c in columns"
+          v-for="(c, idx) in columns"
           :key="c.id"
           class="biz__col"
           :class="{ over: over === c.id }"
@@ -134,8 +161,22 @@ onMounted(async () => {
           @dragleave="over === c.id && (over = undefined)"
           @drop.prevent="drop(c.id)"
         >
-          <div class="biz__stage">{{ c.name }}<span v-if="c.list.length" class="ml-1 opacity-80">({{ c.list.length }})</span></div>
-          <div class="biz__sum">{{ fmtMoney(c.sum) }}</div>
+          <div class="biz__col-head">
+            <div class="flex items-center justify-between gap-2">
+              <span class="flex min-w-0 items-center gap-2 font-semibold text-[#1D1D1F]">
+                <span
+                  class="size-2 shrink-0 rounded-full"
+                  :style="{ background: STAGE_DOTS[idx % STAGE_DOTS.length] }"
+                ></span>
+                <span class="truncate text-[13.5px]">{{ c.name }}</span>
+              </span>
+              <span class="biz__col-count tabular-nums">{{ c.list.length }}</span>
+            </div>
+            <div class="mt-1 text-[12px] font-semibold text-[#6E6E73] tabular-nums">
+              {{ fmtMoney(c.sum) }}
+            </div>
+          </div>
+
           <div class="biz__cards">
             <div
               v-for="b in c.list"
@@ -146,29 +187,72 @@ onMounted(async () => {
               @dragend="dragging = over = undefined"
               @click="detail(b)"
             >
-              <div class="truncate font-medium text-gray-900">{{ b.name }}</div>
-              <div class="mt-1 truncate text-xs text-gray-500">{{ b.customerName || '-' }}</div>
-              <div class="mt-2 flex items-center justify-between text-xs">
-                <span class="font-medium text-[#0071E3]">{{ fmtMoney(b.totalPrice) }}</span>
-                <span class="text-gray-400">{{ b.dealTime ? fmtTime(b.dealTime).slice(0, 10) : '' }}</span>
+              <div class="truncate text-[13.5px] font-semibold text-[#1D1D1F]">
+                {{ b.name }}
+              </div>
+              <div class="mt-1.5 flex items-center gap-1.5 text-xs text-[#6E6E73]">
+                <span
+                  class="inline-grid size-4 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white"
+                  :style="{ background: crmAvatarBg(b.customerName || b.id) }"
+                  >{{ crmInitial(b.customerName) }}</span
+                >
+                <span class="truncate">{{ b.customerName || '未关联客户' }}</span>
+              </div>
+              <div class="mt-3 flex items-center justify-between border-0 border-t border-solid border-black/[0.05] pt-2 text-xs">
+                <span class="font-bold text-[#007AFF] tabular-nums">
+                  {{ fmtMoney(b.totalPrice) }}
+                </span>
+                <span v-if="b.dealTime" class="text-[#8E8E93] tabular-nums">
+                  {{ fmtTime(b.dealTime).slice(0, 10) }}
+                </span>
               </div>
             </div>
-            <div v-if="!c.list.length" class="biz__empty">暂无商机</div>
+            <div v-if="!c.list.length" class="biz__empty">
+              拖拽商机卡片至此阶段
+            </div>
           </div>
         </div>
       </div>
 
-      <div v-else class="px-4">
-        <Table :columns="listColumns" :data-source="rows" :pagination="{ pageSize: 20, showTotal: (t: number) => `共 ${t} 条` }" row-key="id" size="middle" :scroll="{ x: 1280 }">
+      <div v-else class="biz__list-card">
+        <Table
+          :columns="listColumns"
+          :data-source="rows"
+          :pagination="{ pageSize: 20, showTotal: (t: number) => `共 ${t} 条` }"
+          row-key="id"
+          size="middle"
+          :scroll="{ x: 1280 }"
+        >
           <template #bodyCell="{ column, record }">
-            <a v-if="column.key === 'name'" class="font-medium" @click="detail(record as any)">{{ record.name }}</a>
-            <template v-else-if="column.key === 'totalPrice'">{{ fmtMoney(record.totalPrice) }}</template>
-            <template v-else-if="['dealTime', 'contactLastTime', 'createTime'].includes(String(column.key))">{{ fmtTime(record[column.key as string]) }}</template>
+            <a
+              v-if="column.key === 'name'"
+              class="font-semibold text-[#1D1D1F] hover:text-[#007AFF]"
+              @click="detail(record as any)"
+              >{{ record.name }}</a
+            >
+            <span v-else-if="column.key === 'statusName'" class="ap-crm-pill ap-crm-pill--blue">
+              {{ record.statusName || '-' }}
+            </span>
+            <span
+              v-else-if="column.key === 'totalPrice'"
+              class="font-semibold text-[#1D1D1F] tabular-nums"
+              >{{ fmtMoney(record.totalPrice) }}</span
+            >
+            <span
+              v-else-if="['dealTime', 'contactLastTime', 'createTime'].includes(String(column.key))"
+              class="tabular-nums text-[#6E6E73]"
+              >{{ fmtTime(record[column.key as string]) }}</span
+            >
             <template v-else-if="column.key === 'action'">
-              <div class="flex gap-3"><a @click="detail(record as any)">查看</a><a @click="formApi.setData(record as any).open()">编辑</a></div>
+              <div class="flex gap-3">
+                <a class="ap-crm-link" @click="detail(record as any)">查看</a>
+                <a class="ap-crm-link" @click="formApi.setData(record as any).open()">编辑</a>
+              </div>
             </template>
           </template>
-          <template #emptyText><Empty :image="Empty.PRESENTED_IMAGE_SIMPLE" description="暂无商机" /></template>
+          <template #emptyText>
+            <div class="py-12 text-center text-[13px] text-[#86868B]">暂无商机记录</div>
+          </template>
         </Table>
       </div>
     </Spin>
@@ -180,56 +264,109 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding-top: 14px;
+  padding: 20px 24px 16px;
 }
 
 .biz__head {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px 10px;
+  padding-bottom: 14px;
 }
 
 .biz__title {
   margin: 0;
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 700;
-  color: #1D1D1F;
-}
-
-.biz__switch {
-  display: inline-flex;
-  padding: 3px;
-  background: #F2F2F7;
-  border-radius: 8px;
-}
-
-.biz__switch button {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  padding: 3px 10px;
-  font-size: 13px;
-  color: #6e6e73;
-  cursor: pointer;
-  background: none;
-  border: 0;
-  border-radius: 6px;
-}
-
-.biz__switch button.on {
-  color: #0071E3;
-  background: #fff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+  letter-spacing: -0.02em;
+  color: #1d1d1f;
 }
 
 .biz__search {
   display: flex;
+  gap: 6px;
   align-items: center;
-  width: 300px;
-  margin: 0 16px 12px;
-  border: 1px solid #e5e5ea;
-  border-radius: 6px;
+  width: 210px;
+  height: 32px;
+  padding: 0 10px;
+  background: rgb(255 255 255 / 86%);
+  border-radius: 999px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 5%),
+    inset 0 0 0 0.5px rgb(0 0 0 / 10%);
+  transition: all var(--ap-dur-fast);
+}
+
+.biz__search:focus-within {
+  background: #fff;
+  box-shadow:
+    0 0 0 2px rgb(0 122 255 / 22%),
+    inset 0 0 0 0.5px rgb(0 122 255 / 45%);
+}
+
+.biz__search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font-size: 12.5px;
+  color: #1d1d1f;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.biz__search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.biz__search-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  color: #fff;
+  cursor: pointer;
+  background: #aeaeb2;
+  border: 0;
+  border-radius: 50%;
+}
+
+.biz__switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgb(118 118 128 / 11%);
+  border-radius: 999px;
+}
+
+.biz__switch button {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #6e6e73;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  transition: all var(--ap-dur-fast);
+}
+
+.biz__switch button.on {
+  font-weight: 600;
+  color: #1d1d1f;
+  background: #fff;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 8%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
 }
 
 .biz__spin {
@@ -243,77 +380,96 @@ onMounted(async () => {
 
 .biz__board {
   display: flex;
-  gap: 0;
+  gap: 12px;
   height: 100%;
-  padding: 0 0 8px 12px;
+  padding-bottom: 6px;
   overflow: auto hidden;
 }
 
 .biz__col {
   display: flex;
-  flex: 0 0 210px;
+  flex: 0 0 256px;
   flex-direction: column;
   min-height: 0;
-  margin-right: -2px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 66%);
+  border: 0.5px solid rgb(0 0 0 / 6%);
+  border-radius: 18px;
+  backdrop-filter: blur(18px);
+  transition:
+    background-color var(--ap-dur-fast),
+    box-shadow var(--ap-dur-fast);
 }
 
-.biz__col.over .biz__cards {
-  background: #eef4ff;
+.biz__col.over {
+  background: rgb(232 242 255 / 80%);
+  box-shadow: inset 0 0 0 1.5px rgb(0 122 255 / 45%);
 }
 
-.biz__stage {
-  height: 32px;
-  padding-left: 18px;
-  font-size: 13px;
+.biz__col-head {
+  padding: 13px 14px 10px;
+  border-bottom: 0.5px solid rgb(0 0 0 / 6%);
+}
+
+.biz__col-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 32px;
-  color: #0066cc;
+  line-height: 20px;
+  color: #6e6e73;
   text-align: center;
-  background: #e8f2fc;
-  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);
-}
-
-.biz__col:first-child .biz__stage {
-  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
-  border-radius: 6px 0 0 6px;
-}
-
-.biz__sum {
-  padding: 6px 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: #424245;
-  text-align: center;
-  background: #f5f5f7;
+  background: rgb(0 0 0 / 5%);
+  border-radius: 999px;
 }
 
 .biz__cards {
   flex: 1;
-  padding: 8px 6px;
+  padding: 10px;
   overflow: auto;
-  border-right: 1px solid #ebebf0;
 }
 
 .biz__card {
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  padding: 12px 13px;
+  margin-bottom: 9px;
   cursor: grab;
   background: #fff;
-  border: 1px solid #eef0f3;
-  border-radius: 8px;
+  border-radius: 14px;
+  box-shadow:
+    0 1px 3px rgb(15 23 42 / 5%),
+    0 0 0 0.5px rgb(0 0 0 / 5%);
+  transition:
+    transform var(--ap-dur-fast) var(--ap-ease),
+    box-shadow var(--ap-dur-fast) var(--ap-ease);
 }
 
 .biz__card:hover {
-  border-color: #c7d7fe;
-  box-shadow: 0 2px 8px rgb(37 99 235 / 8%);
+  transform: translateY(-1.5px);
+  box-shadow:
+    0 6px 16px rgb(15 23 42 / 8%),
+    0 0 0 0.5px rgb(0 122 255 / 22%);
+}
+
+.biz__card:active {
+  cursor: grabbing;
+  transform: scale(0.99);
 }
 
 .biz__empty {
-  padding: 28px 0;
+  padding: 28px 12px;
   font-size: 12px;
   color: #a1a1a6;
   text-align: center;
-  background: #f5f5f7;
-  border-radius: 8px;
+  border: 1px dashed rgb(0 0 0 / 10%);
+  border-radius: 12px;
+}
+
+.biz__list-card {
+  height: 100%;
+  overflow: auto;
+  background: var(--ap-surface);
+  border-radius: 18px;
+  box-shadow: var(--ap-shadow-rest);
 }
 </style>

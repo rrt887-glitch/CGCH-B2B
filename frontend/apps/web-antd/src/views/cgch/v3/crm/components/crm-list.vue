@@ -14,8 +14,6 @@ import { IconifyIcon } from '@vben/icons';
 import {
   Checkbox,
   DatePicker,
-  Empty,
-  Input,
   Pagination,
   Popover,
   Table,
@@ -307,20 +305,28 @@ defineExpose({ reload, setExtra, currentParams: params });
 <template>
   <div class="crm-list">
     <div class="crm-list__head">
-      <h2 class="crm-list__title">
-        {{ title }}
-        <span v-if="showTotal" class="ml-1">{{ total }}</span>
-      </h2>
+      <div class="flex items-center gap-2.5">
+        <h2 class="crm-list__title">{{ title }}</h2>
+        <span v-if="showTotal || total > 0" class="crm-list__count-badge tabular-nums">
+          {{ total }}
+        </span>
+      </div>
       <div class="flex flex-wrap items-center gap-2">
         <button
           v-if="rail.length || $slots.rail"
           type="button"
           class="crm-filter-toggle"
+          :class="{ 'is-open': railOpen || railKey !== 'all' }"
           :aria-expanded="railOpen"
           @click="railOpen = !railOpen"
         >
-          {{ railOpen ? '收起筛选' : filterLabel }}</button
-        ><slot name="actions"></slot>
+          <IconifyIcon
+            :icon="railOpen ? 'lucide:panel-left-close' : 'lucide:sliders-horizontal'"
+            class="size-3.5"
+          />
+          <span>{{ railOpen ? '收起分类' : filterLabel }}</span>
+        </button>
+        <slot name="actions"></slot>
       </div>
     </div>
 
@@ -328,141 +334,209 @@ defineExpose({ reload, setExtra, currentParams: params });
       <aside
         v-if="(rail.length || $slots.rail) && railOpen"
         class="crm-list__rail"
-        :class="{ closed: !railOpen }"
       >
-        <template v-if="railOpen">
-          <div
-            class="crm-rail__item crm-rail__all"
-            :class="{ on: railKey === 'all' }"
-            @click="pickRail('all')"
+        <div class="crm-rail__head">
+          <span>分类视图</span>
+          <button
+            type="button"
+            class="crm-rail__close"
+            title="收起分类栏"
+            @click="railOpen = false"
           >
-            <span>{{ allLabel }}</span
-            ><span class="crm-rail__num">{{ counts.all ?? 0 }}</span>
-          </div>
+            <IconifyIcon icon="lucide:panel-left-close" class="size-3.5" />
+          </button>
+        </div>
+
+        <div
+          class="crm-rail__item crm-rail__all"
+          :class="{ on: railKey === 'all' }"
+          @click="pickRail('all')"
+        >
+          <span>{{ allLabel }}</span>
+          <span class="crm-rail__num tabular-nums">{{ counts.all ?? 0 }}</span>
+        </div>
+
+        <div v-if="stats.length" class="crm-rail__stats">
           <div
             v-for="st in stats"
             :key="st.label"
-            class="crm-rail__item crm-rail__stat"
+            class="crm-rail__stat-row"
           >
-            <span>{{ st.label }}</span
-            ><span class="crm-rail__num">{{ st.value }}</span>
+            <span class="text-[#86868B]">{{ st.label }}</span>
+            <span class="font-semibold text-[#1D1D1F] tabular-nums">{{ st.value }}</span>
           </div>
-          <div class="crm-rail__list">
-            <template v-for="it in rail" :key="it.key">
-              <div v-if="it.divider" class="crm-rail__sep"></div>
+        </div>
+
+        <div class="crm-rail__list">
+          <template v-for="it in rail" :key="it.key">
+            <div v-if="it.divider" class="crm-rail__sep"></div>
+            <div
+              class="crm-rail__item"
+              :class="{ on: railKey === it.key }"
+              @click="
+                it.children && !it.filter ? toggleGroup(it) : pickRail(it.key)
+              "
+            >
+              <span class="flex min-w-0 items-center gap-1.5">
+                <IconifyIcon
+                  v-if="it.children"
+                  icon="lucide:chevron-right"
+                  class="crm-rail__caret shrink-0"
+                  :class="{ open: expanded[it.key] }"
+                  @click.stop="toggleGroup(it)"
+                />
+                <IconifyIcon
+                  v-if="it.icon"
+                  :icon="it.icon"
+                  class="size-3.5 shrink-0 text-[#FF9500]"
+                />
+                <span class="truncate">{{ it.label }}</span>
+              </span>
+              <span class="crm-rail__num tabular-nums">{{ groupCount(it) }}</span>
+            </div>
+            <template v-if="it.children && expanded[it.key]">
               <div
-                class="crm-rail__item"
-                :class="{ on: railKey === it.key }"
-                @click="
-                  it.children && !it.filter ? toggleGroup(it) : pickRail(it.key)
-                "
+                v-for="c in it.children"
+                :key="c.key"
+                class="crm-rail__item crm-rail__child"
+                :class="{ on: railKey === c.key }"
+                @click="pickRail(c.key)"
               >
-                <span class="flex items-center gap-1">
-                  <IconifyIcon
-                    v-if="it.children"
-                    icon="lucide:triangle"
-                    class="crm-rail__caret"
-                    :class="{ open: expanded[it.key] }"
-                    @click.stop="toggleGroup(it)"
-                  />
-                  <IconifyIcon
-                    v-if="it.icon"
-                    :icon="it.icon"
-                    class="size-3.5 text-amber-400"
-                  />
-                  {{ it.label }}
-                </span>
-                <span class="crm-rail__num">{{ groupCount(it) }}</span>
+                <span class="truncate">{{ c.label }}</span>
+                <span class="crm-rail__num tabular-nums">{{ counts[c.key] ?? 0 }}</span>
               </div>
-              <template v-if="it.children && expanded[it.key]">
-                <div
-                  v-for="c in it.children"
-                  :key="c.key"
-                  class="crm-rail__item crm-rail__child"
-                  :class="{ on: railKey === c.key }"
-                  @click="pickRail(c.key)"
-                >
-                  <span class="truncate">{{ c.label }}</span>
-                  <span class="crm-rail__num">{{ counts[c.key] ?? 0 }}</span>
-                </div>
-                <div
-                  v-if="!it.children.length"
-                  class="crm-rail__child py-1 text-xs text-gray-400"
-                >
-                  暂无
-                </div>
-              </template>
+              <div
+                v-if="!it.children.length"
+                class="crm-rail__child py-1.5 text-xs text-[#AEAEB2]"
+              >
+                暂无子项
+              </div>
             </template>
-          </div>
-        </template>
-        <button
-          type="button"
-          class="crm-list__fold"
-          :title="railOpen ? '收起筛选' : '展开筛选'"
-          @click="railOpen = !railOpen"
-        >
-          <IconifyIcon
-            :icon="railOpen ? 'lucide:chevron-left' : 'lucide:chevron-right'"
-            class="size-3.5"
-          />
-        </button>
+          </template>
+        </div>
       </aside>
 
       <section class="crm-list__main">
         <div class="crm-list__filters">
-          <Input
-            v-model:value="keyword"
-            allow-clear
-            class="crm-list__search"
-            :placeholder="searchPlaceholder"
-            @press-enter="search"
-            @change="(e: any) => !e.target.value && search()"
-          >
-            <template #prefix
-              ><IconifyIcon icon="lucide:search" class="size-3.5 text-gray-400"
-            /></template>
-          </Input>
+          <!-- iOS 无边框圆角搜索框 -->
+          <div class="crm-search-box">
+            <IconifyIcon icon="lucide:search" class="crm-search-box__icon" />
+            <input
+              v-model="keyword"
+              type="search"
+              class="crm-search-box__input"
+              :placeholder="searchPlaceholder"
+              aria-label="搜索"
+              @keydown.enter="search"
+              @search="search"
+            />
+            <button
+              v-if="keyword"
+              type="button"
+              class="crm-search-box__clear"
+              aria-label="清空搜索"
+              @click="
+                keyword = '';
+                search();
+              "
+            >
+              <IconifyIcon icon="lucide:x" class="size-3" />
+            </button>
+          </div>
+
           <div v-if="dateFilter" class="crm-list__range">
+            <IconifyIcon icon="lucide:calendar" class="size-3.5 shrink-0 text-[#8E8E93]" />
             <span class="crm-list__range-label">{{ dateFilter.label }}</span>
             <DatePicker.RangePicker
               v-model:value="range"
               :bordered="false"
+              size="small"
               :placeholder="['开始日期', '结束日期']"
               @change="search"
             />
           </div>
+
           <slot name="filters"></slot>
-          <Tooltip title="刷新">
-            <button type="button" class="crm-list__icon" @click="reload">
-              <IconifyIcon icon="lucide:rotate-cw" class="size-4" />
+
+          <!-- 勾选行时显示轻量胶囊提示 -->
+          <div v-if="selectedKeys.length" class="crm-selected-pill">
+            <span>已选 {{ selectedKeys.length }} 项</span>
+            <button
+              type="button"
+              @click="
+                selectedKeys = [];
+                emit('select', []);
+              "
+            >
+              清空
             </button>
-          </Tooltip>
-          <Popover trigger="click" placement="bottomRight">
-            <template #content>
-              <div class="max-h-80 w-48 overflow-auto">
-                <div class="mb-2 text-xs text-gray-500">显示的列</div>
-                <div v-for="c in columns" :key="c.key" class="py-1">
-                  <Checkbox
-                    :checked="!hiddenCols.includes(c.key)"
-                    :disabled="c.required"
-                    @change="
-                      (e: any) =>
-                        (hiddenCols = e.target.checked
-                          ? hiddenCols.filter((k) => k !== c.key)
-                          : [...hiddenCols, c.key])
-                    "
-                  >
-                    {{ c.title }}
-                  </Checkbox>
-                </div>
-              </div>
-            </template>
-            <Tooltip title="表格设置">
-              <button type="button" class="crm-list__icon">
-                <IconifyIcon icon="lucide:settings" class="size-4" />
+          </div>
+
+          <div class="ml-auto flex items-center gap-1">
+            <Tooltip title="刷新列表">
+              <button
+                type="button"
+                class="crm-list__icon"
+                aria-label="刷新列表"
+                @click="reload"
+              >
+                <IconifyIcon
+                  icon="lucide:refresh-cw"
+                  class="size-3.5"
+                  :class="{ 'animate-spin': loading }"
+                />
               </button>
             </Tooltip>
-          </Popover>
+            <Popover trigger="click" placement="bottomRight">
+              <template #content>
+                <div class="w-52 p-1">
+                  <div class="mb-2 flex items-center justify-between border-0 border-b border-solid border-black/[0.06] pb-1.5 text-xs">
+                    <span class="font-semibold text-[#1D1D1F]">显示字段</span>
+                    <button
+                      type="button"
+                      class="cursor-pointer border-0 bg-transparent p-0 text-xs text-[#007AFF]"
+                      @click="
+                        hiddenCols = props.columns
+                          .filter((c) => c.hidden)
+                          .map((c) => c.key)
+                      "
+                    >
+                      恢复默认
+                    </button>
+                  </div>
+                  <div class="max-h-72 overflow-auto">
+                    <div
+                      v-for="c in columns"
+                      :key="c.key"
+                      class="rounded-md px-1.5 py-1 hover:bg-black/[0.03]"
+                    >
+                      <Checkbox
+                        :checked="!hiddenCols.includes(c.key)"
+                        :disabled="c.required"
+                        @change="
+                          (e: any) =>
+                            (hiddenCols = e.target.checked
+                              ? hiddenCols.filter((k) => k !== c.key)
+                              : [...hiddenCols, c.key])
+                        "
+                      >
+                        <span class="text-[12.5px]">{{ c.title }}</span>
+                      </Checkbox>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <Tooltip title="字段显示设置">
+                <button
+                  type="button"
+                  class="crm-list__icon"
+                  aria-label="字段显示设置"
+                >
+                  <IconifyIcon icon="lucide:sliders-horizontal" class="size-3.5" />
+                </button>
+              </Tooltip>
+            </Popover>
+          </div>
         </div>
 
         <div class="crm-list__table">
@@ -472,7 +546,7 @@ defineExpose({ reload, setExtra, currentParams: params });
             :loading="loading"
             :pagination="false"
             :row-selection="rowSelection"
-            :scroll="rows.length ? { x: scrollX, y: 'calc(100vh - 290px)' } : { x: scrollX }"
+            :scroll="rows.length ? { x: scrollX, y: 'calc(100vh - 280px)' } : { x: scrollX }"
             row-key="id"
             size="middle"
           >
@@ -482,16 +556,25 @@ defineExpose({ reload, setExtra, currentParams: params });
               }}</slot>
             </template>
             <template #emptyText>
-              <Empty
-                :image="Empty.PRESENTED_IMAGE_SIMPLE"
-                :description="loadFailed ? '加载失败，请刷新重试' : '暂无数据'"
-              />
+              <div class="flex flex-col items-center justify-center gap-2 py-12 text-center">
+                <div class="grid size-11 place-items-center rounded-2xl bg-[#F4F5F8] text-[#8E8E93]">
+                  <IconifyIcon
+                    :icon="loadFailed ? 'lucide:alert-circle' : 'lucide:inbox'"
+                    class="size-5"
+                  />
+                </div>
+                <div class="text-[13px] font-medium text-[#86868B]">
+                  {{ loadFailed ? '数据加载失败，请点击右上角刷新重试' : '暂无符合条件的数据' }}
+                </div>
+              </div>
             </template>
           </Table>
         </div>
 
         <div class="crm-list__pager">
-          <span class="mr-2 text-gray-500">共 {{ total }} 条</span>
+          <span class="text-[12.5px] text-[#86868B] tabular-nums">
+            共 <b class="font-semibold text-[#1D1D1F]">{{ total }}</b> 条记录
+          </span>
           <Pagination
             v-model:current="page.no"
             v-model:page-size="page.size"
@@ -512,60 +595,129 @@ defineExpose({ reload, setExtra, currentParams: params });
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 14px 16px 10px;
+  padding: 20px 24px 16px;
 }
 
 .crm-list__head {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 10px;
+  padding-bottom: 14px;
 }
 
 .crm-list__title {
   margin: 0;
-  font-size: 17px;
+  font-size: 21px;
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: #1d1d1f;
+}
+
+.crm-list__count-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6e6e73;
+  background: rgb(118 118 128 / 10%);
+  border-radius: 999px;
+}
+
+.crm-filter-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 32px;
+  padding: 0 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3a3a3c;
+  cursor: pointer;
+  background: rgb(255 255 255 / 86%);
+  border: 0;
+  border-radius: 999px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 5%),
+    inset 0 0 0 0.5px rgb(0 0 0 / 10%);
+  transition: all var(--ap-dur-fast) var(--ap-ease);
+}
+
+.crm-filter-toggle:hover {
+  color: #1d1d1f;
+  background: #fff;
+}
+
+.crm-filter-toggle.is-open {
+  color: #007aff;
+  background: #e8f2ff;
+  box-shadow: inset 0 0 0 0.5px rgb(0 122 255 / 22%);
 }
 
 .crm-list__body {
   display: flex;
   flex: 1;
+  gap: 14px;
   min-height: 0;
 }
 
 .crm-list__rail {
-  position: relative;
   display: flex;
-  flex: 0 0 168px;
+  flex: 0 0 198px;
   flex-direction: column;
-  padding-right: 10px;
-  margin-right: 14px;
-  border-right: 1px solid #eef0f3;
+  padding: 12px 10px;
+  overflow: hidden;
+  background: var(--ap-surface);
+  border-radius: 18px;
+  box-shadow: var(--ap-shadow-rest);
 }
 
-.crm-list__rail.closed {
-  flex-basis: 6px;
-  padding-right: 0;
-}
-
-.crm-list__fold {
-  position: absolute;
-  top: 2px;
-  right: -9px;
+.crm-rail__head {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: #86868b;
+  justify-content: space-between;
+  padding: 0 8px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #8e8e93;
+}
+
+.crm-rail__close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: #8e8e93;
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #e5e5ea;
-  border-radius: 50%;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.crm-rail__close:hover {
+  color: #1d1d1f;
+  background: rgb(0 0 0 / 5%);
+}
+
+.crm-rail__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  margin: 4px 2px 8px;
+  font-size: 12px;
+  background: #f5f5f7;
+  border-radius: 11px;
+}
+
+.crm-rail__stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 .crm-rail__list {
@@ -577,63 +729,66 @@ defineExpose({ reload, setExtra, currentParams: params });
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px;
+  gap: 6px;
+  min-height: 33px;
+  padding: 5px 9px;
   font-size: 13px;
-  color: #1f2937;
+  font-weight: 500;
+  color: #3a3a3c;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 9px;
+  transition:
+    background-color var(--ap-dur-fast),
+    color var(--ap-dur-fast);
 }
 
-.crm-rail__item:hover {
-  background: #f2f2f7;
+.crm-rail__item:hover:not(.on) {
+  color: #1d1d1f;
+  background: rgb(0 0 0 / 4%);
 }
 
 .crm-rail__item.on {
-  color: #0071e3;
-  background: #e8f2fc;
+  font-weight: 600;
+  color: #007aff;
+  background: #e8f2ff;
 }
 
 .crm-rail__all {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-weight: 600;
-  border-bottom: 1px solid #eef0f3;
-  border-radius: 6px 6px 0 0;
-}
-
-.crm-rail__stat {
-  cursor: default;
-}
-
-.crm-rail__stat:hover {
-  background: none;
 }
 
 .crm-rail__child {
   padding-left: 26px;
+  font-size: 12.5px;
   color: #6e6e73;
 }
 
 .crm-rail__sep {
-  height: 1px;
-  margin: 8px 0;
-  background: #eef0f3;
+  height: 0.5px;
+  margin: 7px 6px;
+  background: var(--ap-separator);
 }
 
 .crm-rail__num {
-  font-size: 12px;
-  color: #a1a1a6;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #8e8e93;
+}
+
+.crm-rail__item.on .crm-rail__num {
+  color: #007aff;
 }
 
 .crm-rail__caret {
-  width: 7px;
-  height: 7px;
-  color: #86868b;
-  transform: rotate(90deg);
-  transition: transform 0.15s;
+  width: 13px;
+  height: 13px;
+  color: #8e8e93;
+  transition: transform 180ms var(--ap-ease);
 }
 
 .crm-rail__caret.open {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 
 .crm-list__main {
@@ -641,6 +796,10 @@ defineExpose({ reload, setExtra, currentParams: params });
   flex: 1;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
+  background: var(--ap-surface);
+  border-radius: 18px;
+  box-shadow: var(--ap-shadow-rest);
 }
 
 .crm-list__filters {
@@ -648,45 +807,136 @@ defineExpose({ reload, setExtra, currentParams: params });
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  padding-bottom: 10px;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--ap-separator);
 }
 
-.crm-list__search {
-  width: 200px;
+.crm-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 230px;
+  height: 32px;
+  padding: 0 10px;
+  background: #f2f2f7;
+  border-radius: 10px;
+  transition:
+    background-color var(--ap-dur-fast),
+    box-shadow var(--ap-dur-fast);
+}
+
+.crm-search-box:focus-within {
+  background: #fff;
+  box-shadow:
+    0 0 0 2px rgb(0 122 255 / 22%),
+    inset 0 0 0 0.5px rgb(0 122 255 / 45%);
+}
+
+.crm-search-box__icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #8e8e93;
+}
+
+.crm-search-box__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font-size: 12.5px;
+  color: #1d1d1f;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.crm-search-box__input::placeholder {
+  color: #8e8e93;
+}
+
+.crm-search-box__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.crm-search-box__clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  color: #fff;
+  cursor: pointer;
+  background: #aeaeb2;
+  border: 0;
+  border-radius: 50%;
 }
 
 .crm-list__range {
   display: inline-flex;
+  gap: 6px;
   align-items: center;
-  padding-left: 10px;
-  border: 1px solid #e5e5ea;
-  border-radius: 6px;
+  height: 32px;
+  padding: 0 4px 0 11px;
+  background: #f2f2f7;
+  border-radius: 10px;
 }
 
 .crm-list__range-label {
-  padding-right: 4px;
-  font-size: 13px;
-  color: #424245;
+  padding-right: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6e6e73;
   white-space: nowrap;
-  border-right: 1px solid #e5e5ea;
+  border-right: 0.5px solid rgb(0 0 0 / 10%);
+}
+
+.crm-selected-pill {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #007aff;
+  background: #e8f2ff;
+  border-radius: 999px;
+}
+
+.crm-selected-pill button {
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #007aff;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  opacity: 0.8;
+}
+
+.crm-selected-pill button:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .crm-list__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-grid;
+  place-items: center;
   width: 30px;
   height: 30px;
   color: #6e6e73;
   cursor: pointer;
-  background: none;
+  background: #f2f2f7;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
+  transition: all var(--ap-dur-fast);
 }
 
 .crm-list__icon:hover {
-  color: #0071e3;
-  background: #f2f2f7;
+  color: #1d1d1f;
+  background: #e5e5ea;
 }
 
 .crm-list__table {
@@ -695,52 +945,49 @@ defineExpose({ reload, setExtra, currentParams: params });
 }
 
 .crm-list__table :deep(.ant-table-thead > tr > th) {
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 600;
   color: #86868b;
-  background: #f7f8fa;
+  background: #fbfbfd;
+  border-bottom: 0.5px solid var(--ap-separator);
+}
+
+.crm-list__table :deep(.ant-table-tbody > tr > td) {
+  font-size: 13px;
+  border-bottom: 0.5px solid rgb(0 0 0 / 4.5%);
 }
 
 .crm-list__pager {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
-  justify-content: flex-end;
-  padding-top: 10px;
+  justify-content: space-between;
+  padding: 10px 16px;
   font-size: 13px;
+  border-top: 0.5px solid var(--ap-separator);
 }
 
-@media (max-width: 760px) {
-  .crm-list__rail {
-    display: none;
+@media (width <= 760px) {
+  .crm-list {
+    padding: 12px;
   }
 
-  .crm-list__search {
+  .crm-search-box {
     width: 100%;
   }
-}
-</style>
 
-<style scoped>
-.crm-filter-toggle {
-  border: 0;
-  border-radius: 99px;
-  padding: 7px 14px;
-  background: #007aff14;
-  color: #007aff;
-  font-size: 13px;
-  cursor: pointer;
-}
-@media (width <= 760px) {
   .crm-list__rail {
     position: absolute;
-    z-index: 12;
     top: 0;
     left: 0;
+    z-index: 12;
+    width: 215px;
     max-height: 100%;
-    width: 210px;
-    background: white !important;
-    display: block !important;
-    box-shadow: 0 8px 30px #0002;
+    background: #fff !important;
+    box-shadow: 0 12px 32px rgb(0 0 0 / 14%);
   }
+
   .crm-list__body {
     position: relative;
   }

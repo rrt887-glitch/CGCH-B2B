@@ -13,13 +13,10 @@ import { useRoute, useRouter } from 'vue-router';
 import { IconifyIcon } from '@vben/icons';
 
 import {
-  Alert,
   Button,
   Drawer,
-  Empty,
   Input,
   InputNumber,
-  InputSearch,
   message,
   Modal,
   Progress,
@@ -281,49 +278,61 @@ const ITEM_FILTERS = [
 </script>
 
 <template>
-  <div class="flex h-full flex-col gap-4 overflow-auto rounded-xl bg-white p-3 sm:p-5">
-    <div class="flex flex-wrap items-start gap-3">
+  <div class="mb-page">
+    <div class="flex flex-wrap items-start justify-between gap-3 pb-3.5">
       <div class="min-w-0 flex-1 basis-[240px]">
-        <h2 class="m-0 text-lg font-semibold text-[#1D1D1F]">邮件群发</h2>
+        <h2 class="m-0 text-[21px] font-bold tracking-tight text-[#1D1D1F]">邮件群发</h2>
         <p class="m-0 mt-1 text-[13px] text-[#6E6E73]">
-          给一批客户发同一封邮件：自动验证邮箱、按速率从多个邮箱轮流发出，每封带退订链接，退订的人以后不会再收到。
+          自动校验收件邮箱、按设定速率从多个企业邮箱轮流发送，并自动附带退订保护链接。
         </p>
       </div>
-      <Button type="primary" @click="openCreate()"><IconifyIcon icon="lucide:plus" class="mr-1 inline size-4 align-[-3px]" />新建群发</Button>
+      <Button type="primary" shape="round" @click="openCreate()">
+        <IconifyIcon icon="lucide:plus" class="mr-1 inline size-4 align-[-3px]" />新建群发
+      </Button>
     </div>
 
     <Spin :spinning="loading">
-      <Empty v-if="!loading && list.length === 0" class="py-16" description="还没有群发任务">
-        <Button type="primary" @click="openCreate()">新建第一个群发</Button>
-      </Empty>
+      <div
+        v-if="!loading && list.length === 0"
+        class="flex flex-col items-center justify-center gap-3 rounded-[18px] bg-white px-6 py-16 text-center shadow-[0_1px_4px_rgba(0,0,0,0.04),0_0_0_0.5px_rgba(0,0,0,0.05)]"
+      >
+        <div class="grid size-12 place-items-center rounded-2xl bg-[#EEF4FF] text-[#007AFF]">
+          <IconifyIcon icon="lucide:send" class="size-6" />
+        </div>
+        <div class="text-[15px] font-semibold text-[#1D1D1F]">还没有邮件群发任务</div>
+        <div class="max-w-sm text-[13px] text-[#86868B]">
+          可从 CRM 客户库勾选收件人或批量粘贴邮箱，支持个性化变量与多邮箱轮发。
+        </div>
+        <Button type="primary" shape="round" @click="openCreate()">新建第一个群发</Button>
+      </div>
       <div v-else class="flex flex-col gap-2.5">
         <div
           v-for="b in list"
           :key="b.id"
-          class="grid cursor-pointer grid-cols-1 items-center gap-2 rounded-xl sm:gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_120px_150px] border border-solid border-[#E5E5EA] px-4 py-3 hover:border-[#B8D7F5]"
+          class="mb-task-card grid cursor-pointer grid-cols-1 items-center gap-2 sm:gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_120px_150px]"
           @click="openDetail(b)"
         >
           <div class="min-w-0">
             <div class="flex items-center gap-2">
-              <span class="truncate font-semibold text-[#1D1D1F]">{{ b.name }}</span>
-              <Tag :color="BATCH_STATUS[b.status].color" class="m-0">{{ BATCH_STATUS[b.status].label }}</Tag>
+              <span class="truncate text-[14.5px] font-semibold text-[#1D1D1F]">{{ b.name }}</span>
+              <Tag :color="BATCH_STATUS[b.status].color" class="m-0 !rounded-full">{{ BATCH_STATUS[b.status].label }}</Tag>
             </div>
             <div class="mt-0.5 truncate text-xs text-[#86868B]">{{ b.subject }} · {{ fmtDateTime(b.createTime, 'MM-DD HH:mm') }}</div>
           </div>
           <div>
             <Progress :percent="percent(b)" size="small" :status="b.status === 'sending' ? 'active' : 'normal'" :show-info="false" />
-            <div class="text-xs text-[#6E6E73]">
+            <div class="text-xs text-[#6E6E73] tabular-nums">
               已发 {{ sentOf(b) }} / {{ b.total }}
               <span v-if="b.counts.failed" class="ml-2 text-[#D70015]">失败 {{ b.counts.failed }}</span>
               <span v-if="b.counts.invalid" class="ml-2 text-[#C93400]">无效 {{ b.counts.invalid }}</span>
               <span v-if="b.counts.suppressed" class="ml-2 text-[#86868B]">退订跳过 {{ b.counts.suppressed }}</span>
             </div>
           </div>
-          <div class="text-xs text-[#86868B]">每分钟 {{ b.ratePerMinute }} 封</div>
+          <div class="text-xs text-[#86868B] tabular-nums">每分钟 {{ b.ratePerMinute }} 封</div>
           <div class="flex flex-wrap gap-2 md:justify-end" @click.stop>
-            <Button v-if="b.status === 'draft'" size="small" type="primary" @click="startMailBatch(b.id).then(() => load(true))">开始发送</Button>
-            <Button v-if="b.status === 'sending' || b.status === 'draft'" size="small" @click="cancel(b)">取消</Button>
-            <Button v-else size="small" danger @click="remove(b)">删除</Button>
+            <Button v-if="b.status === 'draft'" size="small" type="primary" shape="round" @click="startMailBatch(b.id).then(() => load(true))">开始发送</Button>
+            <Button v-if="b.status === 'sending' || b.status === 'draft'" size="small" shape="round" @click="cancel(b)">取消</Button>
+            <Button v-else size="small" shape="round" danger @click="remove(b)">删除</Button>
           </div>
         </div>
       </div>
@@ -343,7 +352,17 @@ const ITEM_FILTERS = [
           class="mb-3"
         />
         <template v-if="pickMode === 'crm'">
-          <InputSearch v-model:value="keyword" allow-clear placeholder="搜索客户名称" class="mb-2" @search="searchCustomers" />
+          <div class="mb-search-box mb-2.5">
+            <IconifyIcon icon="lucide:search" class="size-4 text-[#8E8E93]" />
+            <input
+              v-model="keyword"
+              type="search"
+              class="mb-search-input"
+              placeholder="搜索客户名称，回车查询"
+              @keydown.enter="searchCustomers"
+              @search="searchCustomers"
+            />
+          </div>
           <Table
             size="small"
             row-key="id"
@@ -367,7 +386,7 @@ const ITEM_FILTERS = [
           <Textarea v-model:value="pastedEmails" :auto-size="{ minRows: 8, maxRows: 14 }" placeholder="每行一个邮箱，也可以用逗号、分号隔开" />
         </template>
         <div class="mt-3 text-sm text-[#424245]">
-          已选 <b>{{ recipientCount }}</b> 个收件人
+          已选 <b class="tabular-nums">{{ recipientCount }}</b> 个收件人
           <span v-if="pickedNoEmail" class="ml-2 text-xs text-[#C93400]">其中 {{ pickedNoEmail }} 位客户没有邮箱，会被跳过</span>
         </div>
       </template>
@@ -382,12 +401,12 @@ const ITEM_FILTERS = [
             @change="(v: any) => useTemplate(v)"
           />
           <Input v-model:value="form.subject" :maxlength="250" placeholder="邮件主题，例如：New hair dryer models for {company}" />
-          <div v-if="form.contentType === 'html'" class="rounded-lg border border-solid border-[#E5E5EA] p-3">
+          <div v-if="form.contentType === 'html'" class="rounded-2xl bg-[#F5F5F7] p-3.5">
             <div class="mb-2 flex items-center justify-between text-xs text-[#86868B]">
               <span>模板正文预览</span>
               <a @click="form.contentType = 'text'; form.templateId = undefined; form.content = ''">改为自己写</a>
             </div>
-            <iframe :srcdoc="form.content" class="h-72 w-full rounded border-0 bg-white" sandbox="" title="邮件预览"></iframe>
+            <iframe :srcdoc="form.content" class="h-72 w-full rounded-xl border-0 bg-white" sandbox="" title="邮件预览"></iframe>
           </div>
           <Textarea
             v-else
@@ -395,7 +414,10 @@ const ITEM_FILTERS = [
             :auto-size="{ minRows: 10, maxRows: 18 }"
             placeholder="Hi {name},&#10;&#10;我们推出了新款……"
           />
-          <Alert type="info" show-icon message="可用变量：{name} 客户称呼、{company} 公司名称。系统会在邮件末尾自动加上退订链接。" />
+          <div class="ap-sheet-tip">
+            <IconifyIcon icon="lucide:sparkles" class="mt-0.5 size-4 shrink-0 text-[#007AFF]" />
+            <span>可用个性化变量：<code>{name}</code> 客户称呼、<code>{company}</code> 公司名称。系统会在邮件末尾自动附上合规退订链接。</span>
+          </div>
         </div>
       </template>
 
@@ -420,7 +442,7 @@ const ITEM_FILTERS = [
               <InputNumber v-model:value="form.ratePerMinute" :min="1" :max="60" class="w-20" />
               <span class="text-sm text-[#6E6E73]">封</span>
             </div>
-            <div class="mt-2 text-xs text-[#86868B]">
+            <div class="mt-2 text-xs leading-relaxed text-[#86868B]">
               {{ recipientCount }} 封大约需要 {{ minutes }} 分钟。发太快容易被对方邮箱判为垃圾邮件；还会受「发送策略」里每个邮箱每小时 / 每天的上限限制，达到上限会自动暂停一会儿再继续。
             </div>
           </div>
@@ -434,17 +456,17 @@ const ITEM_FILTERS = [
       <template v-else-if="draft">
         <div class="flex flex-col gap-4">
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div class="rounded-xl border border-solid border-[#E5E5EA] p-3">
-              <div class="text-xs text-[#86868B]">将发送</div>
-              <div class="text-2xl font-semibold text-[#248A3D]">{{ draft.counts.pending ?? 0 }}</div>
+            <div class="rounded-2xl bg-[#EEFBF3] p-3.5">
+              <div class="text-xs text-[#248A3D]">将发送</div>
+              <div class="mt-1 text-2xl font-bold tabular-nums text-[#248A3D]">{{ draft.counts.pending ?? 0 }}</div>
             </div>
-            <div class="rounded-xl border border-solid border-[#E5E5EA] p-3">
-              <div class="text-xs text-[#86868B]">邮箱无效</div>
-              <div class="text-2xl font-semibold text-[#C93400]">{{ draft.counts.invalid ?? 0 }}</div>
+            <div class="rounded-2xl bg-[#FFF8EB] p-3.5">
+              <div class="text-xs text-[#B25E00]">邮箱无效</div>
+              <div class="mt-1 text-2xl font-bold tabular-nums text-[#C93400]">{{ draft.counts.invalid ?? 0 }}</div>
             </div>
-            <div class="rounded-xl border border-solid border-[#E5E5EA] p-3">
-              <div class="text-xs text-[#86868B]">已退订跳过</div>
-              <div class="text-2xl font-semibold text-[#86868B]">{{ draft.counts.suppressed ?? 0 }}</div>
+            <div class="rounded-2xl bg-[#F5F5F7] p-3.5">
+              <div class="text-xs text-[#6E6E73]">已退订跳过</div>
+              <div class="mt-1 text-2xl font-bold tabular-nums text-[#6E6E73]">{{ draft.counts.suppressed ?? 0 }}</div>
             </div>
           </div>
           <Table
@@ -460,7 +482,7 @@ const ITEM_FILTERS = [
             :locale="{ emptyText: '所有收件人都通过了检查' }"
           >
             <template #bodyCell="{ column, record }">
-              <Tag v-if="column.dataIndex === 'status'" :color="ITEM_STATUS[record.status as MailBatchApi.ItemStatus].color">
+              <Tag v-if="column.dataIndex === 'status'" :color="ITEM_STATUS[record.status as MailBatchApi.ItemStatus].color" class="!rounded-full">
                 {{ ITEM_STATUS[record.status as MailBatchApi.ItemStatus].label }}
               </Tag>
             </template>
@@ -470,15 +492,15 @@ const ITEM_FILTERS = [
 
       <template #footer>
         <div class="flex justify-between">
-          <Button v-if="step > 0 && step < 3" @click="step--">上一步</Button>
+          <Button v-if="step > 0 && step < 3" shape="round" @click="step--">上一步</Button>
           <span v-else></span>
           <div class="flex gap-2">
             <template v-if="step < 3">
-              <Button type="primary" :loading="saving" @click="next">{{ step === 2 ? '检查收件人' : '下一步' }}</Button>
+              <Button type="primary" shape="round" :loading="saving" @click="next">{{ step === 2 ? '检查收件人' : '下一步' }}</Button>
             </template>
             <template v-else>
-              <Button @click="createOpen = false">先存为草稿</Button>
-              <Button type="primary" :disabled="!(draft?.counts.pending ?? 0)" @click="startDraft">开始发送 {{ draft?.counts.pending ?? 0 }} 封</Button>
+              <Button shape="round" @click="createOpen = false">先存为草稿</Button>
+              <Button type="primary" shape="round" :disabled="!(draft?.counts.pending ?? 0)" @click="startDraft">开始发送 {{ draft?.counts.pending ?? 0 }} 封</Button>
             </template>
           </div>
         </div>
@@ -490,26 +512,26 @@ const ITEM_FILTERS = [
       <template v-if="detail">
         <div class="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
           <div v-for="s in [
-              { k: 'sent', label: '已发送', color: '#248A3D' },
-              { k: 'pending', label: '待发送', color: '#0071E3' },
-              { k: 'failed', label: '失败', color: '#D70015' },
-              { k: 'invalid', label: '邮箱无效', color: '#C93400' },
-              { k: 'suppressed', label: '退订跳过', color: '#86868B' },
-            ]" :key="s.k" class="rounded-xl border border-solid border-[#E5E5EA] p-3"
+              { k: 'sent', label: '已发送', color: '#248A3D', bg: '#EEFBF3' },
+              { k: 'pending', label: '待发送', color: '#007AFF', bg: '#EEF4FF' },
+              { k: 'failed', label: '失败', color: '#D70015', bg: '#FFECEB' },
+              { k: 'invalid', label: '邮箱无效', color: '#C93400', bg: '#FFF8EB' },
+              { k: 'suppressed', label: '退订跳过', color: '#6E6E73', bg: '#F5F5F7' },
+            ]" :key="s.k" class="rounded-2xl p-3" :style="{ background: s.bg }"
           >
-            <div class="text-xs text-[#86868B]">{{ s.label }}</div>
-            <div class="text-xl font-semibold" :style="{ color: s.color }">{{ (detail.counts as any)[s.k] ?? 0 }}</div>
+            <div class="text-xs text-[#6E6E73]">{{ s.label }}</div>
+            <div class="mt-0.5 text-xl font-bold tabular-nums" :style="{ color: s.color }">{{ (detail.counts as any)[s.k] ?? 0 }}</div>
           </div>
         </div>
         <div class="mb-3 flex flex-wrap items-center gap-3 text-sm text-[#6E6E73]">
-          <Tag :color="BATCH_STATUS[detail.status].color" class="m-0">{{ BATCH_STATUS[detail.status].label }}</Tag>
-          <span>已回复 <b class="text-[#1D1D1F]">{{ detail.replied ?? 0 }}</b></span>
+          <Tag :color="BATCH_STATUS[detail.status].color" class="m-0 !rounded-full">{{ BATCH_STATUS[detail.status].label }}</Tag>
+          <span>已回复 <b class="text-[#1D1D1F] tabular-nums">{{ detail.replied ?? 0 }}</b></span>
           <span>主题：{{ detail.subject }}</span>
           <span class="flex-1"></span>
-          <Button v-if="detail.status === 'draft'" size="small" type="primary" @click="startMailBatch(detail.id).then(() => openDetail(detail!)).then(() => load(true))">开始发送</Button>
-          <Button v-if="detail.status === 'sending' || detail.status === 'draft'" size="small" @click="cancel(detail)">取消发送</Button>
+          <Button v-if="detail.status === 'draft'" size="small" type="primary" shape="round" @click="startMailBatch(detail.id).then(() => openDetail(detail!)).then(() => load(true))">开始发送</Button>
+          <Button v-if="detail.status === 'sending' || detail.status === 'draft'" size="small" shape="round" @click="cancel(detail)">取消发送</Button>
         </div>
-        <Segmented v-model:value="detailFilter" :options="ITEM_FILTERS" size="small" class="mb-2" />
+        <Segmented v-model:value="detailFilter" :options="ITEM_FILTERS" size="small" class="mb-3" />
         <Table
           size="small"
           row-key="id"
@@ -525,19 +547,71 @@ const ITEM_FILTERS = [
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'email'">
-              <div class="truncate">{{ record.email }}</div>
+              <div class="truncate font-medium text-[#1D1D1F]">{{ record.email }}</div>
               <div v-if="record.name" class="truncate text-xs text-[#86868B]">{{ record.name }}</div>
             </template>
             <template v-else-if="column.dataIndex === 'accountId'">{{ accountEmail(record.accountId) }}</template>
             <template v-else-if="column.dataIndex === 'status'">
-              <Tag :color="ITEM_STATUS[record.status as MailBatchApi.ItemStatus].color" class="m-0">{{ ITEM_STATUS[record.status as MailBatchApi.ItemStatus].label }}</Tag>
-              <Tag v-if="record.replied" color="green" class="ml-1">已回复</Tag>
-              <Tag v-if="record.unsubscribed" class="ml-1">已退订</Tag>
+              <Tag :color="ITEM_STATUS[record.status as MailBatchApi.ItemStatus].color" class="m-0 !rounded-full">{{ ITEM_STATUS[record.status as MailBatchApi.ItemStatus].label }}</Tag>
+              <Tag v-if="record.replied" color="green" class="ml-1 !rounded-full">已回复</Tag>
+              <Tag v-if="record.unsubscribed" class="ml-1 !rounded-full">已退订</Tag>
             </template>
-            <template v-else-if="column.dataIndex === 'sentTime'">{{ fmtDateTime(record.sentTime, 'MM-DD HH:mm', '-') }}</template>
+            <template v-else-if="column.dataIndex === 'sentTime'">
+              <span class="tabular-nums text-[#6E6E73]">{{ fmtDateTime(record.sentTime, 'MM-DD HH:mm', '-') }}</span>
+            </template>
           </template>
         </Table>
       </template>
     </Drawer>
   </div>
 </template>
+
+<style scoped>
+.mb-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px 24px 16px;
+  overflow: auto;
+}
+
+.mb-task-card {
+  padding: 14px 18px;
+  background: var(--ap-surface);
+  border-radius: 16px;
+  box-shadow: var(--ap-shadow-rest);
+  transition:
+    transform var(--ap-dur-fast) var(--ap-ease),
+    box-shadow var(--ap-dur-fast) var(--ap-ease);
+}
+
+.mb-task-card:hover {
+  transform: translateY(-1.5px);
+  box-shadow: var(--ap-shadow-lift);
+}
+
+.mb-search-box {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  background: #f2f2f7;
+  border-radius: 10px;
+}
+
+.mb-search-box:focus-within {
+  background: #fff;
+  box-shadow: 0 0 0 2px rgb(0 122 255 / 22%);
+}
+
+.mb-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+</style>

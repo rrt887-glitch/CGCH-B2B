@@ -102,34 +102,82 @@ onMounted(loadSums);
       search-placeholder="请输入订单名称"
     >
       <template #actions>
-        <Button type="primary" @click="formApi.setData(null).open()"><IconifyIcon icon="lucide:plus" class="mr-1 inline size-4" />新增</Button>
-        <Button @click="doExport"><IconifyIcon icon="lucide:upload" class="mr-1 inline size-4" />导出</Button>
+        <button
+          type="button"
+          class="order-soft-btn"
+          @click="doExport"
+        >
+          <IconifyIcon icon="lucide:upload" class="size-3.5" />
+          <span>导出</span>
+        </button>
+        <Button
+          type="primary"
+          shape="round"
+          @click="formApi.setData(null).open()"
+        >
+          <IconifyIcon icon="lucide:plus" class="mr-1 inline size-4 align-[-3px]" />新增订单
+        </Button>
       </template>
       <template #filters>
-        <div class="inline-flex items-center rounded-md border border-solid border-gray-200 pl-2.5">
-          <span class="border-0 border-r border-solid border-gray-200 pr-2 text-[13px] text-gray-700">订单状态</span>
+        <div class="order-status-filter">
+          <span class="order-status-filter__label">订单状态</span>
           <Select
             v-model:value="status"
             :bordered="false"
             allow-clear
-            class="w-32"
-            placeholder="请选择"
+            size="small"
+            class="w-28"
+            placeholder="全部状态"
             :options="statusOptions"
             @change="listRef?.setExtra({ auditStatus: status })"
           />
         </div>
       </template>
       <template #cell="{ column, record }">
-        <a v-if="column.key === 'no'" class="font-medium" @click="detail(record)">{{ record.no || record.id }}</a>
-        <template v-else-if="column.key === 'totalPrice'">{{ fmtMoney(record.totalPrice) }}</template>
-        <template v-else-if="column.key === 'auditStatus'">{{ getDictLabel(DICT_TYPE.CRM_AUDIT_STATUS, record.auditStatus) || '-' }}</template>
-        <template v-else-if="column.key === 'orderDate'">{{ fmtTime(record.orderDate) }}</template>
-        <template v-else-if="column.key === 'createTime'">{{ fmtTime(record.createTime) }}</template>
+        <a
+          v-if="column.key === 'no'"
+          class="font-semibold tabular-nums text-[#007AFF] hover:underline"
+          @click="detail(record)"
+          >{{ record.no || record.id }}</a
+        >
+        <span
+          v-else-if="column.key === 'totalPrice'"
+          class="font-semibold tabular-nums text-[#1D1D1F]"
+          >{{ fmtMoney(record.totalPrice) }}</span
+        >
+        <template v-else-if="column.key === 'auditStatus'">
+          <span
+            class="ap-crm-pill"
+            :class="
+              record.auditStatus === 20
+                ? 'ap-crm-pill--green'
+                : record.auditStatus === 10
+                  ? 'ap-crm-pill--amber'
+                  : record.auditStatus === 30
+                    ? 'ap-crm-pill--red'
+                    : 'ap-crm-pill--gray'
+            "
+          >
+            {{ getDictLabel(DICT_TYPE.CRM_AUDIT_STATUS, record.auditStatus) || '-' }}
+          </span>
+        </template>
+        <span
+          v-else-if="column.key === 'orderDate'"
+          class="tabular-nums text-[#6E6E73]"
+          >{{ fmtTime(record.orderDate) }}</span
+        >
+        <span
+          v-else-if="column.key === 'createTime'"
+          class="tabular-nums text-[#6E6E73]"
+          >{{ fmtTime(record.createTime) }}</span
+        >
         <template v-else-if="column.key === 'action'">
-          <div class="flex gap-3">
-            <a @click="detail(record)">查看</a>
-            <a @click="formApi.setData(record).open()">编辑</a>
-            <Popconfirm title="确定删除这个订单吗？" @confirm="remove(record)"><a class="text-red-500">删除</a></Popconfirm>
+          <div class="flex items-center gap-3">
+            <a class="ap-crm-link" @click="detail(record)">查看</a>
+            <a class="ap-crm-link" @click="formApi.setData(record).open()">编辑</a>
+            <Popconfirm title="确定删除这个订单吗？" @confirm="remove(record)">
+              <a class="ap-crm-link ap-crm-link--danger">删除</a>
+            </Popconfirm>
           </div>
         </template>
         <template v-else>{{ (record as any)[column.key as string] || '-' }}</template>
@@ -137,3 +185,45 @@ onMounted(loadSums);
     </CrmList>
   </div>
 </template>
+
+<style scoped>
+.order-soft-btn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 32px;
+  padding: 0 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3a3a3c;
+  cursor: pointer;
+  background: rgb(255 255 255 / 86%);
+  border: 0;
+  border-radius: 999px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 5%),
+    inset 0 0 0 0.5px rgb(0 0 0 / 10%);
+}
+
+.order-soft-btn:hover {
+  color: #1d1d1f;
+  background: #fff;
+}
+
+.order-status-filter {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding-left: 11px;
+  background: #f2f2f7;
+  border-radius: 10px;
+}
+
+.order-status-filter__label {
+  padding-right: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6e6e73;
+  border-right: 0.5px solid rgb(0 0 0 / 10%);
+}
+</style>

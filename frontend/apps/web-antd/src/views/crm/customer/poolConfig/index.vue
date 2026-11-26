@@ -3,9 +3,7 @@ import type { CrmCustomerPoolConfigApi } from '#/api/crm/customer/poolConfig';
 
 import { onMounted, ref } from 'vue';
 
-import { Page } from '@vben/common-ui';
-
-import { Alert, Button, Card, message, Spin } from 'ant-design-vue';
+import { Alert, Button, message, Spin } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import {
@@ -76,14 +74,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <Page auto-content-height>
-    <Card title="客户公海规则设置">
-      <Alert v-if="loadFailed" type="error" message="公海规则加载失败" show-icon>
-        <template #action><Button size="small" @click="getConfigInfo">重试</Button></template>
-      </Alert>
-      <Spin :spinning="loading || saving">
-        <Form v-show="!loadFailed" class="w-1/4" />
-      </Spin>
-    </Card>
-  </Page>
+  <div class="max-w-xl rounded-2xl bg-[#F8F8FB] p-6">
+    <div class="mb-4">
+      <div class="text-[15px] font-semibold text-[#1D1D1F]">客户公海回收规则</div>
+      <div class="mt-0.5 text-xs text-[#86868B]">
+        开启后，超期未跟进或未成交的客户将自动退回公海供团队重新领取。
+      </div>
+    </div>
+    <Alert v-if="loadFailed" type="error" message="公海规则加载失败" show-icon class="mb-4">
+      <template #action><Button size="small" shape="round" @click="getConfigInfo">重试</Button></template>
+    </Alert>
+    <Spin :spinning="loading || saving">
+      <Form v-show="!loadFailed" class="w-full" />
+    </Spin>
+  </div>
 </template>

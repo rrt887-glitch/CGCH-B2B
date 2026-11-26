@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { useTabs } from '@vben/hooks';
+import { IconifyIcon } from '@vben/icons';
 
 import { Button, Card, Tabs } from 'ant-design-vue';
 
@@ -113,21 +114,27 @@ onMounted(() => {
     <UpStatusModal @success="getBusinessDetail" />
     <template #extra>
       <div class="flex items-center gap-2">
+        <Button shape="round" @click="handleBack">
+          <IconifyIcon icon="lucide:arrow-left" class="mr-1 inline size-3.5 align-[-2px]" />返回
+        </Button>
         <Button
           v-if="permissionListRef?.validateWrite"
           type="primary"
+          shape="round"
           @click="handleEdit"
         >
           {{ $t('ui.actionTitle.edit') }}
         </Button>
         <Button
           v-if="permissionListRef?.validateWrite"
+          shape="round"
           @click="handleUpdateStatus"
         >
           变更商机状态
         </Button>
         <Button
           v-if="permissionListRef?.validateOwnerUser"
+          shape="round"
           @click="handleTransfer"
         >
           转移

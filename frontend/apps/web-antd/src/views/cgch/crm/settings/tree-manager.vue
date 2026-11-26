@@ -6,16 +6,15 @@ import type { CgchCrmApi } from '#/api/crm/cgch';
 
 import { computed, onMounted, reactive, ref } from 'vue';
 
+import { IconifyIcon } from '@vben/icons';
+
 import {
   Button,
-  Form,
-  FormItem,
   Input,
   InputNumber,
   message,
   Modal,
   Popconfirm,
-  Space,
   Table,
   TreeSelect,
 } from 'ant-design-vue';
@@ -123,13 +122,26 @@ async function remove(row: Row) {
   await load();
 }
 
+const PRESET_COLORS = [
+  '#007AFF',
+  '#34C759',
+  '#FF9500',
+  '#FF3B30',
+  '#AF52DE',
+  '#5856D6',
+  '#00C7BE',
+  '#FF2D55',
+];
+
 onMounted(load);
 </script>
 
 <template>
   <div>
     <div class="mb-3 flex justify-end">
-      <Button type="primary" @click="openForm()">新增{{ label }}</Button>
+      <Button type="primary" shape="round" @click="openForm()">
+        <IconifyIcon icon="lucide:plus" class="mr-1 inline size-4 align-[-3px]" />新增{{ label }}
+      </Button>
     </div>
     <Table
       :columns="columns"
@@ -141,47 +153,80 @@ onMounted(load);
       size="middle"
     >
       <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'color'">
-          <span
-            v-if="record.color"
-            class="inline-block h-4 w-4 rounded align-middle"
-            :style="{ background: record.color }"
-          ></span>
-          <span class="ml-2 align-middle">{{ record.color }}</span>
+        <template v-if="column.key === 'name'">
+          <span class="font-medium text-[#1D1D1F]">{{ record.name }}</span>
+        </template>
+        <template v-else-if="column.key === 'color'">
+          <span v-if="record.color" class="inline-flex items-center gap-2">
+            <span
+              class="size-3.5 rounded-full shadow-inner"
+              :style="{ background: record.color }"
+            ></span>
+            <span class="text-xs text-[#6E6E73] tabular-nums">{{ record.color }}</span>
+          </span>
+          <span v-else class="text-[#C7C7CC]">-</span>
         </template>
         <template v-else-if="column.key === 'action'">
-          <Space>
-            <Button size="small" type="link" @click="openForm(undefined, record.id)">新增子项</Button>
-            <Button size="small" type="link" @click="openForm(record as any)">修改</Button>
+          <div class="flex items-center gap-3">
+            <a class="ap-crm-link" @click="openForm(undefined, record.id)">新增子项</a>
+            <a class="ap-crm-link" @click="openForm(record as any)">编辑</a>
             <Popconfirm :title="`确定删除「${record.name}」吗？`" @confirm="remove(record as any)">
-              <Button size="small" type="link" danger>删除</Button>
+              <a class="ap-crm-link ap-crm-link--danger">删除</a>
             </Popconfirm>
-          </Space>
+          </div>
         </template>
       </template>
-      <template #emptyText>暂无{{ label }}，点右上角新增</template>
+      <template #emptyText>
+        <div class="py-10 text-center text-[13px] text-[#86868B]">
+          暂无{{ label }}，点击右上角「新增{{ label }}」创建
+        </div>
+      </template>
     </Table>
 
     <Modal
       v-model:open="open"
-      :title="form.id ? `修改${label}` : `新增${label}`"
+      :title="form.id ? `编辑${label}` : `新增${label}`"
+      ok-text="保存"
+      :width="440"
+      wrap-class-name="ap-modal-sheet"
       :confirm-loading="saving"
       @ok="save"
     >
-      <Form layout="vertical">
-        <FormItem label="名称" required>
+      <div class="ap-sheet-body">
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">{{ label }}名称</label>
           <Input v-model:value="form.name" :maxlength="64" :placeholder="`请输入${label}名称`" />
-        </FormItem>
-        <FormItem label="上级">
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">所属上级</label>
           <TreeSelect v-model:value="form.parentId" :tree-data="parentOptions" tree-default-expand-all />
-        </FormItem>
-        <FormItem v-if="withColor" label="颜色">
-          <Input v-model:value="form.color" placeholder="#1677ff" />
-        </FormItem>
-        <FormItem label="排序（越小越靠前）">
+        </div>
+        <div v-if="withColor" class="ap-sheet-field">
+          <label class="ap-sheet-label">标签色彩</label>
+          <div class="flex flex-wrap items-center gap-2 pb-1">
+            <button
+              v-for="c in PRESET_COLORS"
+              :key="c"
+              type="button"
+              class="size-6 cursor-pointer rounded-full border-0 transition-transform hover:scale-110"
+              :style="{
+                background: c,
+                boxShadow: form.color === c ? `0 0 0 2px #fff, 0 0 0 4px ${c}` : 'none',
+              }"
+              :aria-label="`选择颜色 ${c}`"
+              @click="form.color = c"
+            ></button>
+          </div>
+          <Input v-model:value="form.color" placeholder="或输入自定义色值，如 #007AFF" />
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">
+            <span>排序权重</span>
+            <span class="ap-sheet-optional">数字越小越靠前</span>
+          </label>
           <InputNumber v-model:value="form.sort" :min="0" class="w-full" />
-        </FormItem>
-      </Form>
+        </div>
+      </div>
     </Modal>
   </div>
 </template>

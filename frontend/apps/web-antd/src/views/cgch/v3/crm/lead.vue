@@ -8,13 +8,24 @@ import { useRouter } from 'vue-router';
 import { useVbenModal } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
-import { Button, message, Popconfirm, Tag } from 'ant-design-vue';
+import { Button, message, Popconfirm } from 'ant-design-vue';
 
 import { deleteClue, getCluePage, transformClue } from '#/api/crm/clue';
 import ClueForm from '#/views/crm/clue/modules/form.vue';
 
 import CrmList from './components/crm-list.vue';
-import { channelTags, countryName, fmtTime, industryLabel, levelLabel, page, sourceLabel, sourceRail } from './components/shared';
+import {
+  channelTags,
+  countryName,
+  crmAvatarBg,
+  crmInitial,
+  fmtTime,
+  industryLabel,
+  levelLabel,
+  page,
+  sourceLabel,
+  sourceRail,
+} from './components/shared';
 
 const props = defineProps<{ pool?: boolean }>();
 const router = useRouter();
@@ -83,32 +94,66 @@ async function transform(r: any) {
       :date-filter="{ field: 'contactLastTime', label: '最近联系时间' }"
     >
       <template #actions>
-        <Button v-if="!pool" type="primary" @click="formApi.setData(null).open()">
-          <IconifyIcon icon="lucide:plus" class="mr-1 inline size-4" />新建线索
+        <Button
+          v-if="!pool"
+          type="primary"
+          shape="round"
+          @click="formApi.setData(null).open()"
+        >
+          <IconifyIcon icon="lucide:plus" class="mr-1 inline size-4 align-[-3px]" />新建线索
         </Button>
       </template>
       <template #cell="{ column, record }">
-        <a v-if="column.key === 'name'" class="font-medium" @click="detail(record)">{{ record.name }}</a>
+        <div v-if="column.key === 'name'" class="flex min-w-0 items-center gap-2">
+          <span
+            class="ap-crm-avatar"
+            :style="{ background: crmAvatarBg(record.name || record.id) }"
+            aria-hidden="true"
+            >{{ crmInitial(record.name) }}</span
+          >
+          <a
+            class="min-w-0 truncate font-semibold text-[#1D1D1F] hover:text-[#007AFF]"
+            @click="detail(record)"
+            >{{ record.name }}</a
+          >
+        </div>
         <template v-else-if="column.key === 'source'">{{ sourceLabel(record.source) }}</template>
         <template v-else-if="column.key === 'channel'">
-          <Tag v-for="t in channelTags(record)" :key="t" class="m-0 mr-1">{{ t }}</Tag>
-          <span v-if="!channelTags(record).length">-</span>
+          <div v-if="channelTags(record).length" class="flex flex-wrap gap-1">
+            <span
+              v-for="t in channelTags(record)"
+              :key="t"
+              class="ap-crm-pill"
+              :class="t === 'WhatsApp' ? 'ap-crm-pill--green' : 'ap-crm-pill--blue'"
+              >{{ t }}</span
+            >
+          </div>
+          <span v-else class="text-[#C7C7CC]">-</span>
         </template>
-        <template v-else-if="column.key === 'contactLastTime'">{{ fmtTime(record.contactLastTime) }}</template>
-        <template v-else-if="column.key === 'mobile'">{{ record.mobile || record.telephone || '-' }}</template>
+        <template v-else-if="column.key === 'contactLastTime'">
+          <span class="tabular-nums text-[#6E6E73]">{{ fmtTime(record.contactLastTime) }}</span>
+        </template>
+        <template v-else-if="column.key === 'mobile'">
+          <span class="tabular-nums">{{ record.mobile || record.telephone || '-' }}</span>
+        </template>
         <template v-else-if="column.key === 'countryCode'">{{ countryName(record.countryCode) || '-' }}</template>
         <template v-else-if="column.key === 'industryId'">{{ industryLabel(record.industryId) }}</template>
-        <template v-else-if="column.key === 'level'">{{ levelLabel(record.level) }}</template>
+        <template v-else-if="column.key === 'level'">
+          <span v-if="record.level" class="ap-crm-pill ap-crm-pill--amber">
+            {{ levelLabel(record.level) }}
+          </span>
+          <span v-else class="text-[#C7C7CC]">-</span>
+        </template>
         <template v-else-if="column.key === 'action'">
-          <div class="flex gap-3">
-            <a @click="detail(record)">查看</a>
+          <div class="flex items-center gap-3">
+            <a class="ap-crm-link" @click="detail(record)">查看</a>
             <template v-if="!pool">
-              <a @click="formApi.setData(record).open()">编辑</a>
+              <a class="ap-crm-link" @click="formApi.setData(record).open()">编辑</a>
               <Popconfirm v-if="!record.transformStatus" title="把这条线索转为客户？" @confirm="transform(record)">
-                <a>转客户</a>
+                <a class="ap-crm-link">转客户</a>
               </Popconfirm>
               <Popconfirm title="确定删除这条线索吗？" @confirm="remove(record)">
-                <a class="text-red-500">删除</a>
+                <a class="ap-crm-link ap-crm-link--danger">删除</a>
               </Popconfirm>
             </template>
           </div>

@@ -151,14 +151,14 @@ provide('cgchHubSelect', select);
 .side-hub__menu {
   position: relative;
   display: flex;
-  flex: 0 0 192px;
+  flex: 0 0 198px;
   flex-direction: column;
-  gap: 1px;
-  padding: 12px 8px;
+  gap: 2px;
+  padding: 14px 10px;
   overflow: auto;
-  background: rgb(255 255 255 / 48%);
+  background: rgb(255 255 255 / 54%);
   border-right: 0.5px solid rgb(0 0 0 / 6.5%);
-  backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(26px) saturate(170%);
 }
 
 .side-hub__indicator {
@@ -167,15 +167,19 @@ provide('cgchHubSelect', select);
   left: 0;
   z-index: 0;
   pointer-events: none;
-  background: var(--ap-accent-soft);
-  border-radius: 7px;
+  background: #fff;
+  border-radius: 9px;
+  box-shadow:
+    0 1px 4px rgb(15 23 42 / 7%),
+    0 0 0 0.5px rgb(0 0 0 / 5%);
 }
 
 .side-hub__group {
-  padding: 12px 10px 4px;
+  padding: 14px 10px 5px;
   font-size: 11px;
-  font-weight: 500;
-  color: var(--ap-label-3);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #8e8e93;
 }
 
 .side-hub__group:first-of-type {
@@ -192,11 +196,11 @@ provide('cgchHubSelect', select);
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 8px;
+  gap: 9px;
   align-items: center;
   width: 100%;
-  height: 31px;
-  padding: 0 10px;
+  height: 34px;
+  padding: 0 11px;
   font-size: 13px;
   font-weight: 500;
   color: var(--ap-label-2);
@@ -204,7 +208,7 @@ provide('cgchHubSelect', select);
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 7px;
+  border-radius: 9px;
   transition:
     color var(--ap-dur-fast) linear,
     background-color var(--ap-dur-fast) linear;
@@ -217,19 +221,23 @@ provide('cgchHubSelect', select);
 
 .side-hub__item.on {
   font-weight: 600;
-  color: var(--ap-accent);
+  color: #1d1d1f;
 }
 
 .side-hub__icon {
   flex: none;
-  width: 15px;
-  height: 15px;
-  color: var(--ap-label-3);
+  width: 15.5px;
+  height: 15.5px;
+  color: #8e8e93;
   transition: color var(--ap-dur-fast) linear;
 }
 
+.side-hub__item:hover:not(.on) .side-hub__icon {
+  color: #424245;
+}
+
 .side-hub__item.on .side-hub__icon {
-  color: var(--ap-accent);
+  color: #007aff;
 }
 
 .side-hub__main {

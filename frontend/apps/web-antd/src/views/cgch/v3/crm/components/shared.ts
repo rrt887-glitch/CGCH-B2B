@@ -39,6 +39,30 @@ export function fmtMoney(v?: number) {
   return `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** 苹果通讯录风格 8 色渐变单字头像（CRM 客户 / 线索通用） */
+const CRM_AVATAR_GRADIENTS = [
+  'linear-gradient(180deg, #3395FF 0%, #007AFF 100%)',
+  'linear-gradient(180deg, #FFAB2E 0%, #FF9500 100%)',
+  'linear-gradient(180deg, #4CD964 0%, #28CD41 100%)',
+  'linear-gradient(180deg, #C678F0 0%, #AF52DE 100%)',
+  'linear-gradient(180deg, #7472E8 0%, #5856D6 100%)',
+  'linear-gradient(180deg, #2AD4CB 0%, #00B5AD 100%)',
+  'linear-gradient(180deg, #FF6259 0%, #FF3B30 100%)',
+  'linear-gradient(180deg, #FF5C85 0%, #FF2D55 100%)',
+];
+
+export function crmInitial(name?: string) {
+  const s = (name || '?').trim().replace(/^[+\s<"']+/, '');
+  return (s.slice(0, 1) || '?').toUpperCase();
+}
+
+export function crmAvatarBg(seedStr?: number | string) {
+  const s = String(seedStr || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return CRM_AVATAR_GRADIENTS[h % CRM_AVATAR_GRADIENTS.length]!;
+}
+
 /** 渠道状态：这条记录能通过哪些渠道联系 */
 export function channelTags(r: { email?: string; whatsapp?: string }) {
   const tags: string[] = [];

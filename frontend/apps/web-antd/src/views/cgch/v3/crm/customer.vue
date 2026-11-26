@@ -15,7 +15,7 @@ import { IconifyIcon } from '@vben/icons';
 import { useUserStore } from '@vben/stores';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Button, message, Popconfirm, Select, Tag, Tooltip } from 'ant-design-vue';
+import { Button, message, Popconfirm, Select, Tooltip } from 'ant-design-vue';
 
 import { getCustomerGroupList, getTagList } from '#/api/crm/cgch';
 import {
@@ -34,7 +34,20 @@ import CustomerForm from '#/views/crm/customer/modules/form.vue';
 import ImportForm from '#/views/crm/customer/modules/import-form.vue';
 
 import CrmList from './components/crm-list.vue';
-import { channelTags, countryName, fmtTime, industryLabel, levelLabel, levelRail, page, sourceLabel, stageLabel, stageOptions } from './components/shared';
+import {
+  channelTags,
+  countryName,
+  crmAvatarBg,
+  crmInitial,
+  fmtTime,
+  industryLabel,
+  levelLabel,
+  levelRail,
+  page,
+  sourceLabel,
+  stageLabel,
+  stageOptions,
+} from './components/shared';
 
 const props = defineProps<{ pool?: boolean }>();
 const router = useRouter();
@@ -309,40 +322,130 @@ const me = computed(() => userStore.userInfo?.id);
         </div>
       </template>
       <template #actions>
-        <Button class="crm-ai-btn" :loading="busy" @click="oneClickWake"><IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5" />一键唤醒</Button>
-        <Button v-if="!pool" @click="mailToSelected"><IconifyIcon icon="lucide:send" class="mr-1 inline size-3.5" />群发邮件</Button>
-        <Button v-if="!pool" class="crm-ai-btn" :loading="busy" @click="oneClickResearch">
-          <IconifyIcon icon="lucide:sparkles" class="mr-1 inline size-3.5" />一键背调
+        <template v-if="!pool">
+          <div class="crm-action-group">
+            <button
+              type="button"
+              class="crm-top-btn crm-top-btn--ai"
+              :disabled="busy"
+              @click="oneClickResearch"
+            >
+              <IconifyIcon icon="lucide:sparkles" class="size-3.5" />
+              <span>一键背调</span>
+            </button>
+            <button
+              type="button"
+              class="crm-top-btn crm-top-btn--ai"
+              :disabled="busy"
+              @click="oneClickWake"
+            >
+              <IconifyIcon icon="lucide:wand-sparkles" class="size-3.5" />
+              <span>一键唤醒</span>
+            </button>
+            <button
+              type="button"
+              class="crm-top-btn crm-top-btn--soft"
+              @click="mailToSelected"
+            >
+              <IconifyIcon icon="lucide:send" class="size-3.5" />
+              <span>群发邮件</span>
+            </button>
+          </div>
+          <span class="mx-0.5 h-4 w-px bg-black/[0.08]"></span>
+        </template>
+        <button
+          v-else
+          type="button"
+          class="crm-top-btn crm-top-btn--ai"
+          :disabled="busy"
+          @click="oneClickWake"
+        >
+          <IconifyIcon icon="lucide:sparkles" class="size-3.5" />
+          <span>一键唤醒</span>
+        </button>
+
+        <button
+          type="button"
+          class="crm-top-btn crm-top-btn--soft"
+          @click="importApi.open()"
+        >
+          <IconifyIcon icon="lucide:download" class="size-3.5" />
+          <span>导入</span>
+        </button>
+        <button
+          type="button"
+          class="crm-top-btn crm-top-btn--soft"
+          @click="doExport"
+        >
+          <IconifyIcon icon="lucide:upload" class="size-3.5" />
+          <span>导出</span>
+        </button>
+        <Button
+          v-if="!pool"
+          type="primary"
+          shape="round"
+          @click="formApi.setData(null).open()"
+        >
+          <IconifyIcon icon="lucide:plus" class="mr-1 inline size-4 align-[-3px]" />新增客户
         </Button>
-        <Button v-if="!pool" type="primary" @click="formApi.setData(null).open()">
-          <IconifyIcon icon="lucide:plus" class="mr-1 inline size-4" />新增
-        </Button>
-        <Button @click="importApi.open()"><IconifyIcon icon="lucide:download" class="mr-1 inline size-4" />导入</Button>
-        <Button @click="doExport"><IconifyIcon icon="lucide:upload" class="mr-1 inline size-4" />导出</Button>
       </template>
       <template #cell="{ column, record }">
-        <span v-if="column.key === 'name'" class="inline-flex items-center gap-1">
-          <IconifyIcon
+        <div v-if="column.key === 'name'" class="flex min-w-0 items-center gap-2">
+          <button
             v-if="!pool"
-            :icon="record.starred ? 'mdi:star' : 'mdi:star-outline'"
-            class="size-4 shrink-0 cursor-pointer"
-            :class="record.starred ? 'text-amber-400' : 'text-gray-300'"
+            type="button"
+            class="grid size-5 shrink-0 cursor-pointer place-items-center border-0 bg-transparent p-0 transition-transform active:scale-90"
+            :aria-label="record.starred ? '取消特别关注' : '设为特别关注'"
             @click="toggleStar(record)"
-          />
-          <a class="truncate font-medium" @click="detail(record)">{{ record.name }}</a>
-        </span>
+          >
+            <IconifyIcon
+              :icon="record.starred ? 'mdi:star' : 'mdi:star-outline'"
+              class="size-4"
+              :class="record.starred ? 'text-[#FF9500]' : 'text-[#D1D1D6] hover:text-[#8E8E93]'"
+            />
+          </button>
+          <span
+            class="ap-crm-avatar"
+            :style="{ background: crmAvatarBg(record.name || record.id) }"
+            aria-hidden="true"
+            >{{ crmInitial(record.name) }}</span
+          >
+          <a
+            class="min-w-0 truncate font-semibold text-[#1D1D1F] hover:text-[#007AFF]"
+            @click="detail(record)"
+            >{{ record.name }}</a
+          >
+        </div>
         <template v-else-if="column.key === 'aiHosted'">
-          <Tag :color="record.aiHosted ? 'blue' : 'default'" class="m-0">{{ record.aiHosted ? 'AI托管中' : '人工' }}</Tag>
+          <span
+            class="ap-crm-pill"
+            :class="record.aiHosted ? 'ap-crm-pill--purple' : 'ap-crm-pill--gray'"
+          >
+            <span
+              class="size-1.5 rounded-full"
+              :class="record.aiHosted ? 'bg-[#7C3AED]' : 'bg-[#AEAEB2]'"
+            ></span>
+            {{ record.aiHosted ? 'AI 托管中' : '人工接待' }}
+          </span>
         </template>
         <template v-else-if="column.key === 'channel'">
-          <Tag v-for="t in channelTags(record)" :key="t" class="m-0 mr-1">{{ t }}</Tag>
-          <span v-if="!channelTags(record).length">-</span>
+          <div v-if="channelTags(record).length" class="flex flex-wrap gap-1">
+            <span
+              v-for="t in channelTags(record)"
+              :key="t"
+              class="ap-crm-pill"
+              :class="t === 'WhatsApp' ? 'ap-crm-pill--green' : 'ap-crm-pill--blue'"
+              >{{ t }}</span
+            >
+          </div>
+          <span v-else class="text-[#C7C7CC]">-</span>
         </template>
         <template v-else-if="column.key === 'stage'">
           <Select
             :value="record.stage"
             size="small"
-            class="w-full"
+            :bordered="false"
+            class="crm-inline-select w-full"
             :options="stageOptions().map((o) => ({ label: o.label, value: o.value }))"
             placeholder="未设置"
             @change="(v: any) => changeStage(record, Number(v))"
@@ -350,44 +453,91 @@ const me = computed(() => userStore.userInfo?.id);
         </template>
         <template v-else-if="column.key === 'source'">{{ sourceLabel(record.source) }}</template>
         <template v-else-if="column.key === 'dealStatus'">
-          <Tag :color="record.dealStatus ? 'green' : 'default'" class="m-0">{{ record.dealStatus ? '已成交' : '未成交' }}</Tag>
+          <span
+            class="ap-crm-pill"
+            :class="record.dealStatus ? 'ap-crm-pill--green' : 'ap-crm-pill--gray'"
+          >
+            {{ record.dealStatus ? '已成交' : '未成交' }}
+          </span>
         </template>
-        <template v-else-if="column.key === 'mobile'">{{ record.mobile || record.telephone || '-' }}</template>
+        <template v-else-if="column.key === 'mobile'">
+          <span class="tabular-nums">{{ record.mobile || record.telephone || '-' }}</span>
+        </template>
         <template v-else-if="column.key === 'countryCode'">{{ countryName(record.countryCode) || '-' }}</template>
         <template v-else-if="column.key === 'industryId'">{{ industryLabel(record.industryId) }}</template>
-        <template v-else-if="column.key === 'level'">{{ levelLabel(record.level) }}</template>
+        <template v-else-if="column.key === 'level'">
+          <span v-if="record.level" class="ap-crm-pill ap-crm-pill--amber">
+            {{ levelLabel(record.level) }}
+          </span>
+          <span v-else class="text-[#C7C7CC]">-</span>
+        </template>
         <template v-else-if="column.key === 'tags'">
-          <Tag v-for="id in record.tagIds || []" :key="id" class="m-0 mr-1">{{ tagName(id) || id }}</Tag>
-          <span v-if="!record.tagIds?.length">-</span>
+          <div v-if="record.tagIds?.length" class="flex flex-wrap gap-1">
+            <span
+              v-for="id in record.tagIds"
+              :key="id"
+              class="ap-crm-pill ap-crm-pill--gray"
+              >{{ tagName(id) || id }}</span
+            >
+          </div>
+          <span v-else class="text-[#C7C7CC]">-</span>
         </template>
         <template v-else-if="column.key === 'research'">
           <template v-if="research[record.id]">
             <Tooltip :title="research[record.id]!.summary">
-              <span :class="RESEARCH_STATUS[research[record.id]!.status]?.color">{{ RESEARCH_STATUS[research[record.id]!.status]?.text }}</span>
-              <span v-if="research[record.id]!.summary" class="ml-1 text-xs text-gray-500">{{ research[record.id]!.summary }}</span>
+              <div class="flex min-w-0 items-center gap-1.5">
+                <span
+                  class="ap-crm-pill shrink-0"
+                  :class="
+                    research[record.id]!.status === 'done'
+                      ? 'ap-crm-pill--green'
+                      : research[record.id]!.status === 'running'
+                        ? 'ap-crm-pill--amber'
+                        : 'ap-crm-pill--red'
+                  "
+                >
+                  {{ RESEARCH_STATUS[research[record.id]!.status]?.text }}
+                </span>
+                <span
+                  v-if="research[record.id]!.summary"
+                  class="truncate text-xs text-[#6E6E73]"
+                  >{{ research[record.id]!.summary }}</span
+                >
+              </div>
             </Tooltip>
           </template>
-          <span v-else>-</span>
+          <span v-else class="text-[#C7C7CC]">-</span>
         </template>
         <template v-else-if="column.key === 'report'">
-          <a v-if="research[record.id]?.status === 'done'" @click="openReport(record.id)">查看</a>
-          <span v-else>-</span>
+          <a
+            v-if="research[record.id]?.status === 'done'"
+            class="ap-crm-link"
+            @click="openReport(record.id)"
+            >查看 ›</a
+          >
+          <span v-else class="text-[#C7C7CC]">-</span>
         </template>
-        <template v-else-if="column.key === 'contactNextTime'">{{ fmtTime(record.contactNextTime) }}</template>
-        <template v-else-if="column.key === 'contactLastTime'">{{ fmtTime(record.contactLastTime) }}</template>
+        <template v-else-if="column.key === 'contactNextTime'">
+          <span class="tabular-nums text-[#6E6E73]">{{ fmtTime(record.contactNextTime) }}</span>
+        </template>
+        <template v-else-if="column.key === 'contactLastTime'">
+          <span class="tabular-nums text-[#6E6E73]">{{ fmtTime(record.contactLastTime) }}</span>
+        </template>
         <template v-else-if="column.key === 'action'">
-          <div class="flex gap-3">
-            <a @click="detail(record)">查看</a>
+          <div class="flex items-center gap-3">
+            <a class="ap-crm-link" @click="detail(record)">查看</a>
             <template v-if="pool">
-              <Popconfirm title="领取后这个客户由你负责，确定吗？" @confirm="receive(record)"><a>领取</a></Popconfirm>
+              <Popconfirm title="领取后这个客户由你负责，确定吗？" @confirm="receive(record)">
+                <a class="ap-crm-link">领取</a>
+              </Popconfirm>
             </template>
             <template v-else>
-              <a @click="formApi.setData(record).open()">编辑</a>
+              <a class="ap-crm-link" @click="formApi.setData(record).open()">编辑</a>
               <Popconfirm v-if="record.ownerUserId === me" title="放入公海后其他同事可以领取，确定吗？" @confirm="toPool(record)">
-                <a>放入公海</a>
+                <a class="ap-crm-link">公海</a>
               </Popconfirm>
               <Popconfirm title="确定删除这个客户吗？" @confirm="remove(record)">
-                <a class="text-red-500">删除</a>
+                <a class="ap-crm-link ap-crm-link--danger">删除</a>
               </Popconfirm>
             </template>
           </div>
@@ -399,15 +549,71 @@ const me = computed(() => userStore.userInfo?.id);
 </template>
 
 <style scoped>
-.crm-ai-btn {
-  color: var(--ap-accent);
-  background: var(--ap-accent-soft);
-  border-color: transparent;
+.crm-action-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
-.crm-ai-btn:hover {
-  color: var(--ap-accent);
-  background: rgb(0 122 255 / 16%);
+
+.crm-top-btn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 32px;
+  padding: 0 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  transition:
+    background-color var(--ap-dur-fast),
+    color var(--ap-dur-fast),
+    transform var(--ap-dur-fast) var(--ap-ease),
+    box-shadow var(--ap-dur-fast);
 }
+
+.crm-top-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.crm-top-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.crm-top-btn--ai {
+  color: #6d28d9;
+  background: linear-gradient(135deg, #f5f0ff 0%, #eaf3ff 100%);
+  box-shadow: inset 0 0 0 0.5px rgb(124 58 237 / 20%);
+}
+
+.crm-top-btn--ai:hover:not(:disabled) {
+  color: #5b21b6;
+  background: linear-gradient(135deg, #ede5ff 0%, #dcebff 100%);
+}
+
+.crm-top-btn--soft {
+  color: #3a3a3c;
+  background: rgb(255 255 255 / 86%);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 5%),
+    inset 0 0 0 0.5px rgb(0 0 0 / 10%);
+}
+
+.crm-top-btn--soft:hover:not(:disabled) {
+  color: #1d1d1f;
+  background: #fff;
+}
+
+.crm-inline-select :deep(.ant-select-selector) {
+  padding-inline: 8px !important;
+  background: #f4f5f8 !important;
+  border-radius: 999px !important;
+}
+
 .crm-stage-chips {
   display: flex;
   flex-wrap: wrap;

@@ -5,9 +5,13 @@ import type { CgchCrmApi } from '#/api/crm/cgch';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { Button, Empty, Input, message, Select, Table, Tag } from 'ant-design-vue';
+import { IconifyIcon } from '@vben/icons';
+
+import { Button, message, Select, Table } from 'ant-design-vue';
 
 import { searchDedup } from '#/api/crm/cgch';
+
+import { crmAvatarBg, crmInitial } from './components/shared';
 
 const router = useRouter();
 const scope = ref<'all' | 'clue' | 'customer'>('all');
@@ -78,41 +82,153 @@ function view(r: CgchCrmApi.DedupItem) {
 
 <template>
   <div class="dd">
-    <h2 class="dd__title">查重</h2>
+    <div class="dd__head">
+      <h2 class="dd__title">客户与线索查重</h2>
+      <p class="dd__sub">
+        按名称、邮箱、电话或官网在全库客户与线索中快速检索，避免同事重复跟进撞单。
+      </p>
+    </div>
+
     <div class="dd__card">
       <div class="dd__bar">
-        <div class="dd__seg">
-          <button v-for="s in SCOPES" :key="s.value" type="button" :class="{ on: scope === s.value }" @click="pickScope(s.value)">
+        <div class="dd__seg" role="group" aria-label="查重范围">
+          <button
+            v-for="s in SCOPES"
+            :key="s.value"
+            type="button"
+            :class="{ on: scope === s.value }"
+            @click="pickScope(s.value)"
+          >
             {{ s.label }}
           </button>
         </div>
-        <Select v-model:value="field" class="w-28" :options="FIELDS" @change="searched && search()" />
-        <div class="dd__input">
-          <Input v-model:value="keyword" :bordered="false" allow-clear placeholder="请输入 2-100 个字符" :maxlength="100" @press-enter="search" />
-          <Button type="primary" :loading="loading" @click="search">搜 索</Button>
+
+        <Select
+          v-model:value="field"
+          :bordered="false"
+          class="dd__field-select w-32"
+          :options="FIELDS"
+          @change="searched && search()"
+        />
+
+        <div class="dd__search-box">
+          <IconifyIcon icon="lucide:search" class="size-4 shrink-0 text-[#8E8E93]" />
+          <input
+            v-model="keyword"
+            type="search"
+            class="dd__search-input"
+            placeholder="输入至少 2 个字符，回车查询…"
+            maxlength="100"
+            @keydown.enter="search"
+          />
+          <button
+            v-if="keyword"
+            type="button"
+            class="dd__search-clear"
+            aria-label="清空"
+            @click="keyword = ''"
+          >
+            <IconifyIcon icon="lucide:x" class="size-3" />
+          </button>
         </div>
+
+        <Button
+          type="primary"
+          shape="round"
+          :loading="loading"
+          @click="search"
+        >
+          立即查重
+        </Button>
       </div>
+
       <Table
         :columns="columns"
         :data-source="rows"
         :loading="loading"
-        :pagination="{ pageSize, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'], onShowSizeChange: (_c: number, s: number) => (pageSize = s) }"
+        :pagination="{
+          pageSize,
+          showSizeChanger: true,
+          pageSizeOptions: ['10', '20', '50'],
+          onShowSizeChange: (_c: number, s: number) => (pageSize = s),
+        }"
         :row-key="(r: any) => `${r.type}-${r.id}`"
         size="middle"
         :scroll="{ x: 900 }"
       >
         <template #bodyCell="{ column, record }">
-          <Tag v-if="column.key === 'type'" :color="record.type === 'customer' ? 'blue' : 'orange'" class="m-0">
+          <span
+            v-if="column.key === 'type'"
+            class="ap-crm-pill"
+            :class="
+              record.type === 'customer'
+                ? 'ap-crm-pill--blue'
+                : 'ap-crm-pill--amber'
+            "
+          >
             {{ record.type === 'customer' ? '客户' : '线索' }}
-          </Tag>
-          <template v-else-if="column.key === 'stage'">{{ record.ownerUserId ? '跟进中' : '公海' }}</template>
-          <template v-else-if="column.key === 'customerName'">{{ record.type === 'customer' ? record.name : '-' }}</template>
-          <template v-else-if="column.key === 'clueName'">{{ record.type === 'clue' ? record.name : '-' }}</template>
-          <template v-else-if="column.key === 'companyName'">{{ record.companyName || '-' }}</template>
-          <a v-else-if="column.key === 'action'" @click="view(record as any)">查看</a>
+          </span>
+          <span v-else-if="column.key === 'id'" class="tabular-nums text-[#86868B]">
+            #{{ record.id }}
+          </span>
+          <template v-else-if="column.key === 'stage'">
+            <span
+              class="ap-crm-pill"
+              :class="record.ownerUserId ? 'ap-crm-pill--green' : 'ap-crm-pill--gray'"
+            >
+              {{ record.ownerUserId ? '跟进中' : '公海' }}
+            </span>
+          </template>
+          <template v-else-if="column.key === 'customerName'">
+            <div v-if="record.type === 'customer'" class="flex min-w-0 items-center gap-2">
+              <span
+                class="ap-crm-avatar"
+                :style="{ background: crmAvatarBg(record.name || record.id) }"
+                >{{ crmInitial(record.name) }}</span
+              >
+              <span class="truncate font-semibold text-[#1D1D1F]">{{ record.name }}</span>
+            </div>
+            <span v-else class="text-[#C7C7CC]">-</span>
+          </template>
+          <template v-else-if="column.key === 'clueName'">
+            <div v-if="record.type === 'clue'" class="flex min-w-0 items-center gap-2">
+              <span
+                class="ap-crm-avatar"
+                :style="{ background: crmAvatarBg(record.name || record.id) }"
+                >{{ crmInitial(record.name) }}</span
+              >
+              <span class="truncate font-semibold text-[#1D1D1F]">{{ record.name }}</span>
+            </div>
+            <span v-else class="text-[#C7C7CC]">-</span>
+          </template>
+          <template v-else-if="column.key === 'companyName'">{{
+            record.companyName || '-'
+          }}</template>
+          <a
+            v-else-if="column.key === 'action'"
+            class="ap-crm-link"
+            @click="view(record as any)"
+            >查看 ›</a
+          >
         </template>
         <template #emptyText>
-          <Empty :description="loadFailed ? '搜索失败，请重试' : searched ? '没有找到重复记录' : '暂无数据'" />
+          <div class="flex flex-col items-center justify-center gap-2 py-14 text-center">
+            <div class="grid size-12 place-items-center rounded-2xl bg-[#F4F5F8] text-[#007AFF]">
+              <IconifyIcon icon="lucide:scan-search" class="size-6" />
+            </div>
+            <div class="text-[13.5px] font-medium text-[#1D1D1F]">
+              {{
+                loadFailed
+                  ? '查重请求失败，请重试'
+                  : searched
+                    ? '未发现匹配的重复记录'
+                    : '输入名称、邮箱、电话或官网开始查重'
+              }}
+            </div>
+            <div v-if="!searched" class="text-xs text-[#86868B]">
+              支持模糊匹配，快速确认客户是否已建档或归属公海
+            </div>
+          </div>
         </template>
       </Table>
     </div>
@@ -121,64 +237,139 @@ function view(r: CgchCrmApi.DedupItem) {
 
 <style scoped>
 .dd {
-  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px 24px 16px;
+}
+
+.dd__head {
+  padding-bottom: 14px;
 }
 
 .dd__title {
-  margin: 0 0 14px;
-  font-size: 20px;
+  margin: 0;
+  font-size: 21px;
   font-weight: 700;
-  color: #1D1D1F;
+  letter-spacing: -0.02em;
+  color: #1d1d1f;
+}
+
+.dd__sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: #6e6e73;
 }
 
 .dd__card {
-  padding: 14px;
-  border: 1px solid #eef0f3;
-  border-radius: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--ap-surface);
+  border-radius: 18px;
+  box-shadow: var(--ap-shadow-rest);
 }
 
 .dd__bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-bottom: 0.5px solid var(--ap-separator);
 }
 
 .dd__seg {
   display: inline-flex;
+  gap: 2px;
   padding: 3px;
-  background: #F2F2F7;
-  border-radius: 6px;
+  background: #f2f2f7;
+  border-radius: 10px;
 }
 
 .dd__seg button {
-  padding: 2px 10px;
-  font-size: 13px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
   color: #6e6e73;
   cursor: pointer;
   background: none;
   border: 0;
-  border-radius: 4px;
+  border-radius: 8px;
+  transition: all var(--ap-dur-fast);
 }
 
 .dd__seg button.on {
-  color: #1D1D1F;
+  font-weight: 600;
+  color: #1d1d1f;
   background: #fff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 8%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
 }
 
-.dd__input {
-  display: inline-flex;
+.dd__field-select :deep(.ant-select-selector) {
+  height: 34px !important;
+  padding-inline: 11px !important;
+  background: #f2f2f7 !important;
+  border-radius: 10px !important;
+}
+
+.dd__field-select :deep(.ant-select-selection-item) {
+  line-height: 32px !important;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dd__search-box {
+  display: flex;
+  flex: 1;
+  gap: 7px;
   align-items: center;
-  width: 330px;
-  max-width: 100%;
-  overflow: hidden;
-  border: 1px solid #e5e5ea;
-  border-radius: 6px;
+  min-width: 220px;
+  max-width: 360px;
+  height: 34px;
+  padding: 0 11px;
+  background: #f2f2f7;
+  border-radius: 10px;
+  transition: all var(--ap-dur-fast);
 }
 
-.dd__input :deep(.ant-btn) {
-  border-radius: 0;
+.dd__search-box:focus-within {
+  background: #fff;
+  box-shadow:
+    0 0 0 2px rgb(0 122 255 / 22%),
+    inset 0 0 0 0.5px rgb(0 122 255 / 45%);
+}
+
+.dd__search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font-size: 13px;
+  color: #1d1d1f;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.dd__search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.dd__search-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  color: #fff;
+  cursor: pointer;
+  background: #aeaeb2;
+  border: 0;
+  border-radius: 50%;
 }
 </style>

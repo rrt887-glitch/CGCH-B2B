@@ -23,51 +23,7 @@
   min-width: 0;
 }
 
-/* CRM 列表页：透明画布透出柔和渐变氛围，干净留白 */
-.is-apple .crm-list {
-  padding: 18px 22px 14px;
-  background: transparent;
-}
-
-.is-apple .crm-list__head {
-  gap: 12px;
-  padding-bottom: 14px;
-}
-
-.is-apple .crm-list__title {
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.3;
-  letter-spacing: -0.015em;
-}
-
-.is-apple .crm-list__main {
-  overflow: hidden;
-  background: var(--ap-surface);
-  border-radius: var(--ap-radius-lg);
-  box-shadow: var(--ap-shadow-rest);
-}
-
-.is-apple .crm-list__filters {
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 0.5px solid var(--ap-separator);
-}
-
-.is-apple .crm-list__pager {
-  padding: 10px 14px;
-  border-top: 0.5px solid var(--ap-separator);
-}
-
-.is-apple .crm-list__rail {
-  padding: 10px 8px;
-  background: var(--ap-surface);
-  border: 0;
-  border-radius: var(--ap-radius-lg);
-  box-shadow: var(--ap-shadow-rest);
-}
-
+/* CRM 列表页样式已内聚至 crm-list.vue，此处仅保留容器防溢出 */
 .is-apple .crm-list__table {
   min-width: 0;
 }

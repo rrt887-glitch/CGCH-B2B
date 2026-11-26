@@ -10,15 +10,16 @@ import { useRouter } from 'vue-router';
 
 import { getDictOptions } from '@vben/hooks';
 import { DICT_TYPE } from '@vben/constants';
+import { IconifyIcon } from '@vben/icons';
 
-import { Button, DatePicker, message, Modal, Segmented, Select, Space, Table, Tag, Textarea } from 'ant-design-vue';
+import { DatePicker, message, Modal, Select, Table, Textarea, Tooltip } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import { getWaConversationPage } from '#/api/channel/whatsapp';
 import { requestClient } from '#/api/request';
 import { fmtDateTime } from '#/utils/datetime';
 
-import { stageLabel } from './components/shared';
+import { crmAvatarBg, crmInitial, stageLabel } from './components/shared';
 
 type TabKey = 'done' | 'expired' | 'pool' | 'today';
 const TABS: { key: TabKey; label: string; empty: string }[] = [
@@ -83,7 +84,6 @@ async function loadCounts() {
   );
 }
 
-const tabOptions = computed(() => TABS.map((t) => ({ label: `${t.label} ${counts[t.key] || ''}`.trim(), value: t.key })));
 const emptyText = computed(() =>
   loadFailed.value ? '加载失败，请刷新重试' : TABS.find((t) => t.key === tab.value)!.empty,
 );
@@ -179,56 +179,395 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="rounded-xl bg-white p-5">
-    <div class="mb-1 text-lg font-semibold">跟进日程</div>
-    <div class="mb-4 text-sm text-gray-500">我负责的客户里需要联系的。写跟进时约好下次联系时间，到期会出现在「今天需联系」，过期没联系会出现在「已逾期」。</div>
-    <Segmented :value="tab" :options="tabOptions" class="mb-3" @change="switchTab" />
-    <Table
-      :columns="columns"
-      :data-source="rows"
-      :loading="loading"
-      row-key="id"
-      size="middle"
-      :pagination="{ current: pager.no, pageSize: pager.size, total, showSizeChanger: false, onChange: (p: number) => { pager.no = p; load(); } }"
-    >
-      <template #bodyCell="{ column, record }">
-        <a v-if="column.key === 'name'" class="font-medium" @click="detail(record)">{{ record.name }}</a>
-        <template v-else-if="column.key === 'stage'">
-          <Tag v-if="record.stage" class="m-0">{{ stageLabel(record.stage) }}</Tag>
-          <span v-else class="text-gray-300">-</span>
-        </template>
-        <template v-else-if="column.key === 'next'">
-          <template v-if="tab === 'pool'">
-            <span class="text-orange-500">{{ record.poolDay != null ? `还剩 ${record.poolDay} 天` : '即将进入' }}</span>
-          </template>
-          <template v-else>
-            {{ fmtDateTime(record.contactNextTime, 'MM-DD HH:mm', '-') }}
-            <span v-if="tab === 'expired' && overdueDays(record)" class="ml-1 text-xs text-red-500">逾期 {{ overdueDays(record) }} 天</span>
-          </template>
-        </template>
-        <span v-else-if="column.key === 'last'" class="line-clamp-2 text-gray-600">{{ record.contactLastContent || '-' }}</span>
-        <template v-else-if="column.key === 'lastTime'">{{ fmtDateTime(record.contactLastTime, 'MM-DD HH:mm', '-') }}</template>
-        <Space v-else-if="column.key === 'action'" :size="12">
-          <a @click="chat(record)">去会话</a>
-          <a @click="openFollow(record)">写跟进</a>
-        </Space>
-      </template>
-      <template #emptyText>{{ emptyText }}</template>
-    </Table>
+  <div class="agenda-page">
+    <div class="agenda-head">
+      <div>
+        <h2 class="agenda-title">跟进日程</h2>
+        <p class="agenda-sub">
+          集中查看约定今日联系、已逾期未联系、即将掉入公海及今日已完成的客户跟进。
+        </p>
+      </div>
+      <Tooltip title="刷新日程">
+        <button
+          type="button"
+          class="agenda-refresh"
+          aria-label="刷新日程"
+          @click="
+            loadCounts();
+            load();
+          "
+        >
+          <IconifyIcon
+            icon="lucide:refresh-cw"
+            class="size-4"
+            :class="{ 'animate-spin': loading }"
+          />
+        </button>
+      </Tooltip>
+    </div>
 
-    <Modal v-model:open="open" :title="`写跟进 · ${target?.name || ''}`" ok-text="保存" :confirm-loading="saving" :width="520" @ok="saveFollow">
-      <div class="flex flex-col gap-3">
-        <div class="flex items-center gap-2 text-sm">
-          <span class="w-20 shrink-0 text-gray-500">跟进方式</span>
-          <Select v-model:value="form.type" class="w-40" :options="followTypes.map((o) => ({ label: o.label, value: o.value }))" />
+    <div class="agenda-card">
+      <div class="agenda-tabs-bar">
+        <div class="agenda-seg" role="tablist" aria-label="日程分组">
+          <button
+            v-for="t in TABS"
+            :key="t.key"
+            type="button"
+            role="tab"
+            :aria-selected="tab === t.key"
+            class="agenda-seg__btn"
+            :class="{ on: tab === t.key }"
+            @click="switchTab(t.key)"
+          >
+            <span>{{ t.label }}</span>
+            <span
+              v-if="counts[t.key]"
+              class="agenda-seg__badge tabular-nums"
+              :class="{
+                'is-danger': t.key === 'expired',
+                'is-warn': t.key === 'pool',
+                'is-done': t.key === 'done',
+              }"
+            >
+              {{ counts[t.key] }}
+            </span>
+          </button>
         </div>
-        <Textarea v-model:value="form.content" :auto-size="{ minRows: 4, maxRows: 8 }" :maxlength="2000" placeholder="这次聊了什么、客户的反馈、下一步要做什么" />
-        <div class="flex flex-wrap items-center gap-2 text-sm">
-          <span class="w-20 shrink-0 text-gray-500">下次联系</span>
-          <DatePicker v-model:value="form.nextTime" show-time format="YYYY-MM-DD HH:mm" :allow-clear="false" class="w-48" />
-          <Button v-for="q in QUICK" :key="q.days" size="small" @click="form.nextTime = dayjs().add(q.days, 'day').hour(10).minute(0).second(0)">{{ q.label }}</Button>
+      </div>
+
+      <Table
+        :columns="columns"
+        :data-source="rows"
+        :loading="loading"
+        row-key="id"
+        size="middle"
+        :pagination="{
+          current: pager.no,
+          pageSize: pager.size,
+          total,
+          showSizeChanger: false,
+          onChange: (p: number) => {
+            pager.no = p;
+            load();
+          },
+        }"
+      >
+        <template #bodyCell="{ column, record }">
+          <div v-if="column.key === 'name'" class="flex min-w-0 items-center gap-2">
+            <span
+              class="ap-crm-avatar"
+              :style="{ background: crmAvatarBg(record.name || record.id) }"
+              aria-hidden="true"
+              >{{ crmInitial(record.name) }}</span
+            >
+            <a
+              class="min-w-0 truncate font-semibold text-[#1D1D1F] hover:text-[#007AFF]"
+              @click="detail(record)"
+              >{{ record.name }}</a
+            >
+          </div>
+          <template v-else-if="column.key === 'stage'">
+            <span v-if="record.stage" class="ap-crm-pill ap-crm-pill--blue">
+              {{ stageLabel(record.stage) }}
+            </span>
+            <span v-else class="text-[#C7C7CC]">-</span>
+          </template>
+          <template v-else-if="column.key === 'next'">
+            <template v-if="tab === 'pool'">
+              <span class="ap-crm-pill ap-crm-pill--amber">
+                {{ record.poolDay != null ? `剩余 ${record.poolDay} 天` : '即将进入' }}
+              </span>
+            </template>
+            <template v-else>
+              <span class="tabular-nums text-[#3A3A3C]">
+                {{ fmtDateTime(record.contactNextTime, 'MM-DD HH:mm', '-') }}
+              </span>
+              <span
+                v-if="tab === 'expired' && overdueDays(record)"
+                class="ap-crm-pill ap-crm-pill--red ml-1.5"
+              >
+                逾期 {{ overdueDays(record) }} 天
+              </span>
+            </template>
+          </template>
+          <span
+            v-else-if="column.key === 'last'"
+            class="line-clamp-2 text-[13px] text-[#6E6E73]"
+            >{{ record.contactLastContent || '-' }}</span
+          >
+          <template v-else-if="column.key === 'lastTime'">
+            <span class="tabular-nums text-[#6E6E73]">
+              {{ fmtDateTime(record.contactLastTime, 'MM-DD HH:mm', '-') }}
+            </span>
+          </template>
+          <div v-else-if="column.key === 'action'" class="flex items-center gap-2">
+            <button
+              type="button"
+              class="agenda-act-btn agenda-act-btn--soft"
+              @click="chat(record)"
+            >
+              去会话
+            </button>
+            <button
+              type="button"
+              class="agenda-act-btn agenda-act-btn--primary"
+              @click="openFollow(record)"
+            >
+              写跟进
+            </button>
+          </div>
+        </template>
+        <template #emptyText>
+          <div class="flex flex-col items-center justify-center gap-2 py-12 text-center">
+            <div class="grid size-11 place-items-center rounded-2xl bg-[#F4F5F8] text-[#8E8E93]">
+              <IconifyIcon icon="lucide:calendar-check-2" class="size-5" />
+            </div>
+            <div class="text-[13px] font-medium text-[#86868B]">{{ emptyText }}</div>
+          </div>
+        </template>
+      </Table>
+    </div>
+
+    <Modal
+      v-model:open="open"
+      :title="`写跟进 · ${target?.name || ''}`"
+      ok-text="保存跟进"
+      :confirm-loading="saving"
+      :width="500"
+      wrap-class-name="ap-modal-sheet"
+      @ok="saveFollow"
+    >
+      <div class="ap-sheet-lead">
+        <span class="ap-sheet-icon ap-sheet-icon--purple">
+          <IconifyIcon icon="lucide:notebook-pen" class="size-5" />
+        </span>
+        <div class="ap-sheet-subtitle">
+          记录本次沟通进展并预约下次联系时间，保存后自动从待办提醒中核销。
+        </div>
+      </div>
+      <div class="ap-sheet-body">
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">跟进方式</label>
+          <Select
+            v-model:value="form.type"
+            class="w-full"
+            :options="followTypes.map((o) => ({ label: o.label, value: o.value }))"
+          />
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">沟通要点与反馈</label>
+          <Textarea
+            v-model:value="form.content"
+            :auto-size="{ minRows: 4, maxRows: 8 }"
+            :maxlength="2000"
+            placeholder="这次聊了什么、客户的反馈、下一步要做什么…"
+          />
+        </div>
+        <div class="ap-sheet-field">
+          <label class="ap-sheet-label">下次联系时间</label>
+          <div class="flex flex-wrap items-center gap-2">
+            <DatePicker
+              v-model:value="form.nextTime"
+              show-time
+              format="YYYY-MM-DD HH:mm"
+              :allow-clear="false"
+              class="min-w-[200px] flex-1"
+            />
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="q in QUICK"
+                :key="q.days"
+                type="button"
+                class="agenda-quick-chip"
+                @click="
+                  form.nextTime = dayjs()
+                    .add(q.days, 'day')
+                    .hour(10)
+                    .minute(0)
+                    .second(0)
+                "
+              >
+                {{ q.label }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </Modal>
   </div>
 </template>
+
+<style scoped>
+.agenda-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px 24px 16px;
+}
+
+.agenda-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.agenda-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1d1d1f;
+}
+
+.agenda-sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: #6e6e73;
+}
+
+.agenda-refresh {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: #6e6e73;
+  cursor: pointer;
+  background: rgb(255 255 255 / 86%);
+  border: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 5%),
+    inset 0 0 0 0.5px rgb(0 0 0 / 10%);
+}
+
+.agenda-refresh:hover {
+  color: #1d1d1f;
+  background: #fff;
+}
+
+.agenda-card {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--ap-surface);
+  border-radius: 18px;
+  box-shadow: var(--ap-shadow-rest);
+}
+
+.agenda-tabs-bar {
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--ap-separator);
+}
+
+.agenda-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  background: #f2f2f7;
+  border-radius: 10px;
+}
+
+.agenda-seg__btn {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #6e6e73;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  transition: all var(--ap-dur-fast) var(--ap-ease);
+}
+
+.agenda-seg__btn.on {
+  font-weight: 600;
+  color: #1d1d1f;
+  background: #fff;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 8%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
+}
+
+.agenda-seg__badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  color: #007aff;
+  background: #e8f2ff;
+  border-radius: 999px;
+}
+
+.agenda-seg__badge.is-danger {
+  color: #d70015;
+  background: #ffeceb;
+}
+
+.agenda-seg__badge.is-warn {
+  color: #b25e00;
+  background: #fff4e0;
+}
+
+.agenda-seg__badge.is-done {
+  color: #1e8e3e;
+  background: #eaf9ee;
+}
+
+.agenda-act-btn {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  transition: all var(--ap-dur-fast);
+}
+
+.agenda-act-btn--soft {
+  color: #3a3a3c;
+  background: #f2f2f7;
+}
+
+.agenda-act-btn--soft:hover {
+  color: #1d1d1f;
+  background: #e5e5ea;
+}
+
+.agenda-act-btn--primary {
+  color: #007aff;
+  background: #e8f2ff;
+}
+
+.agenda-act-btn--primary:hover {
+  background: #d8e9ff;
+}
+
+.agenda-quick-chip {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #3a3a3c;
+  cursor: pointer;
+  background: #f2f2f7;
+  border: 0;
+  border-radius: 999px;
+  transition: all var(--ap-dur-fast);
+}
+
+.agenda-quick-chip:hover {
+  color: #007aff;
+  background: #e8f2ff;
+}
+</style>
