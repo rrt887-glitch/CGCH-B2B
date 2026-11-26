@@ -339,6 +339,18 @@ if [ -n "$CUR" ] && [ "$CUR" != "$URL" ]; then
   wait_backend
 fi
 
+# 记录本次部署的版本（镜像里带了 revision 标签），回滚时据此选上一个版本
+BACKEND_IMAGE=$(docker compose config --images 2>/dev/null | grep -m1 'cgch-backend' || true)
+if [ -n "$BACKEND_IMAGE" ]; then
+  DEPLOYED_SHA=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$BACKEND_IMAGE" 2>/dev/null || true)
+  if [ -n "$DEPLOYED_SHA" ] && [ "$DEPLOYED_SHA" != "<no value>" ]; then
+    mkdir -p "$DIR"
+    printf '%s %s\n' "$(date '+%F %T')" "$DEPLOYED_SHA" >> "$DIR/deploy-history.log"
+    tail -n 30 "$DIR/deploy-history.log" > "$DIR/deploy-history.tmp" && mv "$DIR/deploy-history.tmp" "$DIR/deploy-history.log"
+    say "当前版本：${DEPLOYED_SHA:0:8}"
+  fi
+fi
+
 say "安装完成：$URL"
 cat <<EOF
 

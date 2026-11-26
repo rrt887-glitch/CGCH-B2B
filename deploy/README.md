@@ -44,3 +44,24 @@ systemctl disable --now cgch-autodeploy.timer # 关掉
 ```
 
 > 自动部署只会在**镜像更新后**触发（CI 构建成功才会推镜像），所以不会反复重启服务。
+
+## 回滚
+
+```bash
+bash /opt/cgch/rollback.sh            # 回到上一个版本
+bash /opt/cgch/rollback.sh --list     # 看部署历史
+bash /opt/cgch/rollback.sh <提交sha>   # 回到指定版本
+```
+
+回滚脚本会：
+
+1. **暂停自动部署**（否则 10 分钟内又升回最新）
+2. **备份数据库**到 `/opt/cgch/db-before-rollback-*.sql.gz`
+3. 用之前的镜像版本重新部署
+
+注意：回滚只换**代码**，数据库已执行的升级不会倒退；如果新版本有破坏性改动，用第 2 步的备份恢复。修复后要恢复自动部署：
+
+```bash
+rm /opt/cgch/autodeploy.disabled
+systemctl start cgch-autodeploy.service
+```

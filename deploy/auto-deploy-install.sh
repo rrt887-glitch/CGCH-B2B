@@ -14,6 +14,11 @@ set -euo pipefail
 curl -fsSL https://raw.githubusercontent.com/rrt887-glitch/CGCH-B2B/main/deploy/auto-deploy.sh -o /usr/local/bin/cgch-auto-deploy
 chmod +x /usr/local/bin/cgch-auto-deploy
 
+# 回滚脚本放到 /opt/cgch/rollback.sh，随时可用
+mkdir -p /opt/cgch
+curl -fsSL https://raw.githubusercontent.com/rrt887-glitch/CGCH-B2B/main/deploy/rollback.sh -o /opt/cgch/rollback.sh
+chmod +x /opt/cgch/rollback.sh
+
 # 服务：一次执行
 cat >/etc/systemd/system/cgch-autodeploy.service <<'EOF'
 [Unit]
@@ -57,3 +62,6 @@ echo "  查看日志：journalctl -u cgch-autodeploy.service -n 50 --no-pager"
 echo "  暂停自动部署：touch /opt/cgch/autodeploy.disabled"
 echo "  恢复自动部署：rm /opt/cgch/autodeploy.disabled"
 echo "  关闭自动部署：systemctl disable --now cgch-autodeploy.timer"
+echo
+echo "回滚到上一个版本：bash /opt/cgch/rollback.sh"
+echo "看部署历史：bash /opt/cgch/rollback.sh --list"

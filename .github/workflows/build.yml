@@ -3018,7 +3018,8 @@ jobs:
           set -e
           for n in backend web mysql; do
             if ! docker build -t $REGISTRY/cgch-$n:latest -t $REGISTRY/cgch-$n:${{ github.sha }} \
-                --label org.opencontainers.image.source=https://github.com/${{ github.repository }} ctx/$n \
+                --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+                --label org.opencontainers.image.revision=${{ github.sha }} ctx/$n \
                 > /tmp/build-$n.log 2>&1; then
               echo "::error title=构建 $n 镜像失败::$(tail -n 25 /tmp/build-$n.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
               df -h / | awk '{printf "%s%%0A", $0}'
