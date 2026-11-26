@@ -23,6 +23,8 @@ const canEdit = computed(() => scope.value === 'personal' || hasAccessByCodes(['
 const parentId = ref(0);
 const path = ref<CloudApi.File[]>([]);
 const keyword = ref('');
+/** 最近一次真正提交给后端的关键词：搜索无结果时不能再说“暂无资料” */
+const appliedKeyword = ref('');
 const rows = ref<CloudApi.File[]>([]);
 const loading = ref(false);
 const uploading = ref(0);
@@ -42,6 +44,7 @@ async function load() {
   loading.value = true;
   try {
     rows.value = await getCloudFiles({ scope: scope.value, parentId: parentId.value, keyword: keyword.value.trim() || undefined });
+    appliedKeyword.value = keyword.value.trim();
     path.value = parentId.value ? await getCloudPath(parentId.value) : [];
   } finally {
     loading.value = false;
@@ -230,8 +233,18 @@ onMounted(load);
       <template #emptyText>
         <Empty :image="Empty.PRESENTED_IMAGE_SIMPLE">
           <template #description>
-            <div class="font-medium text-gray-700">暂无资料</div>
-            <div class="text-xs text-gray-500">{{ scope === 'enterprise' ? '支持查看企业云盘中的共享资料文件' : '个人云盘中的文件只有你自己能看到' }}</div>
+            <div class="font-medium text-gray-700">
+              {{ appliedKeyword ? `没有找到与“${appliedKeyword}”匹配的文件` : '暂无资料' }}
+            </div>
+            <div class="text-xs text-gray-500">
+              {{
+                appliedKeyword
+                  ? '换个关键词，或清空搜索查看当前目录下的全部文件'
+                  : scope === 'enterprise'
+                    ? '支持查看企业云盘中的共享资料文件'
+                    : '个人云盘中的文件只有你自己能看到'
+              }}
+            </div>
           </template>
         </Empty>
       </template>

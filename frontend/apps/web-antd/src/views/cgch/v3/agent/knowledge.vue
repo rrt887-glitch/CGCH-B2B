@@ -268,7 +268,16 @@ onMounted(() => {
           </template>
         </template>
         <template #emptyText>
-          <Empty :image="Empty.PRESENTED_IMAGE_SIMPLE" description="还没有资料，上传产品目录、FAQ、报价规则等文件，AI 就能据此回答客户" />
+          <Empty
+            :image="Empty.PRESENTED_IMAGE_SIMPLE"
+            :description="
+              keyword.trim()
+                ? `没有找到与“${keyword.trim()}”匹配的资料`
+                : kind
+                  ? '当前类型下还没有资料'
+                  : '还没有资料，上传产品目录、FAQ、报价规则等文件，AI 就能据此回答客户'
+            "
+          />
         </template>
       </Table>
       <div class="mt-4 flex items-center justify-end gap-2 text-sm text-gray-500">

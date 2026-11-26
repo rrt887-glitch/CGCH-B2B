@@ -20,6 +20,8 @@ const canEdit = (r: QuickReplyApi.Item) => r.scope === 'personal' || canManage.v
 const rows = ref<QuickReplyApi.Item[]>([]);
 const loading = ref(false);
 const keyword = ref('');
+/** 最近一次真正提交给后端的关键词：决定空态文案，避免边打字边变 */
+const appliedKeyword = ref('');
 const columns = [
   { title: '标题', dataIndex: 'title', key: 'title', width: 180 },
   { title: '内容', dataIndex: 'content', key: 'content' },
@@ -32,6 +34,7 @@ async function load() {
   loading.value = true;
   try {
     rows.value = await getQuickReplies(keyword.value.trim() || undefined);
+    appliedKeyword.value = keyword.value.trim();
   } finally {
     loading.value = false;
   }
@@ -85,7 +88,9 @@ onMounted(load);
           <span v-else class="text-xs text-gray-400">管理员维护</span>
         </div>
       </template>
-      <template #emptyText>还没有快捷回复</template>
+      <template #emptyText>
+        {{ appliedKeyword ? `没有找到与“${appliedKeyword}”匹配的快捷回复，可清空搜索查看全部` : '还没有快捷回复' }}
+      </template>
     </Table>
 
     <Modal v-model:open="open" :title="form.id ? '编辑快捷回复' : '新建快捷回复'" ok-text="保存" :width="560" @ok="save">

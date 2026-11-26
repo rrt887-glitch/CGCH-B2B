@@ -27,6 +27,8 @@ import { Tinymce } from '#/components/tinymce';
 
 const category = ref('');
 const keyword = ref('');
+/** 最近一次真正提交给后端的关键词：决定空态文案 */
+const appliedKeyword = ref('');
 const rows = ref<MailTemplateApi.Template[]>([]);
 const loading = ref(false);
 const page = reactive({ no: 1, size: 20 });
@@ -47,6 +49,7 @@ async function load() {
   loading.value = true;
   try {
     rows.value = await getMailTemplates({ category: category.value || undefined, keyword: keyword.value.trim() || undefined });
+    appliedKeyword.value = keyword.value.trim();
   } finally {
     loading.value = false;
   }
@@ -156,7 +159,12 @@ onMounted(load);
           <span v-else class="text-xs text-gray-400">管理员维护</span>
         </div>
       </template>
-      <template #emptyText><Empty :image="Empty.PRESENTED_IMAGE_SIMPLE" description="暂无邮件模板" /></template>
+      <template #emptyText>
+        <Empty
+          :image="Empty.PRESENTED_IMAGE_SIMPLE"
+          :description="appliedKeyword ? `没有找到与“${appliedKeyword}”匹配的邮件模板` : '暂无邮件模板'"
+        />
+      </template>
     </Table>
     <div class="mt-4 flex items-center justify-end gap-2 text-sm text-gray-500">
       共 {{ rows.length }} 项数据
