@@ -20,6 +20,7 @@ import { $t, setupI18n } from '#/locales';
 import { bindFormCreateApp } from '#/plugins/form-create/lazy';
 import { registerMotionDirectives } from '#/utils/motion';
 import { setupHoverPrefetch } from '#/utils/prefetch';
+import { setupPaginationA11y } from '#/utils/antd-pagination-a11y';
 import { setupSegmentedKeyboard } from '#/utils/segmented-enter';
 import { setupVxeTableA11y } from '#/utils/vxe-a11y';
 import { initComponentAdapter } from './adapter/component';
@@ -95,6 +96,9 @@ async function bootstrap(namespace: string) {
 
   // Segmented 是原生 radio，回车不会选中，这里统一补上
   setupSegmentedKeyboard();
+
+  // antd 分页器只有图标：补「上一页 / 下一页 / 第 N 页」等可访问名称
+  setupPaginationA11y();
 
   // 鼠标悬停菜单时预取页面分包：跨境链路下能省掉 1 个往返的等待
   setupHoverPrefetch();
