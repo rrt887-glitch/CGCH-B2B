@@ -635,7 +635,15 @@ onMounted(async () => {
               >
                 <IconifyIcon icon="lucide:mail" class="size-5" />
               </div>
-              <div class="text-[13px] text-[#86868B]">暂无邮件</div>
+              <div class="text-[13px] text-[#86868B]">
+                {{
+                  listLoading
+                    ? '正在加载邮件…'
+                    : keyword.trim()
+                      ? `没有找到与“${keyword.trim()}”匹配的邮件`
+                      : '这个文件夹里还没有邮件'
+                }}
+              </div>
             </div>
             <div
               v-for="item in list"
