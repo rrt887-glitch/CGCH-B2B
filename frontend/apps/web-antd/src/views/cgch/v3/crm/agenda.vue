@@ -5,8 +5,8 @@
  */
 import type { Dayjs } from 'dayjs';
 
-import { computed, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import { getDictOptions } from '@vben/hooks';
 import { DICT_TYPE } from '@vben/constants';
@@ -30,7 +30,19 @@ const TABS: { key: TabKey; label: string; empty: string }[] = [
 const STATUS: Record<Exclude<TabKey, 'pool'>, number> = { today: 1, expired: 2, done: 3 };
 
 const router = useRouter();
-const tab = ref<TabKey>('today');
+const route = useRoute();
+
+const isTabKey = (v: unknown): v is TabKey =>
+  TABS.some((t) => t.key === v);
+
+/**
+ * 当前 tab 写进 URL（?agendaTab=expired）。
+ * 去客户详情再「返回」时页面是按上一页地址恢复的，URL 里没有 tab 就会跳回默认的
+ * 「今天需联系」，业务员得重新点一次「已逾期」。
+ */
+const tab = ref<TabKey>(
+  isTabKey(route.query.agendaTab) ? route.query.agendaTab : 'today',
+);
 const rows = ref<any[]>([]);
 const total = ref(0);
 const counts = reactive<Record<TabKey, number>>({ today: 0, expired: 0, pool: 0, done: 0 });
@@ -167,10 +179,24 @@ async function saveFollow() {
 }
 
 function switchTab(v: any) {
-  tab.value = v;
+  tab.value = isTabKey(v) ? v : 'today';
   pager.no = 1;
+  // 用 replace，避免每切一次 tab 就往历史记录里塞一条
+  router.replace({ query: { ...route.query, agendaTab: tab.value } });
   load();
 }
+
+// 浏览器前进/后退时同步回正确的 tab
+watch(
+  () => route.query.agendaTab,
+  (v) => {
+    const next = isTabKey(v) ? v : 'today';
+    if (next === tab.value) return;
+    tab.value = next;
+    pager.no = 1;
+    load();
+  },
+);
 
 onMounted(() => {
   loadCounts();
