@@ -214,13 +214,13 @@ onMounted(() => {
           {
             label: '锁定',
             type: 'default',
-            ifShow: !customer.value.lockStatus && canWrite,
+            ifShow: !customer.lockStatus && canWrite,
             onClick: handleLock.bind(null, true),
           },
           {
             label: '解锁',
             type: 'default',
-            ifShow: customer.value.lockStatus && canWrite,
+            ifShow: customer.lockStatus && canWrite,
             onClick: handleLock.bind(null, false),
           },
           {
@@ -238,7 +238,7 @@ onMounted(() => {
           {
             label: '放入公海',
             type: 'default',
-            ifShow: !!customer.value.ownerUserId && canWrite,
+            ifShow: !!customer.ownerUserId && canWrite,
             onClick: handlePutPool,
           },
         ]"
