@@ -579,7 +579,10 @@ defineExpose({ reload, setExtra, currentParams: params });
 
         <div class="crm-list__pager">
           <span class="text-[12.5px] text-[#86868B] tabular-nums">
-            共 <b class="font-semibold text-[#1D1D1F]">{{ total }}</b> 条记录
+            <template v-if="loading">正在加载…</template>
+            <template v-else>
+              共 <b class="font-semibold text-[#1D1D1F]">{{ total }}</b> 条记录
+            </template>
           </span>
           <Pagination
             v-model:current="page.no"
