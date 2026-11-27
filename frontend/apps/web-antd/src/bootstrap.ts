@@ -22,6 +22,7 @@ import { registerMotionDirectives } from '#/utils/motion';
 import { setupHoverPrefetch } from '#/utils/prefetch';
 import { setupPaginationA11y } from '#/utils/antd-pagination-a11y';
 import { setupSegmentedKeyboard } from '#/utils/segmented-enter';
+import { setupServiceFallback } from '#/utils/service-fallback';
 import { setupVxeTableA11y } from '#/utils/vxe-a11y';
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
@@ -45,6 +46,8 @@ async function bootstrap(namespace: string) {
   // });
 
   const app = createApp(App);
+  // 后端不可用（部署窗口 502 等）时给全屏兜底，而不是白屏干等
+  setupServiceFallback(app);
   app.use(VueDOMPurifyHTML);
 
   // 注册v-loading指令
