@@ -21,6 +21,7 @@ import { bindFormCreateApp } from '#/plugins/form-create/lazy';
 import { registerMotionDirectives } from '#/utils/motion';
 import { setupHoverPrefetch } from '#/utils/prefetch';
 import { setupPaginationA11y } from '#/utils/antd-pagination-a11y';
+import { setupTableA11y } from '#/utils/antd-table-a11y';
 import { setupSegmentedKeyboard } from '#/utils/segmented-enter';
 import { setupServiceFallback, showServiceUnavailable } from '#/utils/service-fallback';
 import { setupVxeTableA11y } from '#/utils/vxe-a11y';
@@ -102,6 +103,9 @@ async function bootstrapApp(namespace: string) {
 
   // antd 分页器只有图标：补「上一页 / 下一页 / 第 N 页」等可访问名称
   setupPaginationA11y();
+
+  // antd 表格行选择：全选是英文 Select all、行内复选框无名，统一补中文
+  setupTableA11y();
 
   // 鼠标悬停菜单时预取页面分包：跨境链路下能省掉 1 个往返的等待
   setupHoverPrefetch();
