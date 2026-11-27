@@ -59,6 +59,7 @@ import {
   stageLabel,
   stageOptions,
 } from '#/views/cgch/v3/crm/components/shared';
+import { normalizePhoneKeyword } from '#/utils/phone-keyword';
 import { countryName } from '#/views/cgch/crm/shared/countries';
 import {
   getCustomerGroupList,
@@ -282,7 +283,10 @@ async function loadConversations(silent = false) {
       pageNo: 1,
       pageSize: 100,
       accountId: accountId.value,
-      keyword: keyword.value || undefined,
+      // 列表里显示 +36706524840，用户照抄搜索时后端按号码片段匹配不到带 + 的写法
+      keyword: keyword.value
+        ? normalizePhoneKeyword(keyword.value) || undefined
+        : undefined,
       unreadOnly: listFilter.value === 'unread' || undefined,
       unreplied: listFilter.value === 'unreplied' || undefined,
       starred: listFilter.value === 'starred' || undefined,
