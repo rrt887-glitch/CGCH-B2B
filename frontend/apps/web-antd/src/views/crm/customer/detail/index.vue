@@ -2,10 +2,11 @@
 import type { CrmCustomerApi } from '#/api/crm/customer';
 import type { SystemOperateLogApi } from '#/api/system/operate-log';
 
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { confirm, Page, useVbenModal } from '@vben/common-ui';
+import { useAccess } from '@vben/access';
 import { useTabs } from '@vben/hooks';
 
 import { Card, message, Tabs } from 'ant-design-vue';
@@ -23,11 +24,10 @@ import { useDescription } from '#/components/description';
 import { OperateLog } from '#/components/operate-log';
 import { ACTION_ICON, TableAction } from '#/components/table-action';
 import { $t } from '#/locales';
-import { BusinessDetailsList } from '#/views/crm/business/components';
 import { ContactDetailsList } from '#/views/crm/contact/components';
 import { ContractDetailsList } from '#/views/crm/contract/components';
 import { FollowUp } from '#/views/crm/followup';
-import { PermissionList, TransferForm } from '#/views/crm/permission';
+import { TransferForm } from '#/views/crm/permission';
 import { ReceivableDetailsList } from '#/views/crm/receivable/components';
 import { ReceivablePlanDetailsList } from '#/views/crm/receivable/plan/components';
 
@@ -47,7 +47,9 @@ const loading = ref(false); // 加载中
 const customerId = ref(0); // 客户编号
 const customer = ref<CrmCustomerApi.Customer>({} as CrmCustomerApi.Customer); // 客户详情
 const logList = ref<SystemOperateLogApi.OperateLog[]>([]); // 操作日志
-const permissionListRef = ref<InstanceType<typeof PermissionList>>(); // 团队成员列表 Ref
+// 团队成员页签已去掉，按钮权限改用权限码判断
+const { hasAccessByCodes } = useAccess();
+const canWrite = computed(() => hasAccessByCodes(['crm:customer:update']));
 
 const [Descriptions] = useDescription({
   bordered: false,
@@ -194,32 +196,31 @@ onMounted(() => {
             type: 'primary',
             icon: ACTION_ICON.EDIT,
             auth: ['crm:customer:update'],
-            ifShow: permissionListRef?.validateWrite,
+            ifShow: canWrite,
             onClick: handleEdit,
           },
           {
             label: '转移',
             type: 'primary',
-            ifShow: permissionListRef?.validateOwnerUser,
+            ifShow: canWrite,
             onClick: handleTransfer,
           },
           {
             label: '更改成交状态',
             type: 'default',
-            ifShow: permissionListRef?.validateWrite,
+            ifShow: canWrite,
             onClick: handleUpdateDealStatus,
           },
           {
             label: '锁定',
             type: 'default',
-            ifShow:
-              !customer.lockStatus && permissionListRef?.validateOwnerUser,
+            ifShow: !customer.value.lockStatus && canWrite,
             onClick: handleLock.bind(null, true),
           },
           {
             label: '解锁',
             type: 'default',
-            ifShow: customer.lockStatus && permissionListRef?.validateOwnerUser,
+            ifShow: customer.value.lockStatus && canWrite,
             onClick: handleLock.bind(null, false),
           },
           {
@@ -237,8 +238,7 @@ onMounted(() => {
           {
             label: '放入公海',
             type: 'default',
-            ifShow:
-              !!customer.ownerUserId && permissionListRef?.validateOwnerUser,
+            ifShow: !!customer.value.ownerUserId && canWrite,
             onClick: handlePutPool,
           },
         ]"
@@ -260,22 +260,6 @@ onMounted(() => {
         </Tabs.TabPane>
         <Tabs.TabPane tab="联系人" key="3" :force-render="true">
           <ContactDetailsList
-            :biz-id="customerId"
-            :biz-type="BizTypeEnum.CRM_CUSTOMER"
-            :customer-id="customerId"
-          />
-        </Tabs.TabPane>
-        <Tabs.TabPane tab="团队成员" key="4" :force-render="true">
-          <PermissionList
-            ref="permissionListRef"
-            :biz-id="customerId"
-            :biz-type="BizTypeEnum.CRM_CUSTOMER"
-            :show-action="true"
-            @quit-team="handleBack"
-          />
-        </Tabs.TabPane>
-        <Tabs.TabPane tab="商机" key="5" :force-render="true">
-          <BusinessDetailsList
             :biz-id="customerId"
             :biz-type="BizTypeEnum.CRM_CUSTOMER"
             :customer-id="customerId"

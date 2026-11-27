@@ -18,18 +18,24 @@ import {
   Empty,
   Input,
   message,
+  Modal,
   Select,
   Spin,
   Table,
   Tag,
+  Upload,
 } from 'ant-design-vue';
 
 import { getContractPage } from '#/api/crm/contract';
 import {
   getCustomerPage,
   getCustomerStageStats,
+  importCustomer,
+  importCustomerTemplate,
+  transferCustomer,
   updateCustomerStage,
 } from '#/api/crm/customer';
+import { getSimpleUserList } from '#/api/system/user';
 import { requestClient } from '#/api/request';
 
 import Settings from '../settings.vue';
@@ -62,6 +68,94 @@ const stage = ref<number | undefined>();
 const keyword = ref('');
 const pager = reactive({ no: 1, size: 20 });
 
+/** 勾选批量操作 */
+const selectedIds = ref<number[]>([]);
+const users = ref<{ id?: number; nickname: string }[]>([]);
+const transferOpen = ref(false);
+const transferTo = ref<number>();
+const transferring = ref(false);
+const importOpen = ref(false);
+const importFile = ref<File>();
+const importFileList = ref<any[]>([]);
+const importUpdate = ref(false);
+const importing = ref(false);
+
+function onSelectChange(keys: any[]) {
+  selectedIds.value = (keys || []).map(Number);
+}
+
+async function ensureUsers() {
+  if (!users.value.length) {
+    users.value = ((await getSimpleUserList().catch(() => [])) as any) || [];
+  }
+}
+
+async function openTransfer() {
+  await ensureUsers();
+  transferTo.value = undefined;
+  transferOpen.value = true;
+}
+
+async function doTransfer() {
+  if (!transferTo.value) {
+    message.warning('请选择新的负责人');
+    return;
+  }
+  transferring.value = true;
+  try {
+    let ok = 0;
+    for (const id of selectedIds.value) {
+      try {
+        await transferCustomer({ id, newOwnerUserId: transferTo.value } as any);
+        ok++;
+      } catch {
+        // 单个失败不中断，最后统一提示
+      }
+    }
+    message.success(`已转交 ${ok} / ${selectedIds.value.length} 个客户`);
+    transferOpen.value = false;
+    selectedIds.value = [];
+    await loadCustomers();
+    await loadStats();
+  } finally {
+    transferring.value = false;
+  }
+}
+
+function beforeImportFile(file: File) {
+  importFile.value = file;
+  importFileList.value = [file as any];
+  return false;
+}
+
+function pickImportFile(file: File) {
+  beforeImportFile(file);
+  return false;
+}
+
+async function doImport() {
+  if (!importFile.value) {
+    message.warning('请选择 Excel 文件');
+    return;
+  }
+  importing.value = true;
+  try {
+    await importCustomer({
+      file: importFile.value,
+      updateSupport: importUpdate.value,
+    } as any);
+    message.success('导入完成');
+    importOpen.value = false;
+    importFile.value = undefined;
+    importFileList.value = [];
+    pager.no = 1;
+    await loadCustomers();
+    await loadStats();
+  } finally {
+    importing.value = false;
+  }
+}
+
 const tabs = [
   { key: 'customer' as TabKey, label: '客户' },
   { key: 'today' as TabKey, label: '今天' },
@@ -70,7 +164,7 @@ const tabs = [
 ];
 
 async function loadStats() {
-  stats.value = (await getCustomerStageStats().catch(() => ({}))) || {};
+  stats.value = (await getCustomerStageStats().catch(() => ({} as Record<string, number>))) || {};
 }
 
 async function loadCustomers() {
@@ -293,6 +387,7 @@ onMounted(() => {
           <IconifyIcon icon="lucide:search" class="mr-1 inline size-4 align-[-3px]" />
           搜索
         </Button>
+        <Button @click="importOpen = true">导入客户</Button>
         <span class="text-xs text-gray-400">共 {{ total }} 个客户</span>
       </div>
 
@@ -324,6 +419,12 @@ onMounted(() => {
         </div>
       </div>
 
+      <div v-if="selectedIds.length" class="crm-wb__batch">
+        <span>已选 {{ selectedIds.length }} 个客户</span>
+        <Button size="small" type="primary" @click="openTransfer">批量转交负责人</Button>
+        <Button size="small" @click="onSelectChange([])">取消选择</Button>
+      </div>
+
       <Spin v-else :spinning="loading">
         <Table
           :columns="columns as any"
@@ -336,6 +437,10 @@ onMounted(() => {
             onChange: (p: number) => { pager.no = p; loadCustomers(); },
           }"
           :row-key="(r: any) => r.id"
+          :row-selection="{
+            selectedRowKeys: selectedIds,
+            onChange: onSelectChange,
+          }"
           size="middle"
           :custom-row="(r: any) => ({ onClick: () => openCustomer(r), style: 'cursor:pointer' })"
         >
@@ -470,6 +575,59 @@ onMounted(() => {
       </Spin>
     </template>
 
+    <Modal
+      v-model:open="transferOpen"
+      title="批量转交负责人"
+      :width="440"
+      centered
+      :confirm-loading="transferring"
+      ok-text="转交"
+      @ok="doTransfer"
+    >
+      <p class="mb-3 text-sm text-gray-500">
+        选中 {{ selectedIds.length }} 个客户，全部分配给下面的同事。
+      </p>
+      <Select
+        v-model:value="transferTo"
+        class="w-full"
+        placeholder="选择新的负责人"
+        :options="users.map((u) => ({ label: u.nickname, value: u.id }))"
+        option-filter-prop="label"
+        show-search
+      />
+    </Modal>
+
+    <Modal
+      v-model:open="importOpen"
+      title="导入客户"
+      :width="480"
+      centered
+      :confirm-loading="importing"
+      ok-text="开始导入"
+      @ok="doImport"
+    >
+      <div class="mb-3 text-sm text-gray-500">
+        支持 Excel（.xlsx）。先下载模板，按模板填写后再上传。
+        <Button type="link" size="small" @click="importCustomerTemplate">
+          下载模板
+        </Button>
+      </div>
+      <Upload
+        :file-list="importFileList"
+        :before-upload="pickImportFile"
+        :max-count="1"
+        accept=".xlsx,.xls"
+      >
+        <Button>选择文件</Button>
+      </Upload>
+      <div class="mt-3">
+        <label class="flex items-center gap-2 text-sm text-gray-600">
+          <input v-model="importUpdate" type="checkbox" />
+          已存在的客户要更新（不勾选则跳过重复）
+        </label>
+      </div>
+    </Modal>
+
     <!-- ========== 设置 ========== -->
     <template v-else>
       <Settings />
@@ -552,6 +710,17 @@ onMounted(() => {
 }
 .crm-wb__stage b {
   font-weight: 600;
+}
+.crm-wb__batch {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #1d1d1f;
+  background: rgb(0 122 255 / 8%);
+  border-radius: 10px;
 }
 .crm-wb__toolbar {
   display: flex;
