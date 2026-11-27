@@ -1,4 +1,4 @@
-name: build
+﻿name: build
 
 on:
   push:
@@ -2957,7 +2957,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: read
+      contents: write
       packages: write
     env:
       REGISTRY: ghcr.io/rrt887-glitch
@@ -3057,6 +3057,17 @@ jobs:
           done
           echo "已推送到 $ACR_REGISTRY/$ACR_NAMESPACE"
 
+
+      - name: 导出后端镜像到 GitHub Release（镜像拉取慢的服务器用这个）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          docker save $REGISTRY/cgch-backend:latest | gzip -1 > /tmp/cgch-backend.tgz
+          ls -lh /tmp/cgch-backend.tgz
+          gh release view image-latest >/dev/null 2>&1 || \
+            gh release create image-latest --title "最新镜像（给拉取慢的服务器）" --notes "每次 main 构建都会覆盖这个文件"
+          gh release upload image-latest /tmp/cgch-backend.tgz --clobber
       - name: 在全新环境执行一键安装脚本
         run: |
           set -e
