@@ -50,7 +50,28 @@ public class ChannelUnipileController {
         return CommonResult.success(channelUnipileService.connect(provider, Boolean.TRUE.equals(force)));
     }
 
-    @PostMapping("/recover")
+    @PostMapping("/facebook/login")
+    @Operation(summary = "Facebook 直接登录第 1 步：提交账号密码或 cookies")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
+    public CommonResult<Map<String, Object>> facebookLogin(@RequestBody Map<String, Object> req) {
+        return CommonResult.success(channelUnipileService.startFacebookLogin(
+                str(req.get("username")), str(req.get("password")), str(req.get("cookies")),
+                str(req.get("userAgent")), Boolean.TRUE.equals(req.get("selectPages"))));
+    }
+
+    @PostMapping("/facebook/solve")
+    @Operation(summary = "Facebook 直接登录第 2 步：回答 checkpoint（选 Page / 验证码 / SKIP）")
+    @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
+    public CommonResult<Map<String, Object>> facebookSolve(@RequestBody Map<String, Object> req) {
+        return CommonResult.success(channelUnipileService.solveFacebookLogin(
+                str(req.get("intentId")), str(req.get("code")), str(req.get("credential"))));
+    }
+
+    private static String str(Object v) {
+        return v == null ? null : String.valueOf(v);
+    }
+
+    @PostMapping("/recover")    @PostMapping("/recover")
     @Operation(summary = "找回 Unipile 上已存在、但后台没记录的账号")
     @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
     public CommonResult<Integer> recover() {

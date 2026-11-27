@@ -247,7 +247,100 @@ public class ChannelUnipileService {
         return m;
     }
 
-    /** 生成一次性授权令牌：记录「哪个成员、哪个渠道」，回调时换回来 */
+    // ==================== Facebook 自定义登录（不经过托管页） ====================
+
+    /**
+     * 第 1 步：用账号密码或 cookies 发起登录。
+     * 返回 {status:"account", accountId} 或 {status:"checkpoint", intentId, checkpoint}。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> startFacebookLogin(String username, String password,
+            String cookies, String userAgent, boolean selectPages) {
+        ChannelUnipileCredentialDO c = credential();
+        String key = keyOf(c);
+        com.fasterxml.jackson.databind.node.ObjectNode body = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        body.put("provider", "facebook");
+        com.fasterxml.jackson.databind.node.ObjectNode cred = body.putObject("credentials");
+        if (StrUtil.isNotBlank(cookies)) {
+            // cookies 方式：把 "a=b; c=d" 解析成对象
+            for (String part : cookies.split(";")) {
+                String[] kv = part.trim().split("=", 2);
+                if (kv.length == 2 && StrUtil.isNotBlank(kv[0])) {
+                    cred.put(kv[0].trim(), kv[1].trim());
+                }
+            }
+            if (StrUtil.isNotBlank(userAgent)) {
+                body.put("user_agent", userAgent);
+            }
+        } else {
+            cred.put("username", StrUtil.nullToEmpty(username));
+            cred.put("password", StrUtil.nullToEmpty(password));
+        }
+        com.fasterxml.jackson.databind.node.ObjectNode cfg = body.putObject("config");
+        cfg.put("allow_product_selection", selectPages);
+        try {
+            JsonNode r = UnipileClient.startAuthIntent(props, key, body);
+            return handleAuthResult(r);
+        } catch (UnipileClient.UnipileException e) {
+            throw new ServiceException(1_030_015_004, friendlyFacebookError(e.getMessage()));
+        }
+    }
+
+    /** 第 2 步：回答 checkpoint（勾选 Page / 验证码 / SKIP） */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> solveFacebookLogin(String intentId, String code, String credential) {
+        ChannelUnipileCredentialDO c = credential();
+        try {
+            JsonNode r = UnipileClient.solveAuthIntent(props, keyOf(c), intentId, code, credential);
+            return handleAuthResult(r);
+        } catch (UnipileClient.UnipileException e) {
+            throw new ServiceException(1_030_015_004, friendlyFacebookError(e.getMessage()));
+        }
+    }
+
+    /** 统一处理 Unipile 返回：账号已建好就直接绑定，否则把 checkpoint 交给前端继续 */
+    private Map<String, Object> handleAuthResult(JsonNode r) {
+        String object = r.path("object").asText("");
+        if ("Account".equalsIgnoreCase(object) || StrUtil.isNotBlank(r.path("id").asText(""))) {
+            String accountId = r.path("id").asText("");
+            Long userId = SecurityFrameworkUtils.getLoginUserId();
+            Long tenantId = TenantContextHolder.getRequiredTenantId();
+            handleCallback(tenantId, userId, "facebook", accountId);
+            Map<String, Object> ok = new LinkedHashMap<>();
+            ok.put("status", "account");
+            ok.put("accountId", accountId);
+            ok.put("name", r.path("name").asText(""));
+            return ok;
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", "checkpoint");
+        out.put("intentId", r.path("intent_id").asText(""));
+        JsonNode cp = r.path("checkpoint");
+        out.put("type", cp.path("type").asText(""));
+        out.put("products", cp.path("products"));
+        out.put("options", cp.path("options"));
+        out.put("platform", cp.path("platform").asText(""));
+        out.put("channel", cp.path("channel").asText(""));
+        out.put("code", cp.path("code").asText(""));
+        out.put("raw", r);
+        return out;
+    }
+
+    private String friendlyFacebookError(String msg) {
+        String m = StrUtil.nullToEmpty(msg);
+        if (m.contains("invalid_credentials")) {
+            return "Facebook 账号或密码不对（也可能被要求先在浏览器登录一次）";
+        }
+        if (m.contains("access_restricted")) {
+            return "Facebook 要求先在官网完成安全验证：请用浏览器登录 facebook.com 处理后再试";
+        }
+        if (m.contains("timeout")) {
+            return "等待 Facebook 确认超时，请重试";
+        }
+        return "登录失败：" + m;
+    }
+
+    /** 生成一次性授权令牌：记录「哪个成员、哪个渠道」，回调时换回来 */    /** 生成一次性授权令牌：记录「哪个成员、哪个渠道」，回调时换回来 */
     private String createAuthState(Long tenantId, Long userId, String provider) {
         String token = IdUtil.fastSimpleUUID();
         authStateMapper.insert(ChannelUnipileAuthStateDO.builder()

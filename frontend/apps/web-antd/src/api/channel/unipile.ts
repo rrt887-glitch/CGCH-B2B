@@ -48,3 +48,43 @@ export function recoverUnipile() {
 export function disconnectUnipile(id: number) {
   return requestClient.delete<boolean>(`/channel/unipile/account?id=${id}`);
 }
+
+/** Facebook 直接登录（自定义流程）：第 1 步，账号密码或 cookies */
+export function facebookLogin(data: {
+  username?: string;
+  password?: string;
+  cookies?: string;
+  userAgent?: string;
+  selectPages?: boolean;
+}) {
+  return requestClient.post<FacebookAuthResult>(
+    '/channel/unipile/facebook/login',
+    data,
+  );
+}
+
+/** Facebook 直接登录：第 2 步，回答 checkpoint（选 Page / 验证码 / SKIP） */
+export function facebookSolve(data: {
+  intentId: string;
+  code?: string;
+  credential?: string;
+}) {
+  return requestClient.post<FacebookAuthResult>(
+    '/channel/unipile/facebook/solve',
+    data,
+  );
+}
+
+export interface FacebookAuthResult {
+  status: 'account' | 'checkpoint';
+  accountId?: string;
+  name?: string;
+  intentId?: string;
+  type?: string;
+  products?: { id: string; display_name: string }[];
+  options?: { id: string }[];
+  platform?: string;
+  channel?: string;
+  code?: string;
+  raw?: any;
+}
