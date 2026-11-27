@@ -131,6 +131,18 @@ export function updateCustomerDealStatus(id: number, dealStatus: boolean) {
   );
 }
 
+/** 修改客户阶段（字典 crm_customer_stage：1 新询盘 2 报价 3 样品 4 谈判 5 成交 6 复购） */
+export function updateCustomerStage(id: number, stage: number) {
+  return requestClient.put(
+    `/crm/customer/update-stage?id=${id}&stage=${stage}`,
+  );
+}
+
+/** 各阶段的客户数量（客户工作台的流程条用） */
+export function getCustomerStageStats() {
+  return requestClient.get<Record<string, number>>('/crm/customer/stage-stats');
+}
+
 /** 进入公海客户提醒的客户列表 */
 export function getPutPoolRemindCustomerPage(params: PageParam) {
   return requestClient.get<PageResult<CrmCustomerApi.Customer>>(

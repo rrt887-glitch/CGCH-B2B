@@ -25,14 +25,20 @@ const routes: RouteRecordRaw[] = [
       {
         name: 'CgchV3Crm',
         path: 'crm',
-        component: () => import('#/views/cgch/v3/crm/index.vue'),
-        meta: { title: 'CRM' },
+        component: () => import('#/views/cgch/v3/crm/workbench/index.vue'),
+        meta: { title: '管理客户' },
       },
       {
         name: 'CgchV3Agent',
         path: 'agent',
         component: () => import('#/views/cgch/v3/agent/index.vue'),
         meta: { title: '智能体' },
+      },
+      {
+        name: 'CgchV3CrmLegacy',
+        path: 'crm-legacy',
+        component: () => import('#/views/cgch/v3/crm/index.vue'),
+        meta: { title: '管理客户（旧版）', hideInMenu: true },
       },
       {
         name: 'CgchV3Channel',
