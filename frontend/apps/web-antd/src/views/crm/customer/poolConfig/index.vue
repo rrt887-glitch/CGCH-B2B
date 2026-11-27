@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 /**
- * 客户公海回收规则（macOS 系统设置分组卡片风格）：
- * 消除旧版无标签残缺拼接框与重复「或」字，直观配置未跟进回收、未成交回收与提前预警。
+ * 客户公海自动回收规则（Apple macOS System Settings 卡片风格）：
+ * - 移除无意义的「重置」按钮，提供外贸常用天数快捷胶囊（15/30/45 天未跟进、90/180 天未成交）
+ * - 实时生成自然语言生效摘要，重点锁定客户与已成交客户天然豁免回收
  */
 import type { CrmCustomerPoolConfigApi } from '#/api/crm/customer/poolConfig';
 
@@ -9,13 +10,12 @@ import { computed, onMounted, reactive, ref } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
-import { Button, InputNumber, message, Spin, Switch } from 'ant-design-vue';
+import { InputNumber, message, Spin, Switch } from 'ant-design-vue';
 
 import {
   getCustomerPoolConfig,
   saveCustomerPoolConfig,
 } from '#/api/crm/customer/poolConfig';
-import { $t } from '#/locales';
 
 const loading = ref(true);
 const loadFailed = ref(false);
@@ -29,47 +29,40 @@ const form = reactive<CrmCustomerPoolConfigApi.CustomerPoolConfig>({
   notifyDays: undefined,
 });
 
-const savedSnapshot = ref<CrmCustomerPoolConfigApi.CustomerPoolConfig>({
-  enabled: false,
-  notifyEnabled: false,
-});
+const CONTACT_PRESETS = [7, 15, 30, 45];
+const DEAL_PRESETS = [60, 90, 180, 365];
 
 function applyValues(res?: CrmCustomerPoolConfigApi.CustomerPoolConfig | null) {
-  const next: CrmCustomerPoolConfigApi.CustomerPoolConfig = {
+  Object.assign(form, {
     enabled: Boolean(res?.enabled),
     contactExpireDays: res?.contactExpireDays ?? undefined,
     dealExpireDays: res?.dealExpireDays ?? undefined,
     notifyEnabled: Boolean(res?.notifyEnabled),
     notifyDays: res?.notifyDays ?? undefined,
-  };
-  Object.assign(form, next);
-  savedSnapshot.value = { ...next };
-}
-
-function handleReset() {
-  Object.assign(form, { ...savedSnapshot.value });
+  });
 }
 
 const ruleSummary = computed(() => {
-  if (!form.enabled) return '当前未开启自动回收，所有私海客户长期保留在负责人名下。';
+  if (!form.enabled) {
+    return '当前未开启自动回收，所有客户长期保留在原负责人名下（已成交或点亮「锁定保护」的客户永不掉公海）。';
+  }
   const parts: string[] = [];
   if (form.contactExpireDays) {
-    parts.push(`超过 ${form.contactExpireDays} 天未跟进`);
+    parts.push(`连续 ${form.contactExpireDays} 天未写跟进/沟通`);
   }
   if (form.dealExpireDays) {
-    parts.push(`超过 ${form.dealExpireDays} 天未成交`);
+    parts.push(`累计 ${form.dealExpireDays} 天未产生成交订单`);
   }
   if (!parts.length) {
-    return '请至少填写一项回收天数上限（未跟进天数或未成交天数）。';
+    return '请填写至少一项回收天数（外贸通常建议仅设「30 天未跟进回收」，大单可留空未成交天数）。';
   }
   const notifyText =
     form.notifyEnabled && form.notifyDays
-      ? `，并在回收前 ${form.notifyDays} 天提醒负责人`
+      ? `，并在回收前 ${form.notifyDays} 天提醒负责人挽回`
       : '';
-  return `生效逻辑：当私海客户${parts.join('，或')}时，系统自动将其退回客户公海${notifyText}。`;
+  return `生效规则：未锁定且未成交客户若${parts.join(' 或 ')}，将自动释放至公海池${notifyText}。`;
 });
 
-/** 获取配置 */
 async function getConfigInfo() {
   loading.value = true;
   loadFailed.value = false;
@@ -83,19 +76,14 @@ async function getConfigInfo() {
   }
 }
 
-/** 提交表单 */
 async function handleSubmit() {
   if (loading.value || loadFailed.value || saving.value) return;
-  if (
-    form.enabled &&
-    !form.contactExpireDays &&
-    !form.dealExpireDays
-  ) {
-    message.warning('开启公海规则后，请至少填写「未跟进天数」或「未成交天数」');
+  if (form.enabled && !form.contactExpireDays && !form.dealExpireDays) {
+    message.warning('开启自动回收后，请至少填写「未跟进天数」或「未成交天数」');
     return;
   }
   if (form.enabled && form.notifyEnabled && !form.notifyDays) {
-    message.warning('开启提前提醒后，请填写提前提醒天数');
+    message.warning('请填写提前预警提醒天数');
     return;
   }
 
@@ -111,16 +99,14 @@ async function handleSubmit() {
     };
     await saveCustomerPoolConfig(data);
     applyValues(data);
-    message.success($t('ui.actionMessage.operationSuccess'));
-  } catch {
-    // 请求层已提示失败，保留表单供重试
+    message.success('公海回收规则已保存');
   } finally {
     saving.value = false;
   }
 }
 
 onMounted(() => {
-  getConfigInfo();
+  void getConfigInfo();
 });
 </script>
 
@@ -129,186 +115,193 @@ onMounted(() => {
     <div v-if="loadFailed" class="pc__err">
       <div class="flex items-center gap-2">
         <IconifyIcon icon="lucide:circle-alert" class="size-4 shrink-0" />
-        <span>客户公海规则加载失败，请检查网络后重试</span>
+        <span>公海规则读取失败，请检查网络后重试</span>
       </div>
-      <Button size="small" shape="round" @click="getConfigInfo">重新加载</Button>
+      <button type="button" class="pc__retry" @click="getConfigInfo">重试</button>
     </div>
 
     <Spin v-else :spinning="loading || saving">
       <div class="pc__wrap">
-        <!-- 主开关头卡 -->
+        <!-- 主开关行 -->
         <div class="pc__master">
-          <div class="flex min-w-0 items-center gap-3.5">
-            <span class="pc__icon is-blue">
-              <IconifyIcon icon="lucide:globe" class="size-5" />
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="pc__icon">
+              <IconifyIcon icon="lucide:globe" class="size-4.5" />
             </span>
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-[15.5px] font-bold text-[#1D1D1F]">
-                  客户公海自动回收规则
+                <span class="text-[14.5px] font-bold text-[#1D1D1F]">
+                  公海自动回收机制
                 </span>
                 <span
-                  class="ap-crm-pill"
-                  :class="
-                    form.enabled ? 'ap-crm-pill--green' : 'ap-crm-pill--gray'
-                  "
+                  class="pc__status"
+                  :class="form.enabled ? 'is-on' : 'is-off'"
                 >
-                  {{ form.enabled ? '已开启' : '已关闭' }}
+                  {{ form.enabled ? '运行中' : '未开启' }}
                 </span>
               </div>
-              <div class="mt-0.5 text-xs leading-5 text-[#6E6E73]">
-                开启后，超期未跟进或迟迟未成交的未锁定客户将自动释放回公海池，供其他业务员重新认领激活
+              <div class="mt-0.5 text-[12px] text-[#6E6E73]">
+                盘活长期沉睡无人跟进的询盘，点亮「锁定保护」的重点大客户自动豁免
               </div>
             </div>
           </div>
           <Switch v-model:checked="form.enabled" />
         </div>
 
-        <!-- 生效逻辑实时预览条 -->
+        <!-- 实时生效语义提示 -->
         <div class="pc__summary" :class="{ 'is-on': form.enabled }">
           <IconifyIcon
-            :icon="form.enabled ? 'lucide:sparkles' : 'lucide:info'"
-            class="mt-0.5 size-4 shrink-0"
+            :icon="form.enabled ? 'lucide:sparkles' : 'lucide:shield-check'"
+            class="mt-0.5 size-3.5 shrink-0"
           />
           <span>{{ ruleSummary }}</span>
         </div>
 
-        <!-- 规则详细设置（关闭时半透明展示，开启后可编辑） -->
-        <div
-          class="pc__body"
-          :class="{ 'is-disabled': !form.enabled }"
-        >
-          <div class="pc__section-title">
-            <span>回收触发条件</span>
-            <small>满足以下任意一项条件即触发退回公海</small>
+        <!-- 触发条件卡片 -->
+        <div class="pc__group" :class="{ 'is-dim': !form.enabled }">
+          <!-- 条件 1：超期未跟进 -->
+          <div class="pc__row">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-[13.5px] font-semibold text-[#1D1D1F]">
+                  超期未跟进回收
+                </span>
+                <span class="rounded bg-[#E8F2FF] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#0071E3]">
+                  推荐开启
+                </span>
+              </div>
+              <div class="mt-0.5 text-[11.5px] text-[#86868B]">
+                距离最后一次写跟进或双向消息往来超过设定天数
+              </div>
+              <div class="mt-2 flex flex-wrap gap-1">
+                <button
+                  v-for="d in CONTACT_PRESETS"
+                  :key="d"
+                  type="button"
+                  :disabled="!form.enabled"
+                  class="pc__preset"
+                  :class="{ on: form.contactExpireDays === d }"
+                  @click="form.contactExpireDays = d"
+                >
+                  {{ d }} 天
+                </button>
+              </div>
+            </div>
+
+            <div class="pc__num-box">
+              <span>超过</span>
+              <InputNumber
+                v-model:value="form.contactExpireDays"
+                :min="1"
+                :max="3650"
+                :precision="0"
+                :disabled="!form.enabled"
+                placeholder="如 30"
+                class="pc__input"
+              />
+              <span>天</span>
+            </div>
           </div>
 
-          <div class="pc__cond-stack">
-            <!-- 条件 1：未跟进 -->
-            <div class="pc__cond-card">
-              <div class="flex min-w-0 items-center gap-3">
-                <span class="pc__sub-icon is-blue">
-                  <IconifyIcon icon="lucide:clock" class="size-4" />
-                </span>
-                <div class="min-w-0">
-                  <div class="text-[14px] font-semibold text-[#1D1D1F]">
-                    超期未跟进自动回收
-                  </div>
-                  <div class="mt-0.5 text-xs text-[#6E6E73]">
-                    距离最近一次写跟进记录或双向沟通超过指定天数
-                  </div>
-                </div>
-              </div>
+          <div class="pc__divider" />
 
-              <div class="pc__num-slot">
-                <span>连续超过</span>
+          <!-- 条件 2：超期未成交（可选） -->
+          <div class="pc__row">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-[13.5px] font-semibold text-[#1D1D1F]">
+                  超期未成交回收
+                </span>
+                <span class="text-[11px] text-[#86868B]">（选填，留空则不限成交周期）</span>
+              </div>
+              <div class="mt-0.5 text-[11.5px] text-[#86868B]">
+                外贸长周期定制单建议设 90~180 天或留空不限
+              </div>
+              <div class="mt-2 flex flex-wrap gap-1">
+                <button
+                  v-for="d in DEAL_PRESETS"
+                  :key="d"
+                  type="button"
+                  :disabled="!form.enabled"
+                  class="pc__preset"
+                  :class="{ on: form.dealExpireDays === d }"
+                  @click="form.dealExpireDays = d"
+                >
+                  {{ d }} 天
+                </button>
+                <button
+                  type="button"
+                  :disabled="!form.enabled"
+                  class="pc__preset"
+                  :class="{ on: !form.dealExpireDays }"
+                  @click="form.dealExpireDays = undefined"
+                >
+                  不限周期
+                </button>
+              </div>
+            </div>
+
+            <div class="pc__num-box">
+              <span>超过</span>
+              <InputNumber
+                v-model:value="form.dealExpireDays"
+                :min="1"
+                :max="3650"
+                :precision="0"
+                :disabled="!form.enabled"
+                placeholder="不限"
+                class="pc__input"
+              />
+              <span>天</span>
+            </div>
+          </div>
+
+          <div class="pc__divider" />
+
+          <!-- 回收前预警 -->
+          <div class="pc__row">
+            <div class="min-w-0 flex-1">
+              <div class="text-[13.5px] font-semibold text-[#1D1D1F]">
+                掉入公海前预警通知
+              </div>
+              <div class="mt-0.5 text-[11.5px] text-[#86868B]">
+                提前在「快掉公海」胶囊与消息通知提醒负责人及时跟进重置计时
+              </div>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <div v-if="form.notifyEnabled" class="pc__num-box">
+                <span>提前</span>
                 <InputNumber
-                  v-model:value="form.contactExpireDays"
+                  v-model:value="form.notifyDays"
                   :min="1"
-                  :max="3650"
+                  :max="60"
                   :precision="0"
                   :disabled="!form.enabled"
-                  placeholder="例如 15"
-                  class="pc__num-input"
+                  placeholder="3"
+                  class="pc__input !w-16"
                 />
-                <span>天未跟进</span>
-              </div>
-            </div>
-
-            <!-- 中间「或」连接胶囊 -->
-            <div class="pc__or-divider">
-              <span>或（满足任一即回收）</span>
-            </div>
-
-            <!-- 条件 2：未成交 -->
-            <div class="pc__cond-card">
-              <div class="flex min-w-0 items-center gap-3">
-                <span class="pc__sub-icon is-purple">
-                  <IconifyIcon icon="lucide:briefcase" class="size-4" />
-                </span>
-                <div class="min-w-0">
-                  <div class="text-[14px] font-semibold text-[#1D1D1F]">
-                    超期未成交自动回收
-                  </div>
-                  <div class="mt-0.5 text-xs text-[#6E6E73]">
-                    自建档或领取之日起超过指定天数仍未产生有效订单
-                  </div>
-                </div>
-              </div>
-
-              <div class="pc__num-slot">
-                <span>累计超过</span>
-                <InputNumber
-                  v-model:value="form.dealExpireDays"
-                  :min="1"
-                  :max="3650"
-                  :precision="0"
-                  :disabled="!form.enabled"
-                  placeholder="例如 60"
-                  class="pc__num-input"
-                />
-                <span>天未成交</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 提前提醒设置 -->
-          <div class="pc__section-title mt-5">
-            <span>回收前预警通知</span>
-            <small>给业务员留出最后跟进挽回窗口</small>
-          </div>
-
-          <div class="pc__notify-box">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div class="flex min-w-0 items-center gap-3">
-                <span class="pc__sub-icon is-amber">
-                  <IconifyIcon icon="lucide:bell" class="size-4" />
-                </span>
-                <div>
-                  <div class="text-[14px] font-semibold text-[#1D1D1F]">
-                    掉入公海前提前发送提醒
-                  </div>
-                  <div class="mt-0.5 text-xs text-[#6E6E73]">
-                    到期前自动向客户负责人推送提醒通知，及时跟进即可重置回收计时
-                  </div>
-                </div>
+                <span>天</span>
               </div>
               <Switch
                 v-model:checked="form.notifyEnabled"
+                size="small"
                 :disabled="!form.enabled"
               />
-            </div>
-
-            <div
-              v-if="form.notifyEnabled"
-              class="pc__notify-sub"
-            >
-              <span>在客户掉入公海前提前</span>
-              <InputNumber
-                v-model:value="form.notifyDays"
-                :min="1"
-                :max="365"
-                :precision="0"
-                :disabled="!form.enabled"
-                placeholder="例如 3"
-                class="pc__num-input"
-              />
-              <span>天通知负责人</span>
             </div>
           </div>
         </div>
 
-        <!-- 底部操作栏 -->
-        <div class="pc__foot">
-          <Button shape="round" @click="handleReset">重置</Button>
-          <Button
-            type="primary"
-            shape="round"
-            :loading="saving"
+        <!-- 底部单一明确保存动作 -->
+        <div class="flex justify-end pt-1">
+          <button
+            type="button"
+            class="pc__save-btn"
+            :disabled="saving"
             @click="handleSubmit"
           >
-            保存公海规则
-          </Button>
+            <IconifyIcon icon="lucide:check" class="size-3.5" />
+            <span>保存公海规则</span>
+          </button>
         </div>
       </div>
     </Spin>
@@ -317,207 +310,182 @@ onMounted(() => {
 
 <style scoped>
 .pc {
-  max-width: 780px;
-  padding: 4px 0 12px;
+  width: 100%;
 }
 
 .pc__err {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  font-size: 13px;
+  padding: 11px 14px;
+  font-size: 12.5px;
   color: #d70015;
   background: #ffeceb;
-  border-radius: 14px;
+  border-radius: 12px;
+}
+
+.pc__retry {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d70015;
+  cursor: pointer;
+  background: #fff;
+  border: none;
+  border-radius: 999px;
 }
 
 .pc__wrap {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .pc__master {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 20px;
-  background: #f7f8fb;
-  border-radius: 16px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 0.5px solid rgb(60 60 67 / 10%);
+  border-radius: 14px;
 }
 
 .pc__icon {
   display: grid;
   flex: none;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
+  width: 38px;
+  height: 38px;
+  color: #0071e3;
+  background: #e8f2ff;
+  border-radius: 11px;
 }
 
-.pc__icon.is-blue {
-  color: #007aff;
-  background: #e8f2ff;
+.pc__status {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.pc__status.is-on {
+  color: #1e7e34;
+  background: #eaf9ee;
+}
+
+.pc__status.is-off {
+  color: #6e6e73;
+  background: #f2f2f7;
 }
 
 .pc__summary {
   display: flex;
   gap: 8px;
   align-items: flex-start;
-  padding: 11px 15px;
-  font-size: 12.5px;
+  padding: 10px 13px;
+  font-size: 12px;
   line-height: 1.55;
   color: #6e6e73;
-  background: #f5f6fa;
-  border-radius: 13px;
+  background: #f2f3f7;
+  border-radius: 11px;
 }
 
 .pc__summary.is-on {
   color: #1d1d1f;
-  background: linear-gradient(135deg, #f5f3ff 0%, #eff6ff 100%);
-  box-shadow: inset 0 0 0 0.5px rgb(88 86 214 / 15%);
+  background: #eef5ff;
+  border: 0.5px solid rgb(0 113 227 / 18%);
 }
 
 .pc__summary.is-on :deep(svg) {
-  color: #5856d6;
+  color: #0071e3;
 }
 
-.pc__body {
-  padding: 18px 20px;
-  background: #f7f8fb;
-  border-radius: 16px;
-  transition: opacity var(--ap-dur-fast);
+.pc__group {
+  background: #fff;
+  border: 0.5px solid rgb(60 60 67 / 10%);
+  border-radius: 14px;
+  transition: opacity 0.16s ease;
 }
 
-.pc__body.is-disabled {
-  opacity: 0.52;
+.pc__group.is-dim {
+  opacity: 0.48;
 }
 
-.pc__section-title {
+.pc__row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: #1d1d1f;
-}
-
-.pc__section-title small {
-  font-size: 11.5px;
-  font-weight: 400;
-  color: #86868b;
-}
-
-.pc__cond-stack {
-  display: flex;
-  flex-direction: column;
-}
-
-.pc__cond-card {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  background: #fff;
-  border-radius: 13px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 4%);
 }
 
-.pc__or-divider {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 6px 0;
+.pc__divider {
+  height: 0.5px;
+  margin: 0 16px;
+  background: rgb(60 60 67 / 10%);
 }
 
-.pc__or-divider span {
-  padding: 2px 10px;
+.pc__preset {
+  padding: 2px 9px;
   font-size: 11px;
-  font-weight: 600;
-  color: #86868b;
-  background: #ebedf3;
+  font-weight: 500;
+  color: #6e6e73;
+  cursor: pointer;
+  background: #f5f5f7;
+  border: 0.5px solid transparent;
   border-radius: 999px;
+  transition: all 0.14s ease;
 }
 
-.pc__sub-icon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-}
-
-.pc__sub-icon.is-blue {
-  color: #007aff;
+.pc__preset:hover:not(:disabled) {
+  color: #0071e3;
   background: #e8f2ff;
 }
 
-.pc__sub-icon.is-purple {
-  color: #7c3aed;
-  background: #f3eeff;
+.pc__preset.on {
+  font-weight: 600;
+  color: #0071e3;
+  background: #e8f2ff;
+  border-color: rgb(0 113 227 / 28%);
 }
 
-.pc__sub-icon.is-amber {
-  color: #d97706;
-  background: #fff4e0;
-}
-
-.pc__num-slot {
+.pc__num-box {
   display: inline-flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  padding: 5px 12px;
-  font-size: 13px;
+  padding: 4px 10px;
+  font-size: 12px;
   font-weight: 500;
   color: #3a3a3c;
-  background: #f5f6fa;
-  border-radius: 11px;
+  background: #f5f5f7;
+  border-radius: 10px;
 }
 
-.pc__num-input {
-  width: 96px !important;
+.pc__input {
+  width: 78px !important;
 }
 
-.pc__notify-box {
-  padding: 14px 16px;
-  background: #fff;
-  border-radius: 13px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 4%);
-}
-
-.pc__notify-sub {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.pc__save-btn {
+  display: inline-flex;
+  gap: 5px;
   align-items: center;
-  padding: 10px 14px;
-  margin-top: 12px;
-  margin-left: 48px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #3a3a3c;
-  background: #f7f8fb;
-  border-radius: 11px;
+  height: 34px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  background: #0071e3;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgb(0 113 227 / 24%);
+  transition: all 0.15s ease;
 }
 
-.pc__foot {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  padding-top: 4px;
-}
-
-@media (width <= 680px) {
-  .pc__notify-sub {
-    margin-left: 0;
-  }
+.pc__save-btn:hover:not(:disabled) {
+  background: #0077ed;
 }
 </style>

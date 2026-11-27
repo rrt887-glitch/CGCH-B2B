@@ -1,10 +1,9 @@
 <script lang="ts" setup>
 /**
- * 外贸 B2B 新一代客户管理工作台（Twenty CRM + Apple Human Interface 融合架构）：
- * - 路由兼容：当 ?tab=salesmind 时无损渲染「CRM 智枢」二级工作台；支持 ?customerId=xxx 直达 360° 抽屉
- * - 4 大核心板块：客户管道（6 步漏斗看板拖拽 ⇄ 高密度表格双视图） / 公海淘金（含查重） / 成交订单 / 规则设置
- * - 顶部灵动胶囊「📥 待甄别来信 (N)」承接 AI 初筛存疑来信与历史未转化线索
- * - 原生外贸基因：买家当地实时日夜时钟、USD/EUR/GBP/CNY 多币种商务黑板、首响超时与停滞老化预警、同企业域名防撞单提醒
+ * 外贸 B2B 客户管理主工作台（Apple Human Interface + Twenty CRM 精雕版）：
+ * - 一级主导航瘦身为 3 个纯业务板块：「客户管道 · 公海淘金 · 成交订单」，低频「规则与标签」收纳为右上角 ⚙️ 抽屉
+ * - 顶栏动作组随板块上下文智能切换（导入/导出收纳进 ⋯ 菜单，非管道页不再悬挂载客户按钮）
+ * - 6 步漏斗卡支持美金总额实时汇总；看板卡片展示当地工作时段暖绿提示、公海保护锁、悬浮速记跟进与快速登记订单
  */
 import type { LatestResearch } from '#/api/channel/research';
 import type { CgchCrmApi } from '#/api/crm/cgch';
@@ -26,9 +25,13 @@ import { IconifyIcon } from '@vben/icons';
 import { useUserStore } from '@vben/stores';
 
 import {
+  Drawer,
+  Dropdown,
   Empty,
   Input,
   InputNumber,
+  Menu,
+  MenuItem,
   message,
   Modal,
   Popover,
@@ -41,7 +44,7 @@ import {
 import dayjs from 'dayjs';
 
 import { createResearch, getLatestResearch } from '#/api/channel/research';
-import { getCustomerGroupList, getTagList } from '#/api/crm/cgch';
+import { getTagList } from '#/api/crm/cgch';
 import { getCluePage } from '#/api/crm/clue';
 import {
   createCustomer,
@@ -92,7 +95,7 @@ defineOptions({ name: 'CgchCrmWorkbench' });
 
 const ClawView = defineAsyncComponent(() => import('../claw.vue'));
 
-type MainTab = 'order' | 'pipeline' | 'pool' | 'settings';
+type MainTab = 'order' | 'pipeline' | 'pool';
 type ViewMode = 'kanban' | 'table';
 type QuickChip = 'all' | 'focus' | 'pool_soon' | 'stagnant' | 'urgent';
 
@@ -114,44 +117,43 @@ function setViewMode(m: ViewMode) {
   localStorage.setItem('cgch_crm_view_mode', m);
 }
 
-// 客户全量池（单页拉取 200 条以支撑看板实时拖拽、漏斗美金汇总与秒级智能筛选）
+// 客户数据与标签
 const loading = ref(false);
 const allCustomers = ref<any[]>([]);
 const researchMap = ref<Record<number, LatestResearch>>({});
 const tags = ref<CgchCrmApi.TreeNode[]>([]);
-const groups = ref<CgchCrmApi.TreeNode[]>([]);
 
-// 每分钟刷新一次买家当地时钟
+// 每分钟刷新买家当地日夜时钟
 const clockTick = ref(Date.now());
 let clockTimer: null | ReturnType<typeof setInterval> = null;
 
-// 管道筛选状态
+// 管道筛选状态（已砍掉重叠的「客户分组」下拉，统一使用彩色标签）
 const sceneScope = ref<'all' | 'mine' | 'sub'>('mine');
 const activeStage = ref<'archived' | null | number>(null);
 const quickChip = ref<QuickChip>('all');
 const keyword = ref('');
 const filterTagId = ref<number | undefined>();
-const filterGroupId = ref<number | undefined>();
 const tablePage = ref(1);
 
 // 看板拖拽状态
 const draggingId = ref<null | number>(null);
 const dragOverStage = ref<null | number>(null);
 
-// 待甄别来信抽屉 & 计数
+// 抽屉状态：待甄别来信 / 规则与标签设置 / 360° 客户全景
 const triageOpen = ref(false);
 const triageCount = ref(0);
+const settingsOpen = ref(false);
 
-// 360° 客户全景抽屉
 const drawerOpen = ref(false);
 const activeCustomerId = ref<null | number>(null);
 const drawerRef = ref<InstanceType<typeof CustomerDrawer> | null>(null);
 const ordersPanelRef = ref<InstanceType<typeof OrdersPanel> | null>(null);
 const poolPanelRef = ref<InstanceType<typeof PoolPanel> | null>(null);
 
-// 极简登记订单弹窗
+// 极简登记/修改订单弹窗
 const orderModalOpen = ref(false);
 const orderModalCustomer = ref<null | Record<string, any>>(null);
+const orderModalRecord = ref<null | Record<string, any>>(null);
 
 // 行内 5 秒快速记跟进 Popover
 const quickFollowRowId = ref<null | number>(null);
@@ -207,7 +209,7 @@ const domainOwnersMap = computed(() => {
   return map;
 });
 
-/** 为每条客户计算派生视图对象（商务黑板、健康度、当地时钟、防撞单提示） */
+/** 派生每条客户的商务黑板、健康度、当地时钟与防撞单提醒 */
 const enrichedCustomers = computed(() => {
   const nowDate = new Date(clockTick.value);
   return allCustomers.value.map((raw) => {
@@ -216,7 +218,9 @@ const enrichedCustomers = computed(() => {
     const health = analyzeCustomerHealth(raw, board);
     const clock = getBuyerLocalClock(raw.countryCode, nowDate);
     const domain = corporateDomain(raw.email, raw.website);
-    const peers = domain ? (domainOwnersMap.value.get(domain) ?? []).filter((p) => p.id !== raw.id) : [];
+    const peers = domain
+      ? (domainOwnersMap.value.get(domain) ?? []).filter((p) => p.id !== raw.id)
+      : [];
     const peerHint =
       board.collisionHint ||
       (peers.length > 0
@@ -236,7 +240,6 @@ const enrichedCustomers = computed(() => {
   });
 });
 
-/** 活跃跟进客户 vs 已暂缓归档客户 */
 const activePool = computed(() =>
   enrichedCustomers.value.filter((c) => !c._board.archived),
 );
@@ -244,9 +247,8 @@ const archivedPool = computed(() =>
   enrichedCustomers.value.filter((c) => c._board.archived),
 );
 
-/** 6 步漏斗每阶段客户数与折合美金总预估单值 */
-const stageFunnelStats = computed(() => {
-  return PIPELINE_STAGES.map((st) => {
+const stageFunnelStats = computed(() =>
+  PIPELINE_STAGES.map((st) => {
     const items = activePool.value.filter((c) => c._stage === st.value);
     const usdSum = items.reduce((s, c) => s + c._usd, 0);
     return {
@@ -254,14 +256,13 @@ const stageFunnelStats = computed(() => {
       count: items.length,
       usdSum,
     };
-  });
-});
+  }),
+);
 
 const totalActiveUsd = computed(() =>
   activePool.value.reduce((s, c) => s + c._usd, 0),
 );
 
-/** 智能健康度胶囊计数 */
 const chipCounts = computed(() => {
   const base = activePool.value;
   return {
@@ -278,12 +279,12 @@ const chipCounts = computed(() => {
         c.poolDay !== undefined &&
         c.poolDay !== null &&
         c.poolDay <= 3 &&
-        !c.dealStatus,
+        !c.dealStatus &&
+        !c.lockStatus,
     ).length,
   };
 });
 
-/** 经过搜索、阶段、标签、分组与智能胶囊过滤后的客户列表 */
 const filteredCustomers = computed(() => {
   let list =
     activeStage.value === 'archived' ? archivedPool.value : activePool.value;
@@ -309,13 +310,11 @@ const filteredCustomers = computed(() => {
         c.poolDay !== undefined &&
         c.poolDay !== null &&
         c.poolDay <= 3 &&
-        !c.dealStatus,
+        !c.dealStatus &&
+        !c.lockStatus,
     );
   }
 
-  if (filterGroupId.value) {
-    list = list.filter((c) => c.groupId === filterGroupId.value);
-  }
   if (filterTagId.value) {
     list = list.filter(
       (c) => Array.isArray(c.tagIds) && c.tagIds.includes(filterTagId.value),
@@ -341,7 +340,6 @@ const filteredCustomers = computed(() => {
     );
   }
 
-  // 紧迫优先排序：逾期/待首响在前，其次星标，其次最新活跃
   return [...list].sort((a, b) => {
     const score = (x: any) =>
       (x._health.overdueDays > 0 ? 100 : 0) +
@@ -357,7 +355,21 @@ const filteredCustomers = computed(() => {
   });
 });
 
-/** 看板 6 列分组数据 */
+const hasActiveFilter = computed(
+  () =>
+    activeStage.value !== null ||
+    quickChip.value !== 'all' ||
+    Boolean(filterTagId.value) ||
+    Boolean(keyword.value.trim()),
+);
+
+function resetFilters() {
+  activeStage.value = null;
+  quickChip.value = 'all';
+  filterTagId.value = undefined;
+  keyword.value = '';
+}
+
 const kanbanColumns = computed(() =>
   PIPELINE_STAGES.map((st) => {
     const cards = filteredCustomers.value.filter((c) => c._stage === st.value);
@@ -370,7 +382,6 @@ const kanbanColumns = computed(() =>
   }),
 );
 
-/** 抽屉上下翻页索引 */
 const activeIndexInList = computed(() =>
   filteredCustomers.value.findIndex((c) => c.id === activeCustomerId.value),
 );
@@ -388,7 +399,6 @@ function stepDrawer(delta: -1 | 1) {
   }
 }
 
-/** 加载客户管道全量数据与最新 AI 背调摘要 */
 async function loadPipeline() {
   loading.value = true;
   try {
@@ -400,7 +410,6 @@ async function loadPipeline() {
       sceneType,
     } as any);
     const list = first?.list ?? [];
-    // 若超过 200 条，再补拉第 2 页以覆盖活跃跟进池
     if ((first?.total ?? 0) > 200 && list.length === 200) {
       const second: any = await getCustomerPage({
         pageNo: 2,
@@ -441,15 +450,9 @@ async function loadTriageBadge() {
 }
 
 async function loadTaxonomy() {
-  const [t, g] = await Promise.all([
-    getTagList().catch(() => []),
-    getCustomerGroupList().catch(() => []),
-  ]);
-  tags.value = t || [];
-  groups.value = g || [];
+  tags.value = (await getTagList().catch(() => [])) || [];
 }
 
-/** 看板拖拽推进阶段 */
 function onCardDragStart(e: DragEvent, card: any) {
   draggingId.value = card.id;
   if (e.dataTransfer) {
@@ -492,14 +495,13 @@ async function applyStageChange(
     const meta = getStageMeta(nextStage);
     message.success(`已将「${row.name}」推进至 ${meta.label}`);
     if (promptOrderWhenWon && nextStage === 5) {
-      openQuickOrderModal(row);
+      openCreateOrderModal(row);
     }
   } catch {
     row.stage = prevStage;
   }
 }
 
-/** 卡片/行内星标切换 */
 async function onInlineStar(row: any) {
   const next = !row.starred;
   row.starred = next;
@@ -510,7 +512,6 @@ async function onInlineStar(row: any) {
   }
 }
 
-/** 行内 5 秒极速记跟进 */
 async function submitInlineFollow(row: any) {
   if (!quickFollowText.value.trim()) {
     message.warning('请输入跟进要点');
@@ -539,19 +540,27 @@ async function submitInlineFollow(row: any) {
   }
 }
 
-/** 打开极简订单登记 */
-function openQuickOrderModal(cust?: null | Record<string, any>) {
+function openCreateOrderModal(cust?: null | Record<string, any>) {
+  orderModalRecord.value = null;
   orderModalCustomer.value = cust ?? null;
   orderModalOpen.value = true;
 }
 
-function handleOrderCreated() {
+function openEditOrderModal(
+  ord: Record<string, any>,
+  cust?: null | Record<string, any>,
+) {
+  orderModalRecord.value = ord;
+  orderModalCustomer.value = cust ?? null;
+  orderModalOpen.value = true;
+}
+
+function handleOrderSaved() {
   void loadPipeline();
   drawerRef.value?.reloadOrders();
   ordersPanelRef.value?.reload();
 }
 
-/** 新建外贸客户提交 */
 async function handleCreateCustomer() {
   if (!newCustForm.name.trim() && !newCustForm.companyName.trim()) {
     message.warning('请填写买家姓名或海外公司名称');
@@ -609,7 +618,6 @@ async function handleCreateCustomer() {
   }
 }
 
-/** 批量操作：转交 / 批量 AI 背调 / 批量放回公海 */
 async function openBatchTransfer() {
   if (!simpleUsers.value.length) {
     simpleUsers.value = ((await getSimpleUserList().catch(() => [])) as any[]) || [];
@@ -631,7 +639,7 @@ async function confirmBatchTransfer() {
         await transferCustomer({ id, newOwnerUserId: transferTo.value } as any);
         ok++;
       } catch {
-        // 忽略单条失败
+        // 跳过单条异常
       }
     }
     message.success(`已成功转交 ${ok} 位客户`);
@@ -681,7 +689,6 @@ async function handleBatchPutPool() {
   poolPanelRef.value?.reload();
 }
 
-/** 导入与导出 */
 function pickImportFile(file: File) {
   importFile.value = file;
   importFileList.value = [file as any];
@@ -729,24 +736,23 @@ function tagColorById(id: number) {
 }
 
 const tableColumns = [
-  { title: '海外买家 / 公司', key: 'buyer', width: 250 },
+  { title: '海外买家 / 公司', key: 'buyer', width: 260 },
   { title: '国家与当地时区', key: 'country', width: 175 },
   { title: '销售阶段', key: 'stage', width: 145 },
-  { title: '商务黑板（单值 / 意向产品）', key: 'board', width: 230 },
-  { title: 'AI 背调', key: 'research', width: 145 },
-  { title: '下一步动作与预警', key: 'next', width: 180 },
-  { title: '负责人', key: 'owner', width: 95 },
+  { title: '商务黑板（单值 / 意向产品）', key: 'board', width: 235 },
+  { title: 'AI 背调', key: 'research', width: 150 },
+  { title: '跟进状态与预警', key: 'next', width: 180 },
+  { title: '负责人', key: 'owner', width: 90 },
   { title: '', key: 'quick', width: 92, align: 'right' as const },
 ];
 
-/** 响应 URL 查询参数：?tab=agenda / ?customerId=123 / ?triage=1 */
 watch(
   () => route.query,
   (q) => {
     if (q.tab === 'salesmind') return;
     if (q.tab === 'pool') mainTab.value = 'pool';
     else if (q.tab === 'order') mainTab.value = 'order';
-    else if (q.tab === 'settings') mainTab.value = 'settings';
+    else if (q.tab === 'settings') settingsOpen.value = true;
     else if (q.tab === 'agenda') {
       mainTab.value = 'pipeline';
       quickChip.value = 'urgent';
@@ -795,17 +801,16 @@ onBeforeUnmount(() => {
   <ClawView v-if="isSalesmind" />
 
   <div v-else class="wb-page">
-    <!-- ==================== 1. 顶部导航与全局动作栏 ==================== -->
+    <!-- ==================== 1. 顶部精简导航与上下文动作栏 ==================== -->
     <header class="wb-top">
       <div class="flex flex-wrap items-center gap-3">
-        <!-- 主分段导航 -->
+        <!-- 3 个纯业务主导航（消灭两层设置 Tab 套娃） -->
         <nav class="wb-main-tabs">
           <button
             v-for="item in [
               { k: 'pipeline', l: '客户管道', icon: 'lucide:kanban' },
               { k: 'pool', l: '公海淘金', icon: 'lucide:globe' },
               { k: 'order', l: '成交订单', icon: 'lucide:receipt' },
-              { k: 'settings', l: '规则设置', icon: 'lucide:sliders-horizontal' },
             ]"
             :key="item.k"
             type="button"
@@ -818,7 +823,6 @@ onBeforeUnmount(() => {
           </button>
         </nav>
 
-        <!-- 管道总预估美金徽章 -->
         <div
           v-if="mainTab === 'pipeline' && totalActiveUsd > 0"
           class="wb-pipeline-sum"
@@ -828,49 +832,88 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- 右侧灵动工具组 -->
+      <!-- 右侧按当前板块智能切换动作按钮 -->
       <div class="flex flex-wrap items-center gap-2">
-        <!-- 📥 待甄别来信灵动胶囊 -->
-        <button
-          type="button"
-          class="wb-triage-pill"
-          :class="{ active: triageCount > 0 }"
-          @click="triageOpen = true"
-        >
-          <span v-if="triageCount > 0" class="wb-pulse-dot" />
-          <IconifyIcon icon="lucide:inbox" class="size-3.5" />
-          <span>待甄别来信</span>
-          <span class="wb-triage-count">{{ triageCount }}</span>
-        </button>
+        <template v-if="mainTab === 'pipeline'">
+          <!-- 📥 待甄别来信灵动胶囊 -->
+          <button
+            type="button"
+            class="wb-triage-pill"
+            :class="{ active: triageCount > 0 }"
+            @click="triageOpen = true"
+          >
+            <span v-if="triageCount > 0" class="wb-pulse-dot" />
+            <IconifyIcon icon="lucide:inbox" class="size-3.5" />
+            <span>待甄别来信</span>
+            <span class="wb-triage-count">{{ triageCount }}</span>
+          </button>
 
-        <button
-          type="button"
-          class="wb-ghost-btn"
-          title="Excel 批量导入客户"
-          @click="importOpen = true"
-        >
-          <IconifyIcon icon="lucide:upload" class="size-3.5" />
-          <span>导入</span>
-        </button>
+          <!-- + 新建客户主按钮 -->
+          <button
+            type="button"
+            class="wb-primary-btn"
+            @click="createOpen = true"
+          >
+            <IconifyIcon icon="lucide:plus" class="size-4" />
+            <span>新建客户</span>
+          </button>
 
-        <button
-          type="button"
-          class="wb-ghost-btn"
-          title="导出当前筛选客户"
-          @click="handleExportCustomers"
-        >
-          <IconifyIcon icon="lucide:download" class="size-3.5" />
-          <span>导出</span>
-        </button>
+          <!-- ⋯ 低频导入/导出收纳菜单 -->
+          <Dropdown trigger="click" placement="bottomRight">
+            <button
+              type="button"
+              class="wb-icon-pill"
+              title="导入与导出"
+            >
+              <IconifyIcon icon="lucide:ellipsis" class="size-4" />
+            </button>
+            <template #overlay>
+              <Menu>
+                <MenuItem key="import" @click="importOpen = true">
+                  <span class="inline-flex items-center gap-2">
+                    <IconifyIcon icon="lucide:upload" class="size-3.5" />
+                    Excel 批量导入客户
+                  </span>
+                </MenuItem>
+                <MenuItem key="export" @click="handleExportCustomers">
+                  <span class="inline-flex items-center gap-2">
+                    <IconifyIcon icon="lucide:download" class="size-3.5" />
+                    导出当前筛选客户
+                  </span>
+                </MenuItem>
+                <MenuItem key="tpl" @click="importCustomerTemplate">
+                  <span class="inline-flex items-center gap-2">
+                    <IconifyIcon icon="lucide:file-spreadsheet" class="size-3.5" />
+                    下载标准导入模板
+                  </span>
+                </MenuItem>
+              </Menu>
+            </template>
+          </Dropdown>
+        </template>
 
-        <button
-          type="button"
-          class="wb-primary-btn"
-          @click="createOpen = true"
-        >
-          <IconifyIcon icon="lucide:plus" class="size-4" />
-          <span>新建客户</span>
-        </button>
+        <template v-else-if="mainTab === 'order'">
+          <button
+            type="button"
+            class="wb-primary-btn"
+            @click="openCreateOrderModal(null)"
+          >
+            <IconifyIcon icon="lucide:plus" class="size-4" />
+            <span>登记成交订单 / PI</span>
+          </button>
+        </template>
+
+        <!-- 全局轻量 ⚙️ 规则与标签抽屉入口 -->
+        <Tooltip title="彩色客户标签与公海自动回收规则">
+          <button
+            type="button"
+            class="wb-ghost-btn"
+            @click="settingsOpen = true"
+          >
+            <IconifyIcon icon="lucide:sliders-horizontal" class="size-3.5" />
+            <span>标签与规则</span>
+          </button>
+        </Tooltip>
       </div>
     </header>
 
@@ -884,12 +927,13 @@ onBeforeUnmount(() => {
           :class="{ on: activeStage === null }"
           @click="activeStage = null"
         >
+          <span class="wb-stage-bar" style="background: #0071e3" />
           <div class="flex items-center justify-between gap-2">
             <span class="wb-stage-name">全部活跃</span>
             <span class="wb-stage-num">{{ activePool.length }}</span>
           </div>
           <div class="wb-stage-usd">
-            {{ totalActiveUsd > 0 ? formatDealMoney(totalActiveUsd, 'USD') : '全流程概览' }}
+            {{ totalActiveUsd > 0 ? formatDealMoney(totalActiveUsd, 'USD') : '全流程总览' }}
           </div>
         </button>
 
@@ -906,17 +950,15 @@ onBeforeUnmount(() => {
           "
           @click="activeStage = activeStage === st.value ? null : st.value"
         >
+          <span class="wb-stage-bar" :style="{ background: st.color }" />
           <div class="flex items-center justify-between gap-1.5">
-            <span class="flex items-center gap-1.5 truncate">
-              <span
-                class="wb-stage-dot"
-                :style="{ background: st.color }"
-              />
-              <span class="wb-stage-name">{{ idx + 1 }}. {{ st.label }}</span>
-            </span>
+            <span class="wb-stage-name">{{ idx + 1 }}. {{ st.label }}</span>
             <span class="wb-stage-num">{{ st.count }}</span>
           </div>
-          <div class="wb-stage-usd">
+          <div
+            class="wb-stage-usd"
+            :class="{ 'font-semibold text-[#1D1D1F]': st.usdSum > 0 }"
+          >
             {{ st.usdSum > 0 ? formatDealMoney(st.usdSum, 'USD') : st.defaultAction }}
           </div>
         </button>
@@ -932,6 +974,7 @@ onBeforeUnmount(() => {
             }
           "
         >
+          <span class="wb-stage-bar" style="background: #8e8e93" />
           <div class="flex items-center justify-between gap-1.5">
             <span class="wb-stage-name">⏸ 暂缓/流失</span>
             <span class="wb-stage-num">{{ archivedPool.length }}</span>
@@ -940,9 +983,8 @@ onBeforeUnmount(() => {
         </button>
       </section>
 
-      <!-- 智能筛选胶囊栏 + 看板/表格双视图切换 -->
+      <!-- 单行清爽筛选栏 + 双视图切换 -->
       <section class="wb-filter-bar">
-        <!-- 归属范围 -->
         <div class="wb-scope-seg">
           <button
             v-for="sc in [
@@ -960,7 +1002,6 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <!-- 智能行动胶囊（把原「今天」页签融为一体，不割裂页面） -->
         <div class="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
@@ -1002,9 +1043,17 @@ onBeforeUnmount(() => {
             <span>⚠️ 快掉公海</span>
             <b>{{ chipCounts.pool_soon }}</b>
           </button>
+
+          <button
+            v-if="hasActiveFilter"
+            type="button"
+            class="cursor-pointer border-none bg-transparent px-1.5 text-[12px] font-medium text-[#0071E3] hover:underline"
+            @click="resetFilters"
+          >
+            清除筛选
+          </button>
         </div>
 
-        <!-- 搜索与标签筛选 -->
         <div class="ml-auto flex flex-wrap items-center gap-2">
           <Input
             v-model:value="keyword"
@@ -1021,21 +1070,11 @@ onBeforeUnmount(() => {
             v-if="tags.length"
             v-model:value="filterTagId"
             allow-clear
-            placeholder="标签"
+            placeholder="按标签筛选"
             :options="tags.map((t) => ({ label: t.name, value: t.id }))"
-            class="w-28"
+            class="w-32"
           />
 
-          <Select
-            v-if="groups.length"
-            v-model:value="filterGroupId"
-            allow-clear
-            placeholder="分组"
-            :options="groups.map((g) => ({ label: g.name, value: g.id }))"
-            class="w-28"
-          />
-
-          <!-- 双视图切换器 -->
           <div class="wb-scope-seg">
             <button
               type="button"
@@ -1149,7 +1188,6 @@ onBeforeUnmount(() => {
             "
             @drop.prevent="onColumnDrop(col.value)"
           >
-            <!-- 列头 -->
             <div class="wb-col-head">
               <div class="flex items-center gap-1.5">
                 <span class="wb-col-dot" :style="{ background: col.color }" />
@@ -1158,12 +1196,14 @@ onBeforeUnmount(() => {
                 </span>
                 <span class="wb-col-count">{{ col.cards.length }}</span>
               </div>
-              <span v-if="col.usd > 0" class="text-[11.5px] font-semibold text-[#6E6E73]">
+              <span
+                v-if="col.usd > 0"
+                class="text-[11.5px] font-bold tabular-nums text-[#3A3A3C]"
+              >
                 {{ formatDealMoney(col.usd, 'USD') }}
               </span>
             </div>
 
-            <!-- 卡片列表 -->
             <div class="wb-col-body">
               <div v-if="col.cards.length === 0" class="wb-col-empty">
                 拖拽卡片至此推进阶段
@@ -1174,12 +1214,15 @@ onBeforeUnmount(() => {
                 :key="card.id"
                 draggable="true"
                 class="wb-card"
-                :class="{ 'wb-card--dragging': draggingId === card.id }"
+                :class="{
+                  'wb-card--dragging': draggingId === card.id,
+                  'wb-card--urgent': card._health.nextTone === 'red',
+                }"
                 @dragstart="(e) => onCardDragStart(e, card)"
                 @dragend="onCardDragEnd"
                 @click="inspectCustomer(card.id)"
               >
-                <!-- 第一行：头像 + 客户名 + 星标 -->
+                <!-- 第一行：头像 + 客户名 + 锁标 + 星标 -->
                 <div class="flex items-start justify-between gap-2">
                   <div class="flex min-w-0 items-center gap-2">
                     <span
@@ -1189,8 +1232,16 @@ onBeforeUnmount(() => {
                       {{ crmInitial(card.name) }}
                     </span>
                     <div class="min-w-0">
-                      <div class="truncate text-[13.5px] font-bold text-[#1D1D1F]">
-                        {{ card.name }}
+                      <div class="flex items-center gap-1">
+                        <span class="truncate text-[13.5px] font-bold text-[#1D1D1F]">
+                          {{ card.name }}
+                        </span>
+                        <IconifyIcon
+                          v-if="card.lockStatus"
+                          icon="lucide:lock"
+                          class="size-3 shrink-0 text-[#0071E3]"
+                          title="已开启公海保护锁"
+                        />
                       </div>
                       <div class="truncate text-[11.5px] text-[#6E6E73]">
                         {{ card.companyName || card.email || card.whatsapp || '待补充公司信息' }}
@@ -1207,9 +1258,13 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
 
-                <!-- 第二行：国旗 + 买家当地日夜时钟 + 背调标识 -->
+                <!-- 第二行：国旗 + 当地日夜黄金窗口 + 背调标识 -->
                 <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
-                  <span v-if="card.countryCode" class="wb-mini-tag">
+                  <span
+                    v-if="card.countryCode"
+                    class="wb-mini-tag"
+                    :class="{ 'wb-mini-tag--awake': card._clock?.period === 'day' }"
+                  >
                     {{ countryFlag(card.countryCode) }}
                     {{ countryName(card.countryCode) }}
                     <template v-if="card._clock">
@@ -1238,7 +1293,7 @@ onBeforeUnmount(() => {
                 >
                   <span
                     v-if="card._board.amount"
-                    class="shrink-0 font-bold text-[#0071E3]"
+                    class="shrink-0 font-bold tabular-nums text-[#0071E3]"
                   >
                     {{ formatDealMoney(card._board.amount, card._board.currency) }}
                   </span>
@@ -1247,7 +1302,7 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
 
-                <!-- 业务标签 -->
+                <!-- 彩色业务标签 -->
                 <div
                   v-if="Array.isArray(card.tagIds) && card.tagIds.length"
                   class="mt-1.5 flex flex-wrap gap-1"
@@ -1255,17 +1310,17 @@ onBeforeUnmount(() => {
                   <span
                     v-for="tid in card.tagIds.slice(0, 3)"
                     :key="tid"
-                    class="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                    class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
                     :style="{
                       color: tagColorById(tid),
-                      background: `${tagColorById(tid)}16`,
+                      background: `${tagColorById(tid)}15`,
                     }"
                   >
                     {{ tagNameById(tid) || `#${tid}` }}
                   </span>
                 </div>
 
-                <!-- 底部：健康度 SLA 提醒 + 悬浮快捷跟进 -->
+                <!-- 底部：健康度提醒 + 快捷操作组 -->
                 <div class="mt-2.5 flex items-center justify-between gap-1 border-t border-[#F2F2F7] pt-2">
                   <span
                     class="wb-health-tag"
@@ -1274,57 +1329,67 @@ onBeforeUnmount(() => {
                     {{ card._health.nextLabel }}
                   </span>
 
-                  <div class="flex items-center gap-1" @click.stop>
-                    <Popover
-                      :open="quickFollowRowId === card.id"
-                      trigger="click"
-                      placement="bottomRight"
-                      @open-change="
-                        (v) => {
-                          quickFollowRowId = v ? card.id : null;
-                          if (v) quickFollowText = '';
-                        }
-                      "
-                    >
-                      <template #content>
-                        <div class="w-64 p-1" @click.stop>
-                          <div class="mb-1.5 text-[12px] font-bold text-[#1D1D1F]">
-                            5 秒速记跟进 · {{ card.name }}
-                          </div>
-                          <Input.TextArea
-                            v-model:value="quickFollowText"
-                            :rows="2"
-                            placeholder="记一句沟通进展…"
-                          />
-                          <div class="mt-2 flex items-center justify-between">
-                            <Select
-                              v-model:value="quickFollowDays"
-                              size="small"
-                              class="w-28"
-                              :options="[
-                                { label: '明天再跟', value: 1 },
-                                { label: '3 天后再跟', value: 3 },
-                                { label: '7 天后再跟', value: 7 },
-                                { label: '14 天后再跟', value: 14 },
-                              ]"
+                  <div class="wb-card-actions" @click.stop>
+                    <Tooltip title="速记跟进">
+                      <Popover
+                        :open="quickFollowRowId === card.id"
+                        trigger="click"
+                        placement="bottomRight"
+                        @open-change="
+                          (v) => {
+                            quickFollowRowId = v ? card.id : null;
+                            if (v) quickFollowText = '';
+                          }
+                        "
+                      >
+                        <template #content>
+                          <div class="w-64 p-1" @click.stop>
+                            <div class="mb-1.5 text-[12px] font-bold text-[#1D1D1F]">
+                              5 秒速记跟进 · {{ card.name }}
+                            </div>
+                            <Input.TextArea
+                              v-model:value="quickFollowText"
+                              :rows="2"
+                              placeholder="记一句沟通进展…"
                             />
-                            <button
-                              type="button"
-                              class="wb-primary-btn !h-7 !px-2.5 !text-[11.5px]"
-                              :disabled="quickFollowSubmitting"
-                              @click="submitInlineFollow(card)"
-                            >
-                              保存
-                            </button>
+                            <div class="mt-2 flex items-center justify-between">
+                              <Select
+                                v-model:value="quickFollowDays"
+                                size="small"
+                                class="w-28"
+                                :options="[
+                                  { label: '明天再跟', value: 1 },
+                                  { label: '3 天后再跟', value: 3 },
+                                  { label: '7 天后再跟', value: 7 },
+                                  { label: '14 天后再跟', value: 14 },
+                                ]"
+                              />
+                              <button
+                                type="button"
+                                class="wb-primary-btn !h-7 !px-2.5 !text-[11.5px]"
+                                :disabled="quickFollowSubmitting"
+                                @click="submitInlineFollow(card)"
+                              >
+                                保存
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      </template>
-                      <Tooltip title="速记跟进">
+                        </template>
                         <button type="button" class="wb-card-act">
                           <IconifyIcon icon="lucide:notebook-pen" class="size-3.5" />
                         </button>
-                      </Tooltip>
-                    </Popover>
+                      </Popover>
+                    </Tooltip>
+
+                    <Tooltip title="登记成交订单">
+                      <button
+                        type="button"
+                        class="wb-card-act"
+                        @click="openCreateOrderModal(card)"
+                      >
+                        <IconifyIcon icon="lucide:receipt" class="size-3.5" />
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               </article>
@@ -1335,26 +1400,25 @@ onBeforeUnmount(() => {
 
       <!-- ========== 视图 2：高密度可交互表格视图 ========== -->
       <div v-else class="wb-table-wrap">
-        <!-- 悬浮批量动作栏 -->
         <div v-if="selectedIds.length > 0" class="wb-batch-bar">
           <span class="text-[12.5px] font-semibold text-[#1D1D1F]">
             已勾选 <b class="text-[#0071E3]">{{ selectedIds.length }}</b> 位客户
           </span>
-          <button type="button" class="wb-ghost-btn" @click="openBatchTransfer">
+          <button type="button" class="wb-ghost-btn !h-8" @click="openBatchTransfer">
             <IconifyIcon icon="lucide:arrow-right-left" class="size-3.5" />
             <span>批量转交</span>
           </button>
-          <button type="button" class="wb-ghost-btn" @click="handleBatchResearch">
+          <button type="button" class="wb-ghost-btn !h-8" @click="handleBatchResearch">
             <IconifyIcon icon="lucide:radar" class="size-3.5" />
             <span>批量 AI 背调</span>
           </button>
-          <button type="button" class="wb-ghost-btn" @click="handleBatchPutPool">
+          <button type="button" class="wb-ghost-btn !h-8" @click="handleBatchPutPool">
             <IconifyIcon icon="lucide:globe" class="size-3.5" />
             <span>放回公海</span>
           </button>
           <button
             type="button"
-            class="ml-auto border-none bg-transparent text-[12px] text-[#6E6E73] cursor-pointer hover:text-[#1D1D1F]"
+            class="ml-auto cursor-pointer border-none bg-transparent text-[12px] text-[#6E6E73] hover:text-[#1D1D1F]"
             @click="selectedIds = []"
           >
             取消选择
@@ -1418,6 +1482,11 @@ onBeforeUnmount(() => {
                       <span class="truncate font-semibold text-[#1D1D1F]">
                         {{ record.name }}
                       </span>
+                      <IconifyIcon
+                        v-if="record.lockStatus"
+                        icon="lucide:lock"
+                        class="size-3 shrink-0 text-[#0071E3]"
+                      />
                       <span
                         v-if="record._peerHint"
                         class="rounded bg-[#FFF2ED] px-1.5 py-0.5 text-[10px] font-semibold text-[#C93400]"
@@ -1439,7 +1508,15 @@ onBeforeUnmount(() => {
                     {{ countryFlag(record.countryCode) }}
                     {{ countryName(record.countryCode) }}
                   </div>
-                  <div v-if="record._clock" class="text-[11px] text-[#86868B]">
+                  <div
+                    v-if="record._clock"
+                    class="text-[11px]"
+                    :class="
+                      record._clock.period === 'day'
+                        ? 'font-medium text-[#1E7E34]'
+                        : 'text-[#86868B]'
+                    "
+                  >
                     {{ record._clock.icon }} 当地 {{ record._clock.time }}
                   </div>
                 </div>
@@ -1464,7 +1541,7 @@ onBeforeUnmount(() => {
                 <div class="text-[12px]">
                   <span
                     v-if="record._board.amount"
-                    class="mr-1.5 font-bold text-[#0071E3]"
+                    class="mr-1.5 font-bold tabular-nums text-[#0071E3]"
                   >
                     {{ formatDealMoney(record._board.amount, record._board.currency) }}
                   </span>
@@ -1526,7 +1603,7 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
-    <!-- ==================== 2B. 公海淘金与查重 ==================== -->
+    <!-- ==================== 2B. 公海淘金与防撞单查重 ==================== -->
     <PoolPanel
       v-else-if="mainTab === 'pool'"
       ref="poolPanelRef"
@@ -1536,16 +1613,12 @@ onBeforeUnmount(() => {
 
     <!-- ==================== 2C. 成交订单台账 ==================== -->
     <OrdersPanel
-      v-else-if="mainTab === 'order'"
+      v-else
       ref="ordersPanelRef"
-      @create-order="openQuickOrderModal(null)"
+      @create-order="openCreateOrderModal(null)"
+      @edit-order="(ord) => openEditOrderModal(ord, null)"
       @inspect-customer="inspectCustomer"
     />
-
-    <!-- ==================== 2D. 规则与标签设置 ==================== -->
-    <div v-else class="-mx-5 -mb-5">
-      <SettingsView />
-    </div>
 
     <!-- ==================== 抽屉与弹窗组 ==================== -->
     <!-- 1. 灵动待甄别来信抽屉 -->
@@ -1566,7 +1639,6 @@ onBeforeUnmount(() => {
       v-model:open="drawerOpen"
       :customer-id="activeCustomerId"
       :tags="tags"
-      :groups="groups"
       :has-prev="activeIndexInList > 0"
       :has-next="
         activeIndexInList >= 0 &&
@@ -1575,17 +1647,55 @@ onBeforeUnmount(() => {
       @prev="stepDrawer(-1)"
       @next="stepDrawer(1)"
       @changed="loadPipeline"
-      @open-order-modal="openQuickOrderModal"
+      @open-order-modal="openCreateOrderModal"
+      @edit-order-modal="openEditOrderModal"
     />
 
-    <!-- 3. 极简外贸订单 / PI 登记弹窗 -->
+    <!-- 3. ⚙️ 标签与公海规则轻量抽屉（消灭两层 Tab 套娃） -->
+    <Drawer
+      v-model:open="settingsOpen"
+      :width="620"
+      placement="right"
+      :closable="false"
+    >
+      <div class="wb-set-drawer">
+        <header class="wb-set-head">
+          <div class="flex items-center gap-2.5">
+            <span class="wb-set-orb">
+              <IconifyIcon icon="lucide:sliders-horizontal" class="size-4" />
+            </span>
+            <div>
+              <h3 class="m-0 text-[16px] font-bold text-[#1D1D1F]">
+                标签与公海规则设置
+              </h3>
+              <p class="m-0 text-[12px] text-[#86868B]">
+                一屏配置彩色客户标签与公海自动回收策略，修改即时生效
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="wb-set-close"
+            @click="settingsOpen = false"
+          >
+            <IconifyIcon icon="lucide:x" class="size-4" />
+          </button>
+        </header>
+        <div class="wb-set-body">
+          <SettingsView @tags-changed="loadTaxonomy" />
+        </div>
+      </div>
+    </Drawer>
+
+    <!-- 4. 极简外贸订单 / PI 登记与修改弹窗 -->
     <QuickOrderModal
       v-model:open="orderModalOpen"
       :customer="orderModalCustomer"
-      @success="handleOrderCreated"
+      :order="orderModalRecord"
+      @success="handleOrderSaved"
     />
 
-    <!-- 4. 极简新建外贸客户弹窗 -->
+    <!-- 5. 极简新建外贸客户弹窗 -->
     <Modal
       v-model:open="createOpen"
       title="新建外贸买家档案"
@@ -1675,7 +1785,7 @@ onBeforeUnmount(() => {
       </div>
     </Modal>
 
-    <!-- 5. 批量转交弹窗 -->
+    <!-- 6. 批量转交弹窗 -->
     <Modal
       v-model:open="transferOpen"
       title="批量转交负责人"
@@ -1702,7 +1812,7 @@ onBeforeUnmount(() => {
       </div>
     </Modal>
 
-    <!-- 6. Excel 导入客户弹窗 -->
+    <!-- 7. Excel 导入客户弹窗 -->
     <Modal
       v-model:open="importOpen"
       title="Excel 批量导入客户"
@@ -1768,8 +1878,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   gap: 3px;
   padding: 3.5px;
-  background: rgb(255 255 255 / 80%);
-  backdrop-filter: blur(16px);
+  background: rgb(255 255 255 / 82%);
+  backdrop-filter: blur(18px);
   border: 0.5px solid rgb(60 60 67 / 10%);
   border-radius: 12px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
@@ -1780,7 +1890,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   align-items: center;
   height: 32px;
-  padding: 0 14px;
+  padding: 0 15px;
   font-size: 13px;
   font-weight: 600;
   color: #6e6e73;
@@ -1798,24 +1908,27 @@ onBeforeUnmount(() => {
 .wb-main-tab.on {
   color: #1d1d1f;
   background: #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
+  box-shadow:
+    0 1px 4px rgb(0 0 0 / 8%),
+    0 0 0 0.5px rgb(0 0 0 / 4%);
 }
 
 .wb-pipeline-sum {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  padding: 4px 11px;
+  padding: 4px 12px;
   font-size: 12px;
   color: #6e6e73;
-  background: rgb(255 255 255 / 72%);
+  background: rgb(255 255 255 / 80%);
   border: 0.5px solid rgb(60 60 67 / 10%);
   border-radius: 999px;
 }
 
 .wb-pipeline-sum strong {
-  font-weight: 700;
+  font-weight: 800;
   color: #0071e3;
+  font-variant-numeric: tabular-nums;
 }
 
 .wb-triage-pill {
@@ -1823,7 +1936,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   align-items: center;
   height: 34px;
-  padding: 0 12px;
+  padding: 0 13px;
   font-size: 12.5px;
   font-weight: 600;
   color: #3a3a3c;
@@ -1834,10 +1947,14 @@ onBeforeUnmount(() => {
   transition: all 0.16s ease;
 }
 
+.wb-triage-pill:hover {
+  border-color: rgb(0 113 227 / 32%);
+}
+
 .wb-triage-pill.active {
   color: #9a4400;
   background: #fff7eb;
-  border-color: rgb(255 149 0 / 38%);
+  border-color: rgb(255 149 0 / 40%);
 }
 
 .wb-pulse-dot {
@@ -1854,6 +1971,25 @@ onBeforeUnmount(() => {
   font-weight: 700;
   background: rgb(0 0 0 / 6%);
   border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-icon-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: #3a3a3c;
+  cursor: pointer;
+  background: #fff;
+  border: 0.5px solid rgb(60 60 67 / 14%);
+  border-radius: 10px;
+  transition: all 0.15s ease;
+}
+
+.wb-icon-pill:hover {
+  background: #f2f2f7;
 }
 
 .wb-ghost-btn {
@@ -1911,21 +2047,39 @@ onBeforeUnmount(() => {
 }
 
 .wb-stage-pill {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 9px 12px;
+  gap: 4px;
+  padding: 10px 12px 9px;
+  overflow: hidden;
   text-align: left;
   cursor: pointer;
-  background: rgb(255 255 255 / 86%);
-  border: 1px solid rgb(60 60 67 / 9%);
-  border-radius: 13px;
+  background: rgb(255 255 255 / 90%);
+  border: 1px solid rgb(60 60 67 / 8%);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
   transition: all 0.16s ease;
+}
+
+.wb-stage-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2.5px;
+  opacity: 0.72;
+}
+
+.wb-stage-pill.on .wb-stage-bar {
+  height: 3px;
+  opacity: 1;
 }
 
 .wb-stage-pill:hover {
   background: #fff;
-  box-shadow: 0 3px 10px rgb(0 0 0 / 5%);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 6%);
+  transform: translateY(-1px);
 }
 
 .wb-stage-pill.on {
@@ -1938,13 +2092,6 @@ onBeforeUnmount(() => {
   border-color: #6e6e73;
 }
 
-.wb-stage-dot {
-  flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-}
-
 .wb-stage-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1955,7 +2102,7 @@ onBeforeUnmount(() => {
 }
 
 .wb-stage-num {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 800;
   color: #1d1d1f;
   font-variant-numeric: tabular-nums;
@@ -1965,8 +2112,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 11px;
-  color: #6e6e73;
+  color: #86868b;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 筛选条 */
@@ -2052,7 +2200,7 @@ onBeforeUnmount(() => {
 
 .wb-kanban {
   display: grid;
-  grid-template-columns: repeat(6, minmax(242px, 1fr));
+  grid-template-columns: repeat(6, minmax(244px, 1fr));
   gap: 10px;
   align-items: stretch;
   min-height: 520px;
@@ -2064,9 +2212,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 500px;
-  max-height: calc(100vh - 250px);
+  max-height: calc(100vh - 246px);
   padding: 10px;
-  background: rgb(235 235 240 / 60%);
+  background: rgb(235 235 240 / 62%);
   border: 1px solid rgb(60 60 67 / 7%);
   border-radius: 16px;
   transition: all 0.16s ease;
@@ -2100,8 +2248,9 @@ onBeforeUnmount(() => {
   font-size: 11px;
   font-weight: 700;
   color: #6e6e73;
-  background: rgb(255 255 255 / 80%);
+  background: rgb(255 255 255 / 84%);
   border-radius: 999px;
+  font-variant-numeric: tabular-nums;
 }
 
 .wb-col-body {
@@ -2130,15 +2279,22 @@ onBeforeUnmount(() => {
   cursor: pointer;
   background: #fff;
   border: 0.5px solid rgb(60 60 67 / 9%);
-  border-radius: 13px;
+  border-radius: 14px;
   box-shadow: 0 1px 3px rgb(0 0 0 / 4%);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .wb-card:hover {
-  border-color: rgb(0 113 227 / 32%);
-  box-shadow: 0 6px 16px rgb(0 0 0 / 7%);
+  border-color: rgb(0 113 227 / 34%);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 7%);
   transform: translateY(-1px);
+}
+
+.wb-card--urgent {
+  border-left: 3px solid #ff3b30;
 }
 
 .wb-card--dragging {
@@ -2186,6 +2342,12 @@ onBeforeUnmount(() => {
   color: #48484a;
   background: #f2f2f7;
   border-radius: 5px;
+}
+
+.wb-mini-tag--awake {
+  font-weight: 600;
+  color: #1e7e34;
+  background: #eaf9ee;
 }
 
 .wb-mini-tag--blue {
@@ -2245,6 +2407,18 @@ onBeforeUnmount(() => {
   background: #f2f2f7;
 }
 
+.wb-card-actions {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  opacity: 0.72;
+  transition: opacity 0.15s ease;
+}
+
+.wb-card:hover .wb-card-actions {
+  opacity: 1;
+}
+
 .wb-card-act {
   display: inline-flex;
   align-items: center;
@@ -2279,6 +2453,59 @@ onBeforeUnmount(() => {
   padding: 10px 16px;
   background: #f0f7ff;
   border-bottom: 0.5px solid rgb(0 113 227 / 18%);
+}
+
+/* 设置抽屉 */
+.wb-set-drawer {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 0px);
+  margin: -24px;
+  background: #f5f5f7;
+}
+
+.wb-set-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 14px;
+  background: rgb(255 255 255 / 90%);
+  backdrop-filter: blur(20px);
+  border-bottom: 0.5px solid rgb(60 60 67 / 12%);
+}
+
+.wb-set-orb {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: #fff;
+  background: linear-gradient(180deg, #3395ff 0%, #0071e3 100%);
+  border-radius: 10px;
+}
+
+.wb-set-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #6e6e73;
+  cursor: pointer;
+  background: rgb(118 118 128 / 10%);
+  border: none;
+  border-radius: 8px;
+}
+
+.wb-set-close:hover {
+  color: #1d1d1f;
+  background: rgb(118 118 128 / 18%);
+}
+
+.wb-set-body {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px 28px;
+  overflow-y: auto;
 }
 
 /* 零客户引导卡 */

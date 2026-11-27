@@ -1,22 +1,30 @@
 <script lang="ts" setup>
 /**
- * 右侧滑出式 360° 客户全景抽屉（Twenty CRM / Apple Inspector 风格）：
- * - 点击看板卡片或表格任意行丝滑滑出，零跳页打断，支持「↑ 上一位 / ↓ 下一位」连续批阅
- * - 顶部集成：姓名/公司直改、星标关注、国旗与买家当地实时日夜时钟、AI 托管开关、快捷发消息/邮件/登记订单/暂缓归档
- * - 中部常驻：6 步可点击阶段推进条 + 4 格「📌 商务黑板」（支持一键从沟通记录智能提取）
- * - 下部四栏合一：沟通与跟进融合时间轴（含 5 秒极速写跟进） / AI 深度背调 / 档案与标签 / 成交订单
+ * 右侧滑出式 360° 客户全景抽屉（Apple Inspector + Twenty CRM 深度打磨版）：
+ * - 顶部名片：一键复制邮箱/WhatsApp、买家当地日夜时钟、星标关注、🔒 公海保护锁、AI 托管开关、键盘 ↑/↓ 秒切客户
+ * - 中部常驻：6 步可点击阶段条 + 4 格「📌 商务黑板」（支持一键从聊天智能提取报价/数量/快递单号）
+ * - 四合一页签：沟通与跟进时间轴 / AI 深度背调 / 档案与多决策人名片夹 / 成交订单（支持直接编辑订单）
  */
 import type { ChannelResearchApi } from '#/api/channel/research';
 import type { CgchCrmApi } from '#/api/crm/cgch';
 
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 import { useRouter } from 'vue-router';
 
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 import { IconifyIcon } from '@vben/icons';
+import { useUserStore } from '@vben/stores';
 
 import {
+  Checkbox,
   DatePicker,
   Drawer,
   Empty,
@@ -40,9 +48,15 @@ import {
   getResearchPage,
 } from '#/api/channel/research';
 import { updateCustomerTags } from '#/api/crm/cgch';
-import { getContractPageByCustomer } from '#/api/crm/contract';
+import {
+  createContact,
+  deleteContact,
+  getContactPageByCustomer,
+} from '#/api/crm/contact';
+import { deleteContract, getContractPageByCustomer } from '#/api/crm/contract';
 import {
   getCustomer,
+  lockCustomer,
   putCustomerPool,
   transferCustomer,
   updateCustomer,
@@ -99,7 +113,6 @@ interface TimelineChannelItem {
 
 const props = defineProps<{
   customerId: null | number;
-  groups?: CgchCrmApi.TreeNode[];
   hasNext?: boolean;
   hasPrev?: boolean;
   open: boolean;
@@ -108,6 +121,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   changed: [];
+  'edit-order-modal': [order: Record<string, any>, customer: Record<string, any>];
   next: [];
   'open-order-modal': [customer: Record<string, any>];
   prev: [];
@@ -115,6 +129,7 @@ const emit = defineEmits<{
 }>();
 
 const router = useRouter();
+const userStore = useUserStore();
 
 const loading = ref(false);
 const detail = ref<null | Record<string, any>>(null);
@@ -159,7 +174,7 @@ const researchRunning = ref(false);
 const latestResearch = ref<ChannelResearchApi.Research | null>(null);
 let researchTimer: null | ReturnType<typeof setInterval> = null;
 
-// 客户档案编辑
+// 客户档案编辑（精简掉冗余的「客户分组」，统一使用彩色标签）
 const profileSaving = ref(false);
 const profileForm = reactive({
   name: '',
@@ -170,10 +185,27 @@ const profileForm = reactive({
   website: '',
   level: undefined as number | undefined,
   source: undefined as number | undefined,
-  groupId: undefined as number | undefined,
   tagIds: [] as number[],
   note: '',
 });
+
+// 企业多决策人名片夹（采购 / 老板 / 财务 / 工程师）
+const contacts = ref<any[]>([]);
+const contactAddOpen = ref(false);
+const contactSaving = ref(false);
+const contactForm = reactive({
+  name: '',
+  post: 'Purchasing Manager',
+  email: '',
+  whatsapp: '',
+  master: false,
+});
+const POST_PRESETS = [
+  'Purchasing Manager',
+  'CEO / Founder',
+  'Product / QC Engineer',
+  'Finance / Logistics',
+];
 
 // 订单列表
 const ordersLoading = ref(false);
@@ -286,6 +318,16 @@ const totalOrderAmount = computed(() =>
   customerOrders.value.reduce((sum, o) => sum + Number(o.totalPrice || 0), 0),
 );
 
+async function copyText(val?: string, label = '内容') {
+  if (!val) return;
+  try {
+    await navigator.clipboard.writeText(val);
+    message.success(`${label}已复制：${val}`);
+  } catch {
+    message.info(val);
+  }
+}
+
 function syncFormsFromDetail(d: Record<string, any>) {
   const b = parseDealBoard(d.remark);
   boardForm.currency = b.currency || 'USD';
@@ -302,7 +344,6 @@ function syncFormsFromDetail(d: Record<string, any>) {
   profileForm.website = d.website || '';
   profileForm.level = d.level ?? undefined;
   profileForm.source = d.source ?? undefined;
-  profileForm.groupId = d.groupId ?? undefined;
   profileForm.tagIds = Array.isArray(d.tagIds) ? [...d.tagIds] : [];
   profileForm.note = b.note || '';
 }
@@ -320,10 +361,62 @@ async function loadCustomerAll(id: number) {
       loadTimeline(id),
       loadResearch(id),
       loadOrders(id),
+      loadContacts(id),
     ]);
   } finally {
     loading.value = false;
   }
+}
+
+async function loadContacts(id: number) {
+  const res: any = await getContactPageByCustomer({
+    customerId: id,
+    pageNo: 1,
+    pageSize: 50,
+  } as any).catch(() => ({ list: [] }));
+  contacts.value = res?.list ?? [];
+}
+
+async function handleCreateContact() {
+  if (!detail.value) return;
+  if (!contactForm.name.trim()) {
+    message.warning('请填写联系人姓名');
+    return;
+  }
+  contactSaving.value = true;
+  try {
+    const rawEmail = contactForm.email.trim();
+    const rawWa = contactForm.whatsapp.trim();
+    await createContact({
+      name: contactForm.name.trim(),
+      customerId: detail.value.id,
+      ownerUserId: detail.value.ownerUserId || userStore.userInfo?.id || 1,
+      post: contactForm.post.trim() || undefined,
+      email: rawEmail && rawEmail.includes('@') ? rawEmail : undefined,
+      // 借用无国内手机号正则限制的 wechat 字段安全存放海外 WhatsApp / 电话
+      wechat: rawWa || undefined,
+      master: contactForm.master,
+    } as any);
+    message.success(`已添加联系人「${contactForm.name.trim()}」`);
+    contactAddOpen.value = false;
+    Object.assign(contactForm, {
+      name: '',
+      post: 'Purchasing Manager',
+      email: '',
+      whatsapp: '',
+      master: false,
+    });
+    await loadContacts(detail.value.id);
+  } finally {
+    contactSaving.value = false;
+  }
+}
+
+async function handleDeleteContact(cid: number) {
+  if (!detail.value) return;
+  await deleteContact(cid);
+  message.success('已移除联系人');
+  await loadContacts(detail.value.id);
 }
 
 async function loadTimeline(id: number) {
@@ -413,6 +506,14 @@ async function loadOrders(id: number) {
   }
 }
 
+async function handleDeleteOrder(orderId: number) {
+  if (!detail.value) return;
+  await deleteContract(orderId);
+  message.success('已删除该订单');
+  await loadOrders(detail.value.id);
+  emit('changed');
+}
+
 /** 切换阶段 */
 async function handleStageSelect(stageVal: number) {
   if (!detail.value) return;
@@ -434,6 +535,18 @@ async function handleToggleStar() {
   await toggleCustomerStarred(detail.value.id, next);
   detail.value.starred = next;
   message.success(next ? '已设为星标重点客户' : '已取消星标');
+  emit('changed');
+}
+
+/** 🔒 公海保护锁（大单长周期豁免自动掉公海） */
+async function handleToggleLock() {
+  if (!detail.value) return;
+  const next = !detail.value.lockStatus;
+  await lockCustomer(detail.value.id, next);
+  detail.value.lockStatus = next;
+  message.success(
+    next ? '已开启锁定保护，该客户不会自动掉入公海' : '已解除公海保护锁',
+  );
   emit('changed');
 }
 
@@ -593,7 +706,7 @@ async function handleApplyResearch() {
   emit('changed');
 }
 
-/** 保存客户档案与标签 */
+/** 保存客户档案与彩色标签 */
 async function handleSaveProfile() {
   if (!detail.value) return;
   if (!profileForm.name.trim()) {
@@ -602,8 +715,6 @@ async function handleSaveProfile() {
   }
   profileSaving.value = true;
   try {
-    const currentBoard = parseDealBoard(detail.value.remark);
-    currentBoard.note = profileForm.note;
     const payload = buildSafeCustomerPayload(detail.value, {
       name: profileForm.name.trim(),
       companyName: profileForm.companyName.trim() || undefined,
@@ -613,7 +724,6 @@ async function handleSaveProfile() {
       website: profileForm.website.trim() || undefined,
       level: profileForm.level,
       source: profileForm.source,
-      groupId: profileForm.groupId,
       tagIds: profileForm.tagIds,
     });
     await updateCustomer(payload as any);
@@ -624,7 +734,7 @@ async function handleSaveProfile() {
     await updateCustomerTags(
       detail.value.id,
       profileForm.tagIds,
-      profileForm.groupId,
+      detail.value.groupId,
     ).catch(() => undefined);
 
     const fresh: any = await getCustomer(detail.value.id);
@@ -639,7 +749,7 @@ async function handleSaveProfile() {
   }
 }
 
-/** 快捷跳转消息 / 邮件 / AI 唤醒 */
+/** 快捷跳转消息 / 邮件 */
 function jumpToIm() {
   if (latestImConvId.value) {
     router.push({
@@ -725,11 +835,26 @@ function fmtStreamTime(ts: number) {
     : d.format('YYYY-MM-DD HH:mm');
 }
 
+/** 键盘 ↑ / ↓ 连续批阅客户 */
+function onKeydown(e: KeyboardEvent) {
+  if (!props.open) return;
+  const tag = (e.target as HTMLElement | null)?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'ArrowUp' && props.hasPrev) {
+    e.preventDefault();
+    emit('prev');
+  } else if (e.key === 'ArrowDown' && props.hasNext) {
+    e.preventDefault();
+    emit('next');
+  }
+}
+
 watch(
   () => [props.open, props.customerId] as const,
   ([isOpen, cid]) => {
     if (isOpen && cid) {
       boardEditing.value = false;
+      contactAddOpen.value = false;
       void loadCustomerAll(cid);
     } else if (!isOpen) {
       stopResearchPoll();
@@ -738,7 +863,11 @@ watch(
   { immediate: true },
 );
 
-onBeforeUnmount(() => stopResearchPoll());
+onMounted(() => window.addEventListener('keydown', onKeydown));
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown);
+  stopResearchPoll();
+});
 
 defineExpose({
   reloadOrders: () => {
@@ -751,7 +880,7 @@ defineExpose({
 <template>
   <Drawer
     :open="open"
-    :width="680"
+    :width="700"
     placement="right"
     :closable="false"
     root-class-name="crm-360-drawer"
@@ -782,11 +911,27 @@ defineExpose({
                     :title="detail.starred ? '取消星标关注' : '设为星标重点客户'"
                     @click="handleToggleStar"
                   >
-                    <IconifyIcon
-                      :icon="detail.starred ? 'lucide:star' : 'lucide:star'"
-                      class="size-4"
-                    />
+                    <IconifyIcon icon="lucide:star" class="size-4" />
                   </button>
+                  <Tooltip
+                    :title="
+                      detail.lockStatus
+                        ? '已开启公海保护锁（点击解锁）'
+                        : '点亮保护锁，防止长周期大客户自动掉入公海'
+                    "
+                  >
+                    <button
+                      type="button"
+                      class="cd-star-btn"
+                      :class="{ 'is-locked': detail.lockStatus }"
+                      @click="handleToggleLock"
+                    >
+                      <IconifyIcon
+                        :icon="detail.lockStatus ? 'lucide:lock' : 'lucide:lock-open'"
+                        class="size-3.5"
+                      />
+                    </button>
+                  </Tooltip>
                   <span
                     v-if="board.archived"
                     class="rounded-full bg-[#F2F2F7] px-2.5 py-0.5 text-[11px] font-semibold text-[#6E6E73]"
@@ -802,29 +947,54 @@ defineExpose({
                   </span>
                 </div>
 
-                <div class="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-[#6E6E73]">
+                <!-- 公司、当地时钟、一键复制联系方式胶囊 -->
+                <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-[#6E6E73]">
                   <span v-if="detail.companyName" class="font-medium text-[#3A3A3C]">
                     {{ detail.companyName }}
                   </span>
-                  <span v-if="detail.countryCode" class="cd-clock-chip">
+                  <span
+                    v-if="detail.countryCode"
+                    class="cd-clock-chip"
+                    :class="{ 'is-day': localClock?.period === 'day' }"
+                  >
                     <span>{{ countryFlag(detail.countryCode) }}</span>
                     <span>{{ countryName(detail.countryCode) }}</span>
                     <template v-if="localClock">
                       <span class="opacity-40">·</span>
                       <span>{{ localClock.icon }} {{ localClock.time }}</span>
-                      <span class="text-[11px] opacity-80">({{ localClock.label }})</span>
                     </template>
                   </span>
-                  <span v-if="detail.ownerUserName" class="text-[#86868B]">
-                    负责人：{{ detail.ownerUserName }}
-                  </span>
+
+                  <button
+                    v-if="detail.email"
+                    type="button"
+                    class="cd-copy-pill"
+                    title="点击复制买家邮箱"
+                    @click="copyText(detail.email, '买家邮箱')"
+                  >
+                    <IconifyIcon icon="lucide:mail" class="size-3" />
+                    <span class="max-w-40 truncate">{{ detail.email }}</span>
+                    <IconifyIcon icon="lucide:copy" class="size-2.5 opacity-60" />
+                  </button>
+
+                  <button
+                    v-if="detail.whatsapp || detail.mobile"
+                    type="button"
+                    class="cd-copy-pill"
+                    title="点击复制 WhatsApp / 电话"
+                    @click="copyText(detail.whatsapp || detail.mobile, '号码')"
+                  >
+                    <IconifyIcon icon="lucide:phone" class="size-3" />
+                    <span>{{ detail.whatsapp || detail.mobile }}</span>
+                    <IconifyIcon icon="lucide:copy" class="size-2.5 opacity-60" />
+                  </button>
                 </div>
               </div>
             </div>
 
-            <!-- 右上角翻页器 & 关闭 -->
+            <!-- 右上角翻页器（支持键盘 ↑ / ↓） & 关闭 -->
             <div class="flex shrink-0 items-center gap-1.5">
-              <Tooltip title="上一位客户">
+              <Tooltip title="上一位客户 (↑)">
                 <button
                   type="button"
                   class="cd-icon-btn"
@@ -834,7 +1004,7 @@ defineExpose({
                   <IconifyIcon icon="lucide:chevron-up" class="size-4" />
                 </button>
               </Tooltip>
-              <Tooltip title="下一位客户">
+              <Tooltip title="下一位客户 (↓)">
                 <button
                   type="button"
                   class="cd-icon-btn"
@@ -847,7 +1017,7 @@ defineExpose({
               <button
                 type="button"
                 class="cd-icon-btn"
-                title="关闭抽屉"
+                title="关闭抽屉 (Esc)"
                 @click="emit('update:open', false)"
               >
                 <IconifyIcon icon="lucide:x" class="size-4" />
@@ -865,11 +1035,11 @@ defineExpose({
           <div class="mt-3 flex flex-wrap items-center gap-1.5">
             <button type="button" class="cd-act cd-act--primary" @click="jumpToIm">
               <IconifyIcon icon="lucide:message-circle" class="size-3.5" />
-              <span>WhatsApp / 会话</span>
+              <span>进会话</span>
             </button>
             <button type="button" class="cd-act" @click="jumpToMail">
               <IconifyIcon icon="lucide:mail" class="size-3.5" />
-              <span>发邮件</span>
+              <span>写邮件</span>
             </button>
             <button
               type="button"
@@ -885,7 +1055,7 @@ defineExpose({
               @click="router.push({ path: '/v3/crm', query: { tab: 'salesmind', sub: 'wake' } })"
             >
               <IconifyIcon icon="lucide:sparkles" class="size-3.5" />
-              <span>AI 追单唤醒</span>
+              <span>AI 唤醒</span>
             </button>
 
             <!-- 暂缓归档 / 恢复 -->
@@ -907,7 +1077,7 @@ defineExpose({
               <template #content>
                 <div class="w-64 p-1">
                   <div class="mb-2 text-[12px] font-semibold text-[#1D1D1F]">
-                    选择暂缓/未成交原因（便于后续 AI 唤醒）
+                    选择暂缓原因（沉淀供后续 AI 唤醒）
                   </div>
                   <div class="flex flex-col gap-1">
                     <button
@@ -945,7 +1115,7 @@ defineExpose({
               </template>
               <button type="button" class="cd-act">
                 <IconifyIcon icon="lucide:pause-circle" class="size-3.5" />
-                <span>暂缓归档</span>
+                <span>暂缓</span>
               </button>
             </Popover>
 
@@ -962,7 +1132,7 @@ defineExpose({
             >
               <button type="button" class="cd-act cd-act--subtle">
                 <IconifyIcon icon="lucide:globe" class="size-3.5" />
-                <span>放入公海</span>
+                <span>退公海</span>
               </button>
             </Popconfirm>
 
@@ -1008,7 +1178,7 @@ defineExpose({
               <div class="flex items-center gap-1.5">
                 <IconifyIcon icon="lucide:layout-grid" class="size-3.5 text-[#0071E3]" />
                 <span class="text-[12.5px] font-bold text-[#1D1D1F]">商务黑板</span>
-                <span class="text-[11px] text-[#86868B]">核心交易要素一眼掌握</span>
+                <span class="text-[11px] text-[#86868B]">单值 · 产品 · 条款 · 样品</span>
               </div>
               <div class="flex items-center gap-1.5">
                 <button
@@ -1152,7 +1322,10 @@ defineExpose({
               @click="subTab = 'profile'"
             >
               <IconifyIcon icon="lucide:contact-round" class="size-3.5" />
-              <span>档案与标签</span>
+              <span>档案与联系人</span>
+              <span v-if="contacts.length" class="cd-subcount">
+                {{ contacts.length }}
+              </span>
             </button>
             <button
               type="button"
@@ -1170,7 +1343,6 @@ defineExpose({
 
           <!-- ========== Tab 1: 沟通与跟进时间轴 ========== -->
           <div v-if="subTab === 'timeline'" class="flex flex-col gap-3">
-            <!-- 5 秒极速写跟进框 -->
             <div class="cd-composer">
               <Input.TextArea
                 v-model:value="followNote"
@@ -1229,7 +1401,6 @@ defineExpose({
               </div>
             </div>
 
-            <!-- 时间轴筛选器 -->
             <div class="flex items-center justify-between">
               <div class="flex gap-1">
                 <button
@@ -1256,7 +1427,6 @@ defineExpose({
               </button>
             </div>
 
-            <!-- 融合流列表 -->
             <Spin :spinning="timelineLoading">
               <Empty
                 v-if="!timelineLoading && unifiedStream.length === 0"
@@ -1299,12 +1469,12 @@ defineExpose({
                       <span v-else class="font-medium text-[#3A3A3C]">
                         {{ item.creator }}
                       </span>
-                      <span class="text-[#86868B]">{{ fmtStreamTime(item.ts) }}</span>
+                      <span class="tabular-nums text-[#86868B]">{{ fmtStreamTime(item.ts) }}</span>
 
                       <button
                         v-if="item.kind === 'message' && (item.conversationId || item.mailId)"
                         type="button"
-                        class="ml-auto text-[11.5px] font-medium text-[#0071E3] hover:underline"
+                        class="ml-auto cursor-pointer border-none bg-transparent p-0 text-[11.5px] font-medium text-[#0071E3] hover:underline"
                         @click="jumpToMessageItem(item)"
                       >
                         {{ item.channel === 'mail' ? '打开邮件 ›' : '打开会话 ›' }}
@@ -1318,7 +1488,7 @@ defineExpose({
                       >
                         <button
                           type="button"
-                          class="ml-auto text-[11px] text-[#86868B] hover:text-[#FF3B30]"
+                          class="ml-auto cursor-pointer border-none bg-transparent p-0 text-[11px] text-[#86868B] hover:text-[#FF3B30]"
                         >
                           删除
                         </button>
@@ -1456,106 +1626,229 @@ defineExpose({
             </Spin>
           </div>
 
-          <!-- ========== Tab 3: 档案与标签 ========== -->
-          <div v-else-if="subTab === 'profile'" class="cd-card-box">
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="cd-lbl">联系人 / 客户名称 *</label>
-                <Input v-model:value="profileForm.name" placeholder="客户姓名或称呼" />
+          <!-- ========== Tab 3: 档案与企业多角色联系人名片夹 ========== -->
+          <div v-else-if="subTab === 'profile'" class="flex flex-col gap-3">
+            <!-- 企业多决策人名片夹（采购 / 老板 / 工程师 / 财务） -->
+            <div class="cd-card-box">
+              <div class="mb-2.5 flex items-center justify-between">
+                <div>
+                  <h4 class="m-0 text-[13.5px] font-bold text-[#1D1D1F]">
+                    企业决策人与对接团队 ({{ contacts.length }})
+                  </h4>
+                  <p class="m-0 text-[11.5px] text-[#86868B]">
+                    同一海外公司的采购、老板、工程师与财务跟单统一归档防丢
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="cd-mini-btn cd-mini-btn--primary"
+                  @click="contactAddOpen = !contactAddOpen"
+                >
+                  {{ contactAddOpen ? '收起' : '+ 添加对接人' }}
+                </button>
               </div>
-              <div>
-                <label class="cd-lbl">海外公司名称</label>
-                <Input v-model:value="profileForm.companyName" placeholder="如 Acme Global Trading Ltd." />
+
+              <div
+                v-if="contactAddOpen"
+                class="mb-3 rounded-xl bg-[#F5F5F7] p-3"
+              >
+                <div class="grid grid-cols-2 gap-2.5">
+                  <Input
+                    v-model:value="contactForm.name"
+                    size="small"
+                    placeholder="姓名（如 Anna Weber）*"
+                  />
+                  <Input
+                    v-model:value="contactForm.post"
+                    size="small"
+                    placeholder="职务（如 Purchasing Manager）"
+                  />
+                  <Input
+                    v-model:value="contactForm.email"
+                    size="small"
+                    placeholder="邮箱"
+                  />
+                  <Input
+                    v-model:value="contactForm.whatsapp"
+                    size="small"
+                    placeholder="WhatsApp / 电话"
+                  />
+                </div>
+                <div class="mt-2 flex flex-wrap gap-1">
+                  <button
+                    v-for="p in POST_PRESETS"
+                    :key="p"
+                    type="button"
+                    class="cd-tpl-chip !bg-white"
+                    @click="contactForm.post = p"
+                  >
+                    {{ p }}
+                  </button>
+                </div>
+                <div class="mt-2.5 flex items-center justify-between">
+                  <Checkbox v-model:checked="contactForm.master">
+                    <span class="text-[12px] text-[#3A3A3C]">👑 标记为关键拍板决策人</span>
+                  </Checkbox>
+                  <button
+                    type="button"
+                    class="cd-act cd-act--primary !h-7"
+                    :disabled="contactSaving"
+                    @click="handleCreateContact"
+                  >
+                    保存联系人
+                  </button>
+                </div>
               </div>
-              <div>
-                <label class="cd-lbl">国家 / 地区（自动联动时区时钟）</label>
-                <Select
-                  v-model:value="profileForm.countryCode"
-                  show-search
-                  allow-clear
-                  option-filter-prop="label"
-                  :options="COUNTRY_OPTIONS"
-                  placeholder="选择买家国家/地区"
-                  class="w-full"
-                />
+
+              <div v-if="contacts.length" class="grid grid-cols-2 gap-2">
+                <div
+                  v-for="ct in contacts"
+                  :key="ct.id"
+                  class="flex items-start justify-between rounded-xl border border-[#E5E5EA] p-2.5"
+                >
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class="truncate text-[13px] font-semibold text-[#1D1D1F]">
+                        {{ ct.name }}
+                      </span>
+                      <span
+                        v-if="ct.master"
+                        class="rounded bg-[#FFF4E0] px-1.5 py-0.5 text-[10px] font-bold text-[#9A4400]"
+                      >
+                        👑 决策人
+                      </span>
+                    </div>
+                    <div v-if="ct.post" class="text-[11px] text-[#6E6E73]">
+                      {{ ct.post }}
+                    </div>
+                    <div class="mt-1 flex flex-wrap gap-1.5 text-[11px] text-[#0071E3]">
+                      <span
+                        v-if="ct.email"
+                        class="cursor-pointer truncate hover:underline"
+                        @click="copyText(ct.email, '邮箱')"
+                      >
+                        {{ ct.email }}
+                      </span>
+                      <span
+                        v-if="ct.wechat || ct.mobile"
+                        class="cursor-pointer hover:underline"
+                        @click="copyText(ct.wechat || ct.mobile, '号码')"
+                      >
+                        {{ ct.wechat || ct.mobile }}
+                      </span>
+                    </div>
+                  </div>
+                  <Popconfirm
+                    title="确定移除该联系人？"
+                    ok-text="移除"
+                    cancel-text="取消"
+                    @confirm="handleDeleteContact(ct.id)"
+                  >
+                    <button
+                      type="button"
+                      class="cursor-pointer border-none bg-transparent p-1 text-[#C7C7CC] hover:text-[#D70015]"
+                    >
+                      <IconifyIcon icon="lucide:x" class="size-3.5" />
+                    </button>
+                  </Popconfirm>
+                </div>
               </div>
-              <div>
-                <label class="cd-lbl">WhatsApp / 国际电话</label>
-                <Input v-model:value="profileForm.whatsapp" placeholder="如 +1 415 555 0199" />
-              </div>
-              <div>
-                <label class="cd-lbl">买家邮箱</label>
-                <Input v-model:value="profileForm.email" placeholder="buyer@company.com" />
-              </div>
-              <div>
-                <label class="cd-lbl">公司官网</label>
-                <Input v-model:value="profileForm.website" placeholder="https://www.example.com" />
-              </div>
-              <div>
-                <label class="cd-lbl">客户意向等级</label>
-                <Select
-                  v-model:value="profileForm.level"
-                  allow-clear
-                  :options="levelOptions"
-                  placeholder="选择等级"
-                  class="w-full"
-                />
-              </div>
-              <div>
-                <label class="cd-lbl">询盘渠道来源</label>
-                <Select
-                  v-model:value="profileForm.source"
-                  allow-clear
-                  :options="sourceOptions"
-                  placeholder="选择来源渠道"
-                  class="w-full"
-                />
-              </div>
-              <div>
-                <label class="cd-lbl">所属客户分组</label>
-                <Select
-                  v-model:value="profileForm.groupId"
-                  allow-clear
-                  :options="(groups || []).map((g) => ({ label: g.name, value: g.id }))"
-                  placeholder="选择分组"
-                  class="w-full"
-                />
-              </div>
-              <div>
-                <label class="cd-lbl">客户标签（可多选）</label>
-                <Select
-                  v-model:value="profileForm.tagIds"
-                  mode="multiple"
-                  allow-clear
-                  :options="(tags || []).map((t) => ({ label: t.name, value: t.id }))"
-                  placeholder="打上业务标签"
-                  class="w-full"
-                />
-              </div>
-              <div class="col-span-2">
-                <label class="cd-lbl">客户长期背景备注</label>
-                <Input.TextArea
-                  v-model:value="profileForm.note"
-                  :rows="3"
-                  placeholder="记录客户采购偏好、账期习惯、决策人性格等长期档案…"
-                />
+              <div v-else-if="!contactAddOpen" class="text-[12px] text-[#86868B]">
+                当前使用主档案联系方式，若对方有多位采购/财务同事可点击右上角补充。
               </div>
             </div>
 
-            <div class="mt-4 flex items-center justify-between border-t border-[#F2F2F7] pt-3">
-              <span class="text-[11.5px] text-[#86868B]">
-                建档时间：{{ detail.createTime ? dayjs(detail.createTime).format('YYYY-MM-DD HH:mm') : '—' }}
-                · 等级：{{ levelLabel(detail.level) }} · 来源：{{ sourceLabel(detail.source) }}
-              </span>
-              <button
-                type="button"
-                class="cd-act cd-act--primary"
-                :disabled="profileSaving"
-                @click="handleSaveProfile"
-              >
-                <IconifyIcon icon="lucide:check" class="size-3.5" />
-                <span>保存档案修改</span>
-              </button>
+            <!-- 客户主档案与彩色标签 -->
+            <div class="cd-card-box">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="cd-lbl">主联系人 / 客户名称 *</label>
+                  <Input v-model:value="profileForm.name" placeholder="客户姓名或称呼" />
+                </div>
+                <div>
+                  <label class="cd-lbl">海外公司名称</label>
+                  <Input v-model:value="profileForm.companyName" placeholder="如 Acme Global Trading Ltd." />
+                </div>
+                <div>
+                  <label class="cd-lbl">国家 / 地区（联动时区日夜时钟）</label>
+                  <Select
+                    v-model:value="profileForm.countryCode"
+                    show-search
+                    allow-clear
+                    option-filter-prop="label"
+                    :options="COUNTRY_OPTIONS"
+                    placeholder="选择买家国家/地区"
+                    class="w-full"
+                  />
+                </div>
+                <div>
+                  <label class="cd-lbl">WhatsApp / 国际电话</label>
+                  <Input v-model:value="profileForm.whatsapp" placeholder="如 +1 415 555 0199" />
+                </div>
+                <div>
+                  <label class="cd-lbl">买家主邮箱</label>
+                  <Input v-model:value="profileForm.email" placeholder="buyer@company.com" />
+                </div>
+                <div>
+                  <label class="cd-lbl">公司官网</label>
+                  <Input v-model:value="profileForm.website" placeholder="https://www.example.com" />
+                </div>
+                <div>
+                  <label class="cd-lbl">客户意向等级</label>
+                  <Select
+                    v-model:value="profileForm.level"
+                    allow-clear
+                    :options="levelOptions"
+                    placeholder="选择等级"
+                    class="w-full"
+                  />
+                </div>
+                <div>
+                  <label class="cd-lbl">询盘渠道来源</label>
+                  <Select
+                    v-model:value="profileForm.source"
+                    allow-clear
+                    :options="sourceOptions"
+                    placeholder="选择来源渠道"
+                    class="w-full"
+                  />
+                </div>
+                <div class="col-span-2">
+                  <label class="cd-lbl">彩色客户标签（多选）</label>
+                  <Select
+                    v-model:value="profileForm.tagIds"
+                    mode="multiple"
+                    allow-clear
+                    :options="(tags || []).map((t) => ({ label: t.name, value: t.id }))"
+                    placeholder="选择标签（如：欧美大客、OEM定制）"
+                    class="w-full"
+                  />
+                </div>
+                <div class="col-span-2">
+                  <label class="cd-lbl">客户长期背景备注</label>
+                  <Input.TextArea
+                    v-model:value="profileForm.note"
+                    :rows="3"
+                    placeholder="记录客户采购偏好、认证要求、账期习惯等长期档案…"
+                  />
+                </div>
+              </div>
+
+              <div class="mt-4 flex items-center justify-between border-t border-[#F2F2F7] pt-3">
+                <span class="text-[11.5px] text-[#86868B]">
+                  建档：{{ detail.createTime ? dayjs(detail.createTime).format('YYYY-MM-DD') : '—' }}
+                  · 等级：{{ levelLabel(detail.level) }} · 来源：{{ sourceLabel(detail.source) }}
+                </span>
+                <button
+                  type="button"
+                  class="cd-act cd-act--primary"
+                  :disabled="profileSaving"
+                  @click="handleSaveProfile"
+                >
+                  <IconifyIcon icon="lucide:check" class="size-3.5" />
+                  <span>保存档案修改</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1566,7 +1859,7 @@ defineExpose({
                 <div class="text-[14px] font-bold text-[#1D1D1F]">
                   历史成交订单（{{ customerOrders.length }} 笔）
                 </div>
-                <div v-if="customerOrders.length" class="text-[12px] text-[#248A3D]">
+                <div v-if="customerOrders.length" class="text-[12px] font-semibold text-[#1E7E34]">
                   累计签约金额：{{ formatDealMoney(totalOrderAmount, board.currency) }}
                 </div>
               </div>
@@ -1590,30 +1883,50 @@ defineExpose({
                 <div
                   v-for="ord in customerOrders"
                   :key="ord.id"
-                  class="flex items-center justify-between rounded-xl border border-[#E5E5EA] p-3 transition hover:border-[#0071E3]/40"
+                  class="flex items-center justify-between gap-3 rounded-xl border border-[#E5E5EA] p-3 transition hover:border-[#0071E3]/40"
                 >
-                  <div class="min-w-0">
+                  <div class="min-w-0 flex-1">
                     <div class="truncate text-[13.5px] font-semibold text-[#1D1D1F]">
                       {{ ord.name || ord.no }}
                     </div>
-                    <div class="mt-0.5 text-[11.5px] text-[#6E6E73]">
+                    <div class="mt-0.5 text-[11.5px] tabular-nums text-[#6E6E73]">
                       单号：{{ ord.no || '—' }} · 签单日：{{
                         ord.orderDate ? dayjs(ord.orderDate).format('YYYY-MM-DD') : '—'
                       }}
                     </div>
                     <div v-if="ord.remark" class="mt-0.5 truncate text-[11.5px] text-[#86868B]">
-                      {{ ord.remark }}
+                      {{ ord.remark.replace(/\[币种:[A-Z]{3}\]\s*\|?\s*/, '') }}
                     </div>
                   </div>
-                  <div class="shrink-0 text-right">
-                    <div class="text-[15px] font-bold text-[#248A3D]">
+                  <div class="flex shrink-0 items-center gap-2.5">
+                    <span class="text-[15px] font-bold tabular-nums text-[#1E7E34]">
                       {{
                         formatDealMoney(
                           ord.totalPrice,
                           ord.remark?.match(/\[币种:([A-Z]{3})\]/)?.[1] || board.currency,
                         )
                       }}
-                    </div>
+                    </span>
+                    <button
+                      type="button"
+                      class="cd-mini-btn"
+                      @click="emit('edit-order-modal', ord, detail)"
+                    >
+                      编辑
+                    </button>
+                    <Popconfirm
+                      title="确定删除该笔订单？"
+                      ok-text="删除"
+                      cancel-text="取消"
+                      @confirm="handleDeleteOrder(ord.id)"
+                    >
+                      <button
+                        type="button"
+                        class="cd-mini-btn !text-[#86868B] hover:!text-[#D70015]"
+                      >
+                        删除
+                      </button>
+                    </Popconfirm>
                   </div>
                 </div>
               </div>
@@ -1668,7 +1981,7 @@ defineExpose({
 .cd-header {
   flex-shrink: 0;
   padding: 18px 22px 14px;
-  background: rgb(255 255 255 / 90%);
+  background: rgb(255 255 255 / 92%);
   backdrop-filter: blur(22px);
   border-bottom: 0.5px solid rgb(60 60 67 / 12%);
 }
@@ -1704,6 +2017,11 @@ defineExpose({
 .cd-star-btn.on,
 .cd-star-btn:hover {
   color: #ff9500;
+}
+
+.cd-star-btn.is-locked {
+  color: #0071e3;
+  background: #e8f2ff;
 }
 
 .cd-health-pill {
@@ -1747,6 +2065,30 @@ defineExpose({
   color: #3a3a3c;
   background: #f2f2f7;
   border-radius: 999px;
+}
+
+.cd-clock-chip.is-day {
+  color: #1e7e34;
+  background: #eaf9ee;
+}
+
+.cd-copy-pill {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 11px;
+  color: #48484a;
+  cursor: pointer;
+  background: #f2f2f7;
+  border: none;
+  border-radius: 999px;
+  transition: all 0.14s ease;
+}
+
+.cd-copy-pill:hover {
+  color: #0071e3;
+  background: #e8f2ff;
 }
 
 .cd-icon-btn {

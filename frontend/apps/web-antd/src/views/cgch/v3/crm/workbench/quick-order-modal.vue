@@ -1,9 +1,8 @@
 <script lang="ts" setup>
 /**
- * 🧾 极简外贸成交订单 / PI 登记弹窗（Apple Sheet）：
- * - 摒弃传统国内 ERP 繁琐的商机/审批前置，5 个核心字段 10 秒完成成交归档
- * - 自动从客户「4 格商务黑板」带出预估单值、币种与意向产品
- * - 保存后可同步把客户推进至「⑤ 已成交」并点亮已成交标识
+ * 🧾 极简外贸成交订单 / PI 登记与编辑弹窗（Apple Sheet）：
+ * - 同时支持「新建登记」与「修改已有订单」（金额、币种、签单日、付款条款、交期备注）
+ * - 新建时自动从客户「4 格商务黑板」带出预估单值、币种与意向产品，并可同步点亮客户「⑤ 已成交」
  */
 import { computed, reactive, ref, watch } from 'vue';
 
@@ -21,7 +20,7 @@ import {
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
-import { createContract } from '#/api/crm/contract';
+import { createContract, updateContract } from '#/api/crm/contract';
 import {
   getCustomerSimpleList,
   updateCustomerDealStatus,
@@ -34,6 +33,7 @@ import { CURRENCIES, parseDealBoard } from './deal-meta';
 const props = defineProps<{
   customer?: null | Record<string, any>;
   open: boolean;
+  order?: null | Record<string, any>;
 }>();
 
 const emit = defineEmits<{
@@ -44,6 +44,8 @@ const emit = defineEmits<{
 const userStore = useUserStore();
 const saving = ref(false);
 const customerList = ref<{ id: number; name: string }[]>([]);
+
+const isEditing = computed(() => Boolean(props.order?.id));
 
 const form = reactive({
   customerId: undefined as number | undefined,
@@ -73,8 +75,42 @@ async function ensureCustomers() {
   customerList.value = ((await getCustomerSimpleList().catch(() => [])) as any[]) || [];
 }
 
-function initFromCustomer(cust?: null | Record<string, any>) {
+function parseOrderRemark(raw?: string) {
+  if (!raw) return { currency: 'USD' as CurrencyCode, paymentTerm: '', note: '' };
+  const curMatch = raw.match(/\[币种:([A-Z]{3})\]/);
+  const currency = (curMatch?.[1] as CurrencyCode) || 'USD';
+  const rest = raw.replace(/\[币种:[A-Z]{3}\]\s*\|?\s*/, '').trim();
+  const segs = rest.split('|').map((s) => s.trim()).filter(Boolean);
+  let paymentTerm = '';
+  const notes: string[] = [];
+  for (const s of segs) {
+    if (s.startsWith('付款条款：')) {
+      paymentTerm = s.replace(/^付款条款：/, '').trim();
+    } else {
+      notes.push(s);
+    }
+  }
+  return { currency, paymentTerm, note: notes.join(' | ') };
+}
+
+function initForm() {
+  if (props.order?.id) {
+    const parsed = parseOrderRemark(props.order.remark);
+    form.customerId = props.order.customerId;
+    form.name = props.order.name || props.order.no || '';
+    form.currency = parsed.currency;
+    form.amount = props.order.totalPrice !== undefined ? Number(props.order.totalPrice) : undefined;
+    form.orderDate = props.order.orderDate
+      ? dayjs(props.order.orderDate).format('YYYY-MM-DD')
+      : dayjs().format('YYYY-MM-DD');
+    form.paymentTerm = parsed.paymentTerm;
+    form.note = parsed.note;
+    form.syncStageWon = false;
+    return;
+  }
+
   const todayTag = dayjs().format('YYYYMMDD');
+  const cust = props.customer;
   if (cust?.id) {
     const board = parseDealBoard(cust.remark);
     form.customerId = cust.id;
@@ -92,6 +128,7 @@ function initFromCustomer(cust?: null | Record<string, any>) {
     form.name = `PI-${todayTag} · 外贸订单`;
     form.note = '';
   }
+  form.paymentTerm = '30% T/T 定金，70% 出货前付清';
   form.orderDate = dayjs().format('YYYY-MM-DD');
   form.syncStageWon = true;
 }
@@ -100,7 +137,7 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
-      initFromCustomer(props.customer);
+      initForm();
       if (!props.customer?.id) {
         void ensureCustomers();
       }
@@ -125,7 +162,10 @@ async function handleSubmit() {
   saving.value = true;
   try {
     const ownerUserId =
-      props.customer?.ownerUserId || userStore.userInfo?.id || 1;
+      props.order?.ownerUserId ||
+      props.customer?.ownerUserId ||
+      userStore.userInfo?.id ||
+      1;
     const orderDateMs = dayjs(form.orderDate || undefined).isValid()
       ? dayjs(form.orderDate).valueOf()
       : Date.now();
@@ -134,27 +174,34 @@ async function handleSubmit() {
     if (form.paymentTerm.trim()) remarkParts.push(`付款条款：${form.paymentTerm.trim()}`);
     if (form.note.trim()) remarkParts.push(form.note.trim());
 
-    await createContract({
+    const payload: any = {
+      id: props.order?.id,
       name: form.name.trim(),
       customerId: form.customerId,
       ownerUserId,
-      signUserId: userStore.userInfo?.id || ownerUserId,
-      orderDate: orderDateMs as any,
-      discountPercent: 0,
+      signUserId: props.order?.signUserId || userStore.userInfo?.id || ownerUserId,
+      orderDate: orderDateMs,
+      discountPercent: props.order?.discountPercent ?? 0,
       totalProductPrice: Number(form.amount),
       totalPrice: Number(form.amount),
       remark: remarkParts.join(' | '),
-      products: [],
-    } as any);
+      products: props.order?.products ?? [],
+    };
 
-    if (form.syncStageWon) {
-      await Promise.allSettled([
-        updateCustomerStage(form.customerId, 5),
-        updateCustomerDealStatus(form.customerId, true),
-      ]);
+    if (isEditing.value) {
+      await updateContract(payload);
+      message.success('订单信息已更新');
+    } else {
+      await createContract(payload);
+      if (form.syncStageWon) {
+        await Promise.allSettled([
+          updateCustomerStage(form.customerId, 5),
+          updateCustomerDealStatus(form.customerId, true),
+        ]);
+      }
+      message.success('成交订单已登记');
     }
 
-    message.success('成交订单已登记');
     emit('update:open', false);
     emit('success', form.customerId);
   } finally {
@@ -166,18 +213,18 @@ async function handleSubmit() {
 <template>
   <Modal
     :open="open"
-    title="登记成交订单 / PI"
+    :title="isEditing ? '修改成交订单 / PI' : '登记成交订单 / PI'"
     :width="520"
     centered
     :confirm-loading="saving"
-    ok-text="确认登记"
+    :ok-text="isEditing ? '保存修改' : '确认登记'"
     cancel-text="取消"
     wrap-class-name="ap-modal-sheet"
     @cancel="emit('update:open', false)"
     @ok="handleSubmit"
   >
     <div class="qo-body">
-      <div v-if="customer?.id" class="qo-cust-banner">
+      <div v-if="customer?.id && !isEditing" class="qo-cust-banner">
         <IconifyIcon icon="lucide:building-2" class="size-4 text-[#0071E3]" />
         <div class="min-w-0 flex-1">
           <div class="truncate text-[13px] font-semibold text-[#1D1D1F]">
@@ -197,6 +244,7 @@ async function handleSubmit() {
         <Select
           v-model:value="form.customerId"
           show-search
+          :disabled="isEditing"
           option-filter-prop="label"
           placeholder="搜索并选择成交客户"
           :options="customerOptions"
@@ -264,15 +312,15 @@ async function handleSubmit() {
       </div>
 
       <div class="qo-field">
-        <label class="qo-label">交期与补充备注</label>
+        <label class="qo-label">尾款水单 / 交期进度备注</label>
         <Input.TextArea
           v-model:value="form.note"
           :rows="2"
-          placeholder="选填：预计交货期、定金水单备注或特批说明…"
+          placeholder="选填：定金水单已收、预计排产交货期或船期提单备注…"
         />
       </div>
 
-      <div class="pt-1">
+      <div v-if="!isEditing" class="pt-1">
         <Checkbox v-model:checked="form.syncStageWon">
           <span class="text-[12.5px] text-[#3A3A3C]">
             同步将客户推进至「⑤ 已成交」阶段并点亮成交状态
