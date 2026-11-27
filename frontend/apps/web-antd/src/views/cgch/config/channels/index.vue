@@ -55,6 +55,7 @@ import LeadRules from './lead-rules.vue';
 import WaAccounts from './wa-accounts.vue';
 import SocialConnectModal from './social-connect-modal.vue';
 import EvoConnectModal from './evo-connect-modal.vue';
+import FacebookLoginModal from './facebook-login-modal.vue';
 import UnipileConnectModal from './unipile-connect-modal.vue';
 import { CHANNEL_ICONS } from '#/assets/channel-icons';
 
@@ -338,6 +339,7 @@ const evoAccountId = ref<number>();
 const socialPlatform = ref<SocialPlatform>('youtube');
 /** Unipile 托管接入：LinkedIn / Facebook / Instagram / Telegram */
 const unipileOpen = ref(false);
+const facebookOpen = ref(false);
 const unipileProvider = ref<ChannelUnipileApi.Provider>('linkedin');
 const socialEnabled = ref<SocialPlatform[]>([]);
 const mailboxes = computed(() => mailAccounts.value.map((a) => a.email));
@@ -477,8 +479,12 @@ function connect(c: Channel) {
       socialOpen.value = true;
       break;
     case 'unipile':
-      unipileProvider.value = c.provider as ChannelUnipileApi.Provider;
-      unipileOpen.value = true;
+      if (c.provider === 'facebook') {
+        facebookOpen.value = true;
+      } else {
+        unipileProvider.value = c.provider as ChannelUnipileApi.Provider;
+        unipileOpen.value = true;
+      }
       break;
   }
 }
@@ -1246,6 +1252,11 @@ onBeforeUnmount(() => window.removeEventListener('message', onOAuthMessage));
       :account-id="evoAccountId"
       @done="waRef?.load()"
     />
+    <FacebookLoginModal
+      v-model:open="facebookOpen"
+      @done="waRef?.load()"
+    />
+
     <UnipileConnectModal
       v-model:open="unipileOpen"
       v-model:provider="unipileProvider"

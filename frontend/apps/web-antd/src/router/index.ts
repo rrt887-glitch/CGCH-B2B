@@ -9,6 +9,7 @@ import { resetStaticRoutes } from '@vben/utils';
 import { Modal } from 'ant-design-vue';
 
 import { isChunkLoadError } from '#/utils/chunk-error';
+import { isServiceUnavailable, showServiceUnavailable } from '#/utils/service-fallback';
 
 import { createRouterGuard } from './guard';
 import { routes } from './routes';
@@ -77,6 +78,11 @@ router.afterEach(() => sessionStorage.removeItem(CHUNK_RETRY_KEY));
 router.onError((error) => {
   if (isChunkLoadError(error)) {
     handleChunkLoadError();
+    return;
+  }
+  // 导航期间后端不可用（登录信息 / 菜单拉不到）时不能白屏
+  if (isServiceUnavailable(error)) {
+    showServiceUnavailable();
     return;
   }
   console.error('[router]', error);

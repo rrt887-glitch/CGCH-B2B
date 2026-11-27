@@ -16,6 +16,8 @@ import { Button, Empty, Input, message, Modal, Pagination, Popconfirm, Switch, T
 
 import { createCloudFolder, deleteCloudFile, getCloudFiles, getCloudPath, updateCloudFile, uploadCloudFile } from '#/api/channel/cloud';
 
+import { useEscapeToClose } from '#/utils/modal-escape';
+
 const scope = ref<CloudApi.Scope>('enterprise');
 const { hasAccessByCodes } = useAccess();
 /** 企业云盘的文件 AI 会发给客户，只有有「企业云盘维护」权限的人能增删改；个人云盘本人随意 */
@@ -116,6 +118,7 @@ function pickFiles() {
 
 // ===== 新建文件夹 / 编辑 =====
 const folderOpen = ref(false);
+useEscapeToClose(folderOpen, () => (folderOpen.value = false));
 const folderName = ref('');
 async function saveFolder() {
   if (!folderName.value.trim()) {
@@ -129,6 +132,7 @@ async function saveFolder() {
 }
 
 const editOpen = ref(false);
+useEscapeToClose(editOpen, () => (editOpen.value = false));
 const editing = reactive({ id: 0, name: '', description: '', folder: false });
 function edit(f: CloudApi.File) {
   Object.assign(editing, { id: f.id, name: f.name, description: f.description || '', folder: f.folder });
@@ -255,11 +259,11 @@ onMounted(load);
       <Pagination v-model:current="page.no" v-model:page-size="page.size" :total="rows.length" show-size-changer show-quick-jumper size="small" />
     </div>
 
-    <Modal v-model:open="folderOpen" title="新建文件夹" ok-text="创建" @ok="saveFolder">
+    <Modal v-model:open="folderOpen" :mask-closable="true" title="新建文件夹" ok-text="创建" @ok="saveFolder">
       <Input v-model:value="folderName" :maxlength="200" placeholder="文件夹名称" @press-enter="saveFolder" />
     </Modal>
 
-    <Modal v-model:open="editOpen" :title="editing.folder ? '编辑文件夹' : '编辑文件'" ok-text="保存" @ok="saveEdit">
+    <Modal v-model:open="editOpen" :mask-closable="true" :title="editing.folder ? '编辑文件夹' : '编辑文件'" ok-text="保存" @ok="saveEdit">
       <div class="mb-1 text-sm">名称</div>
       <Input v-model:value="editing.name" :maxlength="200" />
       <template v-if="!editing.folder">

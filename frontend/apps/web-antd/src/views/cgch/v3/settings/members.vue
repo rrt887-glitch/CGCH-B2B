@@ -23,6 +23,8 @@ import { getHandoverCheck } from '#/api/channel/whatsapp';
 import { isStrongPassword, PASSWORD_TIP } from '#/utils/password';
 import { fmtDateTime } from '#/utils/datetime';
 
+import { useEscapeToClose } from '#/utils/modal-escape';
+
 defineOptions({ name: 'CgchV3Members' });
 
 /** 角色编码：客户公司的管理员是 tenant_admin，平台自己是 super_admin；成员是 cgch_sales */
@@ -86,6 +88,7 @@ async function load() {
 
 // ===== 新增 / 编辑 =====
 const open = ref(false);
+useEscapeToClose(open, () => (open.value = false));
 const saving = ref(false);
 const form = reactive({ id: undefined as number | undefined, username: '', nickname: '', password: '', mobile: '', email: '', role: 'sales' as 'admin' | 'sales' });
 /** 编辑前这个账号是不是管理员（客户不能改管理员账号的角色） */
@@ -173,6 +176,7 @@ async function toggleStatus(row: any, on: boolean) {
 
 // ===== 重置密码 =====
 const pwdOpen = ref(false);
+useEscapeToClose(pwdOpen, () => (pwdOpen.value = false));
 const pwdRow = ref<Row>();
 const pwd = ref('');
 function openPwd(row: any) {
@@ -320,7 +324,7 @@ onMounted(async () => {
       </CollapsePanel>
     </Collapse>
 
-    <Modal v-model:open="open" :title="form.id ? '编辑成员' : '添加成员'" :confirm-loading="saving" ok-text="保存" @ok="save">
+    <Modal v-model:open="open" :mask-closable="true" :title="form.id ? '编辑成员' : '添加成员'" :confirm-loading="saving" ok-text="保存" @ok="save">
       <Form layout="vertical" class="mt-3">
         <FormItem label="姓名" required><Input v-model:value="form.nickname" :maxlength="30" placeholder="例如：张三" /></FormItem>
         <FormItem label="登录账号" required extra="邮箱或手机号，用来登录，添加后不能修改；不能和其他公司的账号重复">
@@ -347,7 +351,7 @@ onMounted(async () => {
       </Form>
     </Modal>
 
-    <Modal v-model:open="pwdOpen" :title="`重置「${pwdRow?.nickname}」的密码`" ok-text="确定" @ok="savePwd">
+    <Modal v-model:open="pwdOpen" :mask-closable="true" :title="`重置「${pwdRow?.nickname}」的密码`" ok-text="确定" @ok="savePwd">
       <InputPassword v-model:value="pwd" class="mt-3" :maxlength="64" placeholder="新密码" />
       <div class="mt-1 text-xs text-[#6E6E73]">{{ PASSWORD_TIP }}。重置后，这个账号因输错密码造成的临时锁定也会一并解除。</div>
     </Modal>

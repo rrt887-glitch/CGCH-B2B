@@ -5,7 +5,7 @@ import { DICT_TYPE } from '@vben/constants';
 import { getDictLabel, getDictObj } from '@vben/hooks';
 import { formatDateTime } from '@vben/utils';
 
-import { Tag, Timeline } from 'ant-design-vue';
+import { Empty, Tag, Timeline } from 'ant-design-vue';
 
 defineOptions({ name: 'OperateLogV2' });
 
@@ -36,7 +36,12 @@ function getUserTypeColor(userType: number) {
 
 <template>
   <div class="pt-5">
-    <Timeline>
+    <Empty
+      v-if="!logList || logList.length === 0"
+      :image="Empty.PRESENTED_IMAGE_SIMPLE"
+      description="还没有操作日志"
+    />
+    <Timeline v-else>
       <Timeline.Item v-for="log in logList" :key="log.id">
         <template #dot>
           <span

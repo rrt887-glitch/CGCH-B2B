@@ -88,8 +88,8 @@ const view = computed(() => {
           loader: item.load,
           loadingComponent: ApSkeleton,
           delay: 140,
-          // 分包一直不回来时也别永远转圈
-          timeout: 15_000,
+          // 分包被拦截 / 一直不回来：6 秒就给出错误界面和重试，别让用户对着骨架干等
+          timeout: 6_000,
           errorComponent: makeLoadError(item.key, item.label),
           onError: (error, _retry, _fail, attempts) => {
             console.warn(

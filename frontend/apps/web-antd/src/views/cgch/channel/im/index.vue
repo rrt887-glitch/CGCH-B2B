@@ -2678,6 +2678,7 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               :checked="!!current.teamPublic"
               :disabled="readOnly"
               :loading="teamPublicSaving"
+              aria-label="公开给团队"
               @change="(v: any) => toggleTeamPublic(!!v)"
             />
           </div>

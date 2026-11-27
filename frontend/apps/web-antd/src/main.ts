@@ -33,4 +33,9 @@ async function initApplication() {
   unmountGlobalLoading();
 }
 
-initApplication();
+initApplication().catch(async (error) => {
+  console.error('[main] 应用初始化失败', error);
+  // 动态导入：避免兜底模块本身受初始化失败影响
+  const { showServiceUnavailable } = await import('./utils/service-fallback');
+  showServiceUnavailable();
+});

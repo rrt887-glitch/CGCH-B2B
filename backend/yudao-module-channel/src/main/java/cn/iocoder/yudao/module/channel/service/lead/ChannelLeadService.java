@@ -386,11 +386,10 @@ public class ChannelLeadService {
 
     private static final String[] INQUIRY_WORDS_EN = {
             "inquiry", "enquiry", "quotation", "quote", "rfq", "price list", "best price", "unit price",
-            "moq", "minimum order", "sample", "catalog", "catalogue", "oem", "odm", "fob", "cif", "exw",
-            "lead time", "wholesale", "distributor", "order",
+            "moq", "minimum order", "sample order", "catalog", "catalogue", "oem", "odm", "fob", "cif", "exw",
     };
     private static final String[] INQUIRY_WORDS_ZH = {
-            "询价", "报价", "采购", "起订量", "打样", "样品", "目录", "画册", "批发", "定制", "交期",
+            "询价", "报价", "采购", "起订量", "打样",
     };
 
     private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+", Pattern.CASE_INSENSITIVE);

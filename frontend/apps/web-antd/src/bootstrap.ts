@@ -22,13 +22,14 @@ import { registerMotionDirectives } from '#/utils/motion';
 import { setupHoverPrefetch } from '#/utils/prefetch';
 import { setupPaginationA11y } from '#/utils/antd-pagination-a11y';
 import { setupSegmentedKeyboard } from '#/utils/segmented-enter';
+import { setupServiceFallback, showServiceUnavailable } from '#/utils/service-fallback';
 import { setupVxeTableA11y } from '#/utils/vxe-a11y';
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
 import { router } from './router';
 
-async function bootstrap(namespace: string) {
+async function bootstrapApp(namespace: string) {
   // 初始化组件适配器
   await initComponentAdapter();
 
@@ -45,6 +46,8 @@ async function bootstrap(namespace: string) {
   // });
 
   const app = createApp(App);
+  // 后端不可用（部署窗口 502 等）时给全屏兜底，而不是白屏干等
+  setupServiceFallback(app);
   app.use(VueDOMPurifyHTML);
 
   // 注册v-loading指令
@@ -102,6 +105,29 @@ async function bootstrap(namespace: string) {
 
   // 鼠标悬停菜单时预取页面分包：跨境链路下能省掉 1 个往返的等待
   setupHoverPrefetch();
+}
+
+/**
+ * 启动入口：初始化失败或卡住（后端 502 时字典 / 权限请求会一直等）都要给用户兜底，
+ * 否则应用还没挂载，errorHandler / 路由错误这些钩子根本收不到，表现就是整页白屏。
+ */
+async function bootstrap(namespace: string) {
+  let mounted = false;
+  // 正常 1~2 秒就能挂载；超过 8 秒还没挂上，先给兜底页（探测到后端恢复会自动刷新）
+  const watchdog = setTimeout(() => {
+    if (!mounted) showServiceUnavailable();
+  }, 8000);
+
+  try {
+    await bootstrapApp(namespace);
+    mounted = true;
+  } catch (error) {
+    console.error('[bootstrap] 应用初始化失败', error);
+    showServiceUnavailable();
+    throw error;
+  } finally {
+    clearTimeout(watchdog);
+  }
 }
 
 export { bootstrap };

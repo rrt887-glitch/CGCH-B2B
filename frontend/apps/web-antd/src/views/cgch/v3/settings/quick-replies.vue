@@ -13,6 +13,8 @@ import { Button, Input, InputNumber, message, Modal, Popconfirm, Radio, RadioGro
 
 import { deleteQuickReply, getQuickReplies, saveQuickReply } from '#/api/channel/quick-reply';
 
+import { useEscapeToClose } from '#/utils/modal-escape';
+
 const { hasAccessByCodes } = useAccess();
 const canManage = computed(() => hasAccessByCodes(['channel:quick-reply:manage']));
 const canEdit = (r: QuickReplyApi.Item) => r.scope === 'personal' || canManage.value;
@@ -41,6 +43,7 @@ async function load() {
 }
 
 const open = ref(false);
+useEscapeToClose(open, () => (open.value = false));
 const form = reactive<QuickReplyApi.Item>({ scope: 'personal', title: '', content: '', sort: 0 });
 function edit(r?: QuickReplyApi.Item) {
   Object.assign(form, r ? { ...r } : { id: undefined, scope: 'personal', title: '', content: '', sort: 0 });
@@ -93,7 +96,7 @@ onMounted(load);
       </template>
     </Table>
 
-    <Modal v-model:open="open" :title="form.id ? '编辑快捷回复' : '新建快捷回复'" ok-text="保存" :width="560" @ok="save">
+    <Modal v-model:open="open" :mask-closable="true" :title="form.id ? '编辑快捷回复' : '新建快捷回复'" ok-text="保存" :width="560" @ok="save">
       <div class="flex flex-col gap-3">
         <Input v-model:value="form.title" :maxlength="100" placeholder="标题，例如：报价单已发送" />
         <Textarea v-model:value="form.content" :auto-size="{ minRows: 4, maxRows: 10 }" :maxlength="4000" placeholder="Hi {name}, I have sent you our latest price list..." />

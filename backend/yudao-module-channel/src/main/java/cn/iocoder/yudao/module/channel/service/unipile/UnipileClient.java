@@ -133,6 +133,23 @@ public final class UnipileClient {
         return call(cfg, tenantKey, "GET", "/v2/accounts/" + enc(accountId), null);
     }
 
+    /** 自定义登录第 1 步：提交账号密码/ cookies，返回 Account 或 AuthenticationCheckpoint */
+    public static JsonNode startAuthIntent(ChannelUnipileProperties cfg, String tenantKey, ObjectNode body) {
+        return call(cfg, tenantKey, "POST", "/v2/auth/intent", body);
+    }
+
+    /** 自定义登录第 2 步：回答 checkpoint（选 Page、验证码、SKIP 等） */
+    public static JsonNode solveAuthIntent(ChannelUnipileProperties cfg, String tenantKey,
+            String intentId, String code, String credential) {
+        ObjectNode body = JSON.createObjectNode();
+        body.put("intent_id", intentId);
+        body.put("code", StrUtil.nullToEmpty(code));
+        if (StrUtil.isNotBlank(credential)) {
+            body.put("credential", credential);
+        }
+        return call(cfg, tenantKey, "POST", "/v2/auth/checkpoint", body);
+    }
+
     public static JsonNode listAccounts(ChannelUnipileProperties cfg, String tenantKey) {
         return call(cfg, tenantKey, "GET", "/v2/accounts?limit=100", null);
     }

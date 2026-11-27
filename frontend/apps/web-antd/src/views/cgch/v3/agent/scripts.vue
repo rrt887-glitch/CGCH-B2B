@@ -59,6 +59,7 @@ const learn = ref<AgentApi.Learn>();
 const style = ref('');
 const learning = ref(false);
 const learnDirty = ref(false);
+const opening = ref<AgentApi.Opening>();
 
 watch(
   () => settings.value,
@@ -199,7 +200,6 @@ const styleDirty = computed(
 );
 
 // ===== 固定开场白 =====
-const opening = ref<AgentApi.Opening>();
 
 async function saveOpening() {
   await save({ opening: opening.value });
