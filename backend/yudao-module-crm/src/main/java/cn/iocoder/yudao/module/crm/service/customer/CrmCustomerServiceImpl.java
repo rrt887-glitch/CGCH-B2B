@@ -190,12 +190,18 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     }
 
     @Override
-    public java.util.Map<Integer, Long> getStageStats(Long userId) {
-        // 与「客户列表」的范围一致（列表不按负责人过滤），按阶段分组计数
-        java.util.Map<Integer, Long> out = new java.util.LinkedHashMap<>();
-        for (java.util.Map<String, Object> row : customerMapper.selectMaps(
+    public java.util.Map<Integer, Long> getStageStats(Long userId, String keyword) {
+        // 与「客户列表」的范围一致（列表不按负责人过滤），按阶段分组计数；
+        // 列表按 name 模糊匹配名称 + 公司名，这里跟随同样的关键词，保证「全部 / 各阶段」数字口径一致
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<CrmCustomerDO> wrapper =
                 new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<CrmCustomerDO>()
-                        .select("stage", "COUNT(*) AS cnt").groupBy("stage"))) {
+                        .select("stage", "COUNT(*) AS cnt").groupBy("stage");
+        if (cn.hutool.core.util.StrUtil.isNotBlank(keyword)) {
+            String kw = keyword.trim();
+            wrapper.and(w -> w.like("name", kw).or().like("company_name", kw));
+        }
+        java.util.Map<Integer, Long> out = new java.util.LinkedHashMap<>();
+        for (java.util.Map<String, Object> row : customerMapper.selectMaps(wrapper)) {
             Object st = row.get("stage");
             Object cnt = row.get("cnt");
             out.put(st == null ? 0 : ((Number) st).intValue(), cnt == null ? 0L : ((Number) cnt).longValue());

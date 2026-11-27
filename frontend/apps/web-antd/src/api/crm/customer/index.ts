@@ -139,8 +139,10 @@ export function updateCustomerStage(id: number, stage: number) {
 }
 
 /** 各阶段的客户数量（客户工作台的流程条用） */
-export function getCustomerStageStats() {
-  return requestClient.get<Record<string, number>>('/crm/customer/stage-stats');
+export function getCustomerStageStats(keyword?: string) {
+  return requestClient.get<Record<string, number>>('/crm/customer/stage-stats', {
+    params: keyword ? { keyword } : undefined,
+  });
 }
 
 /** 进入公海客户提醒的客户列表 */

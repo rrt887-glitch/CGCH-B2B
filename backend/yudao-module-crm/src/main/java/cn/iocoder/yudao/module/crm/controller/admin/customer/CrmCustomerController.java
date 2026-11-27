@@ -108,8 +108,9 @@ public class CrmCustomerController {
     @GetMapping("/stage-stats")
     @Operation(summary = "各阶段的客户数（我能看到的客户）")
     @PreAuthorize("@ss.hasPermission('crm:customer:query')")
-    public CommonResult<java.util.Map<Integer, Long>> stageStats() {
-        return success(customerService.getStageStats(getLoginUserId()));
+    public CommonResult<java.util.Map<Integer, Long>> stageStats(
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        return success(customerService.getStageStats(getLoginUserId(), keyword));
     }
 
     @PutMapping("/update-deal-status")
