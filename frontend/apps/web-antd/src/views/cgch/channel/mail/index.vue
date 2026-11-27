@@ -1026,6 +1026,7 @@ onMounted(async () => {
             <label class="ap-sheet-label">发件邮箱</label>
             <Select
               v-model:value="compose.accountId"
+              aria-label="发件邮箱"
               :options="accounts.map((a) => ({ label: a.email, value: a.id }))"
               placeholder="选择发件邮箱"
             />
@@ -1037,6 +1038,7 @@ onMounted(async () => {
             </label>
             <Select
               :value="templateId"
+              aria-label="邮件模板"
               allow-clear
               placeholder="不套用模板"
               :options="
@@ -1057,6 +1059,7 @@ onMounted(async () => {
             </label>
             <Input
               v-model:value="compose.to"
+              aria-label="收件人"
               placeholder="customer@company.com"
             />
           </div>
@@ -1065,23 +1068,33 @@ onMounted(async () => {
               <span>抄送 CC</span>
               <span class="ap-sheet-optional">选填</span>
             </label>
-            <Input v-model:value="compose.cc" placeholder="colleague@company.com" />
+            <Input
+              v-model:value="compose.cc"
+              aria-label="抄送"
+              placeholder="colleague@company.com"
+            />
           </div>
         </div>
         <div class="ap-sheet-field">
           <label class="ap-sheet-label">邮件主题</label>
-          <Input v-model:value="compose.subject" placeholder="输入清晰专业的邮件主题" />
+          <Input
+            v-model:value="compose.subject"
+            aria-label="邮件主题"
+            placeholder="输入清晰专业的邮件主题"
+          />
         </div>
         <div class="ap-sheet-field">
           <label class="ap-sheet-label">邮件正文</label>
           <Tinymce
             v-if="compose.html || templateId"
             v-model="compose.html"
+            aria-label="邮件正文"
             :height="300"
           />
           <Textarea
             v-else
             v-model:value="compose.text"
+            aria-label="邮件正文"
             :rows="8"
             placeholder="输入邮件正文内容…"
           />
