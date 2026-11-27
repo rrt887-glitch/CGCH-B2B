@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 /**
- * 会话：左栏选择账号（WhatsApp / Facebook / Instagram / 邮箱）与客户等级，中栏会话列表，右栏聊天。
- * 即时消息与邮件共用这个页面，选中邮箱时右侧切换为邮件收件箱。
+ * 会话：左栏选择账号（WhatsApp / Facebook / Instagram / LinkedIn / Telegram），中栏会话列表，右栏聊天。
+ * 邮件是独立板块（左侧导航「邮件」进入，?channel=mail）：会话页只显示即时消息，邮箱只在邮件板块出现。
  */
 import type { ChannelMailApi } from '#/api/channel/mail';
 import type { ChannelWaApi } from '#/api/channel/whatsapp';
@@ -128,9 +128,6 @@ const channelPills = computed(() => {
       title: `${pName} · ${accName}`,
       color: PLATFORM_COLOR[p] || '#007AFF',
     });
-  }
-  if (mailAccounts.value.length) {
-    list.push({ value: 'mail:all', label: '邮件', title: '全部邮件', color: PLATFORM_COLOR.mail! });
   }
   return list;
 });
@@ -340,17 +337,7 @@ onMounted(() => {
           :account-id="selected.id"
           :open-id="openId"
           ><template #list-controls>
-            <div class="channel-pills" role="group" aria-label="选择邮箱与渠道">
-              <button
-                v-if="showIm"
-                type="button"
-                class="channel-pill channel-pill--back"
-                title="返回即时消息会话"
-                @click="selectAccount('im:all')"
-              >
-                <IconifyIcon icon="lucide:chevron-left" class="size-3.5" />
-                <span>即时消息</span>
-              </button>
+            <div class="channel-pills" role="group" aria-label="选择邮箱">
               <button
                 v-for="c in mailAccountPills"
                 :key="c.value"
