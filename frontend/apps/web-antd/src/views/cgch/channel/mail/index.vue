@@ -137,6 +137,18 @@ watch([accountId, view], () => {
   loadList();
 });
 
+/**
+ * 把「当前打开的是哪封邮件」写进地址栏（?id=），
+ * 刷新、收藏、把链接发给同事都能回到同一封；原来 hash 一直是 ?channel=mail。
+ */
+function syncMailUrl(id?: number) {
+  const query: Record<string, any> = { ...route.query };
+  if (id) query.id = String(id);
+  else delete query.id;
+  if (String(route.query.id ?? '') === String(query.id ?? '')) return;
+  void router.replace({ query });
+}
+
 async function open(item: ChannelMailApi.Message) {
   // 同一封邮件只是刷新详情时，保留正在编辑的内容，不走暂存/恢复
   const sameMail = current.value?.id === item.id;
@@ -150,6 +162,7 @@ async function open(item: ChannelMailApi.Message) {
     ]);
     current.value = detail;
     thread.value = history;
+    syncMailUrl(detail.id);
     item.readStatus = true;
     if (!sameMail) restoreReply(detail.id);
     // 已经填过内容（或已经采用过草稿）就不再弹 AI 草稿卡片，避免重复
@@ -459,7 +472,8 @@ onMounted(async () => {
   await loadList();
   // 从工作报告等页面跳转过来时，直接打开指定邮件：/channel-msg/mail?id=123
   const id = props.openId || Number(route.query.id);
-  if (id) await open({ id } as ChannelMailApi.Message);
+  // 链接里的邮件已删除 / 无权限时静默失败：留在列表页即可，不要整页报错
+  if (id) await open({ id } as ChannelMailApi.Message).catch(() => {});
 });
 </script>
 
