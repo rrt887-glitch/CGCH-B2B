@@ -26,6 +26,7 @@ import {
   Upload,
 } from 'ant-design-vue';
 
+import { getCluePage, transformClue } from '#/api/crm/clue';
 import { getContractPage } from '#/api/crm/contract';
 import {
   getCustomerPage,
@@ -42,7 +43,7 @@ import Settings from '../settings.vue';
 
 defineOptions({ name: 'CgchCrmWorkbench' });
 
-type TabKey = 'customer' | 'order' | 'settings' | 'today';
+type TabKey = 'customer' | 'lead' | 'order' | 'settings' | 'today';
 type TodayKey = 'done' | 'expired' | 'pool' | 'today';
 
 const router = useRouter();
@@ -157,6 +158,7 @@ async function doImport() {
 }
 
 const tabs = [
+  { key: 'lead' as TabKey, label: '线索' },
   { key: 'customer' as TabKey, label: '客户' },
   { key: 'today' as TabKey, label: '今天' },
   { key: 'order' as TabKey, label: '订单' },
@@ -183,6 +185,57 @@ async function loadCustomers() {
     loading.value = false;
   }
 }
+
+/** 线索：询盘先进线索，确认意向后再转客户 */
+const leadRows = ref<any[]>([]);
+const leadTotal = ref(0);
+const leadLoading = ref(false);
+const leadKeyword = ref('');
+
+const SOURCE_LABEL: Record<number, string> = {
+  10: '邮件',
+  11: 'WhatsApp',
+  12: '阿里国际站',
+  13: '中国制造网',
+  14: '官网表单',
+  15: 'Facebook',
+  16: 'Instagram',
+  17: '官网IM',
+  18: 'YouTube',
+  19: 'TikTok',
+};
+const sourceLabel = (v?: number) => (v ? SOURCE_LABEL[v] || '其它' : '—');
+
+async function loadLeads() {
+  leadLoading.value = true;
+  try {
+    const r: any = await getCluePage({
+      pageNo: pager.no,
+      pageSize: pager.size,
+      name: leadKeyword.value || undefined,
+    } as any);
+    leadRows.value = r?.list ?? [];
+    leadTotal.value = r?.total ?? 0;
+  } finally {
+    leadLoading.value = false;
+  }
+}
+
+async function convertLead(row: any) {
+  await transformClue(row.id);
+  message.success(`已把「${row.name}」转为客户`);
+  await loadLeads();
+  await loadStats();
+}
+
+const leadColumns = [
+  { title: '线索', dataIndex: 'name', key: 'name' },
+  { title: '来源', dataIndex: 'source', key: 'source', width: 120 },
+  { title: '国家', dataIndex: 'countryCode', key: 'countryCode', width: 90 },
+  { title: '下次跟进', dataIndex: 'contactNextTime', key: 'contactNextTime', width: 130 },
+  { title: '负责人', dataIndex: 'ownerUserName', key: 'ownerUserName', width: 110 },
+  { title: '', key: 'action', width: 110 },
+];
 
 /** 今天：逾期 / 今天要联系 / 快要掉公海 / 今天已联系 */
 const todayKey = ref<TodayKey>('expired');
@@ -266,9 +319,37 @@ function openCustomer(row: any) {
   router.push(`/crm/customer/detail/${row.id}`);
 }
 
+/** 关系阶段：从客户阶段推导（潜在 / 合作中 / 老客户） */
+function relationOf(row: any) {
+  const st = row?.stage || 1;
+  if (st >= 6) return { label: '老客户', color: '#30B0C7' };
+  if (st === 5) return { label: '合作中', color: '#34C759' };
+  return { label: '潜在', color: '#8E8E93' };
+}
+
+/** 下一步该做什么：让列表直接告诉业务员动作，而不是只有数据 */
+function nextAction(row: any): { text: string; tone: 'danger' | 'normal' | 'primary' } {
+  const now = Date.now();
+  const next = row?.contactNextTime ? new Date(row.contactNextTime).getTime() : null;
+  if (next && next < now) return { text: '今天联系（已逾期）', tone: 'danger' };
+  if (!next) return { text: '约下次联系', tone: 'normal' };
+  const st = row?.stage || 1;
+  if (st === 1) return { text: '发报价', tone: 'primary' };
+  if (st === 2) return { text: '跟进报价', tone: 'primary' };
+  if (st === 3) return { text: '确认样品', tone: 'primary' };
+  if (st === 4) return { text: '推动成交', tone: 'primary' };
+  if (st === 5) return { text: '安排回款', tone: 'normal' };
+  return { text: '维护关系', tone: 'normal' };
+}
+
 const emptyOnboarding = computed(
   () => tab.value === 'customer' && total.value === 0 && !keyword.value && !stage.value,
 );
+
+function onLeadSearch() {
+  pager.no = 1;
+  void loadLeads();
+}
 
 function onSearch() {
   pager.no = 1;
@@ -284,7 +365,9 @@ function pickStage(v?: number) {
 function onTabChange(key: any) {
   tab.value = key as TabKey;
   pager.no = 1;
-  if (key === 'customer') {
+  if (key === 'lead') {
+    void loadLeads();
+  } else if (key === 'customer') {
     void loadCustomers();
   } else if (key === 'today') {
     void loadToday();
@@ -316,11 +399,22 @@ const orderColumns = [
   { title: '签订时间', dataIndex: 'orderDate', key: 'orderDate', width: 140 },
 ];
 
+const customerColumns = [
+  { title: '客户', dataIndex: 'name', key: 'name' },
+  { title: '关系', dataIndex: 'relation', key: 'relation', width: 90 },
+  { title: '阶段', dataIndex: 'stage', key: 'stage', width: 140 },
+  { title: '下次跟进', dataIndex: 'contactNextTime', key: 'contactNextTime', width: 140 },
+  { title: '最近联系', dataIndex: 'contactLastTime', key: 'contactLastTime', width: 140 },
+  { title: '负责人', dataIndex: 'ownerUserName', key: 'ownerUserName', width: 120 },
+  { title: '下一步', dataIndex: 'nextAction', key: 'nextAction', width: 160 },
+];
+
 const fmt = (v?: string) => (v ? String(v).slice(0, 10) : '—');
 const money = (v?: number) =>
   v == null ? '—' : `¥ ${Number(v).toLocaleString('zh-CN')}`;
 
 onMounted(() => {
+  void loadLeads();
   void loadCustomers();
   void loadStats();
 });
@@ -341,8 +435,69 @@ onMounted(() => {
       </button>
     </div>
 
+    <!-- ========== 线索 ========== -->
+    <template v-if="tab === 'lead'">
+      <div class="crm-wb__guide">
+        <IconifyIcon icon="lucide:inbox" class="size-4 shrink-0" />
+        <span>
+          渠道来询盘会先落到这里。确认对方有意向、谈得下去，点右侧「转为客户」；没意向的直接忽略。
+        </span>
+      </div>
+
+      <div class="crm-wb__toolbar">
+        <Input
+          v-model:value="leadKeyword"
+          allow-clear
+          placeholder="搜索线索名称"
+          class="max-w-70"
+          @press-enter="onLeadSearch"
+        />
+        <Button @click="onLeadSearch">搜索</Button>
+        <span class="text-xs text-gray-400">共 {{ leadTotal }} 条线索</span>
+      </div>
+
+      <Spin :spinning="leadLoading">
+        <Table
+          :columns="leadColumns as any"
+          :data-source="leadRows"
+          :pagination="{
+            current: pager.no,
+            pageSize: pager.size,
+            total: leadTotal,
+            showSizeChanger: false,
+            onChange: (p: number) => { pager.no = p; loadLeads(); },
+          }"
+          :row-key="(r: any) => r.id"
+          size="middle"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'name'">
+              <div class="font-medium">{{ record.name }}</div>
+              <div class="text-xs text-gray-400">
+                {{ record.companyName || record.email || record.whatsapp || '—' }}
+              </div>
+            </template>
+            <template v-else-if="column.key === 'source'">
+              <Tag>{{ sourceLabel(record.source) }}</Tag>
+            </template>
+            <template v-else-if="column.key === 'contactNextTime'">
+              {{ fmt(record.contactNextTime) }}
+            </template>
+            <template v-else-if="column.key === 'ownerUserName'">
+              {{ record.ownerUserName || '未分配' }}
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <Button size="small" type="primary" @click="convertLead(record)">
+                转为客户
+              </Button>
+            </template>
+          </template>
+        </Table>
+      </Spin>
+    </template>
+
     <!-- ========== 客户 ========== -->
-    <template v-if="tab === 'customer'">
+    <template v-else-if="tab === 'customer'">
       <div class="crm-wb__guide">
         <IconifyIcon icon="lucide:compass" class="size-4 shrink-0" />
         <span>
@@ -427,7 +582,7 @@ onMounted(() => {
 
       <Spin v-else :spinning="loading">
         <Table
-          :columns="columns as any"
+          :columns="customerColumns as any"
           :data-source="rows"
           :pagination="{
             current: pager.no,
@@ -476,6 +631,14 @@ onMounted(() => {
             </template>
             <template v-else-if="column.key === 'ownerUserName'">
               {{ record.ownerUserName || '未分配' }}
+            </template>
+            <template v-else-if="column.key === 'relation'">
+              <Tag :color="relationOf(record).color">{{ relationOf(record).label }}</Tag>
+            </template>
+            <template v-else-if="column.key === 'nextAction'">
+              <Tag :color="nextAction(record).tone === 'danger' ? 'red' : nextAction(record).tone === 'primary' ? 'blue' : 'default'">
+                {{ nextAction(record).text }}
+              </Tag>
             </template>
           </template>
         </Table>

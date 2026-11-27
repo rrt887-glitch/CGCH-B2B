@@ -110,10 +110,6 @@ public class ChannelLeadService {
     @Resource
     private CrmClueMapper crmClueMapper;
     @Resource
-    private cn.iocoder.yudao.module.crm.service.clue.CrmClueService crmClueService;
-    @Resource
-    private cn.iocoder.yudao.module.crm.dal.mysql.customer.CrmCustomerMapper crmCustomerMapper;
-    @Resource
     private CrmPermissionService crmPermissionService;
 
     /** 从询盘中提取的信息 */
@@ -166,7 +162,7 @@ public class ChannelLeadService {
                     .build();
             createClue(clue);
         }
-        Long customerId = clue.getCustomerId() != null ? clue.getCustomerId() : convertToCustomer(clue);
+        Long customerId = clue.getCustomerId();
         channelMailMessageMapper.updateById(new ChannelMailMessageDO().setId(m.getId())
                 .setClueId(clue.getId()).setCustomerId(customerId));
     }
@@ -213,7 +209,7 @@ public class ChannelLeadService {
                     .build();
             createClue(clue);
         }
-        Long customerId = clue.getCustomerId() != null ? clue.getCustomerId() : convertToCustomer(clue);
+        Long customerId = clue.getCustomerId();
         channelWaConversationMapper.updateById(new ChannelWaConversationDO().setId(c.getId())
                 .setClueId(clue.getId()).setCustomerId(customerId));
     }
@@ -245,51 +241,6 @@ public class ChannelLeadService {
         channelNotifyService.onNewLead(clue.getId(), clue.getName(), clue.getOwnerUserId(),
                 sourceLabel(clue.getSource()));
         autoResearch(clue);
-        // 自动建档的询盘直接转成客户（新工作台只展示客户，线索再手动转会多一步）
-        convertToCustomer(clue);
-    }
-
-    /** 按邮箱/手机号/WhatsApp 找已有客户，用于自动建档时查重 */
-    private cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO findExistingCustomer(CrmClueDO clue) {
-        try {
-            if (StrUtil.isNotBlank(clue.getEmail())) {
-                var list = crmCustomerMapper.selectList(
-                        new cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX<cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO>()
-                                .eq(cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO::getEmail, clue.getEmail())
-                                .last("LIMIT 1"));
-                if (!list.isEmpty()) {
-                    return list.get(0);
-                }
-            }
-            String phone = StrUtil.blankToDefault(clue.getWhatsapp(), clue.getMobile());
-            if (StrUtil.isNotBlank(phone)) {
-                var list = crmCustomerMapper.selectList(
-                        new cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX<cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO>()
-                                .and(w -> w.eq(cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO::getMobile, phone)
-                                        .or().eq(cn.iocoder.yudao.module.crm.dal.dataobject.customer.CrmCustomerDO::getTelephone, phone))
-                                .last("LIMIT 1"));
-                if (!list.isEmpty()) {
-                    return list.get(0);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("[findExistingCustomer][线索 {} 查重失败：{}]", clue.getId(), e.getMessage());
-        }
-        return null;
-    }
-
-    /** 把线索转成客户；失败只记日志，线索仍然保留 */
-    private Long convertToCustomer(CrmClueDO clue) {
-        try {
-            crmClueService.transformClue(clue.getId(), clue.getOwnerUserId());
-            CrmClueDO latest = crmClueMapper.selectById(clue.getId());
-            Long customerId = latest == null ? null : latest.getCustomerId();
-            log.info("[convertToCustomer][线索 {} 已转为客户 {}]", clue.getId(), customerId);
-            return customerId;
-        } catch (Exception e) {
-            log.warn("[convertToCustomer][线索 {} 转客户失败：{}]", clue.getId(), e.getMessage());
-            return null;
-        }
     }
 
     @Resource
