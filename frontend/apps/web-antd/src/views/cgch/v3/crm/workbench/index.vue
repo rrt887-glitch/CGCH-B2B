@@ -19,6 +19,7 @@ import {
   Input,
   message,
   Modal,
+  Popconfirm,
   Select,
   Spin,
   Table,
@@ -27,6 +28,11 @@ import {
 } from 'ant-design-vue';
 
 import { getCluePage, transformClue } from '#/api/crm/clue';
+import { DICT_TYPE } from '@vben/constants';
+import { getDictLabel } from '@vben/hooks';
+
+import { fmtDateTime } from '#/utils/datetime';
+
 import { getContractPage } from '#/api/crm/contract';
 import {
   getCustomerPage,
@@ -409,7 +415,8 @@ const customerColumns = [
   { title: '下一步', dataIndex: 'nextAction', key: 'nextAction', width: 160 },
 ];
 
-const fmt = (v?: string) => (v ? String(v).slice(0, 10) : '—');
+/** 时间列统一格式化：后端可能给毫秒/秒时间戳或字符串，不能直接 slice */
+const fmt = (v?: unknown) => fmtDateTime(v, 'YYYY-MM-DD', '—');
 const money = (v?: number) =>
   v == null ? '—' : `¥ ${Number(v).toLocaleString('zh-CN')}`;
 
@@ -487,9 +494,15 @@ onMounted(() => {
               {{ record.ownerUserName || '未分配' }}
             </template>
             <template v-else-if="column.key === 'action'">
-              <Button size="small" type="primary" @click="convertLead(record)">
-                转为客户
-              </Button>
+              <Popconfirm
+                title="确认把这条线索转为客户？"
+                description="转成客户后会进入客户列表，线索本身不再出现在这里。"
+                ok-text="转为客户"
+                cancel-text="取消"
+                @confirm="convertLead(record)"
+              >
+                <Button size="small" type="primary">转为客户</Button>
+              </Popconfirm>
             </template>
           </template>
         </Table>
@@ -728,7 +741,19 @@ onMounted(() => {
               {{ money(record.totalPrice) }}
             </template>
             <template v-else-if="column.key === 'auditStatus'">
-              <Tag>{{ record.auditStatus }}</Tag>
+              <Tag
+                :color="
+                  record.auditStatus === 20
+                    ? 'green'
+                    : record.auditStatus === 10
+                      ? 'orange'
+                      : record.auditStatus === 30
+                        ? 'red'
+                        : undefined
+                "
+              >
+                {{ getDictLabel(DICT_TYPE.CRM_AUDIT_STATUS, record.auditStatus) || '—' }}
+              </Tag>
             </template>
             <template v-else-if="column.key === 'orderDate'">
               {{ fmt(record.orderDate) }}
