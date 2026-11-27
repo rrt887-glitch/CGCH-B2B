@@ -1,19 +1,29 @@
 <script lang="ts" setup>
 /**
- * 📥 灵动待甄别来信抽屉（Smart Triage Inbox）：
- * - 承接 AI 初筛判定为「待确认采购意向」或「疑似推销/通知」的渠道来信及历史未转化线索
- * - 一键「✓ 立项进新询盘」（转为正式客户并置为 ① 新询盘），或「✕ 忽略删除」
- * - 若没有任何待甄别记录，顶部只显示轻量胶囊，不打断业务员主工作流
+ * 📥 灵动待甄别来信抽屉（支持管理员一键立项并直接指派给指定团队成员）：
+ * - 顶部支持预设「立项后默认归属人」（默认当前操作人，管理员可选任意业务员，点立项或全部立项自动派单）
+ * - 单张卡片同时提供「✓ 立项进新询盘」与「指派立项 ▾」快捷选人浮窗，一步到位免二次转交
  */
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
+import { useUserStore } from '@vben/stores';
 
-import { Drawer, Empty, Input, message, Popconfirm, Spin } from 'ant-design-vue';
+import {
+  Drawer,
+  Empty,
+  Input,
+  message,
+  Popconfirm,
+  Popover,
+  Select,
+  Spin,
+} from 'ant-design-vue';
 import dayjs from 'dayjs';
 
-import { deleteClue, getCluePage, transformClue } from '#/api/crm/clue';
-import { updateCustomerStage } from '#/api/crm/customer';
+import { deleteClue, getClue, getCluePage, transformClue } from '#/api/crm/clue';
+import { transferCustomer, updateCustomerStage } from '#/api/crm/customer';
+import { getSimpleUserList } from '#/api/system/user';
 import {
   countryName,
   crmAvatarBg,
@@ -37,11 +47,27 @@ const emit = defineEmits<{
   'update:open': [val: boolean];
 }>();
 
+const userStore = useUserStore();
+const myUserId = computed(() => userStore.userInfo?.id);
+
 const loading = ref(false);
 const actingId = ref<null | number>(null);
 const batchActing = ref(false);
 const keyword = ref('');
 const rawList = ref<any[]>([]);
+
+// 团队成员列表 & 顶部默认指派负责人
+const users = ref<{ id: number; nickname: string }[]>([]);
+const defaultAssigneeId = ref<number | undefined>(undefined);
+const assignPopId = ref<null | number>(null);
+
+const userOptions = computed(() => [
+  { label: '默认归属自己（不额外转派）', value: 0 },
+  ...users.value.map((u) => ({
+    label: `指派给：${u.nickname}`,
+    value: u.id,
+  })),
+]);
 
 const untransformed = computed(() =>
   rawList.value.filter((item) => !item.transformStatus),
@@ -51,11 +77,23 @@ const filteredList = computed(() => {
   const q = keyword.value.trim().toLowerCase();
   if (!q) return untransformed.value;
   return untransformed.value.filter((item) =>
-    [item.name, item.companyName, item.email, item.whatsapp, item.remark]
+    [
+      item.name,
+      item.companyName,
+      item.email,
+      item.whatsapp,
+      item.ownerUserName,
+      item.remark,
+    ]
       .filter(Boolean)
       .some((v) => String(v).toLowerCase().includes(q)),
   );
 });
+
+async function ensureUsers() {
+  if (users.value.length) return;
+  users.value = ((await getSimpleUserList().catch(() => [])) as any[]) || [];
+}
 
 async function loadTriage() {
   loading.value = true;
@@ -75,17 +113,48 @@ async function loadTriage() {
   }
 }
 
-async function handlePromote(clue: any) {
-  actingId.value = clue.id;
-  try {
-    const newId: any = await transformClue(clue.id);
-    if (typeof newId === 'number' && newId > 0) {
-      await updateCustomerStage(newId, 1).catch(() => undefined);
+/** 执行单条线索转化 + 设为 ① 新询盘 + 按需转派给目标成员 */
+async function promoteSingleClue(
+  clue: any,
+  targetOwnerId?: number,
+): Promise<number | undefined> {
+  await transformClue(clue.id);
+  const freshClue = await getClue(clue.id).catch(() => null);
+  const customerId = freshClue?.customerId;
+  if (customerId) {
+    await updateCustomerStage(customerId, 1).catch(() => undefined);
+    if (
+      targetOwnerId &&
+      targetOwnerId > 0 &&
+      targetOwnerId !== myUserId.value
+    ) {
+      await transferCustomer({
+        id: customerId,
+        newOwnerUserId: targetOwnerId,
+      } as any).catch(() => undefined);
     }
+  }
+  return customerId;
+}
+
+async function handlePromote(clue: any, explicitOwnerId?: number) {
+  actingId.value = clue.id;
+  assignPopId.value = null;
+  const targetOwner =
+    explicitOwnerId ?? (defaultAssigneeId.value || undefined);
+  try {
+    const customerId = await promoteSingleClue(clue, targetOwner);
     rawList.value = rawList.value.filter((c) => c.id !== clue.id);
     emit('count-change', untransformed.value.length);
-    message.success(`已将「${clue.name}」立项至 ① 新询盘`);
-    emit('promoted', typeof newId === 'number' ? newId : undefined);
+    const targetName = targetOwner
+      ? users.value.find((u) => u.id === targetOwner)?.nickname
+      : undefined;
+    message.success(
+      targetName
+        ? `已将「${clue.name}」立项并指派给 ${targetName}`
+        : `已将「${clue.name}」立项至 ① 新询盘`,
+    );
+    emit('promoted', targetOwner && targetOwner !== myUserId.value ? undefined : customerId);
   } finally {
     actingId.value = null;
   }
@@ -107,20 +176,25 @@ async function handlePromoteAll() {
   const targets = [...filteredList.value];
   if (!targets.length) return;
   batchActing.value = true;
+  const targetOwner = defaultAssigneeId.value || undefined;
   let ok = 0;
   try {
     for (const c of targets) {
       try {
-        const cid: any = await transformClue(c.id);
-        if (typeof cid === 'number' && cid > 0) {
-          await updateCustomerStage(cid, 1).catch(() => undefined);
-        }
+        await promoteSingleClue(c, targetOwner);
         ok++;
       } catch {
-        // 忽略单条失败
+        // 跳过单条失败
       }
     }
-    message.success(`已批量立项 ${ok} 条记录进入「新询盘」`);
+    const targetName = targetOwner
+      ? users.value.find((u) => u.id === targetOwner)?.nickname
+      : undefined;
+    message.success(
+      targetName
+        ? `已批量立项 ${ok} 条并统一指派给 ${targetName}`
+        : `已批量立项 ${ok} 条记录进入「新询盘」`,
+    );
     await loadTriage();
     emit('promoted');
   } finally {
@@ -143,9 +217,16 @@ function fmtRelative(v?: string) {
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen) void loadTriage();
+    if (isOpen) {
+      void ensureUsers();
+      void loadTriage();
+    }
   },
 );
+
+onMounted(() => {
+  if (props.open) void ensureUsers();
+});
 
 defineExpose({ reload: loadTriage });
 </script>
@@ -153,7 +234,7 @@ defineExpose({ reload: loadTriage });
 <template>
   <Drawer
     :open="open"
-    :width="540"
+    :width="560"
     placement="right"
     :closable="false"
     root-class-name="triage-drawer-root"
@@ -169,12 +250,12 @@ defineExpose({ reload: loadTriage });
           <div>
             <div class="flex items-center gap-2">
               <h3 class="m-0 text-[16px] font-bold tracking-tight text-[#1D1D1F]">
-                待甄别来信
+                待甄别来信与快捷派单
               </h3>
               <span class="td-count-pill">{{ untransformed.length }}</span>
             </div>
             <p class="m-0 text-[12px] text-[#86868B]">
-              明确询盘已由 AI 自动建档入「新询盘」，此处仅保留意向不明来信与历史线索
+              确认有意向可一键立项进「新询盘」，管理员可直接指定派发给任意业务成员
             </p>
           </div>
         </div>
@@ -188,30 +269,56 @@ defineExpose({ reload: loadTriage });
         </button>
       </header>
 
-      <!-- 搜索与一键批量处理 -->
+      <!-- 搜索 + 默认指派人 + 批量立项 -->
       <div class="td-toolbar">
-        <Input
-          v-model:value="keyword"
-          allow-clear
-          placeholder="搜索发件人、邮箱、WhatsApp 或内容…"
-          class="flex-1"
-        >
-          <template #prefix>
-            <IconifyIcon icon="lucide:search" class="size-3.5 text-[#86868B]" />
-          </template>
-        </Input>
-        <Popconfirm
-          v-if="filteredList.length > 1"
-          :title="`确定将当前 ${filteredList.length} 条来信全部立项为「新询盘」客户吗？`"
-          ok-text="全部立项"
-          cancel-text="取消"
-          @confirm="handlePromoteAll"
-        >
-          <button type="button" class="td-batch-btn" :disabled="batchActing">
-            <IconifyIcon icon="lucide:check-check" class="size-3.5" />
-            <span>全部立项 ({{ filteredList.length }})</span>
-          </button>
-        </Popconfirm>
+        <div class="flex gap-2">
+          <Input
+            v-model:value="keyword"
+            allow-clear
+            placeholder="搜索发件人、邮箱、WhatsApp 或内容…"
+            class="flex-1"
+          >
+            <template #prefix>
+              <IconifyIcon icon="lucide:search" class="size-3.5 text-[#86868B]" />
+            </template>
+          </Input>
+          <Select
+            v-if="users.length > 1"
+            :value="defaultAssigneeId ?? 0"
+            show-search
+            option-filter-prop="label"
+            :options="userOptions"
+            class="w-48"
+            @change="(v: any) => (defaultAssigneeId = v ? Number(v) : undefined)"
+          />
+        </div>
+
+        <div v-if="filteredList.length > 1" class="flex items-center justify-between pt-2">
+          <span class="text-[11.5px] text-[#86868B]">
+            共筛选出 {{ filteredList.length }} 条待确认来信
+          </span>
+          <Popconfirm
+            :title="`确定将当前 ${filteredList.length} 条来信全部立项${
+              defaultAssigneeId
+                ? `并指派给「${users.find((u) => u.id === defaultAssigneeId)?.nickname || ''}」`
+                : '进新询盘'
+            }吗？`"
+            ok-text="确认全部立项"
+            cancel-text="取消"
+            @confirm="handlePromoteAll"
+          >
+            <button type="button" class="td-batch-btn" :disabled="batchActing">
+              <IconifyIcon icon="lucide:check-check" class="size-3.5" />
+              <span>
+                {{
+                  defaultAssigneeId
+                    ? `全部立项派给 ${users.find((u) => u.id === defaultAssigneeId)?.nickname}`
+                    : `全部立项 (${filteredList.length})`
+                }}
+              </span>
+            </button>
+          </Popconfirm>
+        </div>
       </div>
 
       <!-- 列表主体 -->
@@ -268,6 +375,9 @@ defineExpose({ reload: loadTriage });
                   </span>
                   <span v-if="item.email" class="truncate">{{ item.email }}</span>
                   <span v-if="item.whatsapp">{{ item.whatsapp }}</span>
+                  <span v-if="item.ownerUserName" class="text-[11px] text-[#86868B]">
+                    · 当前归属：{{ item.ownerUserName }}
+                  </span>
                 </div>
 
                 <!-- AI 初筛标签 & 同企防撞单提示 -->
@@ -293,7 +403,7 @@ defineExpose({ reload: loadTriage });
                   </span>
                 </div>
 
-                <!-- 来信摘要 / 备注 -->
+                <!-- 来信摘要 -->
                 <div
                   v-if="item.contactLastContent || parseDealBoard(item.remark).note"
                   class="td-snippet"
@@ -301,8 +411,8 @@ defineExpose({ reload: loadTriage });
                   {{ item.contactLastContent || parseDealBoard(item.remark).note }}
                 </div>
 
-                <!-- 操作栏 -->
-                <div class="mt-2.5 flex items-center justify-end gap-2">
+                <!-- 操作栏：忽略 / 指派给特定成员立项 / 直接立项 -->
+                <div class="mt-2.5 flex flex-wrap items-center justify-end gap-1.5">
                   <Popconfirm
                     title="确定忽略并删除这条来信吗？"
                     ok-text="删除"
@@ -315,9 +425,46 @@ defineExpose({ reload: loadTriage });
                       :disabled="actingId === item.id"
                     >
                       <IconifyIcon icon="lucide:x" class="size-3.5" />
-                      <span>忽略删除</span>
+                      <span>忽略</span>
                     </button>
                   </Popconfirm>
+
+                  <!-- 管理员一键选人指派立项浮窗 -->
+                  <Popover
+                    v-if="users.length > 1"
+                    :open="assignPopId === item.id"
+                    trigger="click"
+                    placement="bottomRight"
+                    @open-change="(v) => (assignPopId = v ? item.id : null)"
+                  >
+                    <template #content>
+                      <div class="w-48 p-1">
+                        <div class="mb-1.5 px-1.5 text-[11.5px] font-bold text-[#1D1D1F]">
+                          立项进「新询盘」并派给：
+                        </div>
+                        <div class="flex max-h-56 flex-col gap-0.5 overflow-y-auto">
+                          <button
+                            v-for="u in users"
+                            :key="u.id"
+                            type="button"
+                            class="flex cursor-pointer items-center justify-between rounded-lg border-none bg-transparent px-2.5 py-1.5 text-left text-[12.5px] text-[#1D1D1F] hover:bg-[#E8F2FF] hover:text-[#0071E3]"
+                            @click="handlePromote(item, u.id)"
+                          >
+                            <span>{{ u.nickname }}</span>
+                            <IconifyIcon icon="lucide:send" class="size-3 opacity-60" />
+                          </button>
+                        </div>
+                      </div>
+                    </template>
+                    <button
+                      type="button"
+                      class="td-btn td-btn--blue-soft"
+                      :disabled="actingId === item.id"
+                    >
+                      <IconifyIcon icon="lucide:user-check" class="size-3.5" />
+                      <span>立项并指派 ▾</span>
+                    </button>
+                  </Popover>
 
                   <button
                     type="button"
@@ -326,7 +473,13 @@ defineExpose({ reload: loadTriage });
                     @click="handlePromote(item)"
                   >
                     <IconifyIcon icon="lucide:arrow-up-right" class="size-3.5" />
-                    <span>立项进「新询盘」</span>
+                    <span>
+                      {{
+                        defaultAssigneeId
+                          ? `立项派给 ${users.find((u) => u.id === defaultAssigneeId)?.nickname}`
+                          : '立项进「新询盘」'
+                      }}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -353,7 +506,7 @@ defineExpose({ reload: loadTriage });
   align-items: flex-start;
   justify-content: space-between;
   padding: 18px 20px 14px;
-  background: rgb(255 255 255 / 86%);
+  background: rgb(255 255 255 / 88%);
   backdrop-filter: blur(20px);
   border-bottom: 0.5px solid rgb(60 60 67 / 12%);
 }
@@ -405,11 +558,8 @@ defineExpose({ reload: loadTriage });
 }
 
 .td-toolbar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
   padding: 12px 20px;
-  background: rgb(255 255 255 / 65%);
+  background: rgb(255 255 255 / 72%);
   border-bottom: 0.5px solid rgb(60 60 67 / 8%);
 }
 
@@ -418,15 +568,15 @@ defineExpose({ reload: loadTriage });
   flex-shrink: 0;
   gap: 5px;
   align-items: center;
-  height: 32px;
-  padding: 0 12px;
-  font-size: 12px;
+  height: 28px;
+  padding: 0 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: #0071e3;
   cursor: pointer;
   background: #e8f2ff;
   border: none;
-  border-radius: 9px;
+  border-radius: 8px;
   transition: all 0.16s ease;
 }
 
@@ -460,7 +610,7 @@ defineExpose({ reload: loadTriage });
   border: 0.5px solid rgb(60 60 67 / 10%);
   border-radius: 14px;
   box-shadow: 0 1px 3px rgb(0 0 0 / 4%);
-  transition: box-shadow 0.18s ease, transform 0.18s ease;
+  transition: box-shadow 0.18s ease;
 }
 
 .td-card:hover {
@@ -561,6 +711,15 @@ defineExpose({ reload: loadTriage });
 .td-btn--ghost:hover {
   color: #d70015;
   background: #ffeceb;
+}
+
+.td-btn--blue-soft {
+  color: #0071e3;
+  background: #e8f2ff;
+}
+
+.td-btn--blue-soft:hover {
+  background: #d6e8ff;
 }
 
 .td-btn--primary {

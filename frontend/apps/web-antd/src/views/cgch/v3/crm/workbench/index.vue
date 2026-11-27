@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 /**
- * 外贸 B2B 客户管理主工作台（Apple Human Interface + Twenty CRM 精雕版）：
- * - 一级主导航瘦身为 3 个纯业务板块：「客户管道 · 公海淘金 · 成交订单」，低频「规则与标签」收纳为右上角 ⚙️ 抽屉
- * - 顶栏动作组随板块上下文智能切换（导入/导出收纳进 ⋯ 菜单，非管道页不再悬挂载客户按钮）
- * - 6 步漏斗卡支持美金总额实时汇总；看板卡片展示当地工作时段暖绿提示、公海保护锁、悬浮速记跟进与快速登记订单
+ * 外贸 B2B 客户管理主工作台（含租户管理员全套分流派单与巡检能力）：
+ * - 筛选栏支持「按负责人筛选」（选同事时自动切换全团队可见范围），看板卡片显示负责人归属角标与一键派单浮窗
+ * - 新建客户弹窗支持直接指定归属负责人
+ * - 右上角「分流与规则」抽屉集成：询盘自动分流规则 + 彩色客户标签 + 公海自动回收规则
  */
 import type { LatestResearch } from '#/api/channel/research';
 import type { CgchCrmApi } from '#/api/crm/cgch';
@@ -102,6 +102,7 @@ type QuickChip = 'all' | 'focus' | 'pool_soon' | 'stagnant' | 'urgent';
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
+const myUserId = computed(() => userStore.userInfo?.id);
 
 /** 兼容左侧主导航「CRM 智枢」（/v3/crm?tab=salesmind） */
 const isSalesmind = computed(() => route.query.tab === 'salesmind');
@@ -117,29 +118,32 @@ function setViewMode(m: ViewMode) {
   localStorage.setItem('cgch_crm_view_mode', m);
 }
 
-// 客户数据与标签
+// 客户数据、成员列表与标签
 const loading = ref(false);
 const allCustomers = ref<any[]>([]);
 const researchMap = ref<Record<number, LatestResearch>>({});
 const tags = ref<CgchCrmApi.TreeNode[]>([]);
+const simpleUsers = ref<{ id: number; nickname: string }[]>([]);
 
 // 每分钟刷新买家当地日夜时钟
 const clockTick = ref(Date.now());
 let clockTimer: null | ReturnType<typeof setInterval> = null;
 
-// 管道筛选状态（已砍掉重叠的「客户分组」下拉，统一使用彩色标签）
+// 管道筛选状态（含按负责人筛选）
 const sceneScope = ref<'all' | 'mine' | 'sub'>('mine');
 const activeStage = ref<'archived' | null | number>(null);
 const quickChip = ref<QuickChip>('all');
 const keyword = ref('');
 const filterTagId = ref<number | undefined>();
+const filterOwnerId = ref<number | undefined>();
 const tablePage = ref(1);
 
-// 看板拖拽状态
+// 看板拖拽状态 & 卡片行内快捷派单浮窗
 const draggingId = ref<null | number>(null);
 const dragOverStage = ref<null | number>(null);
+const cardAssignPopId = ref<null | number>(null);
 
-// 抽屉状态：待甄别来信 / 规则与标签设置 / 360° 客户全景
+// 抽屉状态：待甄别来信 / 分流与规则设置 / 360° 客户全景
 const triageOpen = ref(false);
 const triageCount = ref(0);
 const settingsOpen = ref(false);
@@ -166,7 +170,6 @@ const selectedIds = ref<number[]>([]);
 const transferOpen = ref(false);
 const transferTo = ref<number | undefined>();
 const transferring = ref(false);
-const simpleUsers = ref<{ id: number; nickname: string }[]>([]);
 
 // 导入客户弹窗
 const importOpen = ref(false);
@@ -175,7 +178,7 @@ const importFileList = ref<any[]>([]);
 const importUpdate = ref(false);
 const importing = ref(false);
 
-// 极简新建外贸客户弹窗
+// 极简新建外贸客户弹窗（支持管理员直接指定负责人）
 const createOpen = ref(false);
 const creating = ref(false);
 const newCustForm = reactive({
@@ -187,6 +190,7 @@ const newCustForm = reactive({
   website: '',
   source: undefined as number | undefined,
   stage: 1,
+  ownerUserId: undefined as number | undefined,
   currency: 'USD' as CurrencyCode,
   amount: undefined as number | undefined,
   productQty: '',
@@ -293,6 +297,10 @@ const filteredCustomers = computed(() => {
     list = list.filter((c) => c._stage === activeStage.value);
   }
 
+  if (filterOwnerId.value) {
+    list = list.filter((c) => c.ownerUserId === filterOwnerId.value);
+  }
+
   if (quickChip.value === 'urgent') {
     list = list.filter(
       (c) =>
@@ -329,6 +337,7 @@ const filteredCustomers = computed(() => {
         c.companyName,
         c.email,
         c.whatsapp,
+        c.ownerUserName,
         c.countryCode,
         countryName(c.countryCode),
         c._board.productQty,
@@ -360,6 +369,7 @@ const hasActiveFilter = computed(
     activeStage.value !== null ||
     quickChip.value !== 'all' ||
     Boolean(filterTagId.value) ||
+    Boolean(filterOwnerId.value) ||
     Boolean(keyword.value.trim()),
 );
 
@@ -367,7 +377,16 @@ function resetFilters() {
   activeStage.value = null;
   quickChip.value = 'all';
   filterTagId.value = undefined;
+  filterOwnerId.value = undefined;
   keyword.value = '';
+}
+
+function onSelectOwnerFilter(uid?: number) {
+  filterOwnerId.value = uid || undefined;
+  // 若选了别的同事而当前还在「我负责的」，自动切至「全部可见」以直接拉出该成员数据
+  if (uid && uid !== myUserId.value && sceneScope.value === 'mine') {
+    sceneScope.value = 'all';
+  }
 }
 
 const kanbanColumns = computed(() =>
@@ -449,8 +468,27 @@ async function loadTriageBadge() {
   }
 }
 
-async function loadTaxonomy() {
-  tags.value = (await getTagList().catch(() => [])) || [];
+async function loadTaxonomyAndUsers() {
+  const [tList, uList] = await Promise.all([
+    getTagList().catch(() => []),
+    getSimpleUserList().catch(() => []),
+  ]);
+  tags.value = tList || [];
+  simpleUsers.value = (uList as any[]) || [];
+}
+
+/** 看板卡片一键转派给团队成员 */
+async function handleCardQuickAssign(card: any, newOwnerId: number) {
+  cardAssignPopId.value = null;
+  if (!newOwnerId || card.ownerUserId === newOwnerId) return;
+  await transferCustomer({
+    id: card.id,
+    newOwnerUserId: newOwnerId,
+  } as any);
+  const targetName =
+    simpleUsers.value.find((u) => u.id === newOwnerId)?.nickname || '该成员';
+  message.success(`已将「${card.name}」指派给 ${targetName}`);
+  await loadPipeline();
 }
 
 function onCardDragStart(e: DragEvent, card: any) {
@@ -561,6 +599,11 @@ function handleOrderSaved() {
   ordersPanelRef.value?.reload();
 }
 
+function openCreateCustomerModal() {
+  newCustForm.ownerUserId = userStore.userInfo?.id;
+  createOpen.value = true;
+}
+
 async function handleCreateCustomer() {
   if (!newCustForm.name.trim() && !newCustForm.companyName.trim()) {
     message.warning('请填写买家姓名或海外公司名称');
@@ -568,6 +611,7 @@ async function handleCreateCustomer() {
   }
   creating.value = true;
   try {
+    const targetOwner = newCustForm.ownerUserId || userStore.userInfo?.id || 1;
     const remark = serializeDealBoard({
       currency: newCustForm.currency,
       amount: newCustForm.amount,
@@ -587,12 +631,21 @@ async function handleCreateCustomer() {
         website: newCustForm.website.trim() || undefined,
         source: newCustForm.source,
         remark,
-        ownerUserId: userStore.userInfo?.id ?? 1,
+        ownerUserId: targetOwner,
       },
     );
     const createdId: any = await createCustomer(payload as any);
-    if (typeof createdId === 'number' && createdId > 0 && newCustForm.stage > 1) {
-      await updateCustomerStage(createdId, newCustForm.stage).catch(() => undefined);
+    if (typeof createdId === 'number' && createdId > 0) {
+      if (newCustForm.stage > 1) {
+        await updateCustomerStage(createdId, newCustForm.stage).catch(() => undefined);
+      }
+      // 若指定给了其他成员，确保权限同步移交
+      if (targetOwner !== myUserId.value) {
+        await transferCustomer({
+          id: createdId,
+          newOwnerUserId: targetOwner,
+        } as any).catch(() => undefined);
+      }
     }
     message.success('新客户已建档入管道');
     createOpen.value = false;
@@ -605,12 +658,17 @@ async function handleCreateCustomer() {
       website: '',
       source: undefined,
       stage: 1,
+      ownerUserId: userStore.userInfo?.id,
       currency: 'USD',
       amount: undefined,
       productQty: '',
     });
     await loadPipeline();
-    if (typeof createdId === 'number' && createdId > 0) {
+    if (
+      typeof createdId === 'number' &&
+      createdId > 0 &&
+      targetOwner === myUserId.value
+    ) {
       inspectCustomer(createdId);
     }
   } finally {
@@ -742,7 +800,7 @@ const tableColumns = [
   { title: '商务黑板（单值 / 意向产品）', key: 'board', width: 235 },
   { title: 'AI 背调', key: 'research', width: 150 },
   { title: '跟进状态与预警', key: 'next', width: 180 },
-  { title: '负责人', key: 'owner', width: 90 },
+  { title: '负责人', key: 'owner', width: 100 },
   { title: '', key: 'quick', width: 92, align: 'right' as const },
 ];
 
@@ -767,8 +825,11 @@ watch(
   { immediate: true },
 );
 
-watch(sceneScope, () => {
+watch(sceneScope, (sc) => {
   tablePage.value = 1;
+  if (sc === 'mine' && filterOwnerId.value && filterOwnerId.value !== myUserId.value) {
+    filterOwnerId.value = undefined;
+  }
   void loadPipeline();
 });
 
@@ -776,7 +837,7 @@ onMounted(() => {
   if (!isSalesmind.value) {
     void loadPipeline();
     void loadTriageBadge();
-    void loadTaxonomy();
+    void loadTaxonomyAndUsers();
   }
   clockTimer = setInterval(() => {
     clockTick.value = Date.now();
@@ -787,7 +848,7 @@ watch(isSalesmind, (sm) => {
   if (!sm && allCustomers.value.length === 0) {
     void loadPipeline();
     void loadTriageBadge();
-    void loadTaxonomy();
+    void loadTaxonomyAndUsers();
   }
 });
 
@@ -804,7 +865,6 @@ onBeforeUnmount(() => {
     <!-- ==================== 1. 顶部精简导航与上下文动作栏 ==================== -->
     <header class="wb-top">
       <div class="flex flex-wrap items-center gap-3">
-        <!-- 3 个纯业务主导航（消灭两层设置 Tab 套娃） -->
         <nav class="wb-main-tabs">
           <button
             v-for="item in [
@@ -835,7 +895,6 @@ onBeforeUnmount(() => {
       <!-- 右侧按当前板块智能切换动作按钮 -->
       <div class="flex flex-wrap items-center gap-2">
         <template v-if="mainTab === 'pipeline'">
-          <!-- 📥 待甄别来信灵动胶囊 -->
           <button
             type="button"
             class="wb-triage-pill"
@@ -848,17 +907,15 @@ onBeforeUnmount(() => {
             <span class="wb-triage-count">{{ triageCount }}</span>
           </button>
 
-          <!-- + 新建客户主按钮 -->
           <button
             type="button"
             class="wb-primary-btn"
-            @click="createOpen = true"
+            @click="openCreateCustomerModal"
           >
             <IconifyIcon icon="lucide:plus" class="size-4" />
             <span>新建客户</span>
           </button>
 
-          <!-- ⋯ 低频导入/导出收纳菜单 -->
           <Dropdown trigger="click" placement="bottomRight">
             <button
               type="button"
@@ -903,15 +960,14 @@ onBeforeUnmount(() => {
           </button>
         </template>
 
-        <!-- 全局轻量 ⚙️ 规则与标签抽屉入口 -->
-        <Tooltip title="彩色客户标签与公海自动回收规则">
+        <Tooltip title="配置新询盘自动轮流分派、彩色标签与公海回收规则">
           <button
             type="button"
             class="wb-ghost-btn"
             @click="settingsOpen = true"
           >
-            <IconifyIcon icon="lucide:sliders-horizontal" class="size-3.5" />
-            <span>标签与规则</span>
+            <IconifyIcon icon="lucide:git-fork" class="size-3.5" />
+            <span>分流与规则</span>
           </button>
         </Tooltip>
       </div>
@@ -983,7 +1039,7 @@ onBeforeUnmount(() => {
         </button>
       </section>
 
-      <!-- 单行清爽筛选栏 + 双视图切换 -->
+      <!-- 筛选栏（含管理员按负责人筛选） + 看板/表格双视图切换 -->
       <section class="wb-filter-bar">
         <div class="wb-scope-seg">
           <button
@@ -1059,20 +1115,33 @@ onBeforeUnmount(() => {
             v-model:value="keyword"
             allow-clear
             placeholder="搜索客户、公司、产品、国家…"
-            class="w-56"
+            class="w-52"
           >
             <template #prefix>
               <IconifyIcon icon="lucide:search" class="size-3.5 text-[#86868B]" />
             </template>
           </Input>
 
+          <!-- 按负责人筛选（管理员巡检或筛出自己名下待派发询盘） -->
+          <Select
+            v-if="simpleUsers.length > 1"
+            :value="filterOwnerId"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            placeholder="按负责人"
+            :options="simpleUsers.map((u) => ({ label: u.nickname, value: u.id }))"
+            class="w-32"
+            @change="(v: any) => onSelectOwnerFilter(v ? Number(v) : undefined)"
+          />
+
           <Select
             v-if="tags.length"
             v-model:value="filterTagId"
             allow-clear
-            placeholder="按标签筛选"
+            placeholder="按标签"
             :options="tags.map((t) => ({ label: t.name, value: t.id }))"
-            class="w-32"
+            class="w-28"
           />
 
           <div class="wb-scope-seg">
@@ -1113,14 +1182,14 @@ onBeforeUnmount(() => {
               欢迎使用全流程外贸客户管道
             </h3>
             <p class="m-0 text-[12.5px] text-[#6E6E73]">
-              渠道询盘自动识别建档 → 六步可视化看板推进 → 滑出式全景抽屉跟进 → 极简 PI 订单沉淀
+              渠道询盘自动识别分流 → 六步可视化看板推进 → 滑出式全景抽屉跟进 → 极简 PI 订单沉淀
             </p>
           </div>
         </div>
         <div class="mt-4 grid grid-cols-3 gap-3">
           <div class="wb-ob-step">
-            <b>① 接入海外沟通渠道</b>
-            <p>绑定企业邮箱、WhatsApp 或社媒主页，买家第一封询盘自动由 AI 识别建档至「新询盘」。</p>
+            <b>① 接入渠道与自动分流</b>
+            <p>绑定邮箱或 WhatsApp，并可在右上角「分流与规则」按国家配置自动轮流派单给业务员。</p>
             <button
               type="button"
               class="wb-ghost-btn mt-auto self-start"
@@ -1131,7 +1200,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="wb-ob-step">
             <b>② 甄别存疑或导入老客</b>
-            <p>历史未转化线索可在右上角「待甄别来信」一键立项，也支持 Excel 批量导入展会名片。</p>
+            <p>历史未转化线索可在右上角「待甄别来信」一键立项并直接指派成员，或 Excel 导入名片。</p>
             <div class="mt-auto flex gap-2">
               <button
                 v-if="triageCount > 0"
@@ -1151,12 +1220,12 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="wb-ob-step">
-            <b>③ 手动新建第一位买家</b>
-            <p>只需填写买家称呼、国家与 WhatsApp/邮箱，自动匹配买家当地时区与美金商务黑板。</p>
+            <b>③ 手动新建并指派买家</b>
+            <p>填写买家称呼、国家与 WhatsApp/邮箱，支持直接指派给任意团队业务员跟进。</p>
             <button
               type="button"
               class="wb-primary-btn mt-auto self-start"
-              @click="createOpen = true"
+              @click="openCreateCustomerModal"
             >
               + 新建第一位客户
             </button>
@@ -1258,7 +1327,7 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
 
-                <!-- 第二行：国旗 + 当地日夜黄金窗口 + 背调标识 -->
+                <!-- 第二行：国旗 + 当地日夜时钟 + 负责人归属角标（团队视角或多人协作一目了然） -->
                 <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
                   <span
                     v-if="card.countryCode"
@@ -1271,6 +1340,15 @@ onBeforeUnmount(() => {
                       · {{ card._clock.icon }} {{ card._clock.time }}
                     </template>
                   </span>
+
+                  <span
+                    v-if="card.ownerUserName && (sceneScope !== 'mine' || filterOwnerId)"
+                    class="wb-mini-tag wb-mini-tag--owner"
+                  >
+                    <IconifyIcon icon="lucide:user" class="size-2.5" />
+                    {{ card.ownerUserName }}
+                  </span>
+
                   <span
                     v-if="researchMap[card.id]?.status === 'done'"
                     class="wb-mini-tag wb-mini-tag--blue"
@@ -1320,7 +1398,7 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
 
-                <!-- 底部：健康度提醒 + 快捷操作组 -->
+                <!-- 底部：健康度提醒 + 快捷操作组（速记跟进 / 一键派单 / 记订单） -->
                 <div class="mt-2.5 flex items-center justify-between gap-1 border-t border-[#F2F2F7] pt-2">
                   <span
                     class="wb-health-tag"
@@ -1330,6 +1408,46 @@ onBeforeUnmount(() => {
                   </span>
 
                   <div class="wb-card-actions" @click.stop>
+                    <!-- 一键指派 / 转交浮窗 -->
+                    <Tooltip v-if="simpleUsers.length > 1" title="派单 / 转交成员">
+                      <Popover
+                        :open="cardAssignPopId === card.id"
+                        trigger="click"
+                        placement="bottomRight"
+                        @open-change="(v) => (cardAssignPopId = v ? card.id : null)"
+                      >
+                        <template #content>
+                          <div class="w-44 p-1" @click.stop>
+                            <div class="mb-1 px-1.5 text-[11.5px] font-bold text-[#1D1D1F]">
+                              指派给团队成员：
+                            </div>
+                            <div class="flex max-h-52 flex-col gap-0.5 overflow-y-auto">
+                              <button
+                                v-for="u in simpleUsers"
+                                :key="u.id"
+                                type="button"
+                                class="flex cursor-pointer items-center justify-between rounded-lg border-none px-2.5 py-1.5 text-left text-[12px]"
+                                :class="
+                                  card.ownerUserId === u.id
+                                    ? 'bg-[#E8F2FF] font-semibold text-[#0071E3]'
+                                    : 'bg-transparent text-[#1D1D1F] hover:bg-[#F2F2F7]'
+                                "
+                                @click="handleCardQuickAssign(card, u.id)"
+                              >
+                                <span>{{ u.nickname }}</span>
+                                <span v-if="card.ownerUserId === u.id" class="text-[10px]">
+                                  当前
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        </template>
+                        <button type="button" class="wb-card-act">
+                          <IconifyIcon icon="lucide:user-check" class="size-3.5" />
+                        </button>
+                      </Popover>
+                    </Tooltip>
+
                     <Tooltip title="速记跟进">
                       <Popover
                         :open="quickFollowRowId === card.id"
@@ -1406,7 +1524,7 @@ onBeforeUnmount(() => {
           </span>
           <button type="button" class="wb-ghost-btn !h-8" @click="openBatchTransfer">
             <IconifyIcon icon="lucide:arrow-right-left" class="size-3.5" />
-            <span>批量转交</span>
+            <span>批量转交成员</span>
           </button>
           <button type="button" class="wb-ghost-btn !h-8" @click="handleBatchResearch">
             <IconifyIcon icon="lucide:radar" class="size-3.5" />
@@ -1583,7 +1701,7 @@ onBeforeUnmount(() => {
               </template>
 
               <template v-else-if="column.key === 'owner'">
-                <span class="text-[12px] text-[#6E6E73]">
+                <span class="text-[12px] font-medium text-[#3A3A3C]">
                   {{ record.ownerUserName || '—' }}
                 </span>
               </template>
@@ -1621,7 +1739,7 @@ onBeforeUnmount(() => {
     />
 
     <!-- ==================== 抽屉与弹窗组 ==================== -->
-    <!-- 1. 灵动待甄别来信抽屉 -->
+    <!-- 1. 灵动待甄别来信抽屉（支持立项直接指派成员） -->
     <TriageDrawer
       v-model:open="triageOpen"
       @count-change="(n) => (triageCount = n)"
@@ -1651,10 +1769,10 @@ onBeforeUnmount(() => {
       @edit-order-modal="openEditOrderModal"
     />
 
-    <!-- 3. ⚙️ 标签与公海规则轻量抽屉（消灭两层 Tab 套娃） -->
+    <!-- 3. 🔀 分流、标签与公海规则抽屉 -->
     <Drawer
       v-model:open="settingsOpen"
-      :width="620"
+      :width="660"
       placement="right"
       :closable="false"
     >
@@ -1662,14 +1780,14 @@ onBeforeUnmount(() => {
         <header class="wb-set-head">
           <div class="flex items-center gap-2.5">
             <span class="wb-set-orb">
-              <IconifyIcon icon="lucide:sliders-horizontal" class="size-4" />
+              <IconifyIcon icon="lucide:git-fork" class="size-4" />
             </span>
             <div>
               <h3 class="m-0 text-[16px] font-bold text-[#1D1D1F]">
-                标签与公海规则设置
+                询盘分流、标签与公海规则
               </h3>
               <p class="m-0 text-[12px] text-[#86868B]">
-                一屏配置彩色客户标签与公海自动回收策略，修改即时生效
+                统一管理新询盘自动轮流派单、彩色业务标签与公海回收机制
               </p>
             </div>
           </div>
@@ -1682,7 +1800,7 @@ onBeforeUnmount(() => {
           </button>
         </header>
         <div class="wb-set-body">
-          <SettingsView @tags-changed="loadTaxonomy" />
+          <SettingsView @tags-changed="loadTaxonomyAndUsers" />
         </div>
       </div>
     </Drawer>
@@ -1695,7 +1813,7 @@ onBeforeUnmount(() => {
       @success="handleOrderSaved"
     />
 
-    <!-- 5. 极简新建外贸客户弹窗 -->
+    <!-- 5. 极简新建外贸客户弹窗（支持指定归属负责人） -->
     <Modal
       v-model:open="createOpen"
       title="新建外贸买家档案"
@@ -1730,10 +1848,13 @@ onBeforeUnmount(() => {
           />
         </div>
         <div>
-          <label class="wb-modal-lbl">初始销售阶段</label>
+          <label class="wb-modal-lbl">归属跟进负责人</label>
           <Select
-            v-model:value="newCustForm.stage"
-            :options="PIPELINE_STAGES.map((s) => ({ label: s.label, value: s.value }))"
+            v-model:value="newCustForm.ownerUserId"
+            show-search
+            option-filter-prop="label"
+            placeholder="默认归属自己"
+            :options="simpleUsers.map((u) => ({ label: u.nickname, value: u.id }))"
             class="w-full"
           />
         </div>
@@ -1769,8 +1890,12 @@ onBeforeUnmount(() => {
           />
         </div>
         <div>
-          <label class="wb-modal-lbl">公司官网（便于 AI 背调）</label>
-          <Input v-model:value="newCustForm.website" placeholder="https://..." />
+          <label class="wb-modal-lbl">初始销售阶段</label>
+          <Select
+            v-model:value="newCustForm.stage"
+            :options="PIPELINE_STAGES.map((s) => ({ label: s.label, value: s.value }))"
+            class="w-full"
+          />
         </div>
         <div>
           <label class="wb-modal-lbl">询盘来源渠道</label>
@@ -2348,6 +2473,12 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: #1e7e34;
   background: #eaf9ee;
+}
+
+.wb-mini-tag--owner {
+  font-weight: 600;
+  color: #5856d6;
+  background: #ededfc;
 }
 
 .wb-mini-tag--blue {
