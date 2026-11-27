@@ -33,6 +33,7 @@ import {
   Button,
   Empty,
   Input,
+  InputNumber,
   InputSearch,
   message,
   Modal,
@@ -60,6 +61,15 @@ import {
   stageOptions,
 } from '#/views/cgch/v3/crm/components/shared';
 import { countryName } from '#/views/cgch/crm/shared/countries';
+import { saveCustomerDealBoard } from '#/views/cgch/v3/crm/workbench/crm-actions';
+import type { CurrencyCode } from '#/views/cgch/v3/crm/workbench/deal-meta';
+import {
+  countryFlag,
+  CURRENCIES,
+  formatDealMoney,
+  getBuyerLocalClock,
+  parseDealBoard,
+} from '#/views/cgch/v3/crm/workbench/deal-meta';
 import {
   getCustomerGroupList,
   getTagList,
@@ -413,6 +423,7 @@ const customerTags = ref<number[]>([]);
 const customerGroup = ref<number>();
 /** 右侧客户信息栏用到的客户字段 */
 interface PanelCustomer {
+  id?: number;
   name?: string;
   level?: number;
   levels?: number[];
@@ -421,6 +432,9 @@ interface PanelCustomer {
   countryCode?: string;
   email?: string;
   mobile?: string;
+  whatsapp?: string;
+  remark?: string;
+  ownerUserId?: number;
   contactNextTime?: number | string;
   contactLastTime?: number | string;
   contactLastContent?: string;
@@ -428,6 +442,47 @@ interface PanelCustomer {
   companyName?: string;
 }
 const customer = ref<PanelCustomer>();
+const customerBoard = computed(() => parseDealBoard(customer.value?.remark));
+const customerClock = computed(() =>
+  getBuyerLocalClock(customer.value?.countryCode),
+);
+const imBoardOpen = ref(false);
+const imBoardSaving = ref(false);
+const imBoardForm = reactive({
+  currency: 'USD' as CurrencyCode,
+  amount: undefined as number | undefined,
+  productQty: '',
+  quoteTerms: '',
+  sampleInfo: '',
+});
+function openImBoardEdit(open: boolean) {
+  imBoardOpen.value = open;
+  if (open && customer.value) {
+    const b = parseDealBoard(customer.value.remark);
+    imBoardForm.currency = b.currency || 'USD';
+    imBoardForm.amount = b.amount;
+    imBoardForm.productQty = b.productQty || '';
+    imBoardForm.quoteTerms = b.quoteTerms || '';
+    imBoardForm.sampleInfo = b.sampleInfo || '';
+  }
+}
+async function saveImBoard() {
+  if (!customer.value?.id) return;
+  imBoardSaving.value = true;
+  try {
+    await saveCustomerDealBoard(customer.value as any, {
+      currency: imBoardForm.currency,
+      amount: imBoardForm.amount ?? undefined,
+      productQty: imBoardForm.productQty,
+      quoteTerms: imBoardForm.quoteTerms,
+      sampleInfo: imBoardForm.sampleInfo,
+    });
+    imBoardOpen.value = false;
+    message.success('已同步至客户商务黑板');
+  } finally {
+    imBoardSaving.value = false;
+  }
+}
 /** 客户阶段进度条：已走过的阶段标蓝，点击可直接改阶段 */
 const stageSteps = computed(() =>
   stageOptions().map((o) => ({
@@ -1598,7 +1653,10 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                     type="button"
                     class="im-crm-chip im-crm-chip--blue"
                     @click="
-                      router.push(`/crm/customer/detail/${current.customerId}`)
+                      router.push({
+                        path: '/v3/crm',
+                        query: { customerId: String(current.customerId) },
+                      })
                     "
                   >
                     客户 · {{ current.customerName }}
@@ -1607,9 +1665,11 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                     v-else-if="current.clueName"
                     type="button"
                     class="im-crm-chip im-crm-chip--teal"
-                    @click="router.push(`/crm/clue/detail/${current.clueId}`)"
+                    @click="
+                      router.push({ path: '/v3/crm', query: { triage: '1' } })
+                    "
                   >
-                    线索 · {{ current.clueName }}
+                    待甄别 · {{ current.clueName }}
                   </button>
                 </div>
                 <div
@@ -2374,13 +2434,13 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
           >
             <span>{{
               current.clueName
-                ? `线索：${current.clueName}`
+                ? `待甄别来信：${current.clueName}`
                 : '尚未关联 CRM 客户'
             }}</span>
             <a
               v-if="current.clueId"
-              @click="router.push(`/crm/clue/detail/${current.clueId}`)"
-              >查看 ›</a
+              @click="router.push({ path: '/v3/crm', query: { triage: '1' } })"
+              >去立项 ›</a
             >
           </div>
         </div>
@@ -2389,9 +2449,13 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
         <template v-if="current.customerId && customerStage !== undefined">
           <div class="im-info-group">
             <div v-if="customer?.countryCode" class="im-info-row">
-              <span class="im-info-label">国家 / 地区</span>
-              <span class="truncate text-[13px] font-medium text-[#1D1D1F]">
+              <span class="im-info-label">国家与时区</span>
+              <span class="truncate text-[12.5px] font-medium text-[#1D1D1F]">
+                {{ countryFlag(customer.countryCode) }}
                 {{ countryName(customer.countryCode) || customer.countryCode }}
+                <template v-if="customerClock">
+                  · {{ customerClock.icon }} {{ customerClock.time }}
+                </template>
               </span>
             </div>
             <div class="im-info-row">
@@ -2454,6 +2518,97 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
                   >{{ s.label }}</span
                 >
               </button>
+            </div>
+          </div>
+
+          <!-- 📌 商务黑板（边聊天边记报价、单值与寄样单号，自动与 CRM 管道同步） -->
+          <div class="rounded-2xl border border-[#E5E5EA] bg-white p-3">
+            <div class="mb-1.5 flex items-center justify-between">
+              <span class="inline-flex items-center gap-1 text-[12px] font-semibold text-[#0071E3]">
+                <IconifyIcon icon="lucide:layout-grid" class="size-3.5" />
+                商务黑板
+              </span>
+              <Popover
+                :open="imBoardOpen"
+                trigger="click"
+                placement="left"
+                @open-change="openImBoardEdit"
+              >
+                <template #content>
+                  <div class="flex w-64 flex-col gap-2 p-1">
+                    <div class="text-[12px] font-bold text-[#1D1D1F]">
+                      更新商务黑板（同步至 CRM）
+                    </div>
+                    <div class="flex gap-1.5">
+                      <Select
+                        v-model:value="imBoardForm.currency"
+                        size="small"
+                        class="w-24"
+                        :options="CURRENCIES.map((c) => ({ label: c.code, value: c.code }))"
+                      />
+                      <InputNumber
+                        v-model:value="imBoardForm.amount"
+                        size="small"
+                        :min="0"
+                        placeholder="预估单值"
+                        class="flex-1"
+                      />
+                    </div>
+                    <Input
+                      v-model:value="imBoardForm.productQty"
+                      size="small"
+                      placeholder="意向产品与数量，如 2000 pcs"
+                    />
+                    <Input
+                      v-model:value="imBoardForm.quoteTerms"
+                      size="small"
+                      placeholder="报价条款，如 FOB $18.5"
+                    />
+                    <Input
+                      v-model:value="imBoardForm.sampleInfo"
+                      size="small"
+                      placeholder="样品进展或快递单号"
+                    />
+                    <div class="mt-1 flex justify-end gap-1.5">
+                      <Button size="small" @click="imBoardOpen = false">取消</Button>
+                      <Button
+                        size="small"
+                        type="primary"
+                        :loading="imBoardSaving"
+                        @click="saveImBoard"
+                      >
+                        保存
+                      </Button>
+                    </div>
+                  </div>
+                </template>
+                <a class="text-[11.5px] text-[#0071E3]">编辑</a>
+              </Popover>
+            </div>
+            <div
+              v-if="
+                customerBoard.amount ||
+                customerBoard.productQty ||
+                customerBoard.quoteTerms ||
+                customerBoard.sampleInfo
+              "
+              class="flex flex-col gap-1 text-[12px] text-[#3A3A3C]"
+            >
+              <div v-if="customerBoard.amount" class="font-bold text-[#0071E3]">
+                预估单值：{{ formatDealMoney(customerBoard.amount, customerBoard.currency) }}
+              </div>
+              <div v-if="customerBoard.productQty" class="truncate">
+                产品数量：{{ customerBoard.productQty }}
+              </div>
+              <div v-if="customerBoard.quoteTerms" class="truncate">
+                最新报价：{{ customerBoard.quoteTerms }}
+              </div>
+              <div v-if="customerBoard.sampleInfo" class="truncate">
+                寄样进展：{{ customerBoard.sampleInfo }}
+              </div>
+            </div>
+            <div v-else class="text-[11.5px] text-[#8E8E93]">
+              聊天中确认的产品、数量与报价可随时记入黑板。
             </div>
           </div>
 
@@ -2579,9 +2734,14 @@ const md = (t?: number | string) => fmtDateTime(t, 'MM-DD');
               <button
                 type="button"
                 class="im-pill-action im-pill-action--link flex-1 justify-center !h-8"
-                @click="router.push(`/crm/customer/detail/${current.customerId}`)"
+                @click="
+                  router.push({
+                    path: '/v3/crm',
+                    query: { customerId: String(current.customerId) },
+                  })
+                "
               >
-                打开客户档案 ›
+                打开全景档案 ›
               </button>
             </div>
           </div>

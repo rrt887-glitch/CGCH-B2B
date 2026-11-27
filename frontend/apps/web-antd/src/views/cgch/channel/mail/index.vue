@@ -818,7 +818,10 @@ onMounted(async () => {
                       type="button"
                       class="mail-crm-chip"
                       @click="
-                        router.push(`/crm/customer/detail/${current.customerId}`)
+                        router.push({
+                          path: '/v3/crm',
+                          query: { customerId: String(current.customerId) },
+                        })
                       "
                     >
                       客户 · {{ current.customerName }}
@@ -827,9 +830,11 @@ onMounted(async () => {
                       v-else-if="current.clueName"
                       type="button"
                       class="mail-crm-chip"
-                      @click="router.push(`/crm/clue/detail/${current.clueId}`)"
+                      @click="
+                        router.push({ path: '/v3/crm', query: { triage: '1' } })
+                      "
                     >
-                      线索 · {{ current.clueName }}
+                      待甄别 · {{ current.clueName }}
                     </button>
                   </div>
                 </div>

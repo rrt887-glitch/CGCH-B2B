@@ -1,142 +1,696 @@
 <script lang="ts" setup>
 /**
- * 客户工作台：把「线索 / 客户 / 商机 / 待办」收敛成 4 个入口，按流程走就行。
- *
- * 客户：一条流程条（新询盘 → 报价 → 样品 → 谈判 → 成交 → 复购）+ 列表，阶段可直接在行内改。
- * 今天：逾期 / 今天要联系 / 快要掉公海 / 今天已联系（只提醒，不自动回收）。
- * 订单：成交后的合同与回款。
- * 设置：标签、分组、公海规则、线索分配。
+ * 外贸 B2B 新一代客户管理工作台（Twenty CRM + Apple Human Interface 融合架构）：
+ * - 路由兼容：当 ?tab=salesmind 时无损渲染「CRM 智枢」二级工作台；支持 ?customerId=xxx 直达 360° 抽屉
+ * - 4 大核心板块：客户管道（6 步漏斗看板拖拽 ⇄ 高密度表格双视图） / 公海淘金（含查重） / 成交订单 / 规则设置
+ * - 顶部灵动胶囊「📥 待甄别来信 (N)」承接 AI 初筛存疑来信与历史未转化线索
+ * - 原生外贸基因：买家当地实时日夜时钟、USD/EUR/GBP/CNY 多币种商务黑板、首响超时与停滞老化预警、同企业域名防撞单提醒
  */
-import { computed, onMounted, reactive, ref } from 'vue';
-
-import { useRouter } from 'vue-router';
-
-import { IconifyIcon } from '@vben/icons';
+import type { LatestResearch } from '#/api/channel/research';
+import type { CgchCrmApi } from '#/api/crm/cgch';
 
 import {
-  Button,
+  computed,
+  defineAsyncComponent,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
+import { IconifyIcon } from '@vben/icons';
+import { useUserStore } from '@vben/stores';
+
+import {
   Empty,
   Input,
+  InputNumber,
   message,
   Modal,
+  Popover,
   Select,
   Spin,
   Table,
-  Tag,
+  Tooltip,
   Upload,
 } from 'ant-design-vue';
+import dayjs from 'dayjs';
 
-import { getCluePage, transformClue } from '#/api/crm/clue';
-import { getContractPage } from '#/api/crm/contract';
+import { createResearch, getLatestResearch } from '#/api/channel/research';
+import { getCustomerGroupList, getTagList } from '#/api/crm/cgch';
+import { getCluePage } from '#/api/crm/clue';
 import {
+  createCustomer,
+  exportCustomer,
   getCustomerPage,
-  getCustomerStageStats,
   importCustomer,
   importCustomerTemplate,
+  putCustomerPool,
   transferCustomer,
   updateCustomerStage,
 } from '#/api/crm/customer';
 import { getSimpleUserList } from '#/api/system/user';
-import { requestClient } from '#/api/request';
+import { COUNTRY_OPTIONS } from '#/views/cgch/crm/shared/countries';
+import {
+  countryName,
+  crmAvatarBg,
+  crmInitial,
+} from '#/views/cgch/v3/crm/components/shared';
 
-import Settings from '../settings.vue';
+import SettingsView from '../settings.vue';
+import {
+  buildSafeCustomerPayload,
+  quickCreateFollowUp,
+  saveCustomerDealBoard,
+  toggleCustomerStarred,
+} from './crm-actions';
+import CustomerDrawer from './customer-drawer.vue';
+import type { CurrencyCode } from './deal-meta';
+import {
+  analyzeCustomerHealth,
+  corporateDomain,
+  countryFlag,
+  CURRENCIES,
+  formatDealMoney,
+  getBuyerLocalClock,
+  getStageMeta,
+  parseDealBoard,
+  PIPELINE_STAGES,
+  serializeDealBoard,
+  toUsdAmount,
+} from './deal-meta';
+import OrdersPanel from './orders-panel.vue';
+import PoolPanel from './pool-panel.vue';
+import QuickOrderModal from './quick-order-modal.vue';
+import TriageDrawer from './triage-drawer.vue';
 
 defineOptions({ name: 'CgchCrmWorkbench' });
 
-type TabKey = 'customer' | 'lead' | 'order' | 'settings' | 'today';
-type TodayKey = 'done' | 'expired' | 'pool' | 'today';
+const ClawView = defineAsyncComponent(() => import('../claw.vue'));
 
+type MainTab = 'order' | 'pipeline' | 'pool' | 'settings';
+type ViewMode = 'kanban' | 'table';
+type QuickChip = 'all' | 'focus' | 'pool_soon' | 'stagnant' | 'urgent';
+
+const route = useRoute();
 const router = useRouter();
+const userStore = useUserStore();
 
-/** 客户阶段：与字典 crm_customer_stage 一致 */
-const STAGES = [
-  { value: 1, label: '新询盘', color: '#007AFF' },
-  { value: 2, label: '报价', color: '#FF9F0A' },
-  { value: 3, label: '样品', color: '#AF52DE' },
-  { value: 4, label: '谈判', color: '#FF6482' },
-  { value: 5, label: '成交', color: '#34C759' },
-  { value: 6, label: '复购', color: '#30B0C7' },
-];
-const stageOptions = STAGES.map((s) => ({ label: s.label, value: s.value }));
-const stageMeta = (v?: number) => STAGES.find((s) => s.value === (v || 1)) || STAGES[0]!;
+/** 兼容左侧主导航「CRM 智枢」（/v3/crm?tab=salesmind） */
+const isSalesmind = computed(() => route.query.tab === 'salesmind');
 
-const tab = ref<TabKey>('customer');
+const mainTab = ref<MainTab>('pipeline');
+const viewMode = ref<ViewMode>(
+  (localStorage.getItem('cgch_crm_view_mode') as ViewMode) === 'table'
+    ? 'table'
+    : 'kanban',
+);
+function setViewMode(m: ViewMode) {
+  viewMode.value = m;
+  localStorage.setItem('cgch_crm_view_mode', m);
+}
+
+// 客户全量池（单页拉取 200 条以支撑看板实时拖拽、漏斗美金汇总与秒级智能筛选）
 const loading = ref(false);
-const rows = ref<any[]>([]);
-const total = ref(0);
-const stats = ref<Record<string, number>>({});
-const stage = ref<number | undefined>();
-const keyword = ref('');
-const pager = reactive({ no: 1, size: 20 });
+const allCustomers = ref<any[]>([]);
+const researchMap = ref<Record<number, LatestResearch>>({});
+const tags = ref<CgchCrmApi.TreeNode[]>([]);
+const groups = ref<CgchCrmApi.TreeNode[]>([]);
 
-/** 勾选批量操作 */
+// 每分钟刷新一次买家当地时钟
+const clockTick = ref(Date.now());
+let clockTimer: null | ReturnType<typeof setInterval> = null;
+
+// 管道筛选状态
+const sceneScope = ref<'all' | 'mine' | 'sub'>('mine');
+const activeStage = ref<'archived' | null | number>(null);
+const quickChip = ref<QuickChip>('all');
+const keyword = ref('');
+const filterTagId = ref<number | undefined>();
+const filterGroupId = ref<number | undefined>();
+const tablePage = ref(1);
+
+// 看板拖拽状态
+const draggingId = ref<null | number>(null);
+const dragOverStage = ref<null | number>(null);
+
+// 待甄别来信抽屉 & 计数
+const triageOpen = ref(false);
+const triageCount = ref(0);
+
+// 360° 客户全景抽屉
+const drawerOpen = ref(false);
+const activeCustomerId = ref<null | number>(null);
+const drawerRef = ref<InstanceType<typeof CustomerDrawer> | null>(null);
+const ordersPanelRef = ref<InstanceType<typeof OrdersPanel> | null>(null);
+const poolPanelRef = ref<InstanceType<typeof PoolPanel> | null>(null);
+
+// 极简登记订单弹窗
+const orderModalOpen = ref(false);
+const orderModalCustomer = ref<null | Record<string, any>>(null);
+
+// 行内 5 秒快速记跟进 Popover
+const quickFollowRowId = ref<null | number>(null);
+const quickFollowText = ref('');
+const quickFollowDays = ref(3);
+const quickFollowSubmitting = ref(false);
+
+// 表格多选与批量操作
 const selectedIds = ref<number[]>([]);
-const users = ref<{ id?: number; nickname: string }[]>([]);
 const transferOpen = ref(false);
-const transferTo = ref<number>();
+const transferTo = ref<number | undefined>();
 const transferring = ref(false);
+const simpleUsers = ref<{ id: number; nickname: string }[]>([]);
+
+// 导入客户弹窗
 const importOpen = ref(false);
 const importFile = ref<File>();
 const importFileList = ref<any[]>([]);
 const importUpdate = ref(false);
 const importing = ref(false);
 
-function onSelectChange(keys: any[]) {
-  selectedIds.value = (keys || []).map(Number);
+// 极简新建外贸客户弹窗
+const createOpen = ref(false);
+const creating = ref(false);
+const newCustForm = reactive({
+  name: '',
+  companyName: '',
+  countryCode: 'US' as string | undefined,
+  whatsapp: '',
+  email: '',
+  website: '',
+  source: undefined as number | undefined,
+  stage: 1,
+  currency: 'USD' as CurrencyCode,
+  amount: undefined as number | undefined,
+  productQty: '',
+});
+
+const sourceOptions = computed(() =>
+  getDictOptions(DICT_TYPE.CRM_CUSTOMER_SOURCE, 'number'),
+);
+
+/** 同企业域名映射表：自动检测不同联系人是否属于同一家海外买家公司 */
+const domainOwnersMap = computed(() => {
+  const map = new Map<string, any[]>();
+  for (const c of allCustomers.value) {
+    const d = corporateDomain(c.email, c.website);
+    if (!d) continue;
+    const arr = map.get(d) ?? [];
+    arr.push(c);
+    map.set(d, arr);
+  }
+  return map;
+});
+
+/** 为每条客户计算派生视图对象（商务黑板、健康度、当地时钟、防撞单提示） */
+const enrichedCustomers = computed(() => {
+  const nowDate = new Date(clockTick.value);
+  return allCustomers.value.map((raw) => {
+    const board = parseDealBoard(raw.remark);
+    const stageMeta = getStageMeta(raw.stage, raw.dealStatus);
+    const health = analyzeCustomerHealth(raw, board);
+    const clock = getBuyerLocalClock(raw.countryCode, nowDate);
+    const domain = corporateDomain(raw.email, raw.website);
+    const peers = domain ? (domainOwnersMap.value.get(domain) ?? []).filter((p) => p.id !== raw.id) : [];
+    const peerHint =
+      board.collisionHint ||
+      (peers.length > 0
+        ? `同企域名 ${domain} 另有 ${peers[0].name}${peers[0].ownerUserName ? `（${peers[0].ownerUserName}）` : ''}`
+        : '');
+    const usdValue = toUsdAmount(board.amount, board.currency);
+    return {
+      ...raw,
+      _board: board,
+      _stage: stageMeta.value,
+      _stageMeta: stageMeta,
+      _health: health,
+      _clock: clock,
+      _peerHint: peerHint,
+      _usd: usdValue,
+    };
+  });
+});
+
+/** 活跃跟进客户 vs 已暂缓归档客户 */
+const activePool = computed(() =>
+  enrichedCustomers.value.filter((c) => !c._board.archived),
+);
+const archivedPool = computed(() =>
+  enrichedCustomers.value.filter((c) => c._board.archived),
+);
+
+/** 6 步漏斗每阶段客户数与折合美金总预估单值 */
+const stageFunnelStats = computed(() => {
+  return PIPELINE_STAGES.map((st) => {
+    const items = activePool.value.filter((c) => c._stage === st.value);
+    const usdSum = items.reduce((s, c) => s + c._usd, 0);
+    return {
+      ...st,
+      count: items.length,
+      usdSum,
+    };
+  });
+});
+
+const totalActiveUsd = computed(() =>
+  activePool.value.reduce((s, c) => s + c._usd, 0),
+);
+
+/** 智能健康度胶囊计数 */
+const chipCounts = computed(() => {
+  const base = activePool.value;
+  return {
+    urgent: base.filter(
+      (c) =>
+        c._health.overdueDays > 0 ||
+        c._health.awaitingFirstReply ||
+        c._health.dueToday,
+    ).length,
+    focus: base.filter((c) => Boolean(c.starred)).length,
+    stagnant: base.filter((c) => c._health.stagnant).length,
+    pool_soon: base.filter(
+      (c) =>
+        c.poolDay !== undefined &&
+        c.poolDay !== null &&
+        c.poolDay <= 3 &&
+        !c.dealStatus,
+    ).length,
+  };
+});
+
+/** 经过搜索、阶段、标签、分组与智能胶囊过滤后的客户列表 */
+const filteredCustomers = computed(() => {
+  let list =
+    activeStage.value === 'archived' ? archivedPool.value : activePool.value;
+
+  if (typeof activeStage.value === 'number') {
+    list = list.filter((c) => c._stage === activeStage.value);
+  }
+
+  if (quickChip.value === 'urgent') {
+    list = list.filter(
+      (c) =>
+        c._health.overdueDays > 0 ||
+        c._health.awaitingFirstReply ||
+        c._health.dueToday,
+    );
+  } else if (quickChip.value === 'focus') {
+    list = list.filter((c) => Boolean(c.starred));
+  } else if (quickChip.value === 'stagnant') {
+    list = list.filter((c) => c._health.stagnant);
+  } else if (quickChip.value === 'pool_soon') {
+    list = list.filter(
+      (c) =>
+        c.poolDay !== undefined &&
+        c.poolDay !== null &&
+        c.poolDay <= 3 &&
+        !c.dealStatus,
+    );
+  }
+
+  if (filterGroupId.value) {
+    list = list.filter((c) => c.groupId === filterGroupId.value);
+  }
+  if (filterTagId.value) {
+    list = list.filter(
+      (c) => Array.isArray(c.tagIds) && c.tagIds.includes(filterTagId.value),
+    );
+  }
+
+  const q = keyword.value.trim().toLowerCase();
+  if (q) {
+    list = list.filter((c) =>
+      [
+        c.name,
+        c.companyName,
+        c.email,
+        c.whatsapp,
+        c.countryCode,
+        countryName(c.countryCode),
+        c._board.productQty,
+        c._board.quoteTerms,
+        c._board.note,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }
+
+  // 紧迫优先排序：逾期/待首响在前，其次星标，其次最新活跃
+  return [...list].sort((a, b) => {
+    const score = (x: any) =>
+      (x._health.overdueDays > 0 ? 100 : 0) +
+      (x._health.awaitingFirstReply ? 80 : 0) +
+      (x._health.dueToday ? 50 : 0) +
+      (x.starred ? 20 : 0);
+    const diff = score(b) - score(a);
+    if (diff !== 0) return diff;
+    return (
+      dayjs(b.updateTime || b.createTime).valueOf() -
+      dayjs(a.updateTime || a.createTime).valueOf()
+    );
+  });
+});
+
+/** 看板 6 列分组数据 */
+const kanbanColumns = computed(() =>
+  PIPELINE_STAGES.map((st) => {
+    const cards = filteredCustomers.value.filter((c) => c._stage === st.value);
+    const usd = cards.reduce((s, c) => s + c._usd, 0);
+    return {
+      ...st,
+      cards,
+      usd,
+    };
+  }),
+);
+
+/** 抽屉上下翻页索引 */
+const activeIndexInList = computed(() =>
+  filteredCustomers.value.findIndex((c) => c.id === activeCustomerId.value),
+);
+
+function inspectCustomer(id: number) {
+  activeCustomerId.value = id;
+  drawerOpen.value = true;
 }
 
-async function ensureUsers() {
-  if (!users.value.length) {
-    users.value = ((await getSimpleUserList().catch(() => [])) as any) || [];
+function stepDrawer(delta: -1 | 1) {
+  const nextIdx = activeIndexInList.value + delta;
+  const target = filteredCustomers.value[nextIdx];
+  if (target?.id) {
+    activeCustomerId.value = target.id;
   }
 }
 
-async function openTransfer() {
-  await ensureUsers();
+/** 加载客户管道全量数据与最新 AI 背调摘要 */
+async function loadPipeline() {
+  loading.value = true;
+  try {
+    const sceneType =
+      sceneScope.value === 'mine' ? 1 : sceneScope.value === 'sub' ? 3 : undefined;
+    const first: any = await getCustomerPage({
+      pageNo: 1,
+      pageSize: 200,
+      sceneType,
+    } as any);
+    const list = first?.list ?? [];
+    // 若超过 200 条，再补拉第 2 页以覆盖活跃跟进池
+    if ((first?.total ?? 0) > 200 && list.length === 200) {
+      const second: any = await getCustomerPage({
+        pageNo: 2,
+        pageSize: 200,
+        sceneType,
+      } as any).catch(() => ({ list: [] }));
+      list.push(...(second?.list ?? []));
+    }
+    allCustomers.value = list;
+
+    const ids = list.slice(0, 150).map((c: any) => c.id).filter(Boolean);
+    if (ids.length) {
+      const rList = await getLatestResearch(ids).catch(() => [] as LatestResearch[]);
+      const map: Record<number, LatestResearch> = {};
+      for (const r of rList || []) {
+        if (r?.customerId) map[r.customerId] = r;
+      }
+      researchMap.value = map;
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadTriageBadge() {
+  try {
+    const res: any = await getCluePage({
+      pageNo: 1,
+      pageSize: 100,
+      transformStatus: false,
+    } as any);
+    triageCount.value = (res?.list ?? []).filter(
+      (c: any) => !c.transformStatus,
+    ).length;
+  } catch {
+    triageCount.value = 0;
+  }
+}
+
+async function loadTaxonomy() {
+  const [t, g] = await Promise.all([
+    getTagList().catch(() => []),
+    getCustomerGroupList().catch(() => []),
+  ]);
+  tags.value = t || [];
+  groups.value = g || [];
+}
+
+/** 看板拖拽推进阶段 */
+function onCardDragStart(e: DragEvent, card: any) {
+  draggingId.value = card.id;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(card.id));
+  }
+}
+
+function onCardDragEnd() {
+  draggingId.value = null;
+  dragOverStage.value = null;
+}
+
+async function onColumnDrop(targetStage: number) {
+  const cid = draggingId.value;
+  draggingId.value = null;
+  dragOverStage.value = null;
+  if (!cid) return;
+  const targetCard = allCustomers.value.find((c) => c.id === cid);
+  if (!targetCard) return;
+  const currentSt = getStageMeta(targetCard.stage, targetCard.dealStatus).value;
+  if (currentSt === targetStage && !parseDealBoard(targetCard.remark).archived) {
+    return;
+  }
+  await applyStageChange(targetCard, targetStage, true);
+}
+
+async function applyStageChange(
+  row: any,
+  nextStage: number,
+  promptOrderWhenWon = false,
+) {
+  const prevStage = row.stage;
+  row.stage = nextStage;
+  try {
+    if (parseDealBoard(row.remark).archived) {
+      await saveCustomerDealBoard(row, { archived: false, lostReason: '' });
+    }
+    await updateCustomerStage(row.id, nextStage);
+    const meta = getStageMeta(nextStage);
+    message.success(`已将「${row.name}」推进至 ${meta.label}`);
+    if (promptOrderWhenWon && nextStage === 5) {
+      openQuickOrderModal(row);
+    }
+  } catch {
+    row.stage = prevStage;
+  }
+}
+
+/** 卡片/行内星标切换 */
+async function onInlineStar(row: any) {
+  const next = !row.starred;
+  row.starred = next;
+  try {
+    await toggleCustomerStarred(row.id, next);
+  } catch {
+    row.starred = !next;
+  }
+}
+
+/** 行内 5 秒极速记跟进 */
+async function submitInlineFollow(row: any) {
+  if (!quickFollowText.value.trim()) {
+    message.warning('请输入跟进要点');
+    return;
+  }
+  quickFollowSubmitting.value = true;
+  try {
+    const nextMoment = dayjs()
+      .add(quickFollowDays.value, 'day')
+      .hour(10)
+      .minute(0)
+      .second(0);
+    await quickCreateFollowUp({
+      customerId: row.id,
+      content: quickFollowText.value.trim(),
+      nextTime: nextMoment.toDate(),
+    });
+    row.contactNextTime = nextMoment.toISOString();
+    row.contactLastTime = new Date().toISOString();
+    row.contactLastContent = quickFollowText.value.trim();
+    quickFollowText.value = '';
+    quickFollowRowId.value = null;
+    message.success(`已记跟进，下次提醒：${nextMoment.format('MM-DD')}`);
+  } finally {
+    quickFollowSubmitting.value = false;
+  }
+}
+
+/** 打开极简订单登记 */
+function openQuickOrderModal(cust?: null | Record<string, any>) {
+  orderModalCustomer.value = cust ?? null;
+  orderModalOpen.value = true;
+}
+
+function handleOrderCreated() {
+  void loadPipeline();
+  drawerRef.value?.reloadOrders();
+  ordersPanelRef.value?.reload();
+}
+
+/** 新建外贸客户提交 */
+async function handleCreateCustomer() {
+  if (!newCustForm.name.trim() && !newCustForm.companyName.trim()) {
+    message.warning('请填写买家姓名或海外公司名称');
+    return;
+  }
+  creating.value = true;
+  try {
+    const remark = serializeDealBoard({
+      currency: newCustForm.currency,
+      amount: newCustForm.amount,
+      productQty: newCustForm.productQty,
+      quoteTerms: '',
+      sampleInfo: '',
+      note: '',
+    });
+    const payload = buildSafeCustomerPayload(
+      {},
+      {
+        name: newCustForm.name.trim() || newCustForm.companyName.trim(),
+        companyName: newCustForm.companyName.trim() || undefined,
+        countryCode: newCustForm.countryCode,
+        whatsapp: newCustForm.whatsapp.trim() || undefined,
+        email: newCustForm.email.trim() || undefined,
+        website: newCustForm.website.trim() || undefined,
+        source: newCustForm.source,
+        remark,
+        ownerUserId: userStore.userInfo?.id ?? 1,
+      },
+    );
+    const createdId: any = await createCustomer(payload as any);
+    if (typeof createdId === 'number' && createdId > 0 && newCustForm.stage > 1) {
+      await updateCustomerStage(createdId, newCustForm.stage).catch(() => undefined);
+    }
+    message.success('新客户已建档入管道');
+    createOpen.value = false;
+    Object.assign(newCustForm, {
+      name: '',
+      companyName: '',
+      countryCode: 'US',
+      whatsapp: '',
+      email: '',
+      website: '',
+      source: undefined,
+      stage: 1,
+      currency: 'USD',
+      amount: undefined,
+      productQty: '',
+    });
+    await loadPipeline();
+    if (typeof createdId === 'number' && createdId > 0) {
+      inspectCustomer(createdId);
+    }
+  } finally {
+    creating.value = false;
+  }
+}
+
+/** 批量操作：转交 / 批量 AI 背调 / 批量放回公海 */
+async function openBatchTransfer() {
+  if (!simpleUsers.value.length) {
+    simpleUsers.value = ((await getSimpleUserList().catch(() => [])) as any[]) || [];
+  }
   transferTo.value = undefined;
   transferOpen.value = true;
 }
 
-async function doTransfer() {
+async function confirmBatchTransfer() {
   if (!transferTo.value) {
     message.warning('请选择新的负责人');
     return;
   }
   transferring.value = true;
+  let ok = 0;
   try {
-    let ok = 0;
     for (const id of selectedIds.value) {
       try {
         await transferCustomer({ id, newOwnerUserId: transferTo.value } as any);
         ok++;
       } catch {
-        // 单个失败不中断，最后统一提示
+        // 忽略单条失败
       }
     }
-    message.success(`已转交 ${ok} / ${selectedIds.value.length} 个客户`);
+    message.success(`已成功转交 ${ok} 位客户`);
     transferOpen.value = false;
     selectedIds.value = [];
-    await loadCustomers();
-    await loadStats();
+    await loadPipeline();
   } finally {
     transferring.value = false;
   }
 }
 
-function beforeImportFile(file: File) {
+async function handleBatchResearch() {
+  const targets = allCustomers.value.filter((c) =>
+    selectedIds.value.includes(c.id),
+  );
+  if (!targets.length) return;
+  let count = 0;
+  for (const c of targets.slice(0, 10)) {
+    try {
+      await createResearch({
+        customerId: c.id,
+        companyName: c.companyName || c.name,
+        website: c.website || undefined,
+      });
+      count++;
+    } catch {
+      // 跳过异常
+    }
+  }
+  selectedIds.value = [];
+  message.success(`已为 ${count} 位客户后台启动 AI 深度背调`);
+}
+
+async function handleBatchPutPool() {
+  let ok = 0;
+  for (const id of selectedIds.value) {
+    try {
+      await putCustomerPool(id);
+      ok++;
+    } catch {
+      // 跳过
+    }
+  }
+  selectedIds.value = [];
+  message.success(`已将 ${ok} 位客户放回公海池`);
+  await loadPipeline();
+  poolPanelRef.value?.reload();
+}
+
+/** 导入与导出 */
+function pickImportFile(file: File) {
   importFile.value = file;
   importFileList.value = [file as any];
   return false;
 }
 
-function pickImportFile(file: File) {
-  beforeImportFile(file);
-  return false;
-}
-
-async function doImport() {
+async function handleDoImport() {
   if (!importFile.value) {
-    message.warning('请选择 Excel 文件');
+    message.warning('请先选择 Excel 文件');
     return;
   }
   importing.value = true;
@@ -144,787 +698,1644 @@ async function doImport() {
     await importCustomer({
       file: importFile.value,
       updateSupport: importUpdate.value,
+      ownerUserId: userStore.userInfo?.id ?? 1,
     } as any);
-    message.success('导入完成');
+    message.success('客户批量导入成功');
     importOpen.value = false;
     importFile.value = undefined;
     importFileList.value = [];
-    pager.no = 1;
-    await loadCustomers();
-    await loadStats();
+    await loadPipeline();
   } finally {
     importing.value = false;
   }
 }
 
-const tabs = [
-  { key: 'lead' as TabKey, label: '线索' },
-  { key: 'customer' as TabKey, label: '客户' },
-  { key: 'today' as TabKey, label: '今天' },
-  { key: 'order' as TabKey, label: '订单' },
-  { key: 'settings' as TabKey, label: '设置' },
-];
-
-async function loadStats() {
-  stats.value = (await getCustomerStageStats().catch(() => ({} as Record<string, number>))) || {};
-}
-
-async function loadCustomers() {
-  loading.value = true;
-  try {
-    const r: any = await getCustomerPage({
-      pageNo: pager.no,
-      pageSize: pager.size,
-      sceneType: 1,
-      stage: stage.value,
-      name: keyword.value || undefined,
-    } as any);
-    rows.value = r?.list ?? [];
-    total.value = r?.total ?? 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-/** 线索：询盘先进线索，确认意向后再转客户 */
-const leadRows = ref<any[]>([]);
-const leadTotal = ref(0);
-const leadLoading = ref(false);
-const leadKeyword = ref('');
-
-const SOURCE_LABEL: Record<number, string> = {
-  10: '邮件',
-  11: 'WhatsApp',
-  12: '阿里国际站',
-  13: '中国制造网',
-  14: '官网表单',
-  15: 'Facebook',
-  16: 'Instagram',
-  17: '官网IM',
-  18: 'YouTube',
-  19: 'TikTok',
-};
-const sourceLabel = (v?: number) => (v ? SOURCE_LABEL[v] || '其它' : '—');
-
-async function loadLeads() {
-  leadLoading.value = true;
-  try {
-    const r: any = await getCluePage({
-      pageNo: pager.no,
-      pageSize: pager.size,
-      name: leadKeyword.value || undefined,
-    } as any);
-    leadRows.value = r?.list ?? [];
-    leadTotal.value = r?.total ?? 0;
-  } finally {
-    leadLoading.value = false;
-  }
-}
-
-async function convertLead(row: any) {
-  await transformClue(row.id);
-  message.success(`已把「${row.name}」转为客户`);
-  await loadLeads();
-  await loadStats();
-}
-
-const leadColumns = [
-  { title: '线索', dataIndex: 'name', key: 'name' },
-  { title: '来源', dataIndex: 'source', key: 'source', width: 120 },
-  { title: '国家', dataIndex: 'countryCode', key: 'countryCode', width: 90 },
-  { title: '下次跟进', dataIndex: 'contactNextTime', key: 'contactNextTime', width: 130 },
-  { title: '负责人', dataIndex: 'ownerUserName', key: 'ownerUserName', width: 110 },
-  { title: '', key: 'action', width: 110 },
-];
-
-/** 今天：逾期 / 今天要联系 / 快要掉公海 / 今天已联系 */
-const todayKey = ref<TodayKey>('expired');
-const todayRows = ref<any[]>([]);
-const todayTotal = ref(0);
-const todayCounts = reactive<Record<TodayKey, number>>({
-  expired: 0,
-  today: 0,
-  pool: 0,
-  done: 0,
-});
-const todayTabs = [
-  { key: 'expired' as TodayKey, label: '逾期未联系' },
-  { key: 'today' as TodayKey, label: '今天要联系' },
-  { key: 'pool' as TodayKey, label: '快要掉公海' },
-  { key: 'done' as TodayKey, label: '今天已联系' },
-];
-const CONTACT_STATUS: Record<Exclude<TodayKey, 'pool'>, number> = {
-  expired: 2,
-  today: 1,
-  done: 3,
-};
-
-function fetchToday(key: TodayKey, pageNo = 1, pageSize = 20) {
-  if (key === 'pool') {
-    return requestClient.get<{ list: any[]; total: number }>(
-      '/crm/customer/put-pool-remind-page',
-      { params: { pageNo, pageSize, sceneType: 1 } },
-    );
-  }
-  return requestClient.get<{ list: any[]; total: number }>('/crm/customer/page', {
-    params: { pageNo, pageSize, sceneType: 1, contactStatus: CONTACT_STATUS[key] },
+async function handleExportCustomers() {
+  const sceneType =
+    sceneScope.value === 'mine' ? 1 : sceneScope.value === 'sub' ? 3 : undefined;
+  await exportCustomer({
+    sceneType,
+    stage: typeof activeStage.value === 'number' ? activeStage.value : undefined,
+    name: keyword.value.trim() || undefined,
   });
 }
 
-async function loadToday() {
-  loading.value = true;
-  try {
-    const r: any = await fetchToday(todayKey.value, pager.no, pager.size);
-    todayRows.value = r?.list ?? [];
-    todayTotal.value = r?.total ?? 0;
-  } finally {
-    loading.value = false;
-  }
+function tagNameById(id: number) {
+  return tags.value.find((t) => t.id === id)?.name;
 }
 
-async function loadTodayCounts() {
-  await Promise.all(
-    todayTabs.map(async (t) => {
-      try {
-        todayCounts[t.key] = (await fetchToday(t.key, 1, 1))?.total ?? 0;
-      } catch {
-        todayCounts[t.key] = 0;
-      }
-    }),
-  );
+function tagColorById(id: number) {
+  return tags.value.find((t) => t.id === id)?.color || '#0071E3';
 }
 
-/** 订单：合同与回款 */
-const orderRows = ref<any[]>([]);
-const orderTotal = ref(0);
-async function loadOrders() {
-  loading.value = true;
-  try {
-    const r: any = await getContractPage({ pageNo: pager.no, pageSize: pager.size });
-    orderRows.value = r?.list ?? [];
-    orderTotal.value = r?.total ?? 0;
-  } finally {
-    loading.value = false;
-  }
-}
+const tableColumns = [
+  { title: '海外买家 / 公司', key: 'buyer', width: 250 },
+  { title: '国家与当地时区', key: 'country', width: 175 },
+  { title: '销售阶段', key: 'stage', width: 145 },
+  { title: '商务黑板（单值 / 意向产品）', key: 'board', width: 230 },
+  { title: 'AI 背调', key: 'research', width: 145 },
+  { title: '下一步动作与预警', key: 'next', width: 180 },
+  { title: '负责人', key: 'owner', width: 95 },
+  { title: '', key: 'quick', width: 92, align: 'right' as const },
+];
 
-async function changeStage(row: any, v: number) {
-  await updateCustomerStage(row.id, v);
-  row.stage = v;
-  message.success(`已改为「${stageMeta(v).label}」`);
-  await loadStats();
-}
-
-function openCustomer(row: any) {
-  router.push(`/crm/customer/detail/${row.id}`);
-}
-
-/** 关系阶段：从客户阶段推导（潜在 / 合作中 / 老客户） */
-function relationOf(row: any) {
-  const st = row?.stage || 1;
-  if (st >= 6) return { label: '老客户', color: '#30B0C7' };
-  if (st === 5) return { label: '合作中', color: '#34C759' };
-  return { label: '潜在', color: '#8E8E93' };
-}
-
-/** 下一步该做什么：让列表直接告诉业务员动作，而不是只有数据 */
-function nextAction(row: any): { text: string; tone: 'danger' | 'normal' | 'primary' } {
-  const now = Date.now();
-  const next = row?.contactNextTime ? new Date(row.contactNextTime).getTime() : null;
-  if (next && next < now) return { text: '今天联系（已逾期）', tone: 'danger' };
-  if (!next) return { text: '约下次联系', tone: 'normal' };
-  const st = row?.stage || 1;
-  if (st === 1) return { text: '发报价', tone: 'primary' };
-  if (st === 2) return { text: '跟进报价', tone: 'primary' };
-  if (st === 3) return { text: '确认样品', tone: 'primary' };
-  if (st === 4) return { text: '推动成交', tone: 'primary' };
-  if (st === 5) return { text: '安排回款', tone: 'normal' };
-  return { text: '维护关系', tone: 'normal' };
-}
-
-const emptyOnboarding = computed(
-  () => tab.value === 'customer' && total.value === 0 && !keyword.value && !stage.value,
+/** 响应 URL 查询参数：?tab=agenda / ?customerId=123 / ?triage=1 */
+watch(
+  () => route.query,
+  (q) => {
+    if (q.tab === 'salesmind') return;
+    if (q.tab === 'pool') mainTab.value = 'pool';
+    else if (q.tab === 'order') mainTab.value = 'order';
+    else if (q.tab === 'settings') mainTab.value = 'settings';
+    else if (q.tab === 'agenda') {
+      mainTab.value = 'pipeline';
+      quickChip.value = 'urgent';
+    }
+    if (q.customerId && Number(q.customerId) > 0) {
+      inspectCustomer(Number(q.customerId));
+    }
+    if (q.triage === '1') {
+      triageOpen.value = true;
+    }
+  },
+  { immediate: true },
 );
 
-function onLeadSearch() {
-  pager.no = 1;
-  void loadLeads();
-}
-
-function onSearch() {
-  pager.no = 1;
-  void loadCustomers();
-}
-
-function pickStage(v?: number) {
-  stage.value = v;
-  pager.no = 1;
-  void loadCustomers();
-}
-
-function onTabChange(key: any) {
-  tab.value = key as TabKey;
-  pager.no = 1;
-  if (key === 'lead') {
-    void loadLeads();
-  } else if (key === 'customer') {
-    void loadCustomers();
-  } else if (key === 'today') {
-    void loadToday();
-    void loadTodayCounts();
-  } else if (key === 'order') {
-    void loadOrders();
-  }
-}
-
-function onTodayChange(key: any) {
-  todayKey.value = key as TodayKey;
-  pager.no = 1;
-  void loadToday();
-}
-
-const columns = [
-  { title: '客户', dataIndex: 'name', key: 'name' },
-  { title: '阶段', dataIndex: 'stage', key: 'stage', width: 140 },
-  { title: '下次跟进', dataIndex: 'contactNextTime', key: 'contactNextTime', width: 140 },
-  { title: '最近联系', dataIndex: 'contactLastTime', key: 'contactLastTime', width: 140 },
-  { title: '负责人', dataIndex: 'ownerUserName', key: 'ownerUserName', width: 120 },
-];
-
-const orderColumns = [
-  { title: '合同编号', dataIndex: 'no', key: 'no', width: 180 },
-  { title: '客户', dataIndex: 'customerName', key: 'customerName' },
-  { title: '金额', dataIndex: 'totalPrice', key: 'totalPrice', width: 140 },
-  { title: '状态', dataIndex: 'auditStatus', key: 'auditStatus', width: 120 },
-  { title: '签订时间', dataIndex: 'orderDate', key: 'orderDate', width: 140 },
-];
-
-const customerColumns = [
-  { title: '客户', dataIndex: 'name', key: 'name' },
-  { title: '关系', dataIndex: 'relation', key: 'relation', width: 90 },
-  { title: '阶段', dataIndex: 'stage', key: 'stage', width: 140 },
-  { title: '下次跟进', dataIndex: 'contactNextTime', key: 'contactNextTime', width: 140 },
-  { title: '最近联系', dataIndex: 'contactLastTime', key: 'contactLastTime', width: 140 },
-  { title: '负责人', dataIndex: 'ownerUserName', key: 'ownerUserName', width: 120 },
-  { title: '下一步', dataIndex: 'nextAction', key: 'nextAction', width: 160 },
-];
-
-const fmt = (v?: string) => (v ? String(v).slice(0, 10) : '—');
-const money = (v?: number) =>
-  v == null ? '—' : `¥ ${Number(v).toLocaleString('zh-CN')}`;
+watch(sceneScope, () => {
+  tablePage.value = 1;
+  void loadPipeline();
+});
 
 onMounted(() => {
-  void loadLeads();
-  void loadCustomers();
-  void loadStats();
+  if (!isSalesmind.value) {
+    void loadPipeline();
+    void loadTriageBadge();
+    void loadTaxonomy();
+  }
+  clockTimer = setInterval(() => {
+    clockTick.value = Date.now();
+  }, 60_000);
+});
+
+watch(isSalesmind, (sm) => {
+  if (!sm && allCustomers.value.length === 0) {
+    void loadPipeline();
+    void loadTriageBadge();
+    void loadTaxonomy();
+  }
+});
+
+onBeforeUnmount(() => {
+  if (clockTimer) clearInterval(clockTimer);
 });
 </script>
 
 <template>
-  <div class="crm-wb">
-    <div class="crm-wb__nav">
-      <button
-        v-for="t in tabs"
-        :key="t.key"
-        type="button"
-        class="crm-wb__nav-item"
-        :class="{ on: tab === t.key }"
-        @click="onTabChange(t.key)"
+  <!-- 路由为 /v3/crm?tab=salesmind 时无缝呈现 CRM 智枢工作台 -->
+  <ClawView v-if="isSalesmind" />
+
+  <div v-else class="wb-page">
+    <!-- ==================== 1. 顶部导航与全局动作栏 ==================== -->
+    <header class="wb-top">
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- 主分段导航 -->
+        <nav class="wb-main-tabs">
+          <button
+            v-for="item in [
+              { k: 'pipeline', l: '客户管道', icon: 'lucide:kanban' },
+              { k: 'pool', l: '公海淘金', icon: 'lucide:globe' },
+              { k: 'order', l: '成交订单', icon: 'lucide:receipt' },
+              { k: 'settings', l: '规则设置', icon: 'lucide:sliders-horizontal' },
+            ]"
+            :key="item.k"
+            type="button"
+            class="wb-main-tab"
+            :class="{ on: mainTab === item.k }"
+            @click="mainTab = item.k as MainTab"
+          >
+            <IconifyIcon :icon="item.icon" class="size-3.5" />
+            <span>{{ item.l }}</span>
+          </button>
+        </nav>
+
+        <!-- 管道总预估美金徽章 -->
+        <div
+          v-if="mainTab === 'pipeline' && totalActiveUsd > 0"
+          class="wb-pipeline-sum"
+        >
+          <span>活跃管道预估总额</span>
+          <strong>{{ formatDealMoney(totalActiveUsd, 'USD') }}</strong>
+        </div>
+      </div>
+
+      <!-- 右侧灵动工具组 -->
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- 📥 待甄别来信灵动胶囊 -->
+        <button
+          type="button"
+          class="wb-triage-pill"
+          :class="{ active: triageCount > 0 }"
+          @click="triageOpen = true"
+        >
+          <span v-if="triageCount > 0" class="wb-pulse-dot" />
+          <IconifyIcon icon="lucide:inbox" class="size-3.5" />
+          <span>待甄别来信</span>
+          <span class="wb-triage-count">{{ triageCount }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="wb-ghost-btn"
+          title="Excel 批量导入客户"
+          @click="importOpen = true"
+        >
+          <IconifyIcon icon="lucide:upload" class="size-3.5" />
+          <span>导入</span>
+        </button>
+
+        <button
+          type="button"
+          class="wb-ghost-btn"
+          title="导出当前筛选客户"
+          @click="handleExportCustomers"
+        >
+          <IconifyIcon icon="lucide:download" class="size-3.5" />
+          <span>导出</span>
+        </button>
+
+        <button
+          type="button"
+          class="wb-primary-btn"
+          @click="createOpen = true"
+        >
+          <IconifyIcon icon="lucide:plus" class="size-4" />
+          <span>新建客户</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ==================== 2A. 客户管道主工作台 ==================== -->
+    <template v-if="mainTab === 'pipeline'">
+      <!-- 6 步外贸销售漏斗条 + 暂缓归档胶囊 -->
+      <section class="wb-funnel">
+        <button
+          type="button"
+          class="wb-stage-pill"
+          :class="{ on: activeStage === null }"
+          @click="activeStage = null"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <span class="wb-stage-name">全部活跃</span>
+            <span class="wb-stage-num">{{ activePool.length }}</span>
+          </div>
+          <div class="wb-stage-usd">
+            {{ totalActiveUsd > 0 ? formatDealMoney(totalActiveUsd, 'USD') : '全流程概览' }}
+          </div>
+        </button>
+
+        <button
+          v-for="(st, idx) in stageFunnelStats"
+          :key="st.value"
+          type="button"
+          class="wb-stage-pill"
+          :class="{ on: activeStage === st.value }"
+          :style="
+            activeStage === st.value
+              ? { borderColor: st.color, background: st.bg }
+              : undefined
+          "
+          @click="activeStage = activeStage === st.value ? null : st.value"
+        >
+          <div class="flex items-center justify-between gap-1.5">
+            <span class="flex items-center gap-1.5 truncate">
+              <span
+                class="wb-stage-dot"
+                :style="{ background: st.color }"
+              />
+              <span class="wb-stage-name">{{ idx + 1 }}. {{ st.label }}</span>
+            </span>
+            <span class="wb-stage-num">{{ st.count }}</span>
+          </div>
+          <div class="wb-stage-usd">
+            {{ st.usdSum > 0 ? formatDealMoney(st.usdSum, 'USD') : st.defaultAction }}
+          </div>
+        </button>
+
+        <button
+          type="button"
+          class="wb-stage-pill wb-stage-pill--archived"
+          :class="{ on: activeStage === 'archived' }"
+          @click="
+            () => {
+              activeStage = activeStage === 'archived' ? null : 'archived';
+              if (activeStage === 'archived') setViewMode('table');
+            }
+          "
+        >
+          <div class="flex items-center justify-between gap-1.5">
+            <span class="wb-stage-name">⏸ 暂缓/流失</span>
+            <span class="wb-stage-num">{{ archivedPool.length }}</span>
+          </div>
+          <div class="wb-stage-usd">沉淀唤醒池</div>
+        </button>
+      </section>
+
+      <!-- 智能筛选胶囊栏 + 看板/表格双视图切换 -->
+      <section class="wb-filter-bar">
+        <!-- 归属范围 -->
+        <div class="wb-scope-seg">
+          <button
+            v-for="sc in [
+              { k: 'mine', l: '我负责的' },
+              { k: 'sub', l: '下属团队' },
+              { k: 'all', l: '全部可见' },
+            ]"
+            :key="sc.k"
+            type="button"
+            class="wb-scope-btn"
+            :class="{ on: sceneScope === sc.k }"
+            @click="sceneScope = sc.k as any"
+          >
+            {{ sc.l }}
+          </button>
+        </div>
+
+        <!-- 智能行动胶囊（把原「今天」页签融为一体，不割裂页面） -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            class="wb-chip"
+            :class="{ 'wb-chip--red': quickChip === 'urgent' }"
+            @click="quickChip = quickChip === 'urgent' ? 'all' : 'urgent'"
+          >
+            <span>🔴 今日待办与首响</span>
+            <b v-if="chipCounts.urgent">{{ chipCounts.urgent }}</b>
+          </button>
+
+          <button
+            type="button"
+            class="wb-chip"
+            :class="{ 'wb-chip--amber': quickChip === 'focus' }"
+            @click="quickChip = quickChip === 'focus' ? 'all' : 'focus'"
+          >
+            <span>⭐ 星标重点</span>
+            <b v-if="chipCounts.focus">{{ chipCounts.focus }}</b>
+          </button>
+
+          <button
+            type="button"
+            class="wb-chip"
+            :class="{ 'wb-chip--amber': quickChip === 'stagnant' }"
+            @click="quickChip = quickChip === 'stagnant' ? 'all' : 'stagnant'"
+          >
+            <span>⏳ 停滞需追单</span>
+            <b v-if="chipCounts.stagnant">{{ chipCounts.stagnant }}</b>
+          </button>
+
+          <button
+            v-if="chipCounts.pool_soon > 0"
+            type="button"
+            class="wb-chip"
+            :class="{ 'wb-chip--amber': quickChip === 'pool_soon' }"
+            @click="quickChip = quickChip === 'pool_soon' ? 'all' : 'pool_soon'"
+          >
+            <span>⚠️ 快掉公海</span>
+            <b>{{ chipCounts.pool_soon }}</b>
+          </button>
+        </div>
+
+        <!-- 搜索与标签筛选 -->
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+          <Input
+            v-model:value="keyword"
+            allow-clear
+            placeholder="搜索客户、公司、产品、国家…"
+            class="w-56"
+          >
+            <template #prefix>
+              <IconifyIcon icon="lucide:search" class="size-3.5 text-[#86868B]" />
+            </template>
+          </Input>
+
+          <Select
+            v-if="tags.length"
+            v-model:value="filterTagId"
+            allow-clear
+            placeholder="标签"
+            :options="tags.map((t) => ({ label: t.name, value: t.id }))"
+            class="w-28"
+          />
+
+          <Select
+            v-if="groups.length"
+            v-model:value="filterGroupId"
+            allow-clear
+            placeholder="分组"
+            :options="groups.map((g) => ({ label: g.name, value: g.id }))"
+            class="w-28"
+          />
+
+          <!-- 双视图切换器 -->
+          <div class="wb-scope-seg">
+            <button
+              type="button"
+              class="wb-scope-btn"
+              :class="{ on: viewMode === 'kanban' && activeStage !== 'archived' }"
+              :disabled="activeStage === 'archived'"
+              @click="setViewMode('kanban')"
+            >
+              <IconifyIcon icon="lucide:columns-3" class="size-3.5" />
+              <span>看板</span>
+            </button>
+            <button
+              type="button"
+              class="wb-scope-btn"
+              :class="{ on: viewMode === 'table' || activeStage === 'archived' }"
+              @click="setViewMode('table')"
+            >
+              <IconifyIcon icon="lucide:table-2" class="size-3.5" />
+              <span>表格</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 新手零客户引导态 -->
+      <div
+        v-if="!loading && allCustomers.length === 0 && !keyword"
+        class="wb-onboarding"
       >
-        {{ t.label }}
-      </button>
-    </div>
-
-    <!-- ========== 线索 ========== -->
-    <template v-if="tab === 'lead'">
-      <div class="crm-wb__guide">
-        <IconifyIcon icon="lucide:inbox" class="size-4 shrink-0" />
-        <span>
-          渠道来询盘会先落到这里。确认对方有意向、谈得下去，点右侧「转为客户」；没意向的直接忽略。
-        </span>
-      </div>
-
-      <div class="crm-wb__toolbar">
-        <Input
-          v-model:value="leadKeyword"
-          allow-clear
-          placeholder="搜索线索名称"
-          class="max-w-70"
-          @press-enter="onLeadSearch"
-        />
-        <Button @click="onLeadSearch">搜索</Button>
-        <span class="text-xs text-gray-400">共 {{ leadTotal }} 条线索</span>
-      </div>
-
-      <Spin :spinning="leadLoading">
-        <Table
-          :columns="leadColumns as any"
-          :data-source="leadRows"
-          :pagination="{
-            current: pager.no,
-            pageSize: pager.size,
-            total: leadTotal,
-            showSizeChanger: false,
-            onChange: (p: number) => { pager.no = p; loadLeads(); },
-          }"
-          :row-key="(r: any) => r.id"
-          size="middle"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'name'">
-              <div class="font-medium">{{ record.name }}</div>
-              <div class="text-xs text-gray-400">
-                {{ record.companyName || record.email || record.whatsapp || '—' }}
-              </div>
-            </template>
-            <template v-else-if="column.key === 'source'">
-              <Tag>{{ sourceLabel(record.source) }}</Tag>
-            </template>
-            <template v-else-if="column.key === 'contactNextTime'">
-              {{ fmt(record.contactNextTime) }}
-            </template>
-            <template v-else-if="column.key === 'ownerUserName'">
-              {{ record.ownerUserName || '未分配' }}
-            </template>
-            <template v-else-if="column.key === 'action'">
-              <Button size="small" type="primary" @click="convertLead(record)">
-                转为客户
-              </Button>
-            </template>
-          </template>
-        </Table>
-      </Spin>
-    </template>
-
-    <!-- ========== 客户 ========== -->
-    <template v-else-if="tab === 'customer'">
-      <div class="crm-wb__guide">
-        <IconifyIcon icon="lucide:compass" class="size-4 shrink-0" />
-        <span>
-          流程：渠道来的询盘自动建成客户 → 在这里<b>直接改阶段</b>推进 →
-          到期没联系的会出现在「今天」提醒你。阶段：新询盘 → 报价 → 样品 → 谈判 → 成交 → 复购。
-        </span>
-      </div>
-
-      <div class="crm-wb__pipeline">
-        <button
-          type="button"
-          class="crm-wb__stage"
-          :class="{ on: stage === undefined }"
-          @click="pickStage(undefined)"
-        >
-          全部
-          <b>{{ stats.total ?? total }}</b>
-        </button>
-        <button
-          v-for="s in STAGES"
-          :key="s.value"
-          type="button"
-          class="crm-wb__stage"
-          :class="{ on: stage === s.value }"
-          @click="pickStage(s.value)"
-        >
-          <span class="dot" :style="{ background: s.color }"></span>
-          {{ s.label }}
-          <b>{{ stats[String(s.value)] ?? 0 }}</b>
-        </button>
-      </div>
-
-      <div class="crm-wb__toolbar">
-        <Input
-          v-model:value="keyword"
-          allow-clear
-          placeholder="搜索客户名称"
-          class="max-w-70"
-          @press-enter="onSearch"
-        />
-        <Button @click="onSearch">
-          <IconifyIcon icon="lucide:search" class="mr-1 inline size-4 align-[-3px]" />
-          搜索
-        </Button>
-        <Button @click="importOpen = true">导入客户</Button>
-        <span class="text-xs text-gray-400">共 {{ total }} 个客户</span>
-      </div>
-
-      <div v-if="emptyOnboarding" class="crm-wb__empty">
-        <Empty description="还没有客户" />
-        <div class="crm-wb__steps">
-          <div class="crm-wb__step">
-            <span class="num">1</span>
-            <div>
-              <b>接入渠道</b>
-              <p>在「渠道」接入 WhatsApp / 邮箱 / LinkedIn，客户发来的消息会自动进「会话」。</p>
-              <Button size="small" @click="router.push('/v3/channel')">去接入渠道</Button>
+        <div class="wb-ob-head">
+          <span class="wb-ob-icon">
+            <IconifyIcon icon="lucide:sparkles" class="size-5" />
+          </span>
+          <div>
+            <h3 class="m-0 text-[16px] font-bold text-[#1D1D1F]">
+              欢迎使用全流程外贸客户管道
+            </h3>
+            <p class="m-0 text-[12.5px] text-[#6E6E73]">
+              渠道询盘自动识别建档 → 六步可视化看板推进 → 滑出式全景抽屉跟进 → 极简 PI 订单沉淀
+            </p>
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-3 gap-3">
+          <div class="wb-ob-step">
+            <b>① 接入海外沟通渠道</b>
+            <p>绑定企业邮箱、WhatsApp 或社媒主页，买家第一封询盘自动由 AI 识别建档至「新询盘」。</p>
+            <button
+              type="button"
+              class="wb-ghost-btn mt-auto self-start"
+              @click="router.push('/v3/channel')"
+            >
+              去绑定渠道 ›
+            </button>
+          </div>
+          <div class="wb-ob-step">
+            <b>② 甄别存疑或导入老客</b>
+            <p>历史未转化线索可在右上角「待甄别来信」一键立项，也支持 Excel 批量导入展会名片。</p>
+            <div class="mt-auto flex gap-2">
+              <button
+                v-if="triageCount > 0"
+                type="button"
+                class="wb-primary-btn"
+                @click="triageOpen = true"
+              >
+                处理待甄别 ({{ triageCount }})
+              </button>
+              <button
+                type="button"
+                class="wb-ghost-btn"
+                @click="importOpen = true"
+              >
+                Excel 导入
+              </button>
             </div>
           </div>
-          <div class="crm-wb__step">
-            <span class="num">2</span>
-            <div>
-              <b>询盘自动成为客户</b>
-              <p>新客户第一次发消息时，系统会自动建客户并放到「新询盘」阶段。</p>
-            </div>
-          </div>
-          <div class="crm-wb__step">
-            <span class="num">3</span>
-            <div>
-              <b>改阶段推进</b>
-              <p>聊到报价就改成「报价」，寄样了改成「样品」，成交改成「成交」——这就是你的销售进度。</p>
-            </div>
+          <div class="wb-ob-step">
+            <b>③ 手动新建第一位买家</b>
+            <p>只需填写买家称呼、国家与 WhatsApp/邮箱，自动匹配买家当地时区与美金商务黑板。</p>
+            <button
+              type="button"
+              class="wb-primary-btn mt-auto self-start"
+              @click="createOpen = true"
+            >
+              + 新建第一位客户
+            </button>
           </div>
         </div>
       </div>
 
-      <div v-if="selectedIds.length" class="crm-wb__batch">
-        <span>已选 {{ selectedIds.length }} 个客户</span>
-        <Button size="small" type="primary" @click="openTransfer">批量转交负责人</Button>
-        <Button size="small" @click="onSelectChange([])">取消选择</Button>
-      </div>
-
-      <Spin v-else :spinning="loading">
-        <Table
-          :columns="customerColumns as any"
-          :data-source="rows"
-          :pagination="{
-            current: pager.no,
-            pageSize: pager.size,
-            total,
-            showSizeChanger: false,
-            onChange: (p: number) => { pager.no = p; loadCustomers(); },
-          }"
-          :row-key="(r: any) => r.id"
-          :row-selection="{
-            selectedRowKeys: selectedIds,
-            onChange: onSelectChange,
-          }"
-          size="middle"
-          :custom-row="(r: any) => ({ onClick: () => openCustomer(r), style: 'cursor:pointer' })"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'name'">
-              <div class="font-medium">{{ record.name }}</div>
-              <div class="text-xs text-gray-400">
-                {{ record.countryCode || record.areaName || '—' }}
+      <!-- ========== 视图 1：6 列拖拽看板视图 ========== -->
+      <Spin
+        v-else-if="viewMode === 'kanban' && activeStage !== 'archived'"
+        :spinning="loading"
+        wrapper-class-name="wb-kanban-spin"
+      >
+        <div class="wb-kanban">
+          <div
+            v-for="col in kanbanColumns"
+            :key="col.value"
+            class="wb-col"
+            :class="{
+              'wb-col--drop': dragOverStage === col.value,
+              'wb-col--dim':
+                typeof activeStage === 'number' && activeStage !== col.value,
+            }"
+            @dragover.prevent="dragOverStage = col.value"
+            @dragleave="
+              () => {
+                if (dragOverStage === col.value) dragOverStage = null;
+              }
+            "
+            @drop.prevent="onColumnDrop(col.value)"
+          >
+            <!-- 列头 -->
+            <div class="wb-col-head">
+              <div class="flex items-center gap-1.5">
+                <span class="wb-col-dot" :style="{ background: col.color }" />
+                <span class="text-[13px] font-bold text-[#1D1D1F]">
+                  {{ col.label }}
+                </span>
+                <span class="wb-col-count">{{ col.cards.length }}</span>
               </div>
-            </template>
-            <template v-else-if="column.key === 'stage'">
-              <Select
-                size="small"
-                class="w-full"
-                :value="record.stage || 1"
-                :options="stageOptions"
-                @click.stop
-                @change="(v: any) => changeStage(record, v)"
+              <span v-if="col.usd > 0" class="text-[11.5px] font-semibold text-[#6E6E73]">
+                {{ formatDealMoney(col.usd, 'USD') }}
+              </span>
+            </div>
+
+            <!-- 卡片列表 -->
+            <div class="wb-col-body">
+              <div v-if="col.cards.length === 0" class="wb-col-empty">
+                拖拽卡片至此推进阶段
+              </div>
+
+              <article
+                v-for="card in col.cards"
+                :key="card.id"
+                draggable="true"
+                class="wb-card"
+                :class="{ 'wb-card--dragging': draggingId === card.id }"
+                @dragstart="(e) => onCardDragStart(e, card)"
+                @dragend="onCardDragEnd"
+                @click="inspectCustomer(card.id)"
+              >
+                <!-- 第一行：头像 + 客户名 + 星标 -->
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex min-w-0 items-center gap-2">
+                    <span
+                      class="wb-card-avatar"
+                      :style="{ background: crmAvatarBg(card.name || card.id) }"
+                    >
+                      {{ crmInitial(card.name) }}
+                    </span>
+                    <div class="min-w-0">
+                      <div class="truncate text-[13.5px] font-bold text-[#1D1D1F]">
+                        {{ card.name }}
+                      </div>
+                      <div class="truncate text-[11.5px] text-[#6E6E73]">
+                        {{ card.companyName || card.email || card.whatsapp || '待补充公司信息' }}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="wb-star"
+                    :class="{ on: card.starred }"
+                    @click.stop="onInlineStar(card)"
+                  >
+                    <IconifyIcon icon="lucide:star" class="size-3.5" />
+                  </button>
+                </div>
+
+                <!-- 第二行：国旗 + 买家当地日夜时钟 + 背调标识 -->
+                <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span v-if="card.countryCode" class="wb-mini-tag">
+                    {{ countryFlag(card.countryCode) }}
+                    {{ countryName(card.countryCode) }}
+                    <template v-if="card._clock">
+                      · {{ card._clock.icon }} {{ card._clock.time }}
+                    </template>
+                  </span>
+                  <span
+                    v-if="researchMap[card.id]?.status === 'done'"
+                    class="wb-mini-tag wb-mini-tag--blue"
+                  >
+                    ✦ 已背调
+                  </span>
+                  <span
+                    v-if="card._peerHint"
+                    class="wb-mini-tag wb-mini-tag--warn"
+                    :title="card._peerHint"
+                  >
+                    ⚠️ 同企防撞
+                  </span>
+                </div>
+
+                <!-- 第三行：商务黑板单值与产品摘要 -->
+                <div
+                  v-if="card._board.amount || card._board.productQty || card._board.quoteTerms"
+                  class="wb-card-deal"
+                >
+                  <span
+                    v-if="card._board.amount"
+                    class="shrink-0 font-bold text-[#0071E3]"
+                  >
+                    {{ formatDealMoney(card._board.amount, card._board.currency) }}
+                  </span>
+                  <span class="truncate text-[#3A3A3C]">
+                    {{ card._board.productQty || card._board.quoteTerms }}
+                  </span>
+                </div>
+
+                <!-- 业务标签 -->
+                <div
+                  v-if="Array.isArray(card.tagIds) && card.tagIds.length"
+                  class="mt-1.5 flex flex-wrap gap-1"
+                >
+                  <span
+                    v-for="tid in card.tagIds.slice(0, 3)"
+                    :key="tid"
+                    class="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                    :style="{
+                      color: tagColorById(tid),
+                      background: `${tagColorById(tid)}16`,
+                    }"
+                  >
+                    {{ tagNameById(tid) || `#${tid}` }}
+                  </span>
+                </div>
+
+                <!-- 底部：健康度 SLA 提醒 + 悬浮快捷跟进 -->
+                <div class="mt-2.5 flex items-center justify-between gap-1 border-t border-[#F2F2F7] pt-2">
+                  <span
+                    class="wb-health-tag"
+                    :class="`wb-health-tag--${card._health.nextTone}`"
+                  >
+                    {{ card._health.nextLabel }}
+                  </span>
+
+                  <div class="flex items-center gap-1" @click.stop>
+                    <Popover
+                      :open="quickFollowRowId === card.id"
+                      trigger="click"
+                      placement="bottomRight"
+                      @open-change="
+                        (v) => {
+                          quickFollowRowId = v ? card.id : null;
+                          if (v) quickFollowText = '';
+                        }
+                      "
+                    >
+                      <template #content>
+                        <div class="w-64 p-1" @click.stop>
+                          <div class="mb-1.5 text-[12px] font-bold text-[#1D1D1F]">
+                            5 秒速记跟进 · {{ card.name }}
+                          </div>
+                          <Input.TextArea
+                            v-model:value="quickFollowText"
+                            :rows="2"
+                            placeholder="记一句沟通进展…"
+                          />
+                          <div class="mt-2 flex items-center justify-between">
+                            <Select
+                              v-model:value="quickFollowDays"
+                              size="small"
+                              class="w-28"
+                              :options="[
+                                { label: '明天再跟', value: 1 },
+                                { label: '3 天后再跟', value: 3 },
+                                { label: '7 天后再跟', value: 7 },
+                                { label: '14 天后再跟', value: 14 },
+                              ]"
+                            />
+                            <button
+                              type="button"
+                              class="wb-primary-btn !h-7 !px-2.5 !text-[11.5px]"
+                              :disabled="quickFollowSubmitting"
+                              @click="submitInlineFollow(card)"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </div>
+                      </template>
+                      <Tooltip title="速记跟进">
+                        <button type="button" class="wb-card-act">
+                          <IconifyIcon icon="lucide:notebook-pen" class="size-3.5" />
+                        </button>
+                      </Tooltip>
+                    </Popover>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </Spin>
+
+      <!-- ========== 视图 2：高密度可交互表格视图 ========== -->
+      <div v-else class="wb-table-wrap">
+        <!-- 悬浮批量动作栏 -->
+        <div v-if="selectedIds.length > 0" class="wb-batch-bar">
+          <span class="text-[12.5px] font-semibold text-[#1D1D1F]">
+            已勾选 <b class="text-[#0071E3]">{{ selectedIds.length }}</b> 位客户
+          </span>
+          <button type="button" class="wb-ghost-btn" @click="openBatchTransfer">
+            <IconifyIcon icon="lucide:arrow-right-left" class="size-3.5" />
+            <span>批量转交</span>
+          </button>
+          <button type="button" class="wb-ghost-btn" @click="handleBatchResearch">
+            <IconifyIcon icon="lucide:radar" class="size-3.5" />
+            <span>批量 AI 背调</span>
+          </button>
+          <button type="button" class="wb-ghost-btn" @click="handleBatchPutPool">
+            <IconifyIcon icon="lucide:globe" class="size-3.5" />
+            <span>放回公海</span>
+          </button>
+          <button
+            type="button"
+            class="ml-auto border-none bg-transparent text-[12px] text-[#6E6E73] cursor-pointer hover:text-[#1D1D1F]"
+            @click="selectedIds = []"
+          >
+            取消选择
+          </button>
+        </div>
+
+        <Spin :spinning="loading">
+          <Table
+            :columns="tableColumns"
+            :data-source="filteredCustomers"
+            :row-key="(r: any) => r.id"
+            :row-selection="{
+              selectedRowKeys: selectedIds,
+              onChange: (keys: any[]) => {
+                selectedIds = keys.map(Number);
+              },
+            }"
+            :pagination="{
+              current: tablePage,
+              pageSize: 20,
+              total: filteredCustomers.length,
+              showSizeChanger: false,
+              onChange: (p: number) => {
+                tablePage = p;
+              },
+            }"
+            :custom-row="
+              (record: any) => ({
+                onClick: () => inspectCustomer(record.id),
+                style: 'cursor: pointer',
+              })
+            "
+            size="middle"
+          >
+            <template #emptyText>
+              <Empty
+                :image="Empty.PRESENTED_IMAGE_SIMPLE"
+                description="没有符合当前筛选条件的客户"
               />
             </template>
-            <template v-else-if="column.key === 'contactNextTime'">
-              <span
-                :class="{
-                  'text-red-500 font-medium':
-                    record.contactNextTime && new Date(record.contactNextTime) < new Date(),
-                }"
-              >
-                {{ fmt(record.contactNextTime) }}
-              </span>
-            </template>
-            <template v-else-if="column.key === 'contactLastTime'">
-              {{ fmt(record.contactLastTime) }}
-            </template>
-            <template v-else-if="column.key === 'ownerUserName'">
-              {{ record.ownerUserName || '未分配' }}
-            </template>
-            <template v-else-if="column.key === 'relation'">
-              <Tag :color="relationOf(record).color">{{ relationOf(record).label }}</Tag>
-            </template>
-            <template v-else-if="column.key === 'nextAction'">
-              <Tag :color="nextAction(record).tone === 'danger' ? 'red' : nextAction(record).tone === 'primary' ? 'blue' : 'default'">
-                {{ nextAction(record).text }}
-              </Tag>
-            </template>
-          </template>
-        </Table>
-      </Spin>
-    </template>
 
-    <!-- ========== 今天 ========== -->
-    <template v-else-if="tab === 'today'">
-      <div class="crm-wb__pipeline">
-        <button
-          v-for="tt in todayTabs"
-          :key="tt.key"
-          type="button"
-          class="crm-wb__stage"
-          :class="{ on: todayKey === tt.key }"
-          @click="onTodayChange(tt.key)"
-        >
-          {{ tt.label }}
-          <b>{{ todayCounts[tt.key] }}</b>
-        </button>
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'buyer'">
+                <div class="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    class="wb-star"
+                    :class="{ on: record.starred }"
+                    @click.stop="onInlineStar(record)"
+                  >
+                    <IconifyIcon icon="lucide:star" class="size-3.5" />
+                  </button>
+                  <span
+                    class="wb-card-avatar"
+                    :style="{ background: crmAvatarBg(record.name || record.id) }"
+                  >
+                    {{ crmInitial(record.name) }}
+                  </span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class="truncate font-semibold text-[#1D1D1F]">
+                        {{ record.name }}
+                      </span>
+                      <span
+                        v-if="record._peerHint"
+                        class="rounded bg-[#FFF2ED] px-1.5 py-0.5 text-[10px] font-semibold text-[#C93400]"
+                        :title="record._peerHint"
+                      >
+                        同企防撞
+                      </span>
+                    </div>
+                    <div class="truncate text-[11.5px] text-[#6E6E73]">
+                      {{ record.companyName || record.email || record.whatsapp || '—' }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <template v-else-if="column.key === 'country'">
+                <div v-if="record.countryCode" class="text-[12.5px] text-[#3A3A3C]">
+                  <div>
+                    {{ countryFlag(record.countryCode) }}
+                    {{ countryName(record.countryCode) }}
+                  </div>
+                  <div v-if="record._clock" class="text-[11px] text-[#86868B]">
+                    {{ record._clock.icon }} 当地 {{ record._clock.time }}
+                  </div>
+                </div>
+                <span v-else class="text-[#C7C7CC]">—</span>
+              </template>
+
+              <template v-else-if="column.key === 'stage'">
+                <div @click.stop>
+                  <Select
+                    size="small"
+                    class="w-32"
+                    :value="record._stage"
+                    :options="
+                      PIPELINE_STAGES.map((s) => ({ label: s.label, value: s.value }))
+                    "
+                    @change="(v: any) => applyStageChange(record, Number(v), true)"
+                  />
+                </div>
+              </template>
+
+              <template v-else-if="column.key === 'board'">
+                <div class="text-[12px]">
+                  <span
+                    v-if="record._board.amount"
+                    class="mr-1.5 font-bold text-[#0071E3]"
+                  >
+                    {{ formatDealMoney(record._board.amount, record._board.currency) }}
+                  </span>
+                  <span class="text-[#3A3A3C]">
+                    {{
+                      record._board.productQty ||
+                      record._board.quoteTerms ||
+                      record.contactLastContent ||
+                      '—'
+                    }}
+                  </span>
+                </div>
+              </template>
+
+              <template v-else-if="column.key === 'research'">
+                <span
+                  v-if="researchMap[record.id]?.status === 'done'"
+                  class="line-clamp-2 text-[11.5px] text-[#3A3A3C]"
+                  :title="researchMap[record.id]?.summary"
+                >
+                  ✦ {{ researchMap[record.id]?.summary || '已完成背调' }}
+                </span>
+                <span
+                  v-else-if="researchMap[record.id]?.status === 'running'"
+                  class="text-[11.5px] text-[#0071E3]"
+                >
+                  背调分析中…
+                </span>
+                <span v-else class="text-[11.5px] text-[#C7C7CC]">未背调</span>
+              </template>
+
+              <template v-else-if="column.key === 'next'">
+                <span
+                  class="wb-health-tag"
+                  :class="`wb-health-tag--${record._health.nextTone}`"
+                >
+                  {{ record._health.nextLabel }}
+                </span>
+              </template>
+
+              <template v-else-if="column.key === 'owner'">
+                <span class="text-[12px] text-[#6E6E73]">
+                  {{ record.ownerUserName || '—' }}
+                </span>
+              </template>
+
+              <template v-else-if="column.key === 'quick'">
+                <button
+                  type="button"
+                  class="wb-ghost-btn !h-7 !px-2.5 !text-[11.5px]"
+                  @click.stop="inspectCustomer(record.id)"
+                >
+                  全景 ›
+                </button>
+              </template>
+            </template>
+          </Table>
+        </Spin>
       </div>
-
-      <Spin :spinning="loading">
-        <Table
-          :columns="columns as any"
-          :data-source="todayRows"
-          :pagination="{
-            current: pager.no,
-            pageSize: pager.size,
-            total: todayTotal,
-            showSizeChanger: false,
-            onChange: (p: number) => { pager.no = p; loadToday(); },
-          }"
-          :row-key="(r: any) => r.id"
-          size="middle"
-          :custom-row="(r: any) => ({ onClick: () => openCustomer(r), style: 'cursor:pointer' })"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'name'">
-              <div class="font-medium">{{ record.name }}</div>
-            </template>
-            <template v-else-if="column.key === 'stage'">
-              <Tag :color="stageMeta(record.stage).color">
-                {{ stageMeta(record.stage).label }}
-              </Tag>
-            </template>
-            <template v-else-if="column.key === 'contactNextTime'">
-              {{ fmt(record.contactNextTime) }}
-            </template>
-            <template v-else-if="column.key === 'contactLastTime'">
-              {{ fmt(record.contactLastTime) }}
-            </template>
-            <template v-else-if="column.key === 'ownerUserName'">
-              {{ record.ownerUserName || '未分配' }}
-            </template>
-          </template>
-        </Table>
-      </Spin>
     </template>
 
-    <!-- ========== 订单 ========== -->
-    <template v-else-if="tab === 'order'">
-      <div class="crm-wb__guide">
-        <IconifyIcon icon="lucide:receipt" class="size-4 shrink-0" />
-        <span>客户阶段改成「成交」后，在这里看合同与回款进度。</span>
+    <!-- ==================== 2B. 公海淘金与查重 ==================== -->
+    <PoolPanel
+      v-else-if="mainTab === 'pool'"
+      ref="poolPanelRef"
+      @claimed="loadPipeline"
+      @inspect="inspectCustomer"
+    />
+
+    <!-- ==================== 2C. 成交订单台账 ==================== -->
+    <OrdersPanel
+      v-else-if="mainTab === 'order'"
+      ref="ordersPanelRef"
+      @create-order="openQuickOrderModal(null)"
+      @inspect-customer="inspectCustomer"
+    />
+
+    <!-- ==================== 2D. 规则与标签设置 ==================== -->
+    <div v-else class="-mx-5 -mb-5">
+      <SettingsView />
+    </div>
+
+    <!-- ==================== 抽屉与弹窗组 ==================== -->
+    <!-- 1. 灵动待甄别来信抽屉 -->
+    <TriageDrawer
+      v-model:open="triageOpen"
+      @count-change="(n) => (triageCount = n)"
+      @promoted="
+        (newId) => {
+          loadPipeline();
+          if (newId) inspectCustomer(newId);
+        }
+      "
+    />
+
+    <!-- 2. 右侧滑出式 360° 客户全景抽屉 -->
+    <CustomerDrawer
+      ref="drawerRef"
+      v-model:open="drawerOpen"
+      :customer-id="activeCustomerId"
+      :tags="tags"
+      :groups="groups"
+      :has-prev="activeIndexInList > 0"
+      :has-next="
+        activeIndexInList >= 0 &&
+        activeIndexInList < filteredCustomers.length - 1
+      "
+      @prev="stepDrawer(-1)"
+      @next="stepDrawer(1)"
+      @changed="loadPipeline"
+      @open-order-modal="openQuickOrderModal"
+    />
+
+    <!-- 3. 极简外贸订单 / PI 登记弹窗 -->
+    <QuickOrderModal
+      v-model:open="orderModalOpen"
+      :customer="orderModalCustomer"
+      @success="handleOrderCreated"
+    />
+
+    <!-- 4. 极简新建外贸客户弹窗 -->
+    <Modal
+      v-model:open="createOpen"
+      title="新建外贸买家档案"
+      :width="540"
+      centered
+      :confirm-loading="creating"
+      ok-text="建档并进入管道"
+      cancel-text="取消"
+      wrap-class-name="ap-modal-sheet"
+      @ok="handleCreateCustomer"
+    >
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <div>
+          <label class="wb-modal-lbl">买家联系人姓名 <span>*</span></label>
+          <Input v-model:value="newCustForm.name" placeholder="例如：Michael Miller" />
+        </div>
+        <div>
+          <label class="wb-modal-lbl">海外公司名称</label>
+          <Input
+            v-model:value="newCustForm.companyName"
+            placeholder="例如：Nordic Home GmbH"
+          />
+        </div>
+        <div>
+          <label class="wb-modal-lbl">国家 / 地区（自动显示当地时钟）</label>
+          <Select
+            v-model:value="newCustForm.countryCode"
+            show-search
+            option-filter-prop="label"
+            :options="COUNTRY_OPTIONS"
+            class="w-full"
+          />
+        </div>
+        <div>
+          <label class="wb-modal-lbl">初始销售阶段</label>
+          <Select
+            v-model:value="newCustForm.stage"
+            :options="PIPELINE_STAGES.map((s) => ({ label: s.label, value: s.value }))"
+            class="w-full"
+          />
+        </div>
+        <div>
+          <label class="wb-modal-lbl">WhatsApp / 国际号码</label>
+          <Input v-model:value="newCustForm.whatsapp" placeholder="+49 151 23456789" />
+        </div>
+        <div>
+          <label class="wb-modal-lbl">买家企业邮箱</label>
+          <Input v-model:value="newCustForm.email" placeholder="purchasing@company.com" />
+        </div>
+        <div>
+          <label class="wb-modal-lbl">预估单值（选填）</label>
+          <div class="flex gap-1.5">
+            <Select
+              v-model:value="newCustForm.currency"
+              class="w-24"
+              :options="CURRENCIES.map((c) => ({ label: c.code, value: c.code }))"
+            />
+            <InputNumber
+              v-model:value="newCustForm.amount"
+              :min="0"
+              placeholder="如 15000"
+              class="flex-1"
+            />
+          </div>
+        </div>
+        <div>
+          <label class="wb-modal-lbl">意向产品与采购量（选填）</label>
+          <Input
+            v-model:value="newCustForm.productQty"
+            placeholder="如：便携咖啡机 · 1000 pcs"
+          />
+        </div>
+        <div>
+          <label class="wb-modal-lbl">公司官网（便于 AI 背调）</label>
+          <Input v-model:value="newCustForm.website" placeholder="https://..." />
+        </div>
+        <div>
+          <label class="wb-modal-lbl">询盘来源渠道</label>
+          <Select
+            v-model:value="newCustForm.source"
+            allow-clear
+            placeholder="选择来源"
+            :options="sourceOptions"
+            class="w-full"
+          />
+        </div>
       </div>
-      <Spin :spinning="loading">
-        <Table
-          :columns="orderColumns as any"
-          :data-source="orderRows"
-          :pagination="{
-            current: pager.no,
-            pageSize: pager.size,
-            total: orderTotal,
-            showSizeChanger: false,
-            onChange: (p: number) => { pager.no = p; loadOrders(); },
-          }"
-          :row-key="(r: any) => r.id"
-          size="middle"
-          :custom-row="(r: any) => ({
-            onClick: () => router.push(`/crm/contract/detail/${r.id}`),
-            style: 'cursor:pointer',
-          })"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'totalPrice'">
-              {{ money(record.totalPrice) }}
-            </template>
-            <template v-else-if="column.key === 'auditStatus'">
-              <Tag>{{ record.auditStatus }}</Tag>
-            </template>
-            <template v-else-if="column.key === 'orderDate'">
-              {{ fmt(record.orderDate) }}
-            </template>
-          </template>
-        </Table>
-      </Spin>
-    </template>
+    </Modal>
 
+    <!-- 5. 批量转交弹窗 -->
     <Modal
       v-model:open="transferOpen"
       title="批量转交负责人"
-      :width="440"
+      :width="420"
       centered
       :confirm-loading="transferring"
-      ok-text="转交"
-      @ok="doTransfer"
+      ok-text="确认转交"
+      cancel-text="取消"
+      wrap-class-name="ap-modal-sheet"
+      @ok="confirmBatchTransfer"
     >
-      <p class="mb-3 text-sm text-gray-500">
-        选中 {{ selectedIds.length }} 个客户，全部分配给下面的同事。
-      </p>
-      <Select
-        v-model:value="transferTo"
-        class="w-full"
-        placeholder="选择新的负责人"
-        :options="users.map((u) => ({ label: u.nickname, value: u.id }))"
-        option-filter-prop="label"
-        show-search
-      />
+      <div class="py-2">
+        <p class="mb-2 text-[12.5px] text-[#6E6E73]">
+          将选中的 {{ selectedIds.length }} 位客户统一移交给：
+        </p>
+        <Select
+          v-model:value="transferTo"
+          show-search
+          option-filter-prop="label"
+          placeholder="选择新的负责人"
+          :options="simpleUsers.map((u) => ({ label: u.nickname, value: u.id }))"
+          class="w-full"
+        />
+      </div>
     </Modal>
 
+    <!-- 6. Excel 导入客户弹窗 -->
     <Modal
       v-model:open="importOpen"
-      title="导入客户"
-      :width="480"
+      title="Excel 批量导入客户"
+      :width="460"
       centered
       :confirm-loading="importing"
       ok-text="开始导入"
-      @ok="doImport"
+      cancel-text="取消"
+      wrap-class-name="ap-modal-sheet"
+      @ok="handleDoImport"
     >
-      <div class="mb-3 text-sm text-gray-500">
-        支持 Excel（.xlsx）。先下载模板，按模板填写后再上传。
-        <Button type="link" size="small" @click="importCustomerTemplate">
-          下载模板
-        </Button>
-      </div>
-      <Upload
-        :file-list="importFileList"
-        :before-upload="pickImportFile"
-        :max-count="1"
-        accept=".xlsx,.xls"
-      >
-        <Button>选择文件</Button>
-      </Upload>
-      <div class="mt-3">
-        <label class="flex items-center gap-2 text-sm text-gray-600">
+      <div class="flex flex-col gap-3 py-2">
+        <div class="rounded-xl bg-[#F5F5F7] p-3 text-[12.5px] text-[#48484A]">
+          支持标准 `.xlsx` 表格导入（如广交会/海外展名片表、海关数据表）。
+          <button
+            type="button"
+            class="ml-1 cursor-pointer border-none bg-transparent p-0 font-semibold text-[#0071E3] hover:underline"
+            @click="importCustomerTemplate"
+          >
+            下载标准导入模板
+          </button>
+        </div>
+        <Upload
+          :file-list="importFileList"
+          :before-upload="pickImportFile"
+          :max-count="1"
+          accept=".xlsx,.xls"
+        >
+          <button type="button" class="wb-ghost-btn">
+            <IconifyIcon icon="lucide:file-spreadsheet" class="size-4" />
+            <span>选择 Excel 文件</span>
+          </button>
+        </Upload>
+        <label class="flex items-center gap-2 text-[12.5px] text-[#3A3A3C]">
           <input v-model="importUpdate" type="checkbox" />
-          已存在的客户要更新（不勾选则跳过重复）
+          <span>遇到已存在的同名客户时覆盖更新（不勾选则自动跳过防重）</span>
         </label>
       </div>
     </Modal>
-
-    <!-- ========== 设置 ========== -->
-    <template v-else>
-      <Settings />
-    </template>
   </div>
 </template>
 
 <style scoped>
-.crm-wb {
+.wb-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   height: 100%;
+  padding: 16px 20px 20px;
   overflow: auto;
-  padding: 4px 4px 24px;
+  background: #f5f5f7;
 }
-.crm-wb__nav {
+
+.wb-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wb-main-tabs {
   display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  margin-bottom: 14px;
-  background: rgb(118 118 128 / 8%);
+  gap: 3px;
+  padding: 3.5px;
+  background: rgb(255 255 255 / 80%);
+  backdrop-filter: blur(16px);
+  border: 0.5px solid rgb(60 60 67 / 10%);
   border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
 }
-.crm-wb__nav-item {
-  padding: 6px 18px;
-  font-size: 13.5px;
-  color: #4b5563;
+
+.wb-main-tab {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6e6e73;
   cursor: pointer;
   background: transparent;
   border: none;
   border-radius: 9px;
-  transition: all 0.15s;
+  transition: all 0.16s ease;
 }
-.crm-wb__nav-item.on {
+
+.wb-main-tab:hover {
+  color: #1d1d1f;
+}
+
+.wb-main-tab.on {
   color: #1d1d1f;
   background: #fff;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
 }
-.crm-wb__guide {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #4b5563;
-  background: rgb(0 122 255 / 6%);
-  border-radius: 12px;
-}
-.crm-wb__pipeline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.crm-wb__stage {
+
+.wb-pipeline-sum {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  padding: 6px 14px;
-  font-size: 13px;
-  color: #1f2937;
+  padding: 4px 11px;
+  font-size: 12px;
+  color: #6e6e73;
+  background: rgb(255 255 255 / 72%);
+  border: 0.5px solid rgb(60 60 67 / 10%);
+  border-radius: 999px;
+}
+
+.wb-pipeline-sum strong {
+  font-weight: 700;
+  color: #0071e3;
+}
+
+.wb-triage-pill {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3a3a3c;
   cursor: pointer;
   background: #fff;
-  border: 1px solid rgb(0 0 0 / 8%);
+  border: 0.5px solid rgb(60 60 67 / 14%);
   border-radius: 999px;
-  transition: all 0.15s;
+  transition: all 0.16s ease;
 }
-.crm-wb__stage:hover {
-  border-color: rgb(0 122 255 / 40%);
+
+.wb-triage-pill.active {
+  color: #9a4400;
+  background: #fff7eb;
+  border-color: rgb(255 149 0 / 38%);
 }
-.crm-wb__stage.on {
-  color: #fff;
-  background: #1d1d1f;
-  border-color: #1d1d1f;
-}
-.crm-wb__stage .dot {
+
+.wb-pulse-dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  background: #ff9500;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgb(255 149 0 / 22%);
 }
-.crm-wb__stage b {
-  font-weight: 600;
+
+.wb-triage-count {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgb(0 0 0 / 6%);
+  border-radius: 999px;
 }
-.crm-wb__batch {
-  display: flex;
-  gap: 10px;
+
+.wb-ghost-btn {
+  display: inline-flex;
+  gap: 5px;
   align-items: center;
-  padding: 8px 12px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: #1d1d1f;
-  background: rgb(0 122 255 / 8%);
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3a3a3c;
+  cursor: pointer;
+  background: #fff;
+  border: 0.5px solid rgb(60 60 67 / 14%);
   border-radius: 10px;
+  transition: all 0.15s ease;
 }
-.crm-wb__toolbar {
+
+.wb-ghost-btn:hover {
+  background: #f2f2f7;
+}
+
+.wb-primary-btn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  background: #0071e3;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgb(0 113 227 / 24%);
+  transition: all 0.15s ease;
+}
+
+.wb-primary-btn:hover {
+  background: #0077ed;
+}
+
+/* 6 步漏斗条 */
+.wb-funnel {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 1360px) {
+  .wb-funnel {
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
+  }
+}
+
+.wb-stage-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  text-align: left;
+  cursor: pointer;
+  background: rgb(255 255 255 / 86%);
+  border: 1px solid rgb(60 60 67 / 9%);
+  border-radius: 13px;
+  transition: all 0.16s ease;
+}
+
+.wb-stage-pill:hover {
+  background: #fff;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 5%);
+}
+
+.wb-stage-pill.on {
+  background: #eef5ff;
+  border-color: #0071e3;
+}
+
+.wb-stage-pill--archived.on {
+  background: #ebebf0;
+  border-color: #6e6e73;
+}
+
+.wb-stage-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+
+.wb-stage-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1d1d1f;
+  white-space: nowrap;
+}
+
+.wb-stage-num {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1d1d1f;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-stage-usd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: #6e6e73;
+  white-space: nowrap;
+}
+
+/* 筛选条 */
+.wb-filter-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 10px;
 }
-.crm-wb__empty {
-  padding: 24px 0;
+
+.wb-scope-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgb(118 118 128 / 11%);
+  border-radius: 9px;
 }
-.crm-wb__steps {
-  display: grid;
-  gap: 12px;
-  max-width: 680px;
-  margin: 16px auto 0;
+
+.wb-scope-btn {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6e6e73;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  transition: all 0.15s ease;
 }
-.crm-wb__step {
-  display: flex;
-  gap: 12px;
-  padding: 14px 16px;
+
+.wb-scope-btn.on {
+  color: #1d1d1f;
   background: #fff;
-  border: 1px solid rgb(0 0 0 / 6%);
-  border-radius: 14px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
 }
-.crm-wb__step .num {
+
+.wb-scope-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.wb-chip {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 30px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #48484a;
+  cursor: pointer;
+  background: #fff;
+  border: 0.5px solid rgb(60 60 67 / 12%);
+  border-radius: 999px;
+  transition: all 0.15s ease;
+}
+
+.wb-chip:hover {
+  border-color: rgb(0 113 227 / 35%);
+}
+
+.wb-chip--red {
+  color: #d70015;
+  background: #ffeceb;
+  border-color: rgb(255 59 48 / 35%);
+}
+
+.wb-chip--amber {
+  color: #9a4400;
+  background: #fff4e0;
+  border-color: rgb(255 149 0 / 40%);
+}
+
+/* 看板视图 */
+.wb-kanban-spin {
+  flex: 1;
+  min-height: 0;
+}
+
+.wb-kanban {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(242px, 1fr));
+  gap: 10px;
+  align-items: stretch;
+  min-height: 520px;
+  padding-bottom: 8px;
+  overflow-x: auto;
+}
+
+.wb-col {
   display: flex;
-  flex: 0 0 24px;
+  flex-direction: column;
+  min-height: 500px;
+  max-height: calc(100vh - 250px);
+  padding: 10px;
+  background: rgb(235 235 240 / 60%);
+  border: 1px solid rgb(60 60 67 / 7%);
+  border-radius: 16px;
+  transition: all 0.16s ease;
+}
+
+.wb-col--drop {
+  background: #e8f2ff;
+  border-color: #0071e3;
+  box-shadow: inset 0 0 0 1px #0071e3;
+}
+
+.wb-col--dim {
+  opacity: 0.42;
+}
+
+.wb-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 8px;
+}
+
+.wb-col-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.wb-col-count {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6e6e73;
+  background: rgb(255 255 255 / 80%);
+  border-radius: 999px;
+}
+
+.wb-col-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding-right: 2px;
+  overflow-y: auto;
+}
+
+.wb-col-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88px;
+  font-size: 11.5px;
+  color: #aeaeb2;
+  border: 1px dashed rgb(60 60 67 / 14%);
+  border-radius: 12px;
+}
+
+.wb-card {
+  padding: 11px 12px;
+  cursor: pointer;
+  background: #fff;
+  border: 0.5px solid rgb(60 60 67 / 9%);
+  border-radius: 13px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 4%);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.wb-card:hover {
+  border-color: rgb(0 113 227 / 32%);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 7%);
+  transform: translateY(-1px);
+}
+
+.wb-card--dragging {
+  opacity: 0.45;
+}
+
+.wb-card-avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 9px;
+}
+
+.wb-star {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: #d1d1d6;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+}
+
+.wb-star.on,
+.wb-star:hover {
+  color: #ff9500;
+}
+
+.wb-mini-tag {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  color: #48484a;
+  background: #f2f2f7;
+  border-radius: 5px;
+}
+
+.wb-mini-tag--blue {
+  font-weight: 600;
+  color: #0071e3;
+  background: #e8f2ff;
+}
+
+.wb-mini-tag--warn {
+  font-weight: 600;
+  color: #c93400;
+  background: #fff2ed;
+}
+
+.wb-card-deal {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 8px;
+  margin-top: 7px;
+  font-size: 11.5px;
+  background: #f8f9fb;
+  border-radius: 8px;
+}
+
+.wb-health-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 6px;
+}
+
+.wb-health-tag--red {
+  color: #d70015;
+  background: #ffeceb;
+}
+
+.wb-health-tag--amber {
+  color: #9a4400;
+  background: #fff4e0;
+}
+
+.wb-health-tag--blue {
+  color: #0071e3;
+  background: #e8f2ff;
+}
+
+.wb-health-tag--green {
+  color: #1e7e34;
+  background: #eaf9ee;
+}
+
+.wb-health-tag--gray {
+  color: #6e6e73;
+  background: #f2f2f7;
+}
+
+.wb-card-act {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
+  color: #6e6e73;
+  cursor: pointer;
+  background: #f5f5f7;
+  border: none;
+  border-radius: 6px;
+}
+
+.wb-card-act:hover {
+  color: #0071e3;
+  background: #e8f2ff;
+}
+
+/* 表格视图与批量栏 */
+.wb-table-wrap {
+  overflow: hidden;
+  background: #fff;
+  border: 0.5px solid rgb(60 60 67 / 10%);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 4%);
+}
+
+.wb-batch-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 16px;
+  background: #f0f7ff;
+  border-bottom: 0.5px solid rgb(0 113 227 / 18%);
+}
+
+/* 零客户引导卡 */
+.wb-onboarding {
+  padding: 22px 24px;
+  background: #fff;
+  border: 0.5px solid rgb(60 60 67 / 10%);
+  border-radius: 18px;
+}
+
+.wb-ob-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.wb-ob-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: #fff;
+  background: linear-gradient(180deg, #3395ff 0%, #0071e3 100%);
+  border-radius: 12px;
+}
+
+.wb-ob-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: #f8f8fa;
+  border-radius: 14px;
+}
+
+.wb-ob-step b {
+  font-size: 13.5px;
+  color: #1d1d1f;
+}
+
+.wb-ob-step p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #6e6e73;
+}
+
+.wb-modal-lbl {
+  display: block;
+  margin-bottom: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
-  background: #007aff;
-  border-radius: 50%;
+  color: #3a3a3c;
 }
-.crm-wb__step p {
-  margin: 4px 0 8px;
-  font-size: 12.5px;
-  color: #6e6e73;
+
+.wb-modal-lbl span {
+  color: #ff3b30;
 }
 </style>
