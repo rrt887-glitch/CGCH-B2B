@@ -113,6 +113,20 @@ const viewMode = ref<ViewMode>(
     ? 'table'
     : 'kanban',
 );
+/**
+ * 切换主视图时同步地址栏（?tab=order / pool），刷新、收藏、发给同事才能回到同一页签。
+ * 注意左侧主导航「CRM 智枢」用的是 ?tab=salesmind，那种场景不覆盖。
+ */
+function setMainTab(next: MainTab) {
+  mainTab.value = next;
+  const query: Record<string, any> = { ...route.query };
+  if (query.tab === 'salesmind') return;
+  if (next === 'pipeline') delete query.tab;
+  else query.tab = next;
+  if (JSON.stringify(query) === JSON.stringify(route.query)) return;
+  void router.replace({ query });
+}
+
 function setViewMode(m: ViewMode) {
   viewMode.value = m;
   localStorage.setItem('cgch_crm_view_mode', m);
@@ -876,7 +890,7 @@ onBeforeUnmount(() => {
             type="button"
             class="wb-main-tab"
             :class="{ on: mainTab === item.k }"
-            @click="mainTab = item.k as MainTab"
+            @click="setMainTab(item.k as MainTab)"
           >
             <IconifyIcon :icon="item.icon" class="size-3.5" />
             <span>{{ item.l }}</span>
