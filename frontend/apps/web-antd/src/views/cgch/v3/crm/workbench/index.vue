@@ -171,8 +171,16 @@ const tabs = [
   { key: 'settings' as TabKey, label: '设置' },
 ];
 
+/** 「全部」与各阶段用同一口径：都跟随搜索关键词，避免一排数字有的按筛选、有的按全量 */
+const statsTotal = computed(() =>
+  Object.values(stats.value).reduce((sum, n) => sum + (Number(n) || 0), 0),
+);
+
 async function loadStats() {
-  stats.value = (await getCustomerStageStats().catch(() => ({} as Record<string, number>))) || {};
+  stats.value =
+    (await getCustomerStageStats(keyword.value.trim() || undefined).catch(
+      () => ({} as Record<string, number>),
+    )) || {};
 }
 
 async function loadCustomers() {
@@ -360,6 +368,8 @@ function onLeadSearch() {
 function onSearch() {
   pager.no = 1;
   void loadCustomers();
+  // 计数也要跟着搜索词刷新，否则「全部 / 各阶段」和列表对不上
+  void loadStats();
 }
 
 function pickStage(v?: number) {
@@ -505,6 +515,13 @@ onMounted(() => {
               </Popconfirm>
             </template>
           </template>
+          <template #emptyText>
+            {{
+              leadKeyword.trim()
+                ? `没有找到与“${leadKeyword.trim()}”匹配的线索`
+                : '还没有线索'
+            }}
+          </template>
         </Table>
       </Spin>
     </template>
@@ -527,7 +544,7 @@ onMounted(() => {
           @click="pickStage(undefined)"
         >
           全部
-          <b>{{ stats.total ?? total }}</b>
+          <b>{{ statsTotal }}</b>
         </button>
         <button
           v-for="s in STAGES"
@@ -653,6 +670,13 @@ onMounted(() => {
                 {{ nextAction(record).text }}
               </Tag>
             </template>
+          </template>
+          <template #emptyText>
+            {{
+              keyword.trim()
+                ? `没有找到与“${keyword.trim()}”匹配的客户`
+                : '还没有客户'
+            }}
           </template>
         </Table>
       </Spin>

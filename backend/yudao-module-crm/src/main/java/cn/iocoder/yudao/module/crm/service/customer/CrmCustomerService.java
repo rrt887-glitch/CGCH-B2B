@@ -59,7 +59,7 @@ public interface CrmCustomerService {
     void updateCustomerStage(Long id, Integer stage);
 
     /** 各阶段的客户数（按数据权限：我负责的 + 下属负责的） */
-    java.util.Map<Integer, Long> getStageStats(Long userId);
+    java.util.Map<Integer, Long> getStageStats(Long userId, String keyword);
 
     /**
      * 更新客户相关的跟进信息
