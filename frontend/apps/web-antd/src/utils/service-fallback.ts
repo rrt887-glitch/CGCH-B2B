@@ -65,8 +65,14 @@ function createOverlay() {
 }
 
 async function probeAndReload() {
+  // 后端没起来时连接可能很久才失败（网关重试 90s），探测本身要限时，避免请求越堆越多
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
   try {
-    const res = await fetch(PROBE_URL, { cache: 'no-store' });
+    const res = await fetch(PROBE_URL, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
     if (res.ok) {
       if (timer) clearInterval(timer);
       timer = undefined;
@@ -74,6 +80,8 @@ async function probeAndReload() {
     }
   } catch {
     // 还没恢复，等下一轮
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

@@ -5,6 +5,8 @@ import type { RequestClientOptions } from '@vben/request';
 
 import { isTenantEnable, useAppConfig } from '@vben/hooks';
 import { preferences } from '@vben/preferences';
+
+import { showServiceUnavailable } from '#/utils/service-fallback';
 import {
   authenticateResponseInterceptor,
   defaultResponseInterceptor,
@@ -203,6 +205,12 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
         responseData?.error ?? responseData?.message ?? responseData.msg ?? '';
       // add by 芋艿：特殊：避免 401 “账号未登录”，重复提示。因为，此时会跳转到登录界面，只需提示一次！！！
       if (error?.data?.code === 401) {
+        return;
+      }
+      // 网关不可用（部署窗口 502 等）：走全屏兜底，别只弹一句「内部服务器错误」
+      const status = error?.response?.status;
+      if (status === 502 || status === 503 || status === 504) {
+        showServiceUnavailable();
         return;
       }
       // 如果没有错误信息，则会根据状态码进行提示
