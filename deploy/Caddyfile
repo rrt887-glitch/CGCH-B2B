@@ -34,6 +34,10 @@
 
 	handle /admin-api/* {
 		reverse_proxy backend:48080 {
+			# 升级部署时后端容器会重建、Spring Boot 启动需要几十秒；这段时间请求不要立刻 502，
+			# 而是在 90 秒内反复尝试（配合同城 nginx/浏览器重试，用户侧表现为“慢一下”而不是站点不可用）
+			lb_try_duration 90s
+			lb_try_interval 500ms
 			transport http {
 				read_timeout 180s
 			}
