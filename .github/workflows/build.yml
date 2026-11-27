@@ -3029,6 +3029,34 @@ jobs:
             docker push $REGISTRY/cgch-$n:latest || { echo "::error title=推送 $n:latest 失败"; exit 1; }
           done
 
+      # 可选：同时推一份到阿里云 ACR（服务器从国内拉取很快）。
+      # 需要在仓库 Settings → Secrets and variables → Actions 配置：
+      #   ACR_REGISTRY   例：registry.cn-hangzhou.aliyuncs.com
+      #   ACR_NAMESPACE  例：cgch
+      #   ACR_USERNAME   阿里云账号全名
+      #   ACR_PASSWORD   ACR 的固定密码
+      - name: 推送到阿里云 ACR（可选）
+        env:
+          ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
+          ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+        run: |
+          set -e
+          if [ -z "$ACR_REGISTRY" ] || [ -z "$ACR_NAMESPACE" ]; then
+            echo "未配置 ACR（ACR_REGISTRY / ACR_NAMESPACE），跳过"
+            exit 0
+          fi
+          echo "$ACR_PASSWORD" | docker login "$ACR_REGISTRY" -u "$ACR_USERNAME" --password-stdin
+          for n in backend web mysql; do
+            dst="$ACR_REGISTRY/$ACR_NAMESPACE/cgch-$n"
+            docker tag "$REGISTRY/cgch-$n:latest" "$dst:latest"
+            docker tag "$REGISTRY/cgch-$n:${{ github.sha }}" "$dst:${{ github.sha }}"
+            docker push "$dst:latest"
+            docker push "$dst:${{ github.sha }}"
+          done
+          echo "已推送到 $ACR_REGISTRY/$ACR_NAMESPACE"
+
       - name: 在全新环境执行一键安装脚本
         run: |
           set -e
