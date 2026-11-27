@@ -25,6 +25,8 @@ import {
 import { translateTexts } from '#/api/channel/translate';
 import { Tinymce } from '#/components/tinymce';
 
+import { useEscapeToClose } from '#/utils/modal-escape';
+
 const category = ref('');
 const keyword = ref('');
 /** 最近一次真正提交给后端的关键词：决定空态文案 */
@@ -57,6 +59,7 @@ async function load() {
 
 // ===== 编辑 =====
 const open = ref(false);
+useEscapeToClose(open, () => (open.value = false));
 const saving = ref(false);
 const translating = ref(false);
 const view = ref<'desktop' | 'edit' | 'mobile'>('edit');
@@ -171,7 +174,7 @@ onMounted(load);
       <Pagination v-model:current="page.no" v-model:page-size="page.size" :total="rows.length" show-size-changer show-quick-jumper size="small" />
     </div>
 
-    <Modal v-model:open="open" :title="form.id ? '编辑模板' : '创建模板'" :width="920" :footer="null" :body-style="{ paddingTop: '8px' }" centered>
+    <Modal v-model:open="open" :mask-closable="true" :title="form.id ? '编辑模板' : '创建模板'" :width="920" :footer="null" :body-style="{ paddingTop: '8px' }" centered>
       <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div class="md:col-span-2">
           <div class="et__label">模板名称</div>
