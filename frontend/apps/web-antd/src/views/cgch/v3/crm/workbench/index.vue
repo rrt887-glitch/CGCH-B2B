@@ -738,6 +738,11 @@ onMounted(() => {
       </Spin>
     </template>
 
+    <!-- ========== 设置 ========== -->
+    <template v-else>
+      <Settings />
+    </template>
+
     <Modal
       v-model:open="transferOpen"
       title="批量转交负责人"
@@ -790,11 +795,6 @@ onMounted(() => {
         </label>
       </div>
     </Modal>
-
-    <!-- ========== 设置 ========== -->
-    <template v-else>
-      <Settings />
-    </template>
   </div>
 </template>
 
