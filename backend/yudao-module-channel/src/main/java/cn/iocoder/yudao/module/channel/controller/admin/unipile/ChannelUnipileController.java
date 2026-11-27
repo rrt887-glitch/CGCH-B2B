@@ -71,7 +71,7 @@ public class ChannelUnipileController {
         return v == null ? null : String.valueOf(v);
     }
 
-    @PostMapping("/recover")    @PostMapping("/recover")
+    @PostMapping("/recover")
     @Operation(summary = "找回 Unipile 上已存在、但后台没记录的账号")
     @PreAuthorize("@ss.hasPermission('channel:wa-account:create')")
     public CommonResult<Integer> recover() {
