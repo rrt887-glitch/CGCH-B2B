@@ -34,9 +34,19 @@ image_ids() {
 
 BEFORE=$(image_ids || true)
 
-if ! docker compose pull -q >/dev/null 2>&1; then
-  log "拉取镜像失败（网络或镜像仓库问题），本次跳过"
-  exit 0
+# 拉取镜像：失败时重试一次，并把真实错误记下来（第三方镜像源偶发抖动很常见）
+pull_once() {
+  docker compose pull >"$DIR/autodeploy-pull.log" 2>&1
+}
+if ! pull_once; then
+  log "拉取镜像失败，10 秒后重试一次"
+  sleep 10
+  if ! pull_once; then
+    log "拉取镜像仍然失败，本次跳过。真实错误如下："
+    tail -10 "$DIR/autodeploy-pull.log" 2>/dev/null || true
+    exit 0
+  fi
+  log "重试成功"
 fi
 
 AFTER=$(image_ids || true)
