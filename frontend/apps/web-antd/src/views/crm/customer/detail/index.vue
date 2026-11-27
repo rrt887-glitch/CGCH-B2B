@@ -30,6 +30,7 @@ import { FollowUp } from '#/views/crm/followup';
 import { TransferForm } from '#/views/crm/permission';
 import { ReceivableDetailsList } from '#/views/crm/receivable/components';
 import { ReceivablePlanDetailsList } from '#/views/crm/receivable/plan/components';
+import RecordMissing from '#/views/crm/_shared/record-missing.vue';
 
 import Form from '../modules/form.vue';
 import { useDetailSchema } from './data';
@@ -44,7 +45,9 @@ const router = useRouter();
 const tabs = useTabs();
 
 const loading = ref(false); // 加载中
-const customerId = ref(0); // 客户编号
+const customerId = ref(0);
+/** 详情加载返回空 / 404（旧链接、收藏、并发删除）时显示“记录不存在” */
+const notFound = ref(false); // 客户编号
 const customer = ref<CrmCustomerApi.Customer>({} as CrmCustomerApi.Customer); // 客户详情
 const logList = ref<SystemOperateLogApi.OperateLog[]>([]); // 操作日志
 // 团队成员页签已去掉，按钮权限改用权限码判断
@@ -75,14 +78,27 @@ const [DistributeModal, distributeModalApi] = useVbenModal({
 /** 加载客户详情 */
 async function loadCustomerDetail() {
   loading.value = true;
+  notFound.value = false;
+  if (!customerId.value) {
+    notFound.value = true;
+    loading.value = false;
+    return;
+  }
   try {
-    customer.value = await getCustomer(customerId.value);
+    const detail = await getCustomer(customerId.value);
+    if (!detail) {
+      notFound.value = true;
+      return;
+    }
+    customer.value = detail;
     // 操作日志
     const res = await getOperateLogPage({
       bizType: BizTypeEnum.CRM_CUSTOMER,
       bizId: customerId.value,
     });
     logList.value = res.list;
+  } catch {
+    notFound.value = true;
   } finally {
     loading.value = false;
   }
@@ -178,7 +194,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <Page auto-content-height :title="customer?.name" :loading="loading">
+  <RecordMissing v-if="notFound" kind="customer" label="客户" />
+  <Page v-else auto-content-height :title="customer?.name" :loading="loading">
     <FormModal @success="loadCustomerDetail" />
     <TransferModal @success="loadCustomerDetail" />
     <DistributeModal @success="loadCustomerDetail" />

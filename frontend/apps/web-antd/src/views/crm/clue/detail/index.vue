@@ -24,6 +24,7 @@ import { useDetailSchema } from './data';
 import Info from './modules/info.vue';
 
 import { crmBackTarget } from '../../_shared/back';
+import RecordMissing from '#/views/crm/_shared/record-missing.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -31,6 +32,8 @@ const tabs = useTabs();
 
 const loading = ref(false); // 加载中
 const clueId = ref(0); // 线索编号
+/** 详情加载返回空 / 404（旧链接、收藏、并发删除）时显示“记录不存在” */
+const notFound = ref(false);
 const clue = ref<CrmClueApi.Clue>({} as CrmClueApi.Clue); // 线索详情
 const logList = ref<SystemOperateLogApi.OperateLog[]>([]); // 操作日志
 const permissionListRef = ref<InstanceType<typeof PermissionList>>(); // 团队成员列表 Ref
@@ -54,14 +57,28 @@ const [TransferModal, transferModalApi] = useVbenModal({
 /** 加载线索详情 */
 async function getClueDetail() {
   loading.value = true;
+  notFound.value = false;
+  if (!clueId.value) {
+    notFound.value = true;
+    loading.value = false;
+    return;
+  }
   try {
-    clue.value = await getClue(clueId.value);
+    const detail = await getClue(clueId.value);
+    if (!detail) {
+      notFound.value = true;
+      return;
+    }
+    clue.value = detail;
     // 操作日志
     const res = await getOperateLogPage({
       bizType: BizTypeEnum.CRM_CLUE,
       bizId: clueId.value,
     });
     logList.value = res.list;
+  } catch {
+    // 404 / 并发删除：请求层已经提示过一次，这里只负责页面兜底
+    notFound.value = true;
   } finally {
     loading.value = false;
   }
@@ -107,7 +124,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <Page auto-content-height :title="clue?.name" :loading="loading">
+  <RecordMissing v-if="notFound" kind="clue" label="线索" />
+  <Page v-else auto-content-height :title="clue?.name" :loading="loading">
     <FormModal @success="getClueDetail" />
     <TransferModal @success="getClueDetail" />
     <template #extra>
